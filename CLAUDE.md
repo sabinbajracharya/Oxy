@@ -30,8 +30,10 @@ cargo clippy --all-targets --all-features -- -D warnings  # Lint
 ```bash
 cargo run -- --version         # Print version
 cargo run -- --help            # Print help
-cargo run -- run file.fe       # Execute a Ferrite file (future)
-cargo run -- repl              # Start REPL (future)
+cargo run -- run file.fe       # Execute a Ferrite file
+cargo run -- repl              # Start interactive REPL
+cargo run -- --dump-tokens f.fe # Dump token stream
+cargo run -- --dump-ast f.fe    # Dump AST
 ```
 
 ### Docker
@@ -99,4 +101,24 @@ src/
 
 ## Current Phase
 
-Phase 1: Project Scaffolding & Infrastructure — workspace setup, Docker, CI/CD, documentation, minimal CLI.
+Phase 4: Basic Interpreter — COMPLETE. Variables, arithmetic, string operations, functions with recursion, println!/print! macros, if/else expressions, block expressions, compound assignment, return statements, REPL. 132 tests passing.
+
+### What Works Now
+- `let` / `let mut` bindings with immutability enforcement
+- Arithmetic: `+`, `-`, `*`, `/`, `%` (integers, floats, mixed)
+- String concatenation with `+`
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `&&`, `||`, `!`
+- Bitwise: `&`, `|`, `^`, `<<`, `>>`
+- `if` / `else if` / `else` expressions (return values)
+- Block expressions: `{ let y = 10; y + 1 }`
+- Function definitions and calls with proper scoping
+- Recursion (factorial, fibonacci)
+- `return` statements
+- `println!("{}", x)` with `{}` format placeholders
+- `print!()` without newline
+- `&` and `&mut` syntax parsed but ignored (no borrow checker)
+- Shadowing: `let x = 1; let x = "hello";`
+- Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
+- REPL with persistent environment
+- File execution with `ferrite run file.fe`

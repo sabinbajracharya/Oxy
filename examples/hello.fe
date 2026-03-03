@@ -1,4 +1,6 @@
 // hello.fe — The classic first program in Ferrite
 fn main() {
-    println!("Hello, Ferrite!");
+    let name = "Ferrite";
+    println!("Hello, {}!", name);
+    println!("Welcome to Rust syntax, scripting freedom.");
 }

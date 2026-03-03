@@ -7,6 +7,9 @@ pub mod errors;
 pub mod lexer;
 pub mod ast;
 pub mod parser;
+pub mod types;
+pub mod env;
+pub mod interpreter;
 
 /// The current version of the Ferrite language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

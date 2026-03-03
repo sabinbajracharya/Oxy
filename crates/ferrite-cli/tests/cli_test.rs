@@ -51,3 +51,41 @@ fn test_unknown_command() {
         .failure()
         .stderr(predicate::str::contains("unknown command"));
 }
+
+#[test]
+fn test_run_hello() {
+    // CWD for cargo tests is the crate root, so use CARGO_MANIFEST_DIR to find workspace
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let workspace = std::path::Path::new(manifest).parent().unwrap().parent().unwrap();
+    let hello = workspace.join("examples/hello.fe");
+
+    ferrite_cmd()
+        .args(["run", hello.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello, Ferrite!"));
+}
+
+#[test]
+fn test_run_missing_file() {
+    ferrite_cmd()
+        .args(["run", "nonexistent.fe"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("could not read file"));
+}
+
+#[test]
+fn test_run_no_main() {
+    // Create a temp file with no main function
+    let dir = std::env::temp_dir().join("ferrite_test");
+    std::fs::create_dir_all(&dir).ok();
+    let path = dir.join("no_main.fe");
+    std::fs::write(&path, "fn foo() {}").unwrap();
+
+    ferrite_cmd()
+        .args(["run", path.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no `main` function"));
+}
