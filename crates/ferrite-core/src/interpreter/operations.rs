@@ -189,7 +189,12 @@ impl Interpreter {
             (UnaryOp::Deref, v) => Ok(v.clone()),
             // Neg trait overloading for user types
             (UnaryOp::Neg, Value::Struct { name, .. })
-            | (UnaryOp::Neg, Value::EnumVariant { enum_name: name, .. }) => {
+            | (
+                UnaryOp::Neg,
+                Value::EnumVariant {
+                    enum_name: name, ..
+                },
+            ) => {
                 if let Some(method_def) = self.find_trait_method(name, "neg") {
                     let key = (name.clone(), "Neg".to_string());
                     if self.trait_impls.contains_key(&key) {
