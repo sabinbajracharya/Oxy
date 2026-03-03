@@ -26,12 +26,13 @@ fn main() {
 | Feature | Status |
 |---|---|
 | Variables (`let`, `let mut`) | ✅ |
-| Functions, closures, higher-order functions | ✅ |
+| Functions, closures (with mutable captures), higher-order functions | ✅ |
 | Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`) | ✅ |
-| Structs, enums, `impl` blocks | ✅ |
+| Structs, enums, `impl` blocks (both structs and enums) | ✅ |
 | Traits with default methods, operator overloading | ✅ |
-| Generics (basic) | ✅ |
+| Generics with trait bounds and `where` clauses | ✅ |
 | Error handling (`Result`, `Option`, `?` operator) | ✅ |
+| Type aliases (`type Pos = Point`) | ✅ |
 | Modules (`mod`, `use`) | ✅ |
 | Collections (`Vec`, `HashMap`, tuples, ranges) | ✅ |
 | Iterator methods (`map`, `filter`, `zip`, `chain`, `sum`, `flatten`, …) | ✅ |
