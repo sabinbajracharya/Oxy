@@ -19,18 +19,19 @@ pub struct Parser {
 enum Precedence {
     None = 0,
     Assignment = 1, // = += -= etc.
-    Or = 2,         // ||
-    And = 3,        // &&
-    BitOr = 4,      // |
-    BitXor = 5,     // ^
-    BitAnd = 6,     // &
-    Equality = 7,   // == !=
-    Comparison = 8, // < > <= >=
-    Shift = 9,      // << >>
-    Term = 10,      // + -
-    Factor = 11,    // * / %
-    Unary = 12,     // - ! & *
-    Call = 13,      // () .
+    Range = 2,      // .. ..=
+    Or = 3,         // ||
+    And = 4,        // &&
+    BitOr = 5,      // |
+    BitXor = 6,     // ^
+    BitAnd = 7,     // &
+    Equality = 8,   // == !=
+    Comparison = 9, // < > <= >=
+    Shift = 10,     // << >>
+    Term = 11,      // + -
+    Factor = 12,    // * / %
+    Unary = 13,     // - ! & *
+    Call = 14,      // () .
 }
 
 impl Precedence {
@@ -52,6 +53,7 @@ impl Precedence {
             TokenKind::LParen => Precedence::Call,
             TokenKind::Eq | TokenKind::PlusEq | TokenKind::MinusEq | TokenKind::StarEq
             | TokenKind::SlashEq | TokenKind::PercentEq => Precedence::Assignment,
+            TokenKind::DotDot | TokenKind::DotDotEq => Precedence::Range,
             _ => Precedence::None,
         }
     }
@@ -202,6 +204,11 @@ impl Parser {
         match self.peek_kind() {
             TokenKind::Let => self.parse_let_stmt(),
             TokenKind::Return => self.parse_return_stmt(),
+            TokenKind::While => self.parse_while_stmt(),
+            TokenKind::Loop => self.parse_loop_stmt(),
+            TokenKind::For => self.parse_for_stmt(),
+            TokenKind::Break => self.parse_break_stmt(),
+            TokenKind::Continue => self.parse_continue_stmt(),
             _ => self.parse_expr_stmt(),
         }
     }
@@ -262,6 +269,88 @@ impl Parser {
 
         Ok(Stmt::Return {
             value,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_while_stmt(&mut self) -> Result<Stmt, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::While)?;
+
+        let condition = self.parse_expr(Precedence::None)?;
+        let body = self.parse_block()?;
+        let end_span = body.span;
+
+        Ok(Stmt::While {
+            condition: Box::new(condition),
+            body,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_loop_stmt(&mut self) -> Result<Stmt, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Loop)?;
+
+        let body = self.parse_block()?;
+        let end_span = body.span;
+
+        Ok(Stmt::Loop {
+            body,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_for_stmt(&mut self) -> Result<Stmt, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::For)?;
+
+        let name = self.expect_ident()?;
+        self.expect(TokenKind::In)?;
+
+        let iterable = self.parse_expr(Precedence::None)?;
+        let body = self.parse_block()?;
+        let end_span = body.span;
+
+        Ok(Stmt::For {
+            name,
+            iterable: Box::new(iterable),
+            body,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_break_stmt(&mut self) -> Result<Stmt, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Break)?;
+
+        let value = if !self.check(&TokenKind::Semicolon) && !self.check(&TokenKind::RBrace) {
+            Some(Box::new(self.parse_expr(Precedence::None)?))
+        } else {
+            None
+        };
+
+        let end_span = self.current_span();
+        if self.check(&TokenKind::Semicolon) {
+            self.advance();
+        }
+
+        Ok(Stmt::Break {
+            value,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_continue_stmt(&mut self) -> Result<Stmt, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Continue)?;
+
+        let end_span = self.current_span();
+        if self.check(&TokenKind::Semicolon) {
+            self.advance();
+        }
+
+        Ok(Stmt::Continue {
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -372,6 +461,25 @@ impl Parser {
             // If expression
             TokenKind::If => self.parse_if_expr(),
 
+            // Match expression
+            TokenKind::Match => self.parse_match_expr(),
+
+            // Loop as expression (for `let x = loop { break val; };`)
+            TokenKind::Loop => {
+                let start_span = self.current_span();
+                self.advance();
+                let body = self.parse_block()?;
+                let end_span = body.span;
+                // Wrap as a block expression containing a Loop statement
+                Ok(Expr::Block(Block {
+                    stmts: vec![Stmt::Loop {
+                        body,
+                        span: self.merge_spans(start_span, end_span),
+                    }],
+                    span: self.merge_spans(start_span, end_span),
+                }))
+            }
+
             // Unary operators
             TokenKind::Minus => {
                 let span = self.current_span();
@@ -461,6 +569,20 @@ impl Parser {
             };
         }
 
+        // Range operators: `..` and `..=`
+        if matches!(op_kind, TokenKind::DotDot | TokenKind::DotDotEq) {
+            let inclusive = op_kind == TokenKind::DotDotEq;
+            self.advance();
+            let right = self.parse_expr(prec)?;
+            let span = self.merge_spans(left.span(), right.span());
+            return Ok(Expr::Range {
+                start: Box::new(left),
+                end: Box::new(right),
+                inclusive,
+                span,
+            });
+        }
+
         // Binary operators
         if let Some(bin_op) = Self::token_to_binop(&op_kind) {
             self.advance();
@@ -524,6 +646,81 @@ impl Parser {
             else_block,
             span: self.merge_spans(start_span, end_span),
         })
+    }
+
+    fn parse_match_expr(&mut self) -> Result<Expr, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Match)?;
+
+        let expr = self.parse_expr(Precedence::None)?;
+        self.expect(TokenKind::LBrace)?;
+
+        let mut arms = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            let arm_span = self.current_span();
+            let pattern = self.parse_pattern()?;
+            self.expect(TokenKind::FatArrow)?;
+
+            // Arm body can be a block or a single expression
+            let body = if self.check(&TokenKind::LBrace) {
+                let block = self.parse_block()?;
+                Expr::Block(block)
+            } else {
+                self.parse_expr(Precedence::None)?
+            };
+
+            let end_span = body.span();
+            arms.push(MatchArm {
+                pattern,
+                body,
+                span: self.merge_spans(arm_span, end_span),
+            });
+
+            // Comma is optional after block bodies, required after expressions
+            self.match_token(&TokenKind::Comma);
+        }
+
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+
+        Ok(Expr::Match {
+            expr: Box::new(expr),
+            arms,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_pattern(&mut self) -> Result<Pattern, FerriError> {
+        match self.peek_kind().clone() {
+            TokenKind::Underscore => {
+                let span = self.current_span();
+                self.advance();
+                Ok(Pattern::Wildcard(span))
+            }
+            TokenKind::IntLiteral(_)
+            | TokenKind::FloatLiteral(_)
+            | TokenKind::True
+            | TokenKind::False
+            | TokenKind::StringLiteral(_)
+            | TokenKind::CharLiteral(_) => {
+                let expr = self.parse_prefix()?;
+                Ok(Pattern::Literal(expr))
+            }
+            TokenKind::Minus => {
+                // Negative numeric literal
+                let expr = self.parse_prefix()?;
+                Ok(Pattern::Literal(expr))
+            }
+            TokenKind::Ident(_) => {
+                let span = self.current_span();
+                let name = self.expect_ident()?;
+                Ok(Pattern::Ident(name, span))
+            }
+            other => Err(self.error(format!(
+                "expected pattern, found {}",
+                other.description()
+            ))),
+        }
     }
 
     fn parse_arg_list(&mut self) -> Result<Vec<Expr>, FerriError> {
@@ -992,5 +1189,96 @@ fn main() {
     fn test_bool_literal_expr() {
         let stmts = parse_fn_body("fn main() { true; false; }");
         assert_eq!(stmts.len(), 2);
+    }
+
+    // === Phase 5: Control Flow ===
+
+    #[test]
+    fn test_while_stmt() {
+        let stmts = parse_fn_body("fn main() { while x > 0 { x -= 1; } }");
+        assert_eq!(stmts.len(), 1);
+        assert!(matches!(&stmts[0], Stmt::While { .. }));
+    }
+
+    #[test]
+    fn test_loop_stmt() {
+        let stmts = parse_fn_body("fn main() { loop { break; } }");
+        assert_eq!(stmts.len(), 1);
+        assert!(matches!(&stmts[0], Stmt::Loop { .. }));
+    }
+
+    #[test]
+    fn test_for_stmt() {
+        let stmts = parse_fn_body("fn main() { for i in 0..10 { println!(\"{}\", i); } }");
+        assert_eq!(stmts.len(), 1);
+        let Stmt::For { name, iterable, .. } = &stmts[0] else { panic!("expected for"); };
+        assert_eq!(name, "i");
+        assert!(matches!(iterable.as_ref(), Expr::Range { inclusive: false, .. }));
+    }
+
+    #[test]
+    fn test_for_inclusive_range() {
+        let stmts = parse_fn_body("fn main() { for i in 0..=10 { x; } }");
+        let Stmt::For { iterable, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(iterable.as_ref(), Expr::Range { inclusive: true, .. }));
+    }
+
+    #[test]
+    fn test_break_stmt() {
+        let stmts = parse_fn_body("fn main() { break; }");
+        assert!(matches!(&stmts[0], Stmt::Break { value: None, .. }));
+    }
+
+    #[test]
+    fn test_break_with_value() {
+        let stmts = parse_fn_body("fn main() { break 42; }");
+        assert!(matches!(&stmts[0], Stmt::Break { value: Some(_), .. }));
+    }
+
+    #[test]
+    fn test_continue_stmt() {
+        let stmts = parse_fn_body("fn main() { continue; }");
+        assert!(matches!(&stmts[0], Stmt::Continue { .. }));
+    }
+
+    #[test]
+    fn test_match_expr() {
+        let stmts = parse_fn_body(r#"fn main() { match x { 1 => "one", _ => "other" }; }"#);
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Match { arms, .. } = expr else { panic!(); };
+        assert_eq!(arms.len(), 2);
+        assert!(matches!(&arms[0].pattern, Pattern::Literal(_)));
+        assert!(matches!(&arms[1].pattern, Pattern::Wildcard(_)));
+    }
+
+    #[test]
+    fn test_match_with_blocks() {
+        let stmts = parse_fn_body(
+            r#"fn main() { match x { 1 => { println!("one"); } _ => { println!("other"); } }; }"#,
+        );
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(expr, Expr::Match { .. }));
+    }
+
+    #[test]
+    fn test_match_variable_pattern() {
+        let stmts = parse_fn_body("fn main() { match x { n => n + 1 }; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Match { arms, .. } = expr else { panic!(); };
+        assert!(matches!(&arms[0].pattern, Pattern::Ident(name, _) if name == "n"));
+    }
+
+    #[test]
+    fn test_range_expression() {
+        let stmts = parse_fn_body("fn main() { 0..10; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(expr, Expr::Range { inclusive: false, .. }));
+    }
+
+    #[test]
+    fn test_range_inclusive_expression() {
+        let stmts = parse_fn_body("fn main() { 0..=10; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(expr, Expr::Range { inclusive: true, .. }));
     }
 }

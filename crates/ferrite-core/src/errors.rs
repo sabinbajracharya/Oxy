@@ -30,4 +30,12 @@ pub enum FerriError {
     /// Not a real error — caught at function call boundaries.
     #[error("return outside of function")]
     Return(Value),
+    /// Control flow: `break` with optional value.
+    /// Not a real error — caught at loop boundaries.
+    #[error("break outside of loop")]
+    Break(Option<Value>),
+    /// Control flow: `continue`.
+    /// Not a real error — caught at loop boundaries.
+    #[error("continue outside of loop")]
+    Continue,
 }

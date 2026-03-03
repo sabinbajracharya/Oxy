@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 4: Basic Interpreter — COMPLETE. Variables, arithmetic, string operations, functions with recursion, println!/print! macros, if/else expressions, block expressions, compound assignment, return statements, REPL. 132 tests passing.
+Phase 5: Control Flow — COMPLETE. 163 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -112,6 +112,11 @@ Phase 4: Basic Interpreter — COMPLETE. Variables, arithmetic, string operation
 - Bitwise: `&`, `|`, `^`, `<<`, `>>`
 - `if` / `else if` / `else` expressions (return values)
 - Block expressions: `{ let y = 10; y + 1 }`
+- `while condition { body }` loops
+- `loop { body }` with `break value` support
+- `for x in 0..10 { body }` and `0..=10` inclusive ranges
+- `break` and `continue` in all loop types
+- `match expr { pattern => body }` with literal, wildcard (`_`), and variable patterns
 - Function definitions and calls with proper scoping
 - Recursion (factorial, fibonacci)
 - `return` statements

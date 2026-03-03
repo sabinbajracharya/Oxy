@@ -32,6 +32,8 @@ pub enum Value {
         /// The environment captured at function definition time.
         closure_env: Env,
     },
+    /// A range value: `start..end` (end-exclusive, stored as actual end).
+    Range(i64, i64),
 }
 
 impl Value {
@@ -45,6 +47,7 @@ impl Value {
             Value::Char(_) => "char",
             Value::Unit => "()",
             Value::Function { .. } => "fn",
+            Value::Range(_, _) => "Range",
         }
     }
 
@@ -54,6 +57,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Integer(n) => *n != 0,
             Value::Unit => false,
+            Value::Range(_, _) => true,
             _ => true,
         }
     }
@@ -75,6 +79,7 @@ impl fmt::Display for Value {
             Value::Char(c) => write!(f, "{c}"),
             Value::Unit => write!(f, "()"),
             Value::Function { name, .. } => write!(f, "<fn {name}>"),
+            Value::Range(start, end) => write!(f, "{start}..{end}"),
         }
     }
 }
@@ -88,6 +93,7 @@ impl PartialEq for Value {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Unit, Value::Unit) => true,
+            (Value::Range(a1, a2), Value::Range(b1, b2)) => a1 == b1 && a2 == b2,
             _ => false,
         }
     }

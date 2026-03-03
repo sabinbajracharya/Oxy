@@ -78,12 +78,45 @@ pub enum Stmt {
         value: Option<Expr>,
         span: Span,
     },
+    /// `while cond { body }`
+    While {
+        condition: Box<Expr>,
+        body: Block,
+        span: Span,
+    },
+    /// `loop { body }`
+    Loop {
+        body: Block,
+        span: Span,
+    },
+    /// `for name in iterable { body }`
+    For {
+        name: String,
+        iterable: Box<Expr>,
+        body: Block,
+        span: Span,
+    },
+    /// `break [expr];`
+    Break {
+        value: Option<Box<Expr>>,
+        span: Span,
+    },
+    /// `continue;`
+    Continue {
+        span: Span,
+    },
 }
 
 impl Stmt {
     pub fn span(&self) -> Span {
         match self {
-            Stmt::Let { span, .. } | Stmt::Return { span, .. } => *span,
+            Stmt::Let { span, .. }
+            | Stmt::Return { span, .. }
+            | Stmt::While { span, .. }
+            | Stmt::Loop { span, .. }
+            | Stmt::For { span, .. }
+            | Stmt::Break { span, .. }
+            | Stmt::Continue { span, .. } => *span,
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -153,6 +186,19 @@ pub enum Expr {
     },
     /// Grouped expression: `(expr)`
     Grouped(Box<Expr>, Span),
+    /// Match expression: `match expr { arms }`
+    Match {
+        expr: Box<Expr>,
+        arms: Vec<MatchArm>,
+        span: Span,
+    },
+    /// Range expression: `start..end` or `start..=end`
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        inclusive: bool,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -172,7 +218,9 @@ impl Expr {
             | Expr::If { span: s, .. }
             | Expr::Assign { span: s, .. }
             | Expr::CompoundAssign { span: s, .. }
-            | Expr::Grouped(_, s) => *s,
+            | Expr::Grouped(_, s)
+            | Expr::Match { span: s, .. }
+            | Expr::Range { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -233,6 +281,25 @@ pub enum UnaryOp {
     Not,   // !
     Ref,   // & (parsed but semantically ignored)
     Deref, // * (parsed but semantically ignored)
+}
+
+/// A match arm: `pattern => expr`
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Expr,
+    pub span: Span,
+}
+
+/// A pattern for match arms (basic patterns for now).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Pattern {
+    /// Literal value: `42`, `"hello"`, `true`
+    Literal(Expr),
+    /// Wildcard: `_`
+    Wildcard(Span),
+    /// Variable binding: `x`
+    Ident(String, Span),
 }
 
 impl std::fmt::Display for UnaryOp {
@@ -320,6 +387,42 @@ impl Stmt {
                 }
                 out.push_str(";\n");
             }
+            Stmt::While { condition, body, .. } => {
+                out.push_str(&format!("{pad}while "));
+                condition.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for stmt in &body.stmts {
+                    stmt.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Stmt::Loop { body, .. } => {
+                out.push_str(&format!("{pad}loop {{\n"));
+                for stmt in &body.stmts {
+                    stmt.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Stmt::For { name, iterable, body, .. } => {
+                out.push_str(&format!("{pad}for {name} in "));
+                iterable.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for stmt in &body.stmts {
+                    stmt.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Stmt::Break { value, .. } => {
+                out.push_str(&format!("{pad}break"));
+                if let Some(v) = value {
+                    out.push(' ');
+                    v.pretty_print(out, 0);
+                }
+                out.push_str(";\n");
+            }
+            Stmt::Continue { .. } => {
+                out.push_str(&format!("{pad}continue;\n"));
+            }
         }
     }
 }
@@ -400,6 +503,32 @@ impl Expr {
                 out.push('(');
                 expr.pretty_print(out, 0);
                 out.push(')');
+            }
+            Expr::Match { expr, arms, .. } => {
+                out.push_str("match ");
+                expr.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for arm in arms {
+                    out.push_str("  ");
+                    match &arm.pattern {
+                        Pattern::Literal(e) => e.pretty_print(out, 0),
+                        Pattern::Wildcard(_) => out.push('_'),
+                        Pattern::Ident(name, _) => out.push_str(name),
+                    }
+                    out.push_str(" => ");
+                    arm.body.pretty_print(out, 0);
+                    out.push_str(",\n");
+                }
+                out.push('}');
+            }
+            Expr::Range { start, end, inclusive, .. } => {
+                start.pretty_print(out, 0);
+                if *inclusive {
+                    out.push_str("..=");
+                } else {
+                    out.push_str("..");
+                }
+                end.pretty_print(out, 0);
             }
         }
     }
