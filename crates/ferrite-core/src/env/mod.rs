@@ -84,7 +84,6 @@ impl Environment {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,11 +125,8 @@ mod tests {
     #[test]
     fn test_set_mutable() {
         let env = Environment::new();
-        env.borrow_mut()
-            .define("x".into(), Value::Integer(1), true);
-        env.borrow_mut()
-            .set("x", Value::Integer(2))
-            .unwrap();
+        env.borrow_mut().define("x".into(), Value::Integer(1), true);
+        env.borrow_mut().set("x", Value::Integer(2)).unwrap();
         assert_eq!(env.borrow().get("x").unwrap(), Value::Integer(2));
     }
 

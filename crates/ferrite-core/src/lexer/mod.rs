@@ -453,7 +453,8 @@ impl<'src> Lexer<'src> {
                 }
                 'b' | 'B' => {
                     num_str.push(self.advance());
-                    while !self.is_at_end() && (self.peek() == '0' || self.peek() == '1' || self.peek() == '_')
+                    while !self.is_at_end()
+                        && (self.peek() == '0' || self.peek() == '1' || self.peek() == '_')
                     {
                         let ch = self.advance();
                         if ch != '_' {
@@ -696,11 +697,7 @@ mod tests {
 
     /// Helper to extract just the token kinds.
     fn kinds(src: &str) -> Vec<TokenKind> {
-        tokenize(src)
-            .unwrap()
-            .into_iter()
-            .map(|t| t.kind)
-            .collect()
+        tokenize(src).unwrap().into_iter().map(|t| t.kind).collect()
     }
 
     // === Operators ===
@@ -769,10 +766,7 @@ mod tests {
 
     #[test]
     fn test_dot_dot_eq() {
-        assert_eq!(
-            kinds("..="),
-            vec![TokenKind::DotDotEq, TokenKind::Eof]
-        );
+        assert_eq!(kinds("..="), vec![TokenKind::DotDotEq, TokenKind::Eof]);
     }
 
     // === Delimiters ===
@@ -902,10 +896,7 @@ mod tests {
     fn test_string_hex_escape() {
         assert_eq!(
             kinds(r#""\x41""#),
-            vec![
-                TokenKind::StringLiteral("A".into()),
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::StringLiteral("A".into()), TokenKind::Eof,]
         );
     }
 
@@ -913,10 +904,7 @@ mod tests {
     fn test_string_unicode_escape() {
         assert_eq!(
             kinds(r#""\u{1F600}""#),
-            vec![
-                TokenKind::StringLiteral("😀".into()),
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::StringLiteral("😀".into()), TokenKind::Eof,]
         );
     }
 
@@ -1055,11 +1043,7 @@ mod tests {
     fn test_block_comment() {
         assert_eq!(
             kinds("let /* comment */ x"),
-            vec![
-                TokenKind::Let,
-                TokenKind::Ident("x".into()),
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::Let, TokenKind::Ident("x".into()), TokenKind::Eof,]
         );
     }
 
@@ -1067,11 +1051,7 @@ mod tests {
     fn test_nested_block_comment() {
         assert_eq!(
             kinds("let /* outer /* inner */ still comment */ x"),
-            vec![
-                TokenKind::Let,
-                TokenKind::Ident("x".into()),
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::Let, TokenKind::Ident("x".into()), TokenKind::Eof,]
         );
     }
 
@@ -1079,7 +1059,10 @@ mod tests {
     fn test_unterminated_block_comment() {
         let result = tokenize("/* never closed");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unterminated block comment"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unterminated block comment"));
     }
 
     // === Spans ===
@@ -1141,7 +1124,10 @@ fn main() {
     fn test_invalid_character() {
         let result = tokenize("let x = §;");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unexpected character"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unexpected character"));
     }
 
     #[test]
@@ -1194,11 +1180,7 @@ fn main() {
         // `-42` should be Minus + IntLiteral (parser handles unary minus)
         assert_eq!(
             kinds("-42"),
-            vec![
-                TokenKind::Minus,
-                TokenKind::IntLiteral(42),
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::Minus, TokenKind::IntLiteral(42), TokenKind::Eof,]
         );
     }
 

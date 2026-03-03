@@ -51,8 +51,12 @@ impl Precedence {
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
             TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket => Precedence::Call,
-            TokenKind::Eq | TokenKind::PlusEq | TokenKind::MinusEq | TokenKind::StarEq
-            | TokenKind::SlashEq | TokenKind::PercentEq => Precedence::Assignment,
+            TokenKind::Eq
+            | TokenKind::PlusEq
+            | TokenKind::MinusEq
+            | TokenKind::StarEq
+            | TokenKind::SlashEq
+            | TokenKind::PercentEq => Precedence::Assignment,
             TokenKind::DotDot | TokenKind::DotDotEq => Precedence::Range,
             _ => Precedence::None,
         }
@@ -837,10 +841,7 @@ impl Parser {
                 let name = self.expect_ident()?;
                 Ok(Pattern::Ident(name, span))
             }
-            other => Err(self.error(format!(
-                "expected pattern, found {}",
-                other.description()
-            ))),
+            other => Err(self.error(format!("expected pattern, found {}", other.description()))),
         }
     }
 
@@ -995,7 +996,13 @@ mod tests {
     fn test_let_simple() {
         let stmts = parse_fn_body("fn main() { let x = 42; }");
         assert_eq!(stmts.len(), 1);
-        let Stmt::Let { name, mutable, value, .. } = &stmts[0] else {
+        let Stmt::Let {
+            name,
+            mutable,
+            value,
+            ..
+        } = &stmts[0]
+        else {
             panic!("expected let statement");
         };
         assert_eq!(name, "x");
@@ -1054,9 +1061,16 @@ mod tests {
     #[test]
     fn test_arithmetic_precedence() {
         let stmts = parse_fn_body("fn main() { 1 + 2 * 3; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
         // Should be Add(1, Mul(2, 3))
-        let Expr::BinaryOp { op, left, right, .. } = expr else { panic!("expected BinaryOp"); };
+        let Expr::BinaryOp {
+            op, left, right, ..
+        } = expr
+        else {
+            panic!("expected BinaryOp");
+        };
         assert_eq!(*op, BinOp::Add);
         assert!(matches!(**left, Expr::IntLiteral(1, _)));
         let Expr::BinaryOp { op: inner_op, .. } = right.as_ref() else {
@@ -1068,16 +1082,27 @@ mod tests {
     #[test]
     fn test_grouping() {
         let stmts = parse_fn_body("fn main() { (1 + 2) * 3; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::BinaryOp { op, .. } = expr else { panic!("expected Mul at top"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::BinaryOp { op, .. } = expr else {
+            panic!("expected Mul at top");
+        };
         assert_eq!(*op, BinOp::Mul);
     }
 
     #[test]
     fn test_unary_negation() {
         let stmts = parse_fn_body("fn main() { -42; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::UnaryOp { op, expr: inner, .. } = expr else { panic!("expected UnaryOp"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::UnaryOp {
+            op, expr: inner, ..
+        } = expr
+        else {
+            panic!("expected UnaryOp");
+        };
         assert_eq!(*op, UnaryOp::Neg);
         assert!(matches!(**inner, Expr::IntLiteral(42, _)));
     }
@@ -1085,25 +1110,37 @@ mod tests {
     #[test]
     fn test_unary_not() {
         let stmts = parse_fn_body("fn main() { !true; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::UnaryOp { op, .. } = expr else { panic!("expected UnaryOp"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::UnaryOp { op, .. } = expr else {
+            panic!("expected UnaryOp");
+        };
         assert_eq!(*op, UnaryOp::Not);
     }
 
     #[test]
     fn test_comparison_operators() {
         let stmts = parse_fn_body("fn main() { 1 < 2; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::BinaryOp { op, .. } = expr else { panic!("expected BinaryOp"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::BinaryOp { op, .. } = expr else {
+            panic!("expected BinaryOp");
+        };
         assert_eq!(*op, BinOp::Lt);
     }
 
     #[test]
     fn test_logical_operators() {
         let stmts = parse_fn_body("fn main() { true && false || true; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
         // || has lower precedence than &&, so: Or(And(true, false), true)
-        let Expr::BinaryOp { op, .. } = expr else { panic!("expected Or at top"); };
+        let Expr::BinaryOp { op, .. } = expr else {
+            panic!("expected Or at top");
+        };
         assert_eq!(*op, BinOp::Or);
     }
 
@@ -1112,8 +1149,12 @@ mod tests {
     #[test]
     fn test_function_call() {
         let stmts = parse_fn_body("fn main() { foo(1, 2); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::Call { callee, args, .. } = expr else { panic!("expected Call"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::Call { callee, args, .. } = expr else {
+            panic!("expected Call");
+        };
         assert!(matches!(callee.as_ref(), Expr::Ident(name, _) if name == "foo"));
         assert_eq!(args.len(), 2);
     }
@@ -1121,8 +1162,12 @@ mod tests {
     #[test]
     fn test_function_call_no_args() {
         let stmts = parse_fn_body("fn main() { foo(); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::Call { args, .. } = expr else { panic!("expected Call"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected Call");
+        };
         assert!(args.is_empty());
     }
 
@@ -1131,8 +1176,12 @@ mod tests {
     #[test]
     fn test_println_macro() {
         let stmts = parse_fn_body(r#"fn main() { println!("hello {}", x); }"#);
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::MacroCall { name, args, .. } = expr else { panic!("expected MacroCall"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::MacroCall { name, args, .. } = expr else {
+            panic!("expected MacroCall");
+        };
         assert_eq!(name, "println");
         assert_eq!(args.len(), 2);
     }
@@ -1142,26 +1191,36 @@ mod tests {
     #[test]
     fn test_if_expr() {
         let stmts = parse_fn_body("fn main() { if true { 1; } }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::If { else_block, .. } = expr else { panic!("expected If"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::If { else_block, .. } = expr else {
+            panic!("expected If");
+        };
         assert!(else_block.is_none());
     }
 
     #[test]
     fn test_if_else_expr() {
         let stmts = parse_fn_body("fn main() { if true { 1; } else { 2; } }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::If { else_block, .. } = expr else { panic!("expected If"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::If { else_block, .. } = expr else {
+            panic!("expected If");
+        };
         assert!(else_block.is_some());
     }
 
     #[test]
     fn test_if_else_if() {
-        let stmts = parse_fn_body(
-            "fn main() { if true { 1; } else if false { 2; } else { 3; } }",
-        );
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        let Expr::If { else_block, .. } = expr else { panic!("expected If"); };
+        let stmts = parse_fn_body("fn main() { if true { 1; } else if false { 2; } else { 3; } }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::If { else_block, .. } = expr else {
+            panic!("expected If");
+        };
         assert!(matches!(else_block.as_deref(), Some(Expr::If { .. })));
     }
 
@@ -1170,7 +1229,10 @@ mod tests {
     #[test]
     fn test_block_as_value() {
         let stmts = parse_fn_body("fn main() { let x = { 42 }; }");
-        let Stmt::Let { value: Some(expr), .. } = &stmts[0] else {
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &stmts[0]
+        else {
             panic!("expected let with block value");
         };
         assert!(matches!(expr, Expr::Block(_)));
@@ -1181,14 +1243,18 @@ mod tests {
     #[test]
     fn test_assignment() {
         let stmts = parse_fn_body("fn main() { x = 42; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
         assert!(matches!(expr, Expr::Assign { .. }));
     }
 
     #[test]
     fn test_compound_assignment() {
         let stmts = parse_fn_body("fn main() { x += 1; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
         let Expr::CompoundAssign { op, .. } = expr else {
             panic!("expected compound assignment");
         };
@@ -1200,14 +1266,18 @@ mod tests {
     #[test]
     fn test_return_value() {
         let stmts = parse_fn_body("fn main() { return 42; }");
-        let Stmt::Return { value, .. } = &stmts[0] else { panic!("expected return"); };
+        let Stmt::Return { value, .. } = &stmts[0] else {
+            panic!("expected return");
+        };
         assert!(value.is_some());
     }
 
     #[test]
     fn test_return_void() {
         let stmts = parse_fn_body("fn main() { return; }");
-        let Stmt::Return { value, .. } = &stmts[0] else { panic!("expected return"); };
+        let Stmt::Return { value, .. } = &stmts[0] else {
+            panic!("expected return");
+        };
         assert!(value.is_none());
     }
 
@@ -1265,8 +1335,16 @@ mod tests {
     #[test]
     fn test_ref_expr() {
         let stmts = parse_fn_body("fn main() { &x; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
-        assert!(matches!(expr, Expr::UnaryOp { op: UnaryOp::Ref, .. }));
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        assert!(matches!(
+            expr,
+            Expr::UnaryOp {
+                op: UnaryOp::Ref,
+                ..
+            }
+        ));
     }
 
     // === Full program ===
@@ -1302,7 +1380,9 @@ fn main() {
     #[test]
     fn test_string_literal_expr() {
         let stmts = parse_fn_body(r#"fn main() { "hello"; }"#);
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!("expected expr stmt"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!("expected expr stmt");
+        };
         assert!(matches!(expr, Expr::StringLiteral(s, _) if s == "hello"));
     }
 
@@ -1332,16 +1412,32 @@ fn main() {
     fn test_for_stmt() {
         let stmts = parse_fn_body("fn main() { for i in 0..10 { println!(\"{}\", i); } }");
         assert_eq!(stmts.len(), 1);
-        let Stmt::For { name, iterable, .. } = &stmts[0] else { panic!("expected for"); };
+        let Stmt::For { name, iterable, .. } = &stmts[0] else {
+            panic!("expected for");
+        };
         assert_eq!(name, "i");
-        assert!(matches!(iterable.as_ref(), Expr::Range { inclusive: false, .. }));
+        assert!(matches!(
+            iterable.as_ref(),
+            Expr::Range {
+                inclusive: false,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn test_for_inclusive_range() {
         let stmts = parse_fn_body("fn main() { for i in 0..=10 { x; } }");
-        let Stmt::For { iterable, .. } = &stmts[0] else { panic!(); };
-        assert!(matches!(iterable.as_ref(), Expr::Range { inclusive: true, .. }));
+        let Stmt::For { iterable, .. } = &stmts[0] else {
+            panic!();
+        };
+        assert!(matches!(
+            iterable.as_ref(),
+            Expr::Range {
+                inclusive: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -1365,8 +1461,12 @@ fn main() {
     #[test]
     fn test_match_expr() {
         let stmts = parse_fn_body(r#"fn main() { match x { 1 => "one", _ => "other" }; }"#);
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Match { arms, .. } = expr else { panic!(); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Match { arms, .. } = expr else {
+            panic!();
+        };
         assert_eq!(arms.len(), 2);
         assert!(matches!(&arms[0].pattern, Pattern::Literal(_)));
         assert!(matches!(&arms[1].pattern, Pattern::Wildcard(_)));
@@ -1377,30 +1477,52 @@ fn main() {
         let stmts = parse_fn_body(
             r#"fn main() { match x { 1 => { println!("one"); } _ => { println!("other"); } }; }"#,
         );
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
         assert!(matches!(expr, Expr::Match { .. }));
     }
 
     #[test]
     fn test_match_variable_pattern() {
         let stmts = parse_fn_body("fn main() { match x { n => n + 1 }; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Match { arms, .. } = expr else { panic!(); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Match { arms, .. } = expr else {
+            panic!();
+        };
         assert!(matches!(&arms[0].pattern, Pattern::Ident(name, _) if name == "n"));
     }
 
     #[test]
     fn test_range_expression() {
         let stmts = parse_fn_body("fn main() { 0..10; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        assert!(matches!(expr, Expr::Range { inclusive: false, .. }));
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        assert!(matches!(
+            expr,
+            Expr::Range {
+                inclusive: false,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn test_range_inclusive_expression() {
         let stmts = parse_fn_body("fn main() { 0..=10; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        assert!(matches!(expr, Expr::Range { inclusive: true, .. }));
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        assert!(matches!(
+            expr,
+            Expr::Range {
+                inclusive: true,
+                ..
+            }
+        ));
     }
 
     // === Phase 6: Collections & Strings ===
@@ -1408,31 +1530,45 @@ fn main() {
     #[test]
     fn test_array_literal() {
         let stmts = parse_fn_body("fn main() { [1, 2, 3]; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Array { elements, .. } = expr else { panic!("expected Array"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Array { elements, .. } = expr else {
+            panic!("expected Array");
+        };
         assert_eq!(elements.len(), 3);
     }
 
     #[test]
     fn test_empty_array() {
         let stmts = parse_fn_body("fn main() { []; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Array { elements, .. } = expr else { panic!("expected Array"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Array { elements, .. } = expr else {
+            panic!("expected Array");
+        };
         assert_eq!(elements.len(), 0);
     }
 
     #[test]
     fn test_index_expr() {
         let stmts = parse_fn_body("fn main() { v[0]; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
         assert!(matches!(expr, Expr::Index { .. }));
     }
 
     #[test]
     fn test_method_call() {
         let stmts = parse_fn_body("fn main() { v.push(1); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::MethodCall { method, args, .. } = expr else { panic!("expected MethodCall"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::MethodCall { method, args, .. } = expr else {
+            panic!("expected MethodCall");
+        };
         assert_eq!(method, "push");
         assert_eq!(args.len(), 1);
     }
@@ -1440,47 +1576,69 @@ fn main() {
     #[test]
     fn test_field_access() {
         let stmts = parse_fn_body("fn main() { t.0; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::FieldAccess { field, .. } = expr else { panic!("expected FieldAccess"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::FieldAccess { field, .. } = expr else {
+            panic!("expected FieldAccess");
+        };
         assert_eq!(field, "0");
     }
 
     #[test]
     fn test_tuple_literal() {
         let stmts = parse_fn_body("fn main() { (1, 2, 3); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple, got {expr:?}"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Tuple { elements, .. } = expr else {
+            panic!("expected Tuple, got {expr:?}");
+        };
         assert_eq!(elements.len(), 3);
     }
 
     #[test]
     fn test_single_element_tuple() {
         let stmts = parse_fn_body("fn main() { (42,); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Tuple { elements, .. } = expr else {
+            panic!("expected Tuple");
+        };
         assert_eq!(elements.len(), 1);
     }
 
     #[test]
     fn test_grouped_expr_not_tuple() {
         let stmts = parse_fn_body("fn main() { (42); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
         assert!(matches!(expr, Expr::Grouped(_, _)));
     }
 
     #[test]
     fn test_empty_tuple() {
         let stmts = parse_fn_body("fn main() { (); }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Tuple { elements, .. } = expr else {
+            panic!("expected Tuple");
+        };
         assert_eq!(elements.len(), 0);
     }
 
     #[test]
     fn test_vec_macro_brackets() {
         let stmts = parse_fn_body("fn main() { vec![1, 2, 3]; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::MacroCall { name, args, .. } = expr else { panic!("expected MacroCall"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::MacroCall { name, args, .. } = expr else {
+            panic!("expected MacroCall");
+        };
         assert_eq!(name, "vec");
         assert_eq!(args.len(), 3);
     }
@@ -1488,8 +1646,12 @@ fn main() {
     #[test]
     fn test_chained_method_calls() {
         let stmts = parse_fn_body(r#"fn main() { s.trim().to_uppercase(); }"#);
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::MethodCall { method, object, .. } = expr else { panic!("expected MethodCall"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::MethodCall { method, object, .. } = expr else {
+            panic!("expected MethodCall");
+        };
         assert_eq!(method, "to_uppercase");
         assert!(matches!(object.as_ref(), Expr::MethodCall { method, .. } if method == "trim"));
     }
@@ -1497,8 +1659,12 @@ fn main() {
     #[test]
     fn test_chained_index() {
         let stmts = parse_fn_body("fn main() { v[0][1]; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
-        let Expr::Index { object, .. } = expr else { panic!("expected Index"); };
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Index { object, .. } = expr else {
+            panic!("expected Index");
+        };
         assert!(matches!(object.as_ref(), Expr::Index { .. }));
     }
 }

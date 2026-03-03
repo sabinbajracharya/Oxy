@@ -56,7 +56,11 @@ fn test_unknown_command() {
 fn test_run_hello() {
     // CWD for cargo tests is the crate root, so use CARGO_MANIFEST_DIR to find workspace
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let workspace = std::path::Path::new(manifest).parent().unwrap().parent().unwrap();
+    let workspace = std::path::Path::new(manifest)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
     let hello = workspace.join("examples/hello.fe");
 
     ferrite_cmd()

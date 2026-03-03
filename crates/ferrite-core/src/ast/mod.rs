@@ -69,15 +69,9 @@ pub enum Stmt {
     },
     /// An expression used as a statement. `has_semicolon` distinguishes
     /// `expr;` (statement, value discarded) from `expr` (tail expression, value returned).
-    Expr {
-        expr: Expr,
-        has_semicolon: bool,
-    },
+    Expr { expr: Expr, has_semicolon: bool },
     /// `return [expr];`
-    Return {
-        value: Option<Expr>,
-        span: Span,
-    },
+    Return { value: Option<Expr>, span: Span },
     /// `while cond { body }`
     While {
         condition: Box<Expr>,
@@ -85,10 +79,7 @@ pub enum Stmt {
         span: Span,
     },
     /// `loop { body }`
-    Loop {
-        body: Block,
-        span: Span,
-    },
+    Loop { body: Block, span: Span },
     /// `for name in iterable { body }`
     For {
         name: String,
@@ -102,9 +93,7 @@ pub enum Stmt {
         span: Span,
     },
     /// `continue;`
-    Continue {
-        span: Span,
-    },
+    Continue { span: Span },
 }
 
 impl Stmt {
@@ -200,10 +189,7 @@ pub enum Expr {
         span: Span,
     },
     /// Array literal: `[1, 2, 3]`
-    Array {
-        elements: Vec<Expr>,
-        span: Span,
-    },
+    Array { elements: Vec<Expr>, span: Span },
     /// Index expression: `expr[index]`
     Index {
         object: Box<Expr>,
@@ -224,10 +210,7 @@ pub enum Expr {
         span: Span,
     },
     /// Tuple literal: `(a, b, c)`
-    Tuple {
-        elements: Vec<Expr>,
-        span: Span,
-    },
+    Tuple { elements: Vec<Expr>, span: Span },
 }
 
 impl Expr {
@@ -263,24 +246,24 @@ impl Expr {
 /// Binary operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
-    Add,      // +
-    Sub,      // -
-    Mul,      // *
-    Div,      // /
-    Mod,      // %
-    Eq,       // ==
-    NotEq,    // !=
-    Lt,       // <
-    Gt,       // >
-    LtEq,     // <=
-    GtEq,     // >=
-    And,      // &&
-    Or,       // ||
-    BitAnd,   // &
-    BitOr,    // |
-    BitXor,   // ^
-    Shl,      // <<
-    Shr,      // >>
+    Add,    // +
+    Sub,    // -
+    Mul,    // *
+    Div,    // /
+    Mod,    // %
+    Eq,     // ==
+    NotEq,  // !=
+    Lt,     // <
+    Gt,     // >
+    LtEq,   // <=
+    GtEq,   // >=
+    And,    // &&
+    Or,     // ||
+    BitAnd, // &
+    BitOr,  // |
+    BitXor, // ^
+    Shl,    // <<
+    Shr,    // >>
 }
 
 impl std::fmt::Display for BinOp {
@@ -394,8 +377,17 @@ impl Stmt {
     fn pretty_print(&self, out: &mut String, indent: usize) {
         let pad = "  ".repeat(indent);
         match self {
-            Stmt::Let { name, mutable, type_ann, value, .. } => {
-                out.push_str(&format!("{pad}let {}{name}", if *mutable { "mut " } else { "" }));
+            Stmt::Let {
+                name,
+                mutable,
+                type_ann,
+                value,
+                ..
+            } => {
+                out.push_str(&format!(
+                    "{pad}let {}{name}",
+                    if *mutable { "mut " } else { "" }
+                ));
                 if let Some(t) = type_ann {
                     out.push_str(&format!(": {}", t.name));
                 }
@@ -405,7 +397,10 @@ impl Stmt {
                 }
                 out.push_str(";\n");
             }
-            Stmt::Expr { expr, has_semicolon } => {
+            Stmt::Expr {
+                expr,
+                has_semicolon,
+            } => {
                 out.push_str(&pad);
                 expr.pretty_print(out, 0);
                 if *has_semicolon {
@@ -421,7 +416,9 @@ impl Stmt {
                 }
                 out.push_str(";\n");
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 out.push_str(&format!("{pad}while "));
                 condition.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -437,7 +434,12 @@ impl Stmt {
                 }
                 out.push_str(&format!("{pad}}}\n"));
             }
-            Stmt::For { name, iterable, body, .. } => {
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                ..
+            } => {
                 out.push_str(&format!("{pad}for {name} in "));
                 iterable.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -470,7 +472,9 @@ impl Expr {
             Expr::StringLiteral(s, _) => out.push_str(&format!("\"{s}\"")),
             Expr::CharLiteral(c, _) => out.push_str(&format!("'{c}'")),
             Expr::Ident(name, _) => out.push_str(name),
-            Expr::BinaryOp { left, op, right, .. } => {
+            Expr::BinaryOp {
+                left, op, right, ..
+            } => {
                 out.push('(');
                 left.pretty_print(out, 0);
                 out.push_str(&format!(" {op} "));
@@ -510,7 +514,12 @@ impl Expr {
                 }
                 out.push('}');
             }
-            Expr::If { condition, then_block, else_block, .. } => {
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 out.push_str("if ");
                 condition.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -528,7 +537,9 @@ impl Expr {
                 out.push_str(" = ");
                 value.pretty_print(out, 0);
             }
-            Expr::CompoundAssign { target, op, value, .. } => {
+            Expr::CompoundAssign {
+                target, op, value, ..
+            } => {
                 target.pretty_print(out, 0);
                 out.push_str(&format!(" {op}= "));
                 value.pretty_print(out, 0);
@@ -555,7 +566,12 @@ impl Expr {
                 }
                 out.push('}');
             }
-            Expr::Range { start, end, inclusive, .. } => {
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
                 start.pretty_print(out, 0);
                 if *inclusive {
                     out.push_str("..=");
@@ -580,7 +596,12 @@ impl Expr {
                 index.pretty_print(out, 0);
                 out.push(']');
             }
-            Expr::MethodCall { object, method, args, .. } => {
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                ..
+            } => {
                 object.pretty_print(out, 0);
                 out.push('.');
                 out.push_str(method);

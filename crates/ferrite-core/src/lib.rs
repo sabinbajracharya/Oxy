@@ -3,13 +3,13 @@
 //! Core library for the Ferrite programming language interpreter.
 //! Ferrite replicates Rust's syntax without the borrow checker or ownership rules.
 
-pub mod errors;
-pub mod lexer;
 pub mod ast;
+pub mod env;
+pub mod errors;
+pub mod interpreter;
+pub mod lexer;
 pub mod parser;
 pub mod types;
-pub mod env;
-pub mod interpreter;
 
 /// The current version of the Ferrite language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

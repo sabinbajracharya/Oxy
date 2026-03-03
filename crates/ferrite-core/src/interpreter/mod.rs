@@ -59,11 +59,15 @@ impl Interpreter {
         }
 
         // Look for and call main()
-        let main_fn = self.env.borrow().get("main").map_err(|_| FerriError::Runtime {
-            message: "no `main` function found".into(),
-            line: 0,
-            column: 0,
-        })?;
+        let main_fn = self
+            .env
+            .borrow()
+            .get("main")
+            .map_err(|_| FerriError::Runtime {
+                message: "no `main` function found".into(),
+                line: 0,
+                column: 0,
+            })?;
 
         if let Value::Function { .. } = &main_fn {
             self.call_function(&main_fn, &[], 0, 0)
@@ -125,7 +129,9 @@ impl Interpreter {
                 };
                 Err(FerriError::Return(val))
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 loop {
                     let cond = self.eval_expr(condition, env)?;
                     if !cond.is_truthy() {
@@ -140,17 +146,20 @@ impl Interpreter {
                 }
                 Ok(Value::Unit)
             }
-            Stmt::Loop { body, .. } => {
-                loop {
-                    match self.eval_block(body, env) {
-                        Ok(_) => {}
-                        Err(FerriError::Break(val)) => return Ok(val.unwrap_or(Value::Unit)),
-                        Err(FerriError::Continue) => continue,
-                        Err(e) => return Err(e),
-                    }
+            Stmt::Loop { body, .. } => loop {
+                match self.eval_block(body, env) {
+                    Ok(_) => {}
+                    Err(FerriError::Break(val)) => return Ok(val.unwrap_or(Value::Unit)),
+                    Err(FerriError::Continue) => continue,
+                    Err(e) => return Err(e),
                 }
-            }
-            Stmt::For { name, iterable, body, .. } => {
+            },
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                ..
+            } => {
                 let iter_val = self.eval_expr(iterable, env)?;
                 let values = self.value_to_iter(&iter_val, iterable.span())?;
                 let for_env = Environment::child(env);
@@ -223,14 +232,21 @@ impl Interpreter {
             }),
 
             Expr::BinaryOp {
-                left, op, right, span,
+                left,
+                op,
+                right,
+                span,
             } => {
                 let lval = self.eval_expr(left, env)?;
                 let rval = self.eval_expr(right, env)?;
                 self.eval_binary_op(&lval, *op, &rval, span.line, span.column)
             }
 
-            Expr::UnaryOp { op, expr: inner, span } => {
+            Expr::UnaryOp {
+                op,
+                expr: inner,
+                span,
+            } => {
                 let val = self.eval_expr(inner, env)?;
                 self.eval_unary_op(*op, &val, span.line, span.column)
             }
@@ -266,16 +282,20 @@ impl Interpreter {
                 }
             }
 
-            Expr::Assign { target, value, span } => {
+            Expr::Assign {
+                target,
+                value,
+                span,
+            } => {
                 let val = self.eval_expr(value, env)?;
                 if let Expr::Ident(name, _) = target.as_ref() {
-                    env.borrow_mut().set(name, val).map_err(|e| {
-                        FerriError::Runtime {
+                    env.borrow_mut()
+                        .set(name, val)
+                        .map_err(|e| FerriError::Runtime {
                             message: e.to_string(),
                             line: span.line,
                             column: span.column,
-                        }
-                    })?;
+                        })?;
                     Ok(Value::Unit)
                 } else if let Expr::Index { object, index, .. } = target.as_ref() {
                     // Index assignment: `v[0] = x`
@@ -289,16 +309,20 @@ impl Interpreter {
                     };
                     let i = i as usize;
                     if let Expr::Ident(name, _) = object.as_ref() {
-                        let mut current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                            message: format!("undefined variable '{name}'"),
-                            line: span.line,
-                            column: span.column,
-                        })?;
+                        let mut current =
+                            env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                                message: format!("undefined variable '{name}'"),
+                                line: span.line,
+                                column: span.column,
+                            })?;
                         match &mut current {
                             Value::Vec(v) => {
                                 if i >= v.len() {
                                     return Err(FerriError::Runtime {
-                                        message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
+                                        message: format!(
+                                            "index out of bounds: len is {}, but index is {i}",
+                                            v.len()
+                                        ),
                                         line: span.line,
                                         column: span.column,
                                     });
@@ -307,19 +331,22 @@ impl Interpreter {
                             }
                             _ => {
                                 return Err(FerriError::Runtime {
-                                    message: format!("cannot index-assign into {}", current.type_name()),
+                                    message: format!(
+                                        "cannot index-assign into {}",
+                                        current.type_name()
+                                    ),
                                     line: span.line,
                                     column: span.column,
                                 });
                             }
                         }
-                        env.borrow_mut().set(name, current).map_err(|e| {
-                            FerriError::Runtime {
+                        env.borrow_mut()
+                            .set(name, current)
+                            .map_err(|e| FerriError::Runtime {
                                 message: e.to_string(),
                                 line: span.line,
                                 column: span.column,
-                            }
-                        })?;
+                            })?;
                         Ok(Value::Unit)
                     } else {
                         Err(FerriError::Runtime {
@@ -338,7 +365,10 @@ impl Interpreter {
             }
 
             Expr::CompoundAssign {
-                target, op, value, span,
+                target,
+                op,
+                value,
+                span,
             } => {
                 if let Expr::Ident(name, _) = target.as_ref() {
                     let current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
@@ -347,14 +377,15 @@ impl Interpreter {
                         column: span.column,
                     })?;
                     let rval = self.eval_expr(value, env)?;
-                    let new_val = self.eval_binary_op(&current, *op, &rval, span.line, span.column)?;
-                    env.borrow_mut().set(name, new_val).map_err(|e| {
-                        FerriError::Runtime {
+                    let new_val =
+                        self.eval_binary_op(&current, *op, &rval, span.line, span.column)?;
+                    env.borrow_mut()
+                        .set(name, new_val)
+                        .map_err(|e| FerriError::Runtime {
                             message: e.to_string(),
                             line: span.line,
                             column: span.column,
-                        }
-                    })?;
+                        })?;
                     Ok(Value::Unit)
                 } else {
                     Err(FerriError::Runtime {
@@ -374,7 +405,9 @@ impl Interpreter {
                         // If pattern is a variable binding, create a scope with it
                         if let Pattern::Ident(name, _) = &arm.pattern {
                             let match_env = Environment::child(env);
-                            match_env.borrow_mut().define(name.clone(), val.clone(), false);
+                            match_env
+                                .borrow_mut()
+                                .define(name.clone(), val.clone(), false);
                             return self.eval_expr(&arm.body, &match_env);
                         }
                         return self.eval_expr(&arm.body, env);
@@ -387,7 +420,12 @@ impl Interpreter {
                 })
             }
 
-            Expr::Range { start, end, inclusive, span } => {
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                span,
+            } => {
                 let start_val = self.eval_expr(start, env)?;
                 let end_val = self.eval_expr(end, env)?;
                 match (&start_val, &end_val) {
@@ -423,30 +461,46 @@ impl Interpreter {
                 Ok(Value::Tuple(vals))
             }
 
-            Expr::Index { object, index, span } => {
+            Expr::Index {
+                object,
+                index,
+                span,
+            } => {
                 let obj = self.eval_expr(object, env)?;
                 let idx = self.eval_expr(index, env)?;
                 match (&obj, &idx) {
                     (Value::Vec(v), Value::Integer(i)) => {
                         let i = *i as usize;
                         v.get(i).cloned().ok_or_else(|| FerriError::Runtime {
-                            message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
+                            message: format!(
+                                "index out of bounds: len is {}, but index is {i}",
+                                v.len()
+                            ),
                             line: span.line,
                             column: span.column,
                         })
                     }
                     (Value::String(s), Value::Integer(i)) => {
                         let i = *i as usize;
-                        s.chars().nth(i).map(Value::Char).ok_or_else(|| FerriError::Runtime {
-                            message: format!("index out of bounds: len is {}, but index is {i}", s.len()),
-                            line: span.line,
-                            column: span.column,
-                        })
+                        s.chars()
+                            .nth(i)
+                            .map(Value::Char)
+                            .ok_or_else(|| FerriError::Runtime {
+                                message: format!(
+                                    "index out of bounds: len is {}, but index is {i}",
+                                    s.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            })
                     }
                     (Value::Tuple(t), Value::Integer(i)) => {
                         let i = *i as usize;
                         t.get(i).cloned().ok_or_else(|| FerriError::Runtime {
-                            message: format!("index out of bounds: len is {}, but index is {i}", t.len()),
+                            message: format!(
+                                "index out of bounds: len is {}, but index is {i}",
+                                t.len()
+                            ),
                             line: span.line,
                             column: span.column,
                         })
@@ -463,20 +517,28 @@ impl Interpreter {
                 }
             }
 
-            Expr::FieldAccess { object, field, span } => {
+            Expr::FieldAccess {
+                object,
+                field,
+                span,
+            } => {
                 let obj = self.eval_expr(object, env)?;
                 // Tuple index access: t.0, t.1 etc.
                 if let Ok(idx) = field.parse::<usize>() {
                     match &obj {
-                        Value::Tuple(t) => {
-                            t.get(idx).cloned().ok_or_else(|| FerriError::Runtime {
-                                message: format!("index out of bounds: len is {}, but index is {idx}", t.len()),
-                                line: span.line,
-                                column: span.column,
-                            })
-                        }
+                        Value::Tuple(t) => t.get(idx).cloned().ok_or_else(|| FerriError::Runtime {
+                            message: format!(
+                                "index out of bounds: len is {}, but index is {idx}",
+                                t.len()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        }),
                         _ => Err(FerriError::Runtime {
-                            message: format!("cannot access field `.{field}` on {}", obj.type_name()),
+                            message: format!(
+                                "cannot access field `.{field}` on {}",
+                                obj.type_name()
+                            ),
                             line: span.line,
                             column: span.column,
                         }),
@@ -491,7 +553,12 @@ impl Interpreter {
                 }
             }
 
-            Expr::MethodCall { object, method, args, span } => {
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                span,
+            } => {
                 let obj = self.eval_expr(object, env)?;
                 let arg_vals: Vec<Value> = args
                     .iter()
@@ -682,7 +749,14 @@ impl Interpreter {
                 (Expr::BoolLiteral(b, _), Value::Bool(v)) => *b == *v,
                 (Expr::StringLiteral(s, _), Value::String(v)) => s == v,
                 (Expr::CharLiteral(c, _), Value::Char(v)) => *c == *v,
-                (Expr::UnaryOp { op: UnaryOp::Neg, expr, .. }, Value::Integer(v)) => {
+                (
+                    Expr::UnaryOp {
+                        op: UnaryOp::Neg,
+                        expr,
+                        ..
+                    },
+                    Value::Integer(v),
+                ) => {
                     if let Expr::IntLiteral(n, _) = expr.as_ref() {
                         -*n == *v
                     } else {
@@ -698,9 +772,7 @@ impl Interpreter {
 
     fn value_to_iter(&self, value: &Value, span: Span) -> Result<Vec<Value>, FerriError> {
         match value {
-            Value::Range(start, end) => {
-                Ok((*start..*end).map(Value::Integer).collect())
-            }
+            Value::Range(start, end) => Ok((*start..*end).map(Value::Integer).collect()),
             Value::Vec(v) => Ok(v.clone()),
             Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
             _ => Err(FerriError::Runtime {
@@ -872,7 +944,9 @@ impl Interpreter {
         env: &Env,
         span: &Span,
     ) -> Result<Value, FerriError> {
-        let Value::Vec(v) = receiver else { unreachable!() };
+        let Value::Vec(v) = receiver else {
+            unreachable!()
+        };
         match method {
             "len" => Ok(Value::Integer(v.len() as i64)),
             "is_empty" => Ok(Value::Bool(v.is_empty())),
@@ -946,7 +1020,9 @@ impl Interpreter {
         args: Vec<Value>,
         span: &Span,
     ) -> Result<Value, FerriError> {
-        let Value::String(s) = receiver else { unreachable!() };
+        let Value::String(s) = receiver else {
+            unreachable!()
+        };
         match method {
             "len" => Ok(Value::Integer(s.len() as i64)),
             "is_empty" => Ok(Value::Bool(s.is_empty())),
@@ -961,11 +1037,16 @@ impl Interpreter {
                 let needle = match &args[0] {
                     Value::String(s) => s.clone(),
                     Value::Char(c) => c.to_string(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("String::contains() expects a string or char, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "String::contains() expects a string or char, got {}",
+                                other.type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 Ok(Value::Bool(s.contains(&needle)))
             }
@@ -975,36 +1056,46 @@ impl Interpreter {
             "starts_with" => {
                 if args.len() != 1 {
                     return Err(FerriError::Runtime {
-                        message: format!("String::starts_with() takes 1 argument, got {}", args.len()),
+                        message: format!(
+                            "String::starts_with() takes 1 argument, got {}",
+                            args.len()
+                        ),
                         line: span.line,
                         column: span.column,
                     });
                 }
                 let prefix = match &args[0] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 Ok(Value::Bool(s.starts_with(&prefix)))
             }
             "ends_with" => {
                 if args.len() != 1 {
                     return Err(FerriError::Runtime {
-                        message: format!("String::ends_with() takes 1 argument, got {}", args.len()),
+                        message: format!(
+                            "String::ends_with() takes 1 argument, got {}",
+                            args.len()
+                        ),
                         line: span.line,
                         column: span.column,
                     });
                 }
                 let suffix = match &args[0] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 Ok(Value::Bool(s.ends_with(&suffix)))
             }
@@ -1018,19 +1109,23 @@ impl Interpreter {
                 }
                 let from = match &args[0] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 let to = match &args[1] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 Ok(Value::String(s.replace(&from, &to)))
             }
@@ -1048,13 +1143,18 @@ impl Interpreter {
                 }
                 let delim = match &args[0] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
-                let parts: Vec<Value> = s.split(&delim).map(|p| Value::String(p.to_string())).collect();
+                let parts: Vec<Value> = s
+                    .split(&delim)
+                    .map(|p| Value::String(p.to_string()))
+                    .collect();
                 Ok(Value::Vec(parts))
             }
             "repeat" => {
@@ -1067,11 +1167,13 @@ impl Interpreter {
                 }
                 let n = match &args[0] {
                     Value::Integer(n) => *n as usize,
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected integer, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected integer, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 Ok(Value::String(s.repeat(n)))
             }
@@ -1086,11 +1188,13 @@ impl Interpreter {
                 }
                 let suffix = match &args[0] {
                     Value::String(s) => s.clone(),
-                    other => return Err(FerriError::Runtime {
-                        message: format!("expected string, got {}", other.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected string, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 };
                 let mut new_s = s;
                 new_s.push_str(&suffix);
@@ -1113,16 +1217,14 @@ impl Interpreter {
         span: &Span,
     ) -> Result<(), FerriError> {
         match expr {
-            Expr::Ident(name, _) => {
-                env.borrow_mut().set(name, new_val).map_err(|e| match e {
-                    FerriError::Runtime { message, .. } => FerriError::Runtime {
-                        message,
-                        line: span.line,
-                        column: span.column,
-                    },
-                    other => other,
-                })
-            }
+            Expr::Ident(name, _) => env.borrow_mut().set(name, new_val).map_err(|e| match e {
+                FerriError::Runtime { message, .. } => FerriError::Runtime {
+                    message,
+                    line: span.line,
+                    column: span.column,
+                },
+                other => other,
+            }),
             _ => Err(FerriError::Runtime {
                 message: "cannot mutate non-variable receiver".into(),
                 line: span.line,
@@ -1220,17 +1322,13 @@ mod tests {
 
     #[test]
     fn test_let_binding() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 10; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 10; println!("{}", x); }"#);
         assert_eq!(output, vec!["10\n"]);
     }
 
     #[test]
     fn test_let_mut_and_assign() {
-        let output = run_and_capture(
-            r#"fn main() { let mut x = 1; x = 2; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let mut x = 1; x = 2; println!("{}", x); }"#);
         assert_eq!(output, vec!["2\n"]);
     }
 
@@ -1256,9 +1354,8 @@ mod tests {
 
     #[test]
     fn test_shadowing() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 1; let x = "hello"; println!("{}", x); }"#,
-        );
+        let output =
+            run_and_capture(r#"fn main() { let x = 1; let x = "hello"; println!("{}", x); }"#);
         assert_eq!(output, vec!["hello\n"]);
     }
 
@@ -1266,17 +1363,13 @@ mod tests {
 
     #[test]
     fn test_integer_arithmetic() {
-        let output = run_and_capture(
-            r#"fn main() { println!("{}", 2 + 3 * 4); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { println!("{}", 2 + 3 * 4); }"#);
         assert_eq!(output, vec!["14\n"]);
     }
 
     #[test]
     fn test_float_arithmetic() {
-        let output = run_and_capture(
-            r#"fn main() { println!("{}", 1.5 + 2.5); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { println!("{}", 1.5 + 2.5); }"#);
         assert_eq!(output, vec!["4.0\n"]);
     }
 
@@ -1289,17 +1382,14 @@ mod tests {
 
     #[test]
     fn test_string_concatenation() {
-        let output = run_and_capture(
-            r#"fn main() { let s = "hello" + " " + "world"; println!("{}", s); }"#,
-        );
+        let output =
+            run_and_capture(r#"fn main() { let s = "hello" + " " + "world"; println!("{}", s); }"#);
         assert_eq!(output, vec!["hello world\n"]);
     }
 
     #[test]
     fn test_negation() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 5; println!("{}", -x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 5; println!("{}", -x); }"#);
         assert_eq!(output, vec!["-5\n"]);
     }
 
@@ -1317,17 +1407,14 @@ mod tests {
 
     #[test]
     fn test_logical_and_or() {
-        let output = run_and_capture(
-            r#"fn main() { println!("{} {}", true && false, true || false); }"#,
-        );
+        let output =
+            run_and_capture(r#"fn main() { println!("{} {}", true && false, true || false); }"#);
         assert_eq!(output, vec!["false true\n"]);
     }
 
     #[test]
     fn test_logical_not() {
-        let output = run_and_capture(
-            r#"fn main() { println!("{}", !true); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { println!("{}", !true); }"#);
         assert_eq!(output, vec!["false\n"]);
     }
 
@@ -1388,14 +1475,15 @@ fn main() {
 
     #[test]
     fn test_wrong_arg_count() {
-        let result = run(
-            r#"
+        let result = run(r#"
 fn foo(a: i64) -> i64 { a }
 fn main() { foo(1, 2); }
-"#,
-        );
+"#);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("expects 1 argument"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("expects 1 argument"));
     }
 
     #[test]
@@ -1421,17 +1509,13 @@ fn main() {
 
     #[test]
     fn test_if_true() {
-        let output = run_and_capture(
-            r#"fn main() { if true { println!("yes"); } }"#,
-        );
+        let output = run_and_capture(r#"fn main() { if true { println!("yes"); } }"#);
         assert_eq!(output, vec!["yes\n"]);
     }
 
     #[test]
     fn test_if_false() {
-        let output = run_and_capture(
-            r#"fn main() { if false { println!("yes"); } }"#,
-        );
+        let output = run_and_capture(r#"fn main() { if false { println!("yes"); } }"#);
         assert!(output.is_empty());
     }
 
@@ -1469,9 +1553,8 @@ fn main() {
 
     #[test]
     fn test_block_value() {
-        let output = run_and_capture(
-            r#"fn main() { let x = { let y = 10; y + 1 }; println!("{}", x); }"#,
-        );
+        let output =
+            run_and_capture(r#"fn main() { let x = { let y = 10; y + 1 }; println!("{}", x); }"#);
         assert_eq!(output, vec!["11\n"]);
     }
 
@@ -1479,9 +1562,8 @@ fn main() {
 
     #[test]
     fn test_compound_assignment() {
-        let output = run_and_capture(
-            r#"fn main() { let mut x = 10; x += 5; x -= 3; println!("{}", x); }"#,
-        );
+        let output =
+            run_and_capture(r#"fn main() { let mut x = 10; x += 5; x -= 3; println!("{}", x); }"#);
         assert_eq!(output, vec!["12\n"]);
     }
 
@@ -1509,7 +1591,10 @@ fn main() {
     fn test_no_main_error() {
         let result = run("fn foo() {}");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no `main` function"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no `main` function"));
     }
 
     // === Multiple println ===
@@ -1810,8 +1895,7 @@ fn main() {
 
     #[test]
     fn test_match_non_exhaustive_error() {
-        let result = run(
-            r#"
+        let result = run(r#"
 fn main() {
     let x = 5;
     match x {
@@ -1819,8 +1903,7 @@ fn main() {
         2 => "two",
     };
 }
-"#,
-        );
+"#);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("non-exhaustive"));
     }
@@ -1887,8 +1970,21 @@ fn main() {
         assert_eq!(
             output,
             vec![
-                "1\n", "2\n", "Fizz\n", "4\n", "Buzz\n", "Fizz\n", "7\n", "8\n", "Fizz\n",
-                "Buzz\n", "11\n", "Fizz\n", "13\n", "14\n", "FizzBuzz\n"
+                "1\n",
+                "2\n",
+                "Fizz\n",
+                "4\n",
+                "Buzz\n",
+                "Fizz\n",
+                "7\n",
+                "8\n",
+                "Fizz\n",
+                "Buzz\n",
+                "11\n",
+                "Fizz\n",
+                "13\n",
+                "14\n",
+                "FizzBuzz\n"
             ]
         );
     }
@@ -1909,13 +2005,15 @@ fn main() {
 
     #[test]
     fn test_vec_macro() {
-        let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{:?}\", v); }");
+        let output =
+            run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{:?}\", v); }");
         assert_eq!(output, vec!["[10, 20, 30]\n"]);
     }
 
     #[test]
     fn test_vec_index() {
-        let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }");
+        let output =
+            run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }");
         assert_eq!(output, vec!["20\n"]);
     }
 
@@ -1945,7 +2043,8 @@ println!("{} {:?}", x, v);
 
     #[test]
     fn test_vec_len() {
-        let output = run_and_capture("fn main() { let v = vec![1, 2, 3]; println!(\"{}\", v.len()); }");
+        let output =
+            run_and_capture("fn main() { let v = vec![1, 2, 3]; println!(\"{}\", v.len()); }");
         assert_eq!(output, vec!["3\n"]);
     }
 
@@ -2058,19 +2157,22 @@ println!("{} {}", s.contains("world"), s.contains("xyz"));
 
     #[test]
     fn test_string_to_uppercase() {
-        let output = run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.to_uppercase()); }"#);
+        let output =
+            run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.to_uppercase()); }"#);
         assert_eq!(output, vec!["HELLO\n"]);
     }
 
     #[test]
     fn test_string_to_lowercase() {
-        let output = run_and_capture(r#"fn main() { let s = "HELLO"; println!("{}", s.to_lowercase()); }"#);
+        let output =
+            run_and_capture(r#"fn main() { let s = "HELLO"; println!("{}", s.to_lowercase()); }"#);
         assert_eq!(output, vec!["hello\n"]);
     }
 
     #[test]
     fn test_string_trim() {
-        let output = run_and_capture(r#"fn main() { let s = "  hello  "; println!(">{}<", s.trim()); }"#);
+        let output =
+            run_and_capture(r#"fn main() { let s = "  hello  "; println!(">{}<", s.trim()); }"#);
         assert_eq!(output, vec![">hello<\n"]);
     }
 
@@ -2194,7 +2296,10 @@ let t = (1, "two", true);
 println!("{:?}", t);
 }"#,
         );
-        assert_eq!(output, vec!["[\"hello\", \"world\"]\n", "(1, \"two\", true)\n"]);
+        assert_eq!(
+            output,
+            vec!["[\"hello\", \"world\"]\n", "(1, \"two\", true)\n"]
+        );
     }
 
     #[test]

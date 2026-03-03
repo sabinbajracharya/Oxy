@@ -13,7 +13,12 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: usize, end: usize, line: usize, column: usize) -> Self {
-        Self { start, end, line, column }
+        Self {
+            start,
+            end,
+            line,
+            column,
+        }
     }
 }
 
@@ -78,8 +83,8 @@ pub enum TokenKind {
     Pub,
     Use,
     Mod,
-    SelfLower,   // `self`
-    SelfUpper,   // `Self`
+    SelfLower, // `self`
+    SelfUpper, // `Self`
     As,
     Ref,
     Const,
@@ -362,7 +367,10 @@ mod tests {
     #[test]
     fn test_token_kind_display() {
         assert_eq!(format!("{}", TokenKind::IntLiteral(42)), "42");
-        assert_eq!(format!("{}", TokenKind::StringLiteral("hi".into())), "\"hi\"");
+        assert_eq!(
+            format!("{}", TokenKind::StringLiteral("hi".into())),
+            "\"hi\""
+        );
         assert_eq!(format!("{}", TokenKind::Plus), "'+'");
         assert_eq!(format!("{}", TokenKind::Let), "'let'");
     }
