@@ -67,6 +67,9 @@ impl Interpreter {
                     if sname == "Server" {
                         return self.call_server_method(&receiver, method, args, span);
                     }
+                    if sname == "Db" {
+                        return self.call_db_method(&receiver, method, args, span);
+                    }
                 }
                 let type_name = name.clone();
                 self.call_user_method(receiver, &type_name, method, args, receiver_expr, env, span)

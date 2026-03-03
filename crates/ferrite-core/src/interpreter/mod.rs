@@ -15,6 +15,7 @@ use crate::types::{
     RESULT_TYPE, SOME_VARIANT,
 };
 
+mod db_dispatch;
 mod format;
 mod http;
 mod json;
@@ -63,6 +64,10 @@ pub struct Interpreter {
     server_static_dirs: HashMap<String, String>,
     /// Counter for generating unique server IDs.
     server_id_counter: u64,
+    /// Open SQLite database connections, keyed by internal ID.
+    db_connections: HashMap<String, rusqlite::Connection>,
+    /// Counter for generating unique database IDs.
+    db_id_counter: u64,
 }
 
 /// Data stored for a registered module.
@@ -98,6 +103,8 @@ impl Interpreter {
             server_routes: HashMap::new(),
             server_static_dirs: HashMap::new(),
             server_id_counter: 0,
+            db_connections: HashMap::new(),
+            db_id_counter: 0,
         }
     }
 
@@ -6156,5 +6163,113 @@ fn main() {
             "#,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_db_open_memory() {
+        run_capturing(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.close();
+            }
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_db_create_and_insert() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+                db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Alice", 30]);
+                db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Bob", 25]);
+                let id = db.last_insert_id();
+                println!("{}", id);
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["2\n"]);
+    }
+
+    #[test]
+    fn test_db_query() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)");
+                db.execute("INSERT INTO items (name) VALUES (?1)", vec!["apple"]);
+                db.execute("INSERT INTO items (name) VALUES (?1)", vec!["banana"]);
+                let rows = db.query("SELECT name FROM items ORDER BY name");
+                for row in rows {
+                    println!("{}", row.get("name").unwrap());
+                }
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["apple\n", "banana\n"]);
+    }
+
+    #[test]
+    fn test_db_query_with_params() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, val INTEGER)");
+                db.execute("INSERT INTO t (val) VALUES (?1)", vec![10]);
+                db.execute("INSERT INTO t (val) VALUES (?1)", vec![20]);
+                db.execute("INSERT INTO t (val) VALUES (?1)", vec![30]);
+                let rows = db.query("SELECT val FROM t WHERE val > ?1", vec![15]);
+                println!("{}", rows.len());
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["2\n"]);
+    }
+
+    #[test]
+    fn test_db_query_row() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)");
+                db.execute("INSERT INTO t (name) VALUES (?1)", vec!["hello"]);
+                let row = db.query_row("SELECT name FROM t WHERE id = ?1", vec![1]);
+                match row {
+                    Some(r) => println!("{}", r.get("name").unwrap()),
+                    None => println!("not found"),
+                }
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_db_execute_returns_affected() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
+                db.execute("INSERT INTO t (v) VALUES (?1)", vec!["a"]);
+                db.execute("INSERT INTO t (v) VALUES (?1)", vec!["b"]);
+                let n = db.execute("DELETE FROM t");
+                println!("{}", n);
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["2\n"]);
     }
 }

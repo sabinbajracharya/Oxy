@@ -44,6 +44,7 @@ fn main() {
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
 | HTTP server (routing, path params, static files) | ✅ |
+| SQLite database (queries, params, in-memory) | ✅ |
 | Async/await, `spawn`, `sleep` | ✅ |
 | File I/O (`std::fs` — read, write, dirs, metadata) | ✅ |
 | Environment (`std::env` — vars, current_dir) | ✅ |
@@ -487,6 +488,43 @@ fn main() {
 
 **Supported HTTP methods:** `app.get()`, `app.post()`, `app.put()`, `app.delete()`, `app.patch()`
 
+### Database (SQLite)
+
+Ferrite includes a built-in SQLite database with parameterized queries:
+
+```rust
+fn main() {
+    let db = Db::memory();  // or Db::open("app.db") for a file
+
+    db.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+    db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Alice", 30]);
+    db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Bob", 25]);
+
+    // Query returns Vec of HashMaps
+    let rows = db.query("SELECT name, age FROM users WHERE age > ?1", vec![20]);
+    for row in rows {
+        println!("{} is {}", row.get("name").unwrap(), row.get("age").unwrap());
+    }
+
+    // Single row lookup (returns Option)
+    let user = db.query_row("SELECT * FROM users WHERE id = ?1", vec![1]);
+
+    println!("Last ID: {}", db.last_insert_id());
+    db.close();
+}
+```
+
+**Methods:**
+| Method | Description |
+|--------|-------------|
+| `Db::open(path)` | Open or create a SQLite database file |
+| `Db::memory()` | Open an in-memory database |
+| `db.execute(sql)` / `db.execute(sql, params)` | Execute a statement, returns rows affected |
+| `db.query(sql)` / `db.query(sql, params)` | Query rows, returns `Vec<HashMap>` |
+| `db.query_row(sql, params)` | Query a single row, returns `Option<HashMap>` |
+| `db.last_insert_id()` | Get the last auto-increment ID |
+| `db.close()` | Close the database connection |
+
 > 📁 See the `examples/` directory for more complete examples covering all features.
 
 ---
@@ -509,6 +547,7 @@ Ferrite includes a comprehensive standard library accessible via `std::` paths:
 | `http` | `get`, `post`, `put`, `delete`, `patch`, `get_json`, `post_json` | HTTP client |
 | `Server` | `new`, `get`, `post`, `put`, `delete`, `patch`, `static_files`, `listen` | HTTP server with routing |
 | `Response` | `text`, `json`, `html`, `status` | HTTP response builders |
+| `Db` | `open`, `memory`, `execute`, `query`, `query_row`, `last_insert_id`, `close` | SQLite database |
 
 ```rust
 fn main() {

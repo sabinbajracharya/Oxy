@@ -2,8 +2,10 @@
 //!
 //! Provides math, random number generation, time utilities, file system
 //! operations, environment access, process control, regex, networking,
-//! and HTTP server.
+//! HTTP server, and SQLite database.
 
+/// SQLite database operations (open, query, execute).
+pub mod db;
 /// Environment variable and process argument access.
 pub mod env;
 /// File system operations (read, write, directory manipulation).
