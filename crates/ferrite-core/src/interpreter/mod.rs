@@ -1805,11 +1805,7 @@ impl Interpreter {
             Value::HashMap(_) => {
                 self.call_hashmap_method(receiver, method, args, receiver_expr, env, span)
             }
-            Value::Tuple(_) => Err(FerriError::Runtime {
-                message: format!("no method `{method}` on tuple"),
-                line: span.line,
-                column: span.column,
-            }),
+            Value::Tuple(_) => self.try_to_json_method(receiver, method, span, "tuple"),
             Value::Struct { name, .. }
             | Value::EnumVariant {
                 enum_name: name, ..
@@ -1827,11 +1823,33 @@ impl Interpreter {
                 let type_name = name.clone();
                 self.call_user_method(receiver, &type_name, method, args, receiver_expr, env, span)
             }
-            _ => Err(FerriError::Runtime {
-                message: format!("no method `{method}` on type {}", receiver.type_name()),
-                line: span.line,
-                column: span.column,
-            }),
+            _ => {
+                // Built-in .to_json() and .to_json_pretty() on all values
+                if method == "to_json" || method == "to_json_pretty" {
+                    let result = if method == "to_json" {
+                        crate::json::serialize(&receiver)
+                    } else {
+                        crate::json::serialize_pretty(&receiver)
+                    };
+                    return match result {
+                        Ok(json) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Ok".to_string(),
+                            data: vec![Value::String(json)],
+                        }),
+                        Err(e) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Err".to_string(),
+                            data: vec![Value::String(e)],
+                        }),
+                    };
+                }
+                Err(FerriError::Runtime {
+                    message: format!("no method `{method}` on type {}", receiver.type_name()),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
         }
     }
 
@@ -2135,11 +2153,7 @@ impl Interpreter {
                     data: vec![],
                 })
             }
-            _ => Err(FerriError::Runtime {
-                message: format!("no method `{method}` on Vec"),
-                line: span.line,
-                column: span.column,
-            }),
+            _ => self.try_to_json_method(Value::Vec(v), method, span, "Vec"),
         }
     }
 
@@ -2332,11 +2346,7 @@ impl Interpreter {
             }
             "clone" => Ok(Value::String(s)),
             "to_string" => Ok(Value::String(s)),
-            _ => Err(FerriError::Runtime {
-                message: format!("no method `{method}` on String"),
-                line: span.line,
-                column: span.column,
-            }),
+            _ => self.try_to_json_method(Value::String(s), method, span, "String"),
         }
     }
 
@@ -2443,11 +2453,7 @@ impl Interpreter {
                     pairs.into_iter().map(|(_, v)| v.clone()).collect(),
                 ))
             }
-            _ => Err(FerriError::Runtime {
-                message: format!("no method `{method}` on HashMap"),
-                line: span.line,
-                column: span.column,
-            }),
+            _ => self.try_to_json_method(Value::HashMap(m), method, span, "HashMap"),
         }
     }
 
@@ -2825,6 +2831,11 @@ impl Interpreter {
                 return Ok(Value::HashMap(HashMap::new()));
             }
 
+            // Built-in json:: pseudo-module
+            if type_name == "json" {
+                return self.call_json_function(method_name, args, span);
+            }
+
             // Check for module function call: `module::function(args)`
             if let Some(module) = self.modules.get(type_name).cloned() {
                 if let Ok(val) = module.env.borrow().get(method_name) {
@@ -3070,11 +3081,247 @@ impl Interpreter {
             );
         }
 
+        // Built-in to_json / to_json_pretty
+        if method == "to_json" || method == "to_json_pretty" {
+            return self.try_to_json_method(receiver, method, span, type_name);
+        }
+
         Err(FerriError::Runtime {
             message: format!("no method `{method}` found for type `{type_name}`"),
             line: span.line,
             column: span.column,
         })
+    }
+
+    fn try_to_json_method(
+        &self,
+        receiver: Value,
+        method: &str,
+        span: &Span,
+        type_name: &str,
+    ) -> Result<Value, FerriError> {
+        if method == "to_json" || method == "to_json_pretty" {
+            let result = if method == "to_json" {
+                crate::json::serialize(&receiver)
+            } else {
+                crate::json::serialize_pretty(&receiver)
+            };
+            return match result {
+                Ok(json) => Ok(Value::EnumVariant {
+                    enum_name: "Result".to_string(),
+                    variant: "Ok".to_string(),
+                    data: vec![Value::String(json)],
+                }),
+                Err(e) => Ok(Value::EnumVariant {
+                    enum_name: "Result".to_string(),
+                    variant: "Err".to_string(),
+                    data: vec![Value::String(e)],
+                }),
+            };
+        }
+        Err(FerriError::Runtime {
+            message: format!("no method `{method}` on {type_name}"),
+            line: span.line,
+            column: span.column,
+        })
+    }
+
+    fn call_json_function(
+        &self,
+        func_name: &str,
+        args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match func_name {
+            "serialize" | "to_string" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("json::{func_name}() takes 1 argument"),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match crate::json::serialize(&args[0]) {
+                    Ok(json) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Ok".to_string(),
+                        data: vec![Value::String(json)],
+                    }),
+                    Err(e) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Err".to_string(),
+                        data: vec![Value::String(e)],
+                    }),
+                }
+            }
+            "to_string_pretty" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "json::to_string_pretty() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match crate::json::serialize_pretty(&args[0]) {
+                    Ok(json) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Ok".to_string(),
+                        data: vec![Value::String(json)],
+                    }),
+                    Err(e) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Err".to_string(),
+                        data: vec![Value::String(e)],
+                    }),
+                }
+            }
+            "deserialize" | "parse" | "from_str" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("json::{func_name}() takes 1 argument"),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let s = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "json::{func_name}() expects a string, got {}",
+                                other.type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                match crate::json::deserialize(&s) {
+                    Ok(val) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Ok".to_string(),
+                        data: vec![val],
+                    }),
+                    Err(e) => Ok(Value::EnumVariant {
+                        enum_name: "Result".to_string(),
+                        variant: "Err".to_string(),
+                        data: vec![Value::String(e)],
+                    }),
+                }
+            }
+            "from_struct" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message:
+                            "json::from_struct() takes 2 arguments (json_string, \"StructName\")"
+                                .into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let json_str = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "json::from_struct() first argument must be a string, got {}",
+                                other.type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                let struct_name = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "json::from_struct() second argument must be a string, got {}",
+                                other.type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                self.json_from_struct(&json_str, &struct_name, span)
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("unknown json function: {func_name}"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn json_from_struct(
+        &self,
+        json_str: &str,
+        struct_name: &str,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        let parsed = match crate::json::deserialize(json_str) {
+            Ok(val) => val,
+            Err(e) => {
+                return Ok(Value::EnumVariant {
+                    enum_name: "Result".to_string(),
+                    variant: "Err".to_string(),
+                    data: vec![Value::String(e)],
+                })
+            }
+        };
+
+        let map = match parsed {
+            Value::HashMap(m) => m,
+            _ => {
+                return Ok(Value::EnumVariant {
+                    enum_name: "Result".to_string(),
+                    variant: "Err".to_string(),
+                    data: vec![Value::String("JSON value is not an object".to_string())],
+                })
+            }
+        };
+
+        let sdef = match self.struct_defs.get(struct_name) {
+            Some(sd) => sd.clone(),
+            None => {
+                return Err(FerriError::Runtime {
+                    message: format!("unknown struct type: {struct_name}"),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+        };
+
+        use crate::ast::StructKind;
+        match &sdef.kind {
+            StructKind::Named(fields) => {
+                let mut result_fields = std::collections::HashMap::new();
+                for field in fields {
+                    if let Some(val) = map.get(&field.name) {
+                        result_fields.insert(field.name.clone(), val.clone());
+                    } else {
+                        result_fields.insert(field.name.clone(), Value::Unit);
+                    }
+                }
+                Ok(Value::EnumVariant {
+                    enum_name: "Result".to_string(),
+                    variant: "Ok".to_string(),
+                    data: vec![Value::Struct {
+                        name: struct_name.to_string(),
+                        fields: result_fields,
+                    }],
+                })
+            }
+            _ => Ok(Value::EnumVariant {
+                enum_name: "Result".to_string(),
+                variant: "Err".to_string(),
+                data: vec![Value::String(format!(
+                    "json::from_struct only supports named-field structs, not {struct_name}"
+                ))],
+            }),
+        }
     }
 
     /// Search trait impls for a method, including default implementations.
@@ -6082,5 +6329,271 @@ fn main() {
         interp.execute_program(&program).unwrap();
         let output = interp.captured_output().to_vec();
         assert_eq!(output, vec!["test\n", "arg1\n"]);
+    }
+
+    // === Phase 13: JSON & Serialization ===
+
+    #[test]
+    fn test_json_serialize_primitives() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let a = json::serialize(42).unwrap();
+    let b = json::serialize(3.14).unwrap();
+    let c = json::serialize(true).unwrap();
+    let d = json::serialize("hello").unwrap();
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", c);
+    println!("{}", d);
+}"#,
+        );
+        assert_eq!(output, vec!["42\n", "3.14\n", "true\n", "\"hello\"\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_string_escapes() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let s = json::serialize("hello\nworld\t\"quoted\"").unwrap();
+    println!("{}", s);
+}"#,
+        );
+        assert_eq!(output, vec!["\"hello\\nworld\\t\\\"quoted\\\"\"\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_vec() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let j = json::serialize(v).unwrap();
+    println!("{}", j);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_hashmap() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let mut m = HashMap::new();
+    m.insert("alpha", 1);
+    m.insert("beta", 2);
+    let j = json::serialize(m).unwrap();
+    println!("{}", j);
+}"#,
+        );
+        assert_eq!(output, vec!["{\"alpha\": 1, \"beta\": 2}\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_struct() {
+        let output = run_and_capture(
+            r#"
+struct Point {
+    x: i64,
+    y: i64,
+}
+fn main() {
+    let p = Point { x: 10, y: 20 };
+    let j = json::serialize(p).unwrap();
+    println!("{}", j);
+}"#,
+        );
+        assert_eq!(output, vec!["{\"x\": 10, \"y\": 20}\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_enum() {
+        let output = run_and_capture(
+            r#"
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Rgb(i64, i64, i64),
+}
+fn main() {
+    let a = json::serialize(Color::Red).unwrap();
+    let b = json::serialize(Color::Rgb(255, 128, 0)).unwrap();
+    println!("{}", a);
+    println!("{}", b);
+}"#,
+        );
+        assert_eq!(
+            output,
+            vec![
+                "\"Red\"\n",
+                "{\"variant\": \"Rgb\", \"data\": [255, 128, 0]}\n"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_json_serialize_option_result() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let a = json::serialize(Some(42)).unwrap();
+    let b = json::serialize(None).unwrap();
+    let c = json::serialize(Ok("yes")).unwrap();
+    let d = json::serialize(Err("no")).unwrap();
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", c);
+    println!("{}", d);
+}"#,
+        );
+        assert_eq!(
+            output,
+            vec![
+                "42\n",
+                "null\n",
+                "{\"Ok\": \"yes\"}\n",
+                "{\"Err\": \"no\"}\n"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_json_serialize_nested() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let v = vec![vec![1, 2], vec![3, 4]];
+    let j = json::serialize(v).unwrap();
+    println!("{}", j);
+}"#,
+        );
+        assert_eq!(output, vec!["[[1, 2], [3, 4]]\n"]);
+    }
+
+    #[test]
+    fn test_json_serialize_pretty() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let j = json::to_string_pretty(v).unwrap();
+    println!("{}", j);
+}"#,
+        );
+        assert_eq!(output, vec!["[\n  1,\n  2,\n  3\n]\n"]);
+    }
+
+    #[test]
+    fn test_json_deserialize_primitives() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let a = json::deserialize("42").unwrap();
+    let b = json::deserialize("3.14").unwrap();
+    let c = json::deserialize("true").unwrap();
+    let d = json::deserialize("\"hello\"").unwrap();
+    let e = json::deserialize("null").unwrap();
+    println!("{:?}", a);
+    println!("{:?}", b);
+    println!("{:?}", c);
+    println!("{}", d);
+    println!("{:?}", e);
+}"#,
+        );
+        assert_eq!(output, vec!["42\n", "3.14\n", "true\n", "hello\n", "()\n"]);
+    }
+
+    #[test]
+    fn test_json_deserialize_object() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let obj = json::parse("{\"name\": \"Alice\", \"age\": 30}").unwrap();
+    let name = obj.get("name").unwrap();
+    let age = obj.get("age").unwrap();
+    println!("{}", name);
+    println!("{:?}", age);
+}"#,
+        );
+        assert_eq!(output, vec!["Alice\n", "30\n"]);
+    }
+
+    #[test]
+    fn test_json_deserialize_array() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let arr = json::from_str("[1, 2, 3]").unwrap();
+    println!("{:?}", arr);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_json_deserialize_nested() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let data = json::deserialize("{\"items\": [1, 2, 3], \"ok\": true}").unwrap();
+    let items = data.get("items").unwrap();
+    let ok = data.get("ok").unwrap();
+    println!("{:?}", items);
+    println!("{:?}", ok);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_json_roundtrip() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let original = vec![1, 2, 3];
+    let json_str = json::serialize(original).unwrap();
+    let parsed = json::deserialize(json_str).unwrap();
+    println!("{:?}", parsed);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_json_to_json_method() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let v = vec![1, 2, 3];
+    let j = v.to_json().unwrap();
+    println!("{}", j);
+    let n = 42;
+    let j2 = n.to_json().unwrap();
+    println!("{}", j2);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n", "42\n"]);
+    }
+
+    #[test]
+    fn test_json_error_cases() {
+        let output = run_and_capture(
+            r#"fn main() {
+    let r = json::deserialize("invalid");
+    match r {
+        Result::Ok(_) => println!("unexpected ok"),
+        Result::Err(e) => println!("error: {}", e),
+    }
+}"#,
+        );
+        assert!(output[0].starts_with("error: "));
+    }
+
+    #[test]
+    fn test_json_from_struct() {
+        let output = run_and_capture(
+            r#"
+struct Person {
+    name: String,
+    age: i64,
+}
+fn main() {
+    let json_str = "{\"name\": \"Alice\", \"age\": 30}";
+    let p = json::from_struct(json_str, "Person").unwrap();
+    println!("{:?}", p);
+}"#,
+        );
+        assert!(output[0].contains("Alice"));
+        assert!(output[0].contains("30"));
     }
 }

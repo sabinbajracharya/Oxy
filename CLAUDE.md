@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 12: Advanced Features & Polish — COMPLETE. 338 tests passing.
+Phase 13: JSON & Serialization — COMPLETE. 355 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -189,5 +189,10 @@ Phase 12: Advanced Features & Polish — COMPLETE. 338 tests passing.
 - Command-line args: `std::env::args()` returns Vec of strings
 - Process exit: `std::process::exit(code)`
 - Improved error messages with source line context and caret pointing to error column
+- JSON serialization: `json::serialize(value)`, `json::to_string_pretty(value)` — auto-serializes structs, vecs, hashmaps, enums
+- JSON deserialization: `json::deserialize(string)`, `json::parse(string)` — parses JSON into Ferrite values
+- Typed deserialization: `json::from_struct(string, "TypeName")` — deserializes into known struct type
+- `.to_json()` / `.to_json_pretty()` methods on all value types
+- Round-trip: serialize → deserialize preserves values
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`
