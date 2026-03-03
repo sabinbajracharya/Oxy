@@ -65,7 +65,7 @@ function activate(context) {
             args: [
                 "compose", "run", "--rm", "-T",
                 "dev",
-                "cargo", "run", "--release", "-p", "ferrite-lsp", "--quiet",
+                "cargo", "run", "--release", "-p", "ferrite-lsp", "--quiet", "--",
             ],
             options: { cwd: projectRoot },
             transport: TransportKind.stdio,
