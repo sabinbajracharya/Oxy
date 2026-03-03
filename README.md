@@ -29,16 +29,22 @@ fn main() {
 | Functions, closures, higher-order functions | ✅ |
 | Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`) | ✅ |
 | Structs, enums, `impl` blocks | ✅ |
-| Traits with default methods | ✅ |
+| Traits with default methods, operator overloading | ✅ |
 | Generics (basic) | ✅ |
 | Error handling (`Result`, `Option`, `?` operator) | ✅ |
 | Modules (`mod`, `use`) | ✅ |
 | Collections (`Vec`, `HashMap`, tuples, ranges) | ✅ |
-| String operations | ✅ |
+| String operations, f-string interpolation | ✅ |
+| `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
 | Async/await, `spawn`, `sleep` | ✅ |
-| File I/O (`std::fs`) | ✅ |
+| File I/O (`std::fs` — read, write, dirs, metadata) | ✅ |
+| Environment (`std::env` — vars, current_dir) | ✅ |
+| Process/commands (`std::process` — run programs) | ✅ |
+| Regular expressions (`std::regex`) | ✅ |
+| Networking (`std::net` — TCP, UDP, DNS) | ✅ |
+| Math, random, time stdlib | ✅ |
 | CLI args (`std::env::args`) | ✅ |
 | REPL (interactive shell) | ✅ |
 
@@ -307,6 +313,49 @@ fn main() {
 
 ---
 
+## Standard Library
+
+Ferrite includes a comprehensive standard library accessible via `std::` paths:
+
+| Module | Functions | Description |
+|--------|-----------|-------------|
+| `math` | `sqrt`, `sin`, `cos`, `tan`, `abs`, `pow`, `floor`, `ceil`, `round`, `log`, `min`, `max`, `PI`, `E` | Math functions and constants |
+| `rand` | `random`, `range`, `bool` | Pseudo-random number generation |
+| `time` | `now`, `millis`, `elapsed` | Wall-clock time and duration |
+| `std::fs` | `read_to_string`, `write`, `append`, `exists`, `is_file`, `is_dir`, `create_dir`, `create_dir_all`, `read_dir`, `remove_file`, `remove_dir`, `rename`, `copy`, `canonicalize`, `metadata` | File system operations |
+| `std::env` | `args`, `var`, `vars`, `current_dir`, `set_current_dir`, `home_dir` | Environment variables |
+| `std::process` | `exit`, `command`, `command_with_args` | Process control and command execution |
+| `std::regex` | `is_match`, `find`, `find_all`, `captures`, `replace`, `replace_all`, `split` | Regular expressions |
+| `std::net` | `tcp_connect`, `tcp_send`, `tcp_listen`, `udp_bind`, `udp_send_to`, `lookup_host` | TCP/UDP networking |
+| `json` | `serialize`, `deserialize`, `parse`, `to_string_pretty` | JSON serialization |
+| `http` | `get`, `post`, `put`, `delete`, `patch`, `get_json`, `post_json` | HTTP client |
+
+```rust
+fn main() {
+    // File I/O
+    let _ = std::fs::write("hello.txt", "Hello from Ferrite!");
+    let content = std::fs::read_to_string("hello.txt").unwrap();
+    println!("{}", content);
+
+    // Regex
+    let has_email = std::regex::is_match(r"\w+@\w+\.\w+", "user@example.com");
+    println!("Has email: {}", has_email);
+
+    // Run a command
+    let output = std::process::command_with_args("echo", vec!["Hello!"]).unwrap();
+    println!("Output: {}", output.stdout);
+
+    // Math
+    println!("PI = {}", math::PI);
+    println!("sqrt(2) = {}", math::sqrt(2.0));
+
+    // Cleanup
+    let _ = std::fs::remove_file("hello.txt");
+}
+```
+
+---
+
 ## VS Code Extension
 
 Ferrite has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
@@ -392,17 +441,17 @@ Then in VS Code settings (`Cmd+,`):
 ```
 project-ferrite/
 ├── crates/
-│   ├── ferrite-core/       # Language engine (lexer, parser, AST, interpreter)
+│   ├── ferrite-core/       # Language engine (lexer, parser, AST, interpreter, stdlib)
 │   ├── ferrite-cli/        # CLI binary (run files, REPL)
 │   └── ferrite-lsp/        # Language Server Protocol server
 ├── editors/
 │   └── vscode/             # VS Code extension (syntax + LSP client)
-├── examples/               # Example .fe programs
+├── examples/               # Example .fe programs (15+ examples)
 ├── tests/                  # Integration tests
 ├── Dockerfile              # Multi-stage: builder, runtime, dev
 ├── docker-compose.yml      # Dev, test, setup, build services
 ├── CLAUDE.md               # AI assistant context
-├── CONTRIBUTING.md         # Contribution guidelines
+├── CONTRIBUTING.md         # Contribution guidelines + architecture overview
 └── LICENSE                 # MIT license
 ```
 
@@ -421,8 +470,8 @@ project-ferrite/
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (395 tests)
-docker compose run --rm dev bash -c "cargo test"
+# Run all tests (471 tests)
+docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting
 docker compose run --rm dev bash -c "cargo fmt --all --check"
