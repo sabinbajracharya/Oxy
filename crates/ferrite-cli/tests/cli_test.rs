@@ -1,10 +1,14 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 
+fn ferrite_cmd() -> Command {
+    #[allow(deprecated)]
+    Command::cargo_bin("ferrite").unwrap()
+}
+
 #[test]
 fn test_version_flag() {
-    Command::cargo_bin("ferrite")
-        .unwrap()
+    ferrite_cmd()
         .arg("--version")
         .assert()
         .success()
@@ -13,8 +17,7 @@ fn test_version_flag() {
 
 #[test]
 fn test_version_short_flag() {
-    Command::cargo_bin("ferrite")
-        .unwrap()
+    ferrite_cmd()
         .arg("-V")
         .assert()
         .success()
@@ -23,8 +26,7 @@ fn test_version_short_flag() {
 
 #[test]
 fn test_help_flag() {
-    Command::cargo_bin("ferrite")
-        .unwrap()
+    ferrite_cmd()
         .arg("--help")
         .assert()
         .success()
@@ -35,8 +37,7 @@ fn test_help_flag() {
 
 #[test]
 fn test_no_args_shows_help() {
-    Command::cargo_bin("ferrite")
-        .unwrap()
+    ferrite_cmd()
         .assert()
         .success()
         .stdout(predicate::str::contains("Usage:"));
@@ -44,8 +45,7 @@ fn test_no_args_shows_help() {
 
 #[test]
 fn test_unknown_command() {
-    Command::cargo_bin("ferrite")
-        .unwrap()
+    ferrite_cmd()
         .arg("bogus")
         .assert()
         .failure()
