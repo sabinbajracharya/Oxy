@@ -9,6 +9,14 @@ use std::fmt;
 use crate::ast::{Block, Param, TypeAnnotation};
 use crate::env::Env;
 
+// Common string constants to avoid repeated heap allocations in hot paths.
+pub const OPTION_TYPE: &str = "Option";
+pub const RESULT_TYPE: &str = "Result";
+pub const SOME_VARIANT: &str = "Some";
+pub const NONE_VARIANT: &str = "None";
+pub const OK_VARIANT: &str = "Ok";
+pub const ERR_VARIANT: &str = "Err";
+
 /// A runtime value in Ferrite.
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -96,54 +104,54 @@ impl Value {
 
     pub fn some(val: Value) -> Value {
         Value::EnumVariant {
-            enum_name: "Option".to_string(),
-            variant: "Some".to_string(),
+            enum_name: OPTION_TYPE.to_string(),
+            variant: SOME_VARIANT.to_string(),
             data: vec![val],
         }
     }
 
     pub fn none() -> Value {
         Value::EnumVariant {
-            enum_name: "Option".to_string(),
-            variant: "None".to_string(),
+            enum_name: OPTION_TYPE.to_string(),
+            variant: NONE_VARIANT.to_string(),
             data: vec![],
         }
     }
 
     pub fn ok(val: Value) -> Value {
         Value::EnumVariant {
-            enum_name: "Result".to_string(),
-            variant: "Ok".to_string(),
+            enum_name: RESULT_TYPE.to_string(),
+            variant: OK_VARIANT.to_string(),
             data: vec![val],
         }
     }
 
     pub fn err(val: Value) -> Value {
         Value::EnumVariant {
-            enum_name: "Result".to_string(),
-            variant: "Err".to_string(),
+            enum_name: RESULT_TYPE.to_string(),
+            variant: ERR_VARIANT.to_string(),
             data: vec![val],
         }
     }
 
     /// Check if this is a Some variant
     pub fn is_some_variant(&self) -> bool {
-        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Option" && variant == "Some")
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == OPTION_TYPE && variant == SOME_VARIANT)
     }
 
     /// Check if this is a None variant
     pub fn is_none_variant(&self) -> bool {
-        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Option" && variant == "None")
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == OPTION_TYPE && variant == NONE_VARIANT)
     }
 
     /// Check if this is an Ok variant
     pub fn is_ok_variant(&self) -> bool {
-        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Result" && variant == "Ok")
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == RESULT_TYPE && variant == OK_VARIANT)
     }
 
     /// Check if this is an Err variant
     pub fn is_err_variant(&self) -> bool {
-        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Result" && variant == "Err")
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == RESULT_TYPE && variant == ERR_VARIANT)
     }
 
     /// Returns true if this value is truthy (for conditions).
@@ -223,7 +231,7 @@ impl fmt::Display for Value {
                 data,
             } => {
                 // Built-in Option/Result: show without enum prefix
-                if enum_name == "Option" || enum_name == "Result" {
+                if enum_name == OPTION_TYPE || enum_name == RESULT_TYPE {
                     write!(f, "{variant}")?;
                 } else {
                     write!(f, "{enum_name}::{variant}")?;

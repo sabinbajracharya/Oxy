@@ -1,6 +1,6 @@
 //! Hand-written JSON serializer and deserializer for Ferrite values.
 
-use crate::types::Value;
+use crate::types::{Value, OPTION_TYPE, RESULT_TYPE};
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ fn serialize_map_pretty(m: &HashMap<String, Value>, indent: usize) -> Result<Str
 
 fn serialize_enum(enum_name: &str, variant: &str, data: &[Value]) -> Result<String, String> {
     // Special case: Option
-    if enum_name == "Option" {
+    if enum_name == OPTION_TYPE {
         return match variant {
             "None" => Ok("null".to_string()),
             "Some" if data.len() == 1 => serialize_value(&data[0]),
@@ -160,7 +160,7 @@ fn serialize_enum(enum_name: &str, variant: &str, data: &[Value]) -> Result<Stri
         };
     }
     // Special case: Result
-    if enum_name == "Result" {
+    if enum_name == RESULT_TYPE {
         return match variant {
             "Ok" if data.len() == 1 => {
                 let v = serialize_value(&data[0])?;
@@ -202,7 +202,7 @@ fn serialize_enum_pretty(
     indent: usize,
 ) -> Result<String, String> {
     // Special case: Option
-    if enum_name == "Option" {
+    if enum_name == OPTION_TYPE {
         return match variant {
             "None" => Ok("null".to_string()),
             "Some" if data.len() == 1 => serialize_value_pretty(&data[0], indent),
@@ -210,7 +210,7 @@ fn serialize_enum_pretty(
         };
     }
     // Special case: Result
-    if enum_name == "Result" {
+    if enum_name == RESULT_TYPE {
         return match variant {
             "Ok" if data.len() == 1 => {
                 let inner_indent = indent + 2;

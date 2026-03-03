@@ -10,7 +10,10 @@ use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
 use crate::lexer::Span;
-use crate::types::{FunctionData, FutureData, Value};
+use crate::types::{
+    FunctionData, FutureData, Value, ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE,
+    RESULT_TYPE, SOME_VARIANT,
+};
 
 /// The Ferrite interpreter.
 pub struct Interpreter {
@@ -665,8 +668,7 @@ impl Interpreter {
             Expr::CharLiteral(c, _) => Ok(Value::Char(*c)),
 
             Expr::Ident(name, span) => {
-                // Built-in constants
-                if name == "None" {
+                if name == NONE_VARIANT {
                     return Ok(Value::none());
                 }
                 env.borrow().get(name).map_err(|_| FerriError::Runtime {
@@ -696,115 +698,7 @@ impl Interpreter {
                 self.eval_unary_op(*op, &val, span.line, span.column)
             }
 
-            Expr::Call { callee, args, span } => {
-                // Handle built-in constructors: Some(x), Ok(x), Err(e)
-                if let Expr::Ident(name, _) = callee.as_ref() {
-                    match name.as_str() {
-                        "Some" => {
-                            if args.len() != 1 {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "Some() takes exactly 1 argument, got {}",
-                                        args.len()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                            let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::some(val));
-                        }
-                        "Ok" => {
-                            if args.len() != 1 {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "Ok() takes exactly 1 argument, got {}",
-                                        args.len()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                            let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::ok(val));
-                        }
-                        "Err" => {
-                            if args.len() != 1 {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "Err() takes exactly 1 argument, got {}",
-                                        args.len()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                            let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::err(val));
-                        }
-                        "spawn" => {
-                            if args.len() != 1 {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "spawn() takes exactly 1 argument, got {}",
-                                        args.len()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                            let func = self.eval_expr(&args[0], env)?;
-                            let result = self.call_function(&func, &[], span.line, span.column)?;
-                            return Ok(Value::JoinHandle(Box::new(result)));
-                        }
-                        "sleep" => {
-                            if args.len() != 1 {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "sleep() takes exactly 1 argument, got {}",
-                                        args.len()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                            let val = self.eval_expr(&args[0], env)?;
-                            if let Value::Integer(ms) = val {
-                                std::thread::sleep(std::time::Duration::from_millis(ms as u64));
-                                return Ok(Value::Unit);
-                            }
-                            return Err(FerriError::Runtime {
-                                message: format!(
-                                    "sleep() expects integer milliseconds, got {}",
-                                    val.type_name()
-                                ),
-                                line: span.line,
-                                column: span.column,
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-                let func = self.eval_expr(callee, env)?;
-                let mut arg_values = Vec::with_capacity(args.len());
-                for arg in args {
-                    arg_values.push(self.eval_expr(arg, env)?);
-                }
-                // If calling an async function, return a Future thunk
-                if let Value::Function(ref func_data) = func {
-                    if self.async_fns.contains(&func_data.name) {
-                        return Ok(Value::Future(Box::new(FutureData {
-                            name: func_data.name.clone(),
-                            params: func_data.params.clone(),
-                            return_type: func_data.return_type.clone(),
-                            body: func_data.body.clone(),
-                            closure_env: Rc::clone(&func_data.closure_env),
-                            args: arg_values,
-                        })));
-                    }
-                }
-                self.call_function(&func, &arg_values, span.line, span.column)
-            }
+            Expr::Call { callee, args, span } => self.eval_call_expr(callee, args, span, env),
 
             Expr::MacroCall { name, args, span } => {
                 self.eval_macro_call(name, args, env, span.line, span.column)
@@ -832,232 +726,25 @@ impl Interpreter {
                 target,
                 value,
                 span,
-            } => {
-                let val = self.eval_expr(value, env)?;
-                if let Expr::Ident(name, _) = target.as_ref() {
-                    env.borrow_mut()
-                        .set(name, val)
-                        .map_err(|e| FerriError::Runtime {
-                            message: e.to_string(),
-                            line: span.line,
-                            column: span.column,
-                        })?;
-                    Ok(Value::Unit)
-                } else if let Expr::FieldAccess { object, field, .. } = target.as_ref() {
-                    // Field assignment: `s.field = val`
-                    if let Expr::Ident(name, _) = object.as_ref() {
-                        let mut current =
-                            env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                                message: format!("undefined variable '{name}'"),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        if let Value::Struct { fields, .. } = &mut current {
-                            if fields.contains_key(field) {
-                                fields.insert(field.clone(), val);
-                            } else {
-                                return Err(FerriError::Runtime {
-                                    message: format!("no field '{field}' on struct"),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                        } else {
-                            return Err(FerriError::Runtime {
-                                message: format!("cannot set field on {}", current.type_name()),
-                                line: span.line,
-                                column: span.column,
-                            });
-                        }
-                        env.borrow_mut()
-                            .set(name, current)
-                            .map_err(|e| FerriError::Runtime {
-                                message: e.to_string(),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        Ok(Value::Unit)
-                    } else if let Expr::SelfRef(_) = object.as_ref() {
-                        // self.field = val
-                        let mut current =
-                            env.borrow().get("self").map_err(|_| FerriError::Runtime {
-                                message: "'self' not available in this context".into(),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        if let Value::Struct { fields, .. } = &mut current {
-                            if fields.contains_key(field) {
-                                fields.insert(field.clone(), val);
-                            } else {
-                                return Err(FerriError::Runtime {
-                                    message: format!("no field '{field}' on struct"),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                        } else {
-                            return Err(FerriError::Runtime {
-                                message: format!("cannot set field on {}", current.type_name()),
-                                line: span.line,
-                                column: span.column,
-                            });
-                        }
-                        env.borrow_mut()
-                            .set("self", current)
-                            .map_err(|e| FerriError::Runtime {
-                                message: e.to_string(),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        Ok(Value::Unit)
-                    } else {
-                        Err(FerriError::Runtime {
-                            message: "invalid field assignment target".into(),
-                            line: span.line,
-                            column: span.column,
-                        })
-                    }
-                } else if let Expr::Index { object, index, .. } = target.as_ref() {
-                    // Index assignment: `v[0] = x`
-                    let idx = self.eval_expr(index, env)?;
-                    let Value::Integer(i) = idx else {
-                        return Err(FerriError::Runtime {
-                            message: format!("index must be integer, got {}", idx.type_name()),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    };
-                    let i = i as usize;
-                    if let Expr::Ident(name, _) = object.as_ref() {
-                        let mut current =
-                            env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                                message: format!("undefined variable '{name}'"),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        match &mut current {
-                            Value::Vec(v) => {
-                                if i >= v.len() {
-                                    return Err(FerriError::Runtime {
-                                        message: format!(
-                                            "index out of bounds: len is {}, but index is {i}",
-                                            v.len()
-                                        ),
-                                        line: span.line,
-                                        column: span.column,
-                                    });
-                                }
-                                v[i] = val;
-                            }
-                            _ => {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "cannot index-assign into {}",
-                                        current.type_name()
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                        }
-                        env.borrow_mut()
-                            .set(name, current)
-                            .map_err(|e| FerriError::Runtime {
-                                message: e.to_string(),
-                                line: span.line,
-                                column: span.column,
-                            })?;
-                        Ok(Value::Unit)
-                    } else {
-                        Err(FerriError::Runtime {
-                            message: "invalid index assignment target".into(),
-                            line: span.line,
-                            column: span.column,
-                        })
-                    }
-                } else {
-                    Err(FerriError::Runtime {
-                        message: "invalid assignment target".into(),
-                        line: span.line,
-                        column: span.column,
-                    })
-                }
-            }
+            } => self.eval_assign_expr(target, value, span, env),
 
             Expr::CompoundAssign {
                 target,
                 op,
                 value,
                 span,
-            } => {
-                if let Expr::Ident(name, _) = target.as_ref() {
-                    let current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                        message: format!("undefined variable '{name}'"),
-                        line: span.line,
-                        column: span.column,
-                    })?;
-                    let rval = self.eval_expr(value, env)?;
-                    let new_val =
-                        self.eval_binary_op(&current, *op, &rval, span.line, span.column)?;
-                    env.borrow_mut()
-                        .set(name, new_val)
-                        .map_err(|e| FerriError::Runtime {
-                            message: e.to_string(),
-                            line: span.line,
-                            column: span.column,
-                        })?;
-                    Ok(Value::Unit)
-                } else {
-                    Err(FerriError::Runtime {
-                        message: "invalid compound assignment target".into(),
-                        line: span.line,
-                        column: span.column,
-                    })
-                }
-            }
+            } => self.eval_compound_assign_expr(target, *op, value, span, env),
 
             Expr::Grouped(inner, _) => self.eval_expr(inner, env),
 
-            Expr::Match { expr, arms, span } => {
-                let val = self.eval_expr(expr, env)?;
-                for arm in arms {
-                    if Self::pattern_matches(&arm.pattern, &val) {
-                        let match_env = Environment::child(env);
-                        Self::bind_pattern(&arm.pattern, &val, &match_env);
-                        return self.eval_expr(&arm.body, &match_env);
-                    }
-                }
-                Err(FerriError::Runtime {
-                    message: "non-exhaustive match: no arm matched".into(),
-                    line: span.line,
-                    column: span.column,
-                })
-            }
+            Expr::Match { expr, arms, span } => self.eval_match_expr(expr, arms, span, env),
 
             Expr::Range {
                 start,
                 end,
                 inclusive,
                 span,
-            } => {
-                let start_val = self.eval_expr(start, env)?;
-                let end_val = self.eval_expr(end, env)?;
-                match (&start_val, &end_val) {
-                    (Value::Integer(s), Value::Integer(e)) => {
-                        let end_n = if *inclusive { *e + 1 } else { *e };
-                        Ok(Value::Range(*s, end_n))
-                    }
-                    _ => Err(FerriError::Runtime {
-                        message: format!(
-                            "range bounds must be integers, got {} and {}",
-                            start_val.type_name(),
-                            end_val.type_name()
-                        ),
-                        line: span.line,
-                        column: span.column,
-                    }),
-                }
-            }
+            } => self.eval_range_expr(start, end, *inclusive, span, env),
 
             Expr::Array { elements, .. } => {
                 let vals: Vec<Value> = elements
@@ -1079,101 +766,13 @@ impl Interpreter {
                 object,
                 index,
                 span,
-            } => {
-                let obj = self.eval_expr(object, env)?;
-                let idx = self.eval_expr(index, env)?;
-                match (&obj, &idx) {
-                    (Value::Vec(v), Value::Integer(i)) => {
-                        let i = *i as usize;
-                        v.get(i).cloned().ok_or_else(|| FerriError::Runtime {
-                            message: format!(
-                                "index out of bounds: len is {}, but index is {i}",
-                                v.len()
-                            ),
-                            line: span.line,
-                            column: span.column,
-                        })
-                    }
-                    (Value::String(s), Value::Integer(i)) => {
-                        let i = *i as usize;
-                        s.chars()
-                            .nth(i)
-                            .map(Value::Char)
-                            .ok_or_else(|| FerriError::Runtime {
-                                message: format!(
-                                    "index out of bounds: len is {}, but index is {i}",
-                                    s.len()
-                                ),
-                                line: span.line,
-                                column: span.column,
-                            })
-                    }
-                    (Value::Tuple(t), Value::Integer(i)) => {
-                        let i = *i as usize;
-                        t.get(i).cloned().ok_or_else(|| FerriError::Runtime {
-                            message: format!(
-                                "index out of bounds: len is {}, but index is {i}",
-                                t.len()
-                            ),
-                            line: span.line,
-                            column: span.column,
-                        })
-                    }
-                    _ => Err(FerriError::Runtime {
-                        message: format!(
-                            "cannot index {} with {}",
-                            obj.type_name(),
-                            idx.type_name()
-                        ),
-                        line: span.line,
-                        column: span.column,
-                    }),
-                }
-            }
+            } => self.eval_index_expr(object, index, span, env),
 
             Expr::FieldAccess {
                 object,
                 field,
                 span,
-            } => {
-                let obj = self.eval_expr(object, env)?;
-                // Tuple index access: t.0, t.1 etc.
-                if let Ok(idx) = field.parse::<usize>() {
-                    match &obj {
-                        Value::Tuple(t) => t.get(idx).cloned().ok_or_else(|| FerriError::Runtime {
-                            message: format!(
-                                "index out of bounds: len is {}, but index is {idx}",
-                                t.len()
-                            ),
-                            line: span.line,
-                            column: span.column,
-                        }),
-                        _ => Err(FerriError::Runtime {
-                            message: format!(
-                                "cannot access field `.{field}` on {}",
-                                obj.type_name()
-                            ),
-                            line: span.line,
-                            column: span.column,
-                        }),
-                    }
-                } else if let Value::Struct { fields, .. } = &obj {
-                    fields
-                        .get(field)
-                        .cloned()
-                        .ok_or_else(|| FerriError::Runtime {
-                            message: format!("no field `{field}` on struct {}", obj.type_name()),
-                            line: span.line,
-                            column: span.column,
-                        })
-                } else {
-                    Err(FerriError::Runtime {
-                        message: format!("cannot access field `.{field}` on {}", obj.type_name()),
-                        line: span.line,
-                        column: span.column,
-                    })
-                }
-            }
+            } => self.eval_field_access_expr(object, field, span, env),
 
             Expr::MethodCall {
                 object,
@@ -1191,42 +790,7 @@ impl Interpreter {
 
             Expr::StructInit {
                 name, fields, span, ..
-            } => {
-                // Resolve `Self` to the current impl type
-                let resolved_name = if name == "Self" {
-                    self.current_self_type
-                        .clone()
-                        .unwrap_or_else(|| name.clone())
-                } else {
-                    name.clone()
-                };
-                let mut field_map = HashMap::new();
-                for (fname, fexpr) in fields {
-                    let val = self.eval_expr(fexpr, env)?;
-                    field_map.insert(fname.clone(), val);
-                }
-                // Validate fields against struct definition if registered
-                if let Some(sdef) = self.struct_defs.get(&resolved_name) {
-                    if let StructKind::Named(def_fields) = &sdef.kind {
-                        for df in def_fields {
-                            if !field_map.contains_key(&df.name) {
-                                return Err(FerriError::Runtime {
-                                    message: format!(
-                                        "missing field `{}` in initializer of `{resolved_name}`",
-                                        df.name
-                                    ),
-                                    line: span.line,
-                                    column: span.column,
-                                });
-                            }
-                        }
-                    }
-                }
-                Ok(Value::Struct {
-                    name: resolved_name,
-                    fields: field_map,
-                })
-            }
+            } => self.eval_struct_init_expr(name, fields, span, env),
 
             Expr::PathCall { path, args, span } => {
                 let arg_vals: Vec<Value> = args
@@ -1250,137 +814,643 @@ impl Interpreter {
                 then_block,
                 else_block,
                 ..
-            } => {
-                let val = self.eval_expr(expr, env)?;
-                if Self::pattern_matches(pattern, &val) {
-                    let child_env = Environment::child(env);
-                    Self::bind_pattern(pattern, &val, &child_env);
-                    self.eval_block(then_block, &child_env)
-                } else if let Some(else_expr) = else_block {
-                    self.eval_expr(else_expr, env)
-                } else {
-                    Ok(Value::Unit)
-                }
-            }
+            } => self.eval_if_let_expr(pattern, expr, then_block, else_block, env),
 
-            Expr::Try { expr, span } => {
-                let val = self.eval_expr(expr, env)?;
-                match &val {
-                    // Some(x) → unwrap to x
-                    Value::EnumVariant {
-                        enum_name,
-                        variant,
-                        data,
-                        ..
-                    } if enum_name == "Option" && variant == "Some" => {
-                        Ok(data.first().cloned().unwrap_or(Value::Unit))
-                    }
-                    // None → return None early
-                    Value::EnumVariant {
-                        enum_name, variant, ..
-                    } if enum_name == "Option" && variant == "None" => {
-                        Err(FerriError::Return(Box::new(val)))
-                    }
-                    // Ok(x) → unwrap to x
-                    Value::EnumVariant {
-                        enum_name,
-                        variant,
-                        data,
-                        ..
-                    } if enum_name == "Result" && variant == "Ok" => {
-                        Ok(data.first().cloned().unwrap_or(Value::Unit))
-                    }
-                    // Err(e) → return Err(e) early
-                    Value::EnumVariant {
-                        enum_name, variant, ..
-                    } if enum_name == "Result" && variant == "Err" => {
-                        Err(FerriError::Return(Box::new(val)))
-                    }
-                    _ => Err(FerriError::Runtime {
-                        message: format!(
-                            "`?` operator can only be used on Option or Result, got {}",
-                            val.type_name()
-                        ),
-                        line: span.line,
-                        column: span.column,
-                    }),
-                }
-            }
+            Expr::Try { expr, span } => self.eval_try_expr(expr, span, env),
+
             Expr::Closure {
                 params,
                 return_type,
                 body,
                 ..
-            } => {
-                // Convert ClosureParams to Params (for Value::Function compatibility)
-                let fn_params: Vec<Param> = params
-                    .iter()
-                    .map(|cp| Param {
-                        name: cp.name.clone(),
-                        type_ann: cp.type_ann.clone().unwrap_or(TypeAnnotation {
-                            name: "_".to_string(),
-                            span: cp.span,
-                        }),
-                        span: cp.span,
-                    })
-                    .collect();
+            } => self.eval_closure_expr(params, return_type, body, env),
 
-                // The closure body: wrap single expression in a block for Value::Function
-                let closure_body = match body.as_ref() {
-                    Expr::Block(block) => block.clone(),
-                    expr => Block {
-                        stmts: vec![Stmt::Expr {
-                            expr: expr.clone(),
-                            has_semicolon: false,
-                        }],
-                        span: expr.span(),
-                    },
-                };
+            Expr::Await { expr, .. } => self.eval_await_expr(expr, env),
 
-                Ok(Value::Function(Box::new(FunctionData {
-                    name: "<closure>".to_string(),
-                    params: fn_params,
-                    return_type: return_type.clone(),
-                    body: closure_body,
-                    closure_env: env.clone(),
-                })))
-            }
+            Expr::FString { parts, .. } => self.eval_fstring_expr(parts, env),
+        }
+    }
 
-            Expr::Await { expr, .. } => {
-                let val = self.eval_expr(expr, env)?;
-                match val {
-                    Value::Future(future) => {
-                        let call_env = Environment::child(&future.closure_env);
-                        for (param, arg) in future.params.iter().zip(future.args.iter()) {
-                            call_env
-                                .borrow_mut()
-                                .define(param.name.clone(), arg.clone(), true);
-                        }
-                        match self.eval_block(&future.body, &call_env) {
-                            Ok(val) => Ok(val),
-                            Err(FerriError::Return(val)) => Ok(*val),
-                            Err(e) => Err(e),
-                        }
-                    }
-                    Value::JoinHandle(val) => Ok(*val),
-                    other => Ok(other),
+    // === Extracted expression helpers ===
+
+    fn try_builtin_call(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        span: &Span,
+        env: &Env,
+    ) -> Result<Option<Value>, FerriError> {
+        match name {
+            SOME_VARIANT => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Some() takes exactly 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
                 }
+                let val = self.eval_expr(&args[0], env)?;
+                Ok(Some(Value::some(val)))
             }
-
-            Expr::FString { parts, .. } => {
-                let mut result = String::new();
-                for part in parts {
-                    match part {
-                        FStringPart::Literal(s) => result.push_str(s),
-                        FStringPart::Expr(expr) => {
-                            let val = self.eval_expr(expr, env)?;
-                            result.push_str(&val.to_string());
-                        }
-                    }
+            OK_VARIANT => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Ok() takes exactly 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
                 }
-                Ok(Value::String(result))
+                let val = self.eval_expr(&args[0], env)?;
+                Ok(Some(Value::ok(val)))
+            }
+            ERR_VARIANT => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Err() takes exactly 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let val = self.eval_expr(&args[0], env)?;
+                Ok(Some(Value::err(val)))
+            }
+            "spawn" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("spawn() takes exactly 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = self.eval_expr(&args[0], env)?;
+                let result = self.call_function(&func, &[], span.line, span.column)?;
+                Ok(Some(Value::JoinHandle(Box::new(result))))
+            }
+            "sleep" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("sleep() takes exactly 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let val = self.eval_expr(&args[0], env)?;
+                if let Value::Integer(ms) = val {
+                    std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+                    return Ok(Some(Value::Unit));
+                }
+                Err(FerriError::Runtime {
+                    message: format!(
+                        "sleep() expects integer milliseconds, got {}",
+                        val.type_name()
+                    ),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn eval_call_expr(
+        &mut self,
+        callee: &Expr,
+        args: &[Expr],
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        if let Expr::Ident(name, _) = callee {
+            if let Some(result) = self.try_builtin_call(name, args, span, env)? {
+                return Ok(result);
             }
         }
+        let func = self.eval_expr(callee, env)?;
+        let mut arg_values = Vec::with_capacity(args.len());
+        for arg in args {
+            arg_values.push(self.eval_expr(arg, env)?);
+        }
+        // If calling an async function, return a Future thunk
+        if let Value::Function(ref func_data) = func {
+            if self.async_fns.contains(&func_data.name) {
+                return Ok(Value::Future(Box::new(FutureData {
+                    name: func_data.name.clone(),
+                    params: func_data.params.clone(),
+                    return_type: func_data.return_type.clone(),
+                    body: func_data.body.clone(),
+                    closure_env: Rc::clone(&func_data.closure_env),
+                    args: arg_values,
+                })));
+            }
+        }
+        self.call_function(&func, &arg_values, span.line, span.column)
+    }
+
+    fn eval_assign_expr(
+        &mut self,
+        target: &Expr,
+        value: &Expr,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let val = self.eval_expr(value, env)?;
+        if let Expr::Ident(name, _) = target {
+            env.borrow_mut()
+                .set(name, val)
+                .map_err(|e| FerriError::Runtime {
+                    message: e.to_string(),
+                    line: span.line,
+                    column: span.column,
+                })?;
+            Ok(Value::Unit)
+        } else if let Expr::FieldAccess { object, field, .. } = target {
+            // Field assignment: `s.field = val`
+            if let Expr::Ident(name, _) = object.as_ref() {
+                let mut current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                    message: format!("undefined variable '{name}'"),
+                    line: span.line,
+                    column: span.column,
+                })?;
+                if let Value::Struct { fields, .. } = &mut current {
+                    if fields.contains_key(field) {
+                        fields.insert(field.clone(), val);
+                    } else {
+                        return Err(FerriError::Runtime {
+                            message: format!("no field '{field}' on struct"),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                } else {
+                    return Err(FerriError::Runtime {
+                        message: format!("cannot set field on {}", current.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                env.borrow_mut()
+                    .set(name, current)
+                    .map_err(|e| FerriError::Runtime {
+                        message: e.to_string(),
+                        line: span.line,
+                        column: span.column,
+                    })?;
+                Ok(Value::Unit)
+            } else if let Expr::SelfRef(_) = object.as_ref() {
+                // self.field = val
+                let mut current = env.borrow().get("self").map_err(|_| FerriError::Runtime {
+                    message: "'self' not available in this context".into(),
+                    line: span.line,
+                    column: span.column,
+                })?;
+                if let Value::Struct { fields, .. } = &mut current {
+                    if fields.contains_key(field) {
+                        fields.insert(field.clone(), val);
+                    } else {
+                        return Err(FerriError::Runtime {
+                            message: format!("no field '{field}' on struct"),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                } else {
+                    return Err(FerriError::Runtime {
+                        message: format!("cannot set field on {}", current.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                env.borrow_mut()
+                    .set("self", current)
+                    .map_err(|e| FerriError::Runtime {
+                        message: e.to_string(),
+                        line: span.line,
+                        column: span.column,
+                    })?;
+                Ok(Value::Unit)
+            } else {
+                Err(FerriError::Runtime {
+                    message: "invalid field assignment target".into(),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+        } else if let Expr::Index { object, index, .. } = target {
+            // Index assignment: `v[0] = x`
+            let idx = self.eval_expr(index, env)?;
+            let Value::Integer(i) = idx else {
+                return Err(FerriError::Runtime {
+                    message: format!("index must be integer, got {}", idx.type_name()),
+                    line: span.line,
+                    column: span.column,
+                });
+            };
+            let i = i as usize;
+            if let Expr::Ident(name, _) = object.as_ref() {
+                let mut current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                    message: format!("undefined variable '{name}'"),
+                    line: span.line,
+                    column: span.column,
+                })?;
+                match &mut current {
+                    Value::Vec(v) => {
+                        if i >= v.len() {
+                            return Err(FerriError::Runtime {
+                                message: format!(
+                                    "index out of bounds: len is {}, but index is {i}",
+                                    v.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        v[i] = val;
+                    }
+                    _ => {
+                        return Err(FerriError::Runtime {
+                            message: format!("cannot index-assign into {}", current.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+                env.borrow_mut()
+                    .set(name, current)
+                    .map_err(|e| FerriError::Runtime {
+                        message: e.to_string(),
+                        line: span.line,
+                        column: span.column,
+                    })?;
+                Ok(Value::Unit)
+            } else {
+                Err(FerriError::Runtime {
+                    message: "invalid index assignment target".into(),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+        } else {
+            Err(FerriError::Runtime {
+                message: "invalid assignment target".into(),
+                line: span.line,
+                column: span.column,
+            })
+        }
+    }
+
+    fn eval_compound_assign_expr(
+        &mut self,
+        target: &Expr,
+        op: BinOp,
+        value: &Expr,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        if let Expr::Ident(name, _) = target {
+            let current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                message: format!("undefined variable '{name}'"),
+                line: span.line,
+                column: span.column,
+            })?;
+            let rval = self.eval_expr(value, env)?;
+            let new_val = self.eval_binary_op(&current, op, &rval, span.line, span.column)?;
+            env.borrow_mut()
+                .set(name, new_val)
+                .map_err(|e| FerriError::Runtime {
+                    message: e.to_string(),
+                    line: span.line,
+                    column: span.column,
+                })?;
+            Ok(Value::Unit)
+        } else {
+            Err(FerriError::Runtime {
+                message: "invalid compound assignment target".into(),
+                line: span.line,
+                column: span.column,
+            })
+        }
+    }
+
+    fn eval_match_expr(
+        &mut self,
+        expr: &Expr,
+        arms: &[MatchArm],
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let val = self.eval_expr(expr, env)?;
+        for arm in arms {
+            if Self::pattern_matches(&arm.pattern, &val) {
+                let match_env = Environment::child(env);
+                Self::bind_pattern(&arm.pattern, &val, &match_env);
+                return self.eval_expr(&arm.body, &match_env);
+            }
+        }
+        Err(FerriError::Runtime {
+            message: "non-exhaustive match: no arm matched".into(),
+            line: span.line,
+            column: span.column,
+        })
+    }
+
+    fn eval_range_expr(
+        &mut self,
+        start: &Expr,
+        end: &Expr,
+        inclusive: bool,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let start_val = self.eval_expr(start, env)?;
+        let end_val = self.eval_expr(end, env)?;
+        match (&start_val, &end_val) {
+            (Value::Integer(s), Value::Integer(e)) => {
+                let end_n = if inclusive { *e + 1 } else { *e };
+                Ok(Value::Range(*s, end_n))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!(
+                    "range bounds must be integers, got {} and {}",
+                    start_val.type_name(),
+                    end_val.type_name()
+                ),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn eval_index_expr(
+        &mut self,
+        object: &Expr,
+        index: &Expr,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let obj = self.eval_expr(object, env)?;
+        let idx = self.eval_expr(index, env)?;
+        match (&obj, &idx) {
+            (Value::Vec(v), Value::Integer(i)) => {
+                let i = *i as usize;
+                v.get(i).cloned().ok_or_else(|| FerriError::Runtime {
+                    message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+            (Value::String(s), Value::Integer(i)) => {
+                let i = *i as usize;
+                s.chars()
+                    .nth(i)
+                    .map(Value::Char)
+                    .ok_or_else(|| FerriError::Runtime {
+                        message: format!(
+                            "index out of bounds: len is {}, but index is {i}",
+                            s.len()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    })
+            }
+            (Value::Tuple(t), Value::Integer(i)) => {
+                let i = *i as usize;
+                t.get(i).cloned().ok_or_else(|| FerriError::Runtime {
+                    message: format!("index out of bounds: len is {}, but index is {i}", t.len()),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("cannot index {} with {}", obj.type_name(), idx.type_name()),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn eval_field_access_expr(
+        &mut self,
+        object: &Expr,
+        field: &str,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let obj = self.eval_expr(object, env)?;
+        // Tuple index access: t.0, t.1 etc.
+        if let Ok(idx) = field.parse::<usize>() {
+            match &obj {
+                Value::Tuple(t) => t.get(idx).cloned().ok_or_else(|| FerriError::Runtime {
+                    message: format!(
+                        "index out of bounds: len is {}, but index is {idx}",
+                        t.len()
+                    ),
+                    line: span.line,
+                    column: span.column,
+                }),
+                _ => Err(FerriError::Runtime {
+                    message: format!("cannot access field `.{field}` on {}", obj.type_name()),
+                    line: span.line,
+                    column: span.column,
+                }),
+            }
+        } else if let Value::Struct { fields, .. } = &obj {
+            fields
+                .get(field)
+                .cloned()
+                .ok_or_else(|| FerriError::Runtime {
+                    message: format!("no field `{field}` on struct {}", obj.type_name()),
+                    line: span.line,
+                    column: span.column,
+                })
+        } else {
+            Err(FerriError::Runtime {
+                message: format!("cannot access field `.{field}` on {}", obj.type_name()),
+                line: span.line,
+                column: span.column,
+            })
+        }
+    }
+
+    fn eval_struct_init_expr(
+        &mut self,
+        name: &str,
+        fields: &[(String, Expr)],
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        // Resolve `Self` to the current impl type
+        let resolved_name = if name == "Self" {
+            self.current_self_type
+                .clone()
+                .unwrap_or_else(|| name.to_string())
+        } else {
+            name.to_string()
+        };
+        let mut field_map = HashMap::new();
+        for (fname, fexpr) in fields {
+            let val = self.eval_expr(fexpr, env)?;
+            field_map.insert(fname.clone(), val);
+        }
+        // Validate fields against struct definition if registered
+        if let Some(sdef) = self.struct_defs.get(&resolved_name) {
+            if let StructKind::Named(def_fields) = &sdef.kind {
+                for df in def_fields {
+                    if !field_map.contains_key(&df.name) {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "missing field `{}` in initializer of `{resolved_name}`",
+                                df.name
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+            }
+        }
+        Ok(Value::Struct {
+            name: resolved_name,
+            fields: field_map,
+        })
+    }
+
+    fn eval_if_let_expr(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        then_block: &Block,
+        else_block: &Option<Box<Expr>>,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let val = self.eval_expr(expr, env)?;
+        if Self::pattern_matches(pattern, &val) {
+            let child_env = Environment::child(env);
+            Self::bind_pattern(pattern, &val, &child_env);
+            self.eval_block(then_block, &child_env)
+        } else if let Some(else_expr) = else_block {
+            self.eval_expr(else_expr, env)
+        } else {
+            Ok(Value::Unit)
+        }
+    }
+
+    fn eval_try_expr(&mut self, expr: &Expr, span: &Span, env: &Env) -> Result<Value, FerriError> {
+        let val = self.eval_expr(expr, env)?;
+        match &val {
+            // Some(x) → unwrap to x
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+                ..
+            } if enum_name == OPTION_TYPE && variant == SOME_VARIANT => {
+                Ok(data.first().cloned().unwrap_or(Value::Unit))
+            }
+            // None → return None early
+            Value::EnumVariant {
+                enum_name, variant, ..
+            } if enum_name == OPTION_TYPE && variant == NONE_VARIANT => {
+                Err(FerriError::Return(Box::new(val)))
+            }
+            // Ok(x) → unwrap to x
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+                ..
+            } if enum_name == RESULT_TYPE && variant == OK_VARIANT => {
+                Ok(data.first().cloned().unwrap_or(Value::Unit))
+            }
+            // Err(e) → return Err(e) early
+            Value::EnumVariant {
+                enum_name, variant, ..
+            } if enum_name == RESULT_TYPE && variant == ERR_VARIANT => {
+                Err(FerriError::Return(Box::new(val)))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!(
+                    "`?` operator can only be used on Option or Result, got {}",
+                    val.type_name()
+                ),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn eval_closure_expr(
+        &mut self,
+        params: &[ClosureParam],
+        return_type: &Option<TypeAnnotation>,
+        body: &Expr,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        // Convert ClosureParams to Params (for Value::Function compatibility)
+        let fn_params: Vec<Param> = params
+            .iter()
+            .map(|cp| Param {
+                name: cp.name.clone(),
+                type_ann: cp.type_ann.clone().unwrap_or(TypeAnnotation {
+                    name: "_".to_string(),
+                    span: cp.span,
+                }),
+                span: cp.span,
+            })
+            .collect();
+
+        // The closure body: wrap single expression in a block for Value::Function
+        let closure_body = match body {
+            Expr::Block(block) => block.clone(),
+            expr => Block {
+                stmts: vec![Stmt::Expr {
+                    expr: expr.clone(),
+                    has_semicolon: false,
+                }],
+                span: expr.span(),
+            },
+        };
+
+        Ok(Value::Function(Box::new(FunctionData {
+            name: "<closure>".to_string(),
+            params: fn_params,
+            return_type: return_type.clone(),
+            body: closure_body,
+            closure_env: env.clone(),
+        })))
+    }
+
+    fn eval_await_expr(&mut self, expr: &Expr, env: &Env) -> Result<Value, FerriError> {
+        let val = self.eval_expr(expr, env)?;
+        match val {
+            Value::Future(future) => {
+                let call_env = Environment::child(&future.closure_env);
+                for (param, arg) in future.params.iter().zip(future.args.iter()) {
+                    call_env
+                        .borrow_mut()
+                        .define(param.name.clone(), arg.clone(), true);
+                }
+                match self.eval_block(&future.body, &call_env) {
+                    Ok(val) => Ok(val),
+                    Err(FerriError::Return(val)) => Ok(*val),
+                    Err(e) => Err(e),
+                }
+            }
+            Value::JoinHandle(val) => Ok(*val),
+            other => Ok(other),
+        }
+    }
+
+    fn eval_fstring_expr(&mut self, parts: &[FStringPart], env: &Env) -> Result<Value, FerriError> {
+        let mut result = String::new();
+        for part in parts {
+            match part {
+                FStringPart::Literal(s) => result.push_str(s),
+                FStringPart::Expr(expr) => {
+                    let val = self.eval_expr(expr, env)?;
+                    result.push_str(&val.to_string());
+                }
+            }
+        }
+        Ok(Value::String(result))
     }
 
     // === Binary operations ===
@@ -1894,7 +1964,7 @@ impl Interpreter {
             } => {
                 // Built-in Option/Result methods
                 if let Value::EnumVariant { enum_name, .. } = &receiver {
-                    if enum_name == "Option" || enum_name == "Result" {
+                    if enum_name == OPTION_TYPE || enum_name == RESULT_TYPE {
                         if let Some(result) =
                             self.call_option_result_method(&receiver, method, &args, span)?
                         {
@@ -2512,10 +2582,10 @@ impl Interpreter {
 
         match (enum_name.as_str(), method) {
             // === Option methods ===
-            ("Option", "is_some") => Ok(Some(Value::Bool(variant == "Some"))),
-            ("Option", "is_none") => Ok(Some(Value::Bool(variant == "None"))),
-            ("Option", "unwrap") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "is_some") => Ok(Some(Value::Bool(variant == SOME_VARIANT))),
+            (OPTION_TYPE, "is_none") => Ok(Some(Value::Bool(variant == NONE_VARIANT))),
+            (OPTION_TYPE, "unwrap") => {
+                if variant == SOME_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     Err(FerriError::Runtime {
@@ -2525,8 +2595,8 @@ impl Interpreter {
                     })
                 }
             }
-            ("Option", "expect") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "expect") => {
+                if variant == SOME_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     let msg = args
@@ -2540,15 +2610,15 @@ impl Interpreter {
                     })
                 }
             }
-            ("Option", "unwrap_or") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "unwrap_or") => {
+                if variant == SOME_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     Ok(Some(args.first().cloned().unwrap_or(Value::Unit)))
                 }
             }
-            ("Option", "unwrap_or_else") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "unwrap_or_else") => {
+                if variant == SOME_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else if let Some(Value::Function(_)) = args.first() {
                     let result = self.call_function(&args[0], &[], span.line, span.column)?;
@@ -2557,8 +2627,8 @@ impl Interpreter {
                     Ok(Some(Value::Unit))
                 }
             }
-            ("Option", "map") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "map") => {
+                if variant == SOME_VARIANT {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
@@ -2571,8 +2641,8 @@ impl Interpreter {
                     Ok(Some(receiver.clone()))
                 }
             }
-            ("Option", "and_then") => {
-                if variant == "Some" {
+            (OPTION_TYPE, "and_then") => {
+                if variant == SOME_VARIANT {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
@@ -2586,10 +2656,10 @@ impl Interpreter {
             }
 
             // === Result methods ===
-            ("Result", "is_ok") => Ok(Some(Value::Bool(variant == "Ok"))),
-            ("Result", "is_err") => Ok(Some(Value::Bool(variant == "Err"))),
-            ("Result", "unwrap") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "is_ok") => Ok(Some(Value::Bool(variant == OK_VARIANT))),
+            (RESULT_TYPE, "is_err") => Ok(Some(Value::Bool(variant == ERR_VARIANT))),
+            (RESULT_TYPE, "unwrap") => {
+                if variant == OK_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     let err_val = data
@@ -2603,8 +2673,8 @@ impl Interpreter {
                     })
                 }
             }
-            ("Result", "expect") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "expect") => {
+                if variant == OK_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     let msg = args
@@ -2618,8 +2688,8 @@ impl Interpreter {
                     })
                 }
             }
-            ("Result", "unwrap_err") => {
-                if variant == "Err" {
+            (RESULT_TYPE, "unwrap_err") => {
+                if variant == ERR_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     Err(FerriError::Runtime {
@@ -2629,15 +2699,15 @@ impl Interpreter {
                     })
                 }
             }
-            ("Result", "unwrap_or") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "unwrap_or") => {
+                if variant == OK_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else {
                     Ok(Some(args.first().cloned().unwrap_or(Value::Unit)))
                 }
             }
-            ("Result", "unwrap_or_else") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "unwrap_or_else") => {
+                if variant == OK_VARIANT {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
                 } else if let Some(Value::Function(_)) = args.first() {
                     let err_val = data.first().cloned().unwrap_or(Value::Unit);
@@ -2648,8 +2718,8 @@ impl Interpreter {
                     Ok(Some(Value::Unit))
                 }
             }
-            ("Result", "map") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "map") => {
+                if variant == OK_VARIANT {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
@@ -2662,8 +2732,8 @@ impl Interpreter {
                     Ok(Some(receiver.clone()))
                 }
             }
-            ("Result", "map_err") => {
-                if variant == "Err" {
+            (RESULT_TYPE, "map_err") => {
+                if variant == ERR_VARIANT {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
@@ -2675,8 +2745,8 @@ impl Interpreter {
                     Ok(Some(receiver.clone()))
                 }
             }
-            ("Result", "and_then") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "and_then") => {
+                if variant == OK_VARIANT {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
@@ -2688,15 +2758,15 @@ impl Interpreter {
                     Ok(Some(receiver.clone()))
                 }
             }
-            ("Result", "ok") => {
-                if variant == "Ok" {
+            (RESULT_TYPE, "ok") => {
+                if variant == OK_VARIANT {
                     Ok(Some(Value::some(data[0].clone())))
                 } else {
                     Ok(Some(Value::none()))
                 }
             }
-            ("Result", "err") => {
-                if variant == "Err" {
+            (RESULT_TYPE, "err") => {
+                if variant == ERR_VARIANT {
                     Ok(Some(Value::some(data[0].clone())))
                 } else {
                     Ok(Some(Value::none()))
@@ -2733,6 +2803,30 @@ impl Interpreter {
                 }
             }
             Pattern::Wildcard(_) | Pattern::Literal(_) => {}
+        }
+    }
+
+    /// Execute an associated function (non-`self` method from an impl or trait impl block).
+    fn call_associated_fn(
+        &mut self,
+        method_def: &FnDef,
+        type_name: &str,
+        args: &[Value],
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let func_env = Environment::child(env);
+        for (param, arg) in method_def.params.iter().zip(args.iter()) {
+            func_env
+                .borrow_mut()
+                .define(param.name.clone(), arg.clone(), true);
+        }
+        let prev_self_type = self.current_self_type.take();
+        self.current_self_type = Some(type_name.to_string());
+        let result = self.eval_block(&method_def.body, &func_env);
+        self.current_self_type = prev_self_type;
+        match result {
+            Err(FerriError::Return(val)) => Ok(*val),
+            other => other,
         }
     }
 
@@ -2776,23 +2870,7 @@ impl Interpreter {
                             });
                         }
 
-                        let func_env = Environment::child(env);
-                        // Bind parameters
-                        for (param, arg) in method_def.params.iter().zip(args.iter()) {
-                            func_env
-                                .borrow_mut()
-                                .define(param.name.clone(), arg.clone(), true);
-                        }
-
-                        let prev_self_type = self.current_self_type.take();
-                        self.current_self_type = Some(type_name.clone());
-                        let result = self.eval_block(&method_def.body, &func_env);
-                        self.current_self_type = prev_self_type;
-
-                        return match result {
-                            Err(FerriError::Return(val)) => Ok(*val),
-                            other => other,
-                        };
+                        return self.call_associated_fn(method_def, type_name, args, env);
                     }
                 }
             }
@@ -2808,22 +2886,7 @@ impl Interpreter {
                             let is_method =
                                 method_def.params.first().is_some_and(|p| p.name == "self");
                             if !is_method {
-                                let func_env = Environment::child(env);
-                                for (param, arg) in method_def.params.iter().zip(args.iter()) {
-                                    func_env.borrow_mut().define(
-                                        param.name.clone(),
-                                        arg.clone(),
-                                        true,
-                                    );
-                                }
-                                let prev_self_type = self.current_self_type.take();
-                                self.current_self_type = Some(type_name.clone());
-                                let result = self.eval_block(&method_def.body, &func_env);
-                                self.current_self_type = prev_self_type;
-                                return match result {
-                                    Err(FerriError::Return(val)) => Ok(*val),
-                                    other => other,
-                                };
+                                return self.call_associated_fn(&method_def, type_name, args, env);
                             }
                         }
                     }
@@ -2910,20 +2973,7 @@ impl Interpreter {
                 if let Some(methods) = module.impl_methods.get(type_name) {
                     for method_def in methods {
                         if method_def.name == *method_name {
-                            let func_env = Environment::child(env);
-                            for (param, arg) in method_def.params.iter().zip(args.iter()) {
-                                func_env
-                                    .borrow_mut()
-                                    .define(param.name.clone(), arg.clone(), true);
-                            }
-                            let prev_self_type = self.current_self_type.take();
-                            self.current_self_type = Some(type_name.clone());
-                            let result = self.eval_block(&method_def.body, &func_env);
-                            self.current_self_type = prev_self_type;
-                            return match result {
-                                Err(FerriError::Return(val)) => Ok(*val),
-                                other => other,
-                            };
+                            return self.call_associated_fn(method_def, type_name, args, env);
                         }
                     }
                 }
@@ -3907,7 +3957,7 @@ fn debug_format(val: &Value) -> String {
             data,
         } => {
             // Built-in Option/Result: show without enum prefix
-            let prefix = if enum_name == "Option" || enum_name == "Result" {
+            let prefix = if enum_name == OPTION_TYPE || enum_name == RESULT_TYPE {
                 String::new()
             } else {
                 format!("{enum_name}::")

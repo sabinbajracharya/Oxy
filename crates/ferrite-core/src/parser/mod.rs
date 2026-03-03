@@ -5,6 +5,7 @@
 use crate::ast::*;
 use crate::errors::FerriError;
 use crate::lexer::{Span, Token, TokenKind};
+use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
 
 /// Parser for the Ferrite language.
 pub struct Parser {
@@ -1721,17 +1722,21 @@ impl Parser {
 
                 // Handle shorthand patterns: Some(x), None, Ok(x), Err(e)
                 match name.as_str() {
-                    "None" => {
+                    NONE_VARIANT => {
                         return Ok(Pattern::EnumVariant {
-                            enum_name: "Option".to_string(),
-                            variant: "None".to_string(),
+                            enum_name: OPTION_TYPE.to_string(),
+                            variant: NONE_VARIANT.to_string(),
                             fields: vec![],
                             span,
                         });
                     }
-                    "Some" | "Ok" | "Err" => {
-                        let enum_name =
-                            if name == "Some" { "Option" } else { "Result" }.to_string();
+                    SOME_VARIANT | OK_VARIANT | ERR_VARIANT => {
+                        let enum_name = if name == SOME_VARIANT {
+                            OPTION_TYPE
+                        } else {
+                            RESULT_TYPE
+                        }
+                        .to_string();
                         let mut fields = Vec::new();
                         if self.match_token(&TokenKind::LParen) {
                             if !self.check(&TokenKind::RParen) {
