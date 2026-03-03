@@ -225,7 +225,7 @@ mod tests {
         execute(
             &conn,
             "INSERT INTO items (value) VALUES (?1)",
-            &[Value::Float(3.14)],
+            &[Value::Float(3.125)],
             &span,
         )
         .unwrap();

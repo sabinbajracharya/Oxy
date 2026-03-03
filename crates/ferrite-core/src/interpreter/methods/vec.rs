@@ -87,8 +87,12 @@ impl Interpreter {
                 let func = &args[0];
                 let mut result = Vec::new();
                 for item in &v {
-                    let mapped =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let mapped = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     result.push(mapped);
                 }
                 Ok(Value::Vec(result))
@@ -98,7 +102,12 @@ impl Interpreter {
                 let func = &args[0];
                 let mut result = Vec::new();
                 for item in &v {
-                    let keep = self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let keep = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     if keep.is_truthy() {
                         result.push(item.clone());
                     }
@@ -109,7 +118,7 @@ impl Interpreter {
                 check_arg_count("Vec::for_each", 1, &args, span)?;
                 let func = &args[0];
                 for item in &v {
-                    self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    self.call_function(func, std::slice::from_ref(item), span.line, span.column)?;
                 }
                 Ok(Value::Unit)
             }
@@ -126,8 +135,12 @@ impl Interpreter {
                 check_arg_count("Vec::any", 1, &args, span)?;
                 let func = &args[0];
                 for item in &v {
-                    let result =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let result = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     if result.is_truthy() {
                         return Ok(Value::Bool(true));
                     }
@@ -138,8 +151,12 @@ impl Interpreter {
                 check_arg_count("Vec::all", 1, &args, span)?;
                 let func = &args[0];
                 for item in &v {
-                    let result =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let result = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     if !result.is_truthy() {
                         return Ok(Value::Bool(false));
                     }
@@ -150,8 +167,12 @@ impl Interpreter {
                 check_arg_count("Vec::find", 1, &args, span)?;
                 let func = &args[0];
                 for item in &v {
-                    let result =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let result = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     if result.is_truthy() {
                         return Ok(Value::some(item.clone()));
                     }
@@ -173,8 +194,12 @@ impl Interpreter {
                 let func = &args[0];
                 let mut result = Vec::new();
                 for item in &v {
-                    let mapped =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let mapped = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     match mapped {
                         Value::Vec(inner) => result.extend(inner),
                         other => result.push(other),
@@ -186,8 +211,12 @@ impl Interpreter {
                 check_arg_count("Vec::position", 1, &args, span)?;
                 let func = &args[0];
                 for (i, item) in v.iter().enumerate() {
-                    let result =
-                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    let result = self.call_function(
+                        func,
+                        std::slice::from_ref(item),
+                        span.line,
+                        span.column,
+                    )?;
                     if result.is_truthy() {
                         return Ok(Value::some(Value::Integer(i as i64)));
                     }
