@@ -1070,6 +1070,22 @@ impl Parser {
                 })
             }
 
+            // Closure: `|params| expr` or `|params| { body }`
+            TokenKind::Pipe => self.parse_closure(),
+
+            // Closure with no params: `|| expr` or `|| { body }`
+            TokenKind::PipePipe => self.parse_empty_closure(),
+
+            // `move` closure: `move |params| expr` or `move || expr`
+            TokenKind::Move => {
+                self.advance(); // consume `move`
+                if self.check(&TokenKind::PipePipe) {
+                    self.parse_empty_closure()
+                } else {
+                    self.parse_closure()
+                }
+            }
+
             other => Err(self.error(format!(
                 "expected expression, found {}",
                 other.description()
@@ -1295,6 +1311,85 @@ impl Parser {
             expr: Box::new(expr),
             then_block,
             else_block,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    /// Parse a closure expression: `|params| expr` or `|params| { body }`
+    fn parse_closure(&mut self) -> Result<Expr, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Pipe)?;
+
+        let mut params = Vec::new();
+        if !self.check(&TokenKind::Pipe) {
+            loop {
+                let pspan = self.current_span();
+                let name = self.expect_ident()?;
+                let type_ann = if self.match_token(&TokenKind::Colon) {
+                    Some(self.parse_type_annotation()?)
+                } else {
+                    None
+                };
+                params.push(ClosureParam {
+                    name,
+                    type_ann,
+                    span: pspan,
+                });
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(TokenKind::Pipe)?;
+
+        // Optional return type: `-> Type`
+        let return_type = if self.match_token(&TokenKind::Arrow) {
+            Some(self.parse_type_annotation()?)
+        } else {
+            None
+        };
+
+        // Body: either a block `{ ... }` or a single expression
+        let body = if self.check(&TokenKind::LBrace) {
+            let block = self.parse_block()?;
+            Expr::Block(block)
+        } else {
+            self.parse_expr(Precedence::None)?
+        };
+
+        let end_span = body.span();
+        Ok(Expr::Closure {
+            params,
+            return_type,
+            body: Box::new(body),
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    /// Parse a closure with no params: `|| expr` or `|| { body }`
+    fn parse_empty_closure(&mut self) -> Result<Expr, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::PipePipe)?;
+
+        // Optional return type
+        let return_type = if self.match_token(&TokenKind::Arrow) {
+            Some(self.parse_type_annotation()?)
+        } else {
+            None
+        };
+
+        let body = if self.check(&TokenKind::LBrace) {
+            let block = self.parse_block()?;
+            Expr::Block(block)
+        } else {
+            self.parse_expr(Precedence::None)?
+        };
+
+        let end_span = body.span();
+        Ok(Expr::Closure {
+            params: Vec::new(),
+            return_type,
+            body: Box::new(body),
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -2659,5 +2754,85 @@ fn main() {}"#,
                 ..
             } if enum_name == "Result" && variant == "Err"
         ));
+    }
+
+    // === Phase 10: Closures ===
+
+    #[test]
+    fn test_closure_with_params() {
+        let program = parse(r#"fn main() { let f = |x, y| x + y; }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let");
+        };
+        let Expr::Closure { params, .. } = expr else {
+            panic!("expected closure");
+        };
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0].name, "x");
+        assert_eq!(params[1].name, "y");
+    }
+
+    #[test]
+    fn test_closure_with_types() {
+        let program = parse(r#"fn main() { let f = |x: i64| -> i64 { x * 2 }; }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let");
+        };
+        let Expr::Closure {
+            params,
+            return_type,
+            ..
+        } = expr
+        else {
+            panic!("expected closure");
+        };
+        assert_eq!(params.len(), 1);
+        assert!(params[0].type_ann.is_some());
+        assert!(return_type.is_some());
+    }
+
+    #[test]
+    fn test_empty_closure() {
+        let program = parse(r#"fn main() { let f = || 42; }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let");
+        };
+        let Expr::Closure { params, .. } = expr else {
+            panic!("expected closure");
+        };
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_move_closure() {
+        let program = parse(r#"fn main() { let f = move |x| x; }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let");
+        };
+        assert!(matches!(expr, Expr::Closure { .. }));
     }
 }

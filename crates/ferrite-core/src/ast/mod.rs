@@ -52,6 +52,14 @@ pub struct Param {
     pub span: Span,
 }
 
+/// A closure parameter (type annotation is optional).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClosureParam {
+    pub name: String,
+    pub type_ann: Option<TypeAnnotation>,
+    pub span: Span,
+}
+
 /// A struct definition: `struct Name { field: Type, ... }` or `struct Name(Type, ...);`
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDef {
@@ -352,6 +360,13 @@ pub enum Expr {
     },
     /// Try operator: `expr?` — unwraps Ok/Some or returns Err/None early
     Try { expr: Box<Expr>, span: Span },
+    /// Closure expression: `|params| expr` or `|params| { body }`
+    Closure {
+        params: Vec<ClosureParam>,
+        return_type: Option<TypeAnnotation>,
+        body: Box<Expr>,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -384,7 +399,8 @@ impl Expr {
             | Expr::Path { span: s, .. }
             | Expr::SelfRef(s)
             | Expr::IfLet { span: s, .. }
-            | Expr::Try { span: s, .. } => *s,
+            | Expr::Try { span: s, .. }
+            | Expr::Closure { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -1013,6 +1029,29 @@ impl Expr {
             Expr::Try { expr, .. } => {
                 expr.pretty_print(out, indent);
                 out.push('?');
+            }
+            Expr::Closure {
+                params,
+                return_type,
+                body,
+                ..
+            } => {
+                out.push('|');
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    out.push_str(&p.name);
+                    if let Some(ty) = &p.type_ann {
+                        out.push_str(&format!(": {ty:?}"));
+                    }
+                }
+                out.push('|');
+                if let Some(ret) = return_type {
+                    out.push_str(&format!(" -> {ret:?}"));
+                }
+                out.push(' ');
+                body.pretty_print(out, indent);
             }
         }
     }

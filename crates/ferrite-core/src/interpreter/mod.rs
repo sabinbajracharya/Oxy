@@ -927,6 +927,45 @@ impl Interpreter {
                     }),
                 }
             }
+            Expr::Closure {
+                params,
+                return_type,
+                body,
+                ..
+            } => {
+                // Convert ClosureParams to Params (for Value::Function compatibility)
+                let fn_params: Vec<Param> = params
+                    .iter()
+                    .map(|cp| Param {
+                        name: cp.name.clone(),
+                        type_ann: cp.type_ann.clone().unwrap_or(TypeAnnotation {
+                            name: "_".to_string(),
+                            span: cp.span,
+                        }),
+                        span: cp.span,
+                    })
+                    .collect();
+
+                // The closure body: wrap single expression in a block for Value::Function
+                let closure_body = match body.as_ref() {
+                    Expr::Block(block) => block.clone(),
+                    expr => Block {
+                        stmts: vec![Stmt::Expr {
+                            expr: expr.clone(),
+                            has_semicolon: false,
+                        }],
+                        span: expr.span(),
+                    },
+                };
+
+                Ok(Value::Function {
+                    name: "<closure>".to_string(),
+                    params: fn_params,
+                    return_type: return_type.clone(),
+                    body: closure_body,
+                    closure_env: env.clone(),
+                })
+            }
         }
     }
 
@@ -1557,6 +1596,200 @@ impl Interpreter {
                 };
                 let s: Vec<String> = v.iter().map(|e| format!("{e}")).collect();
                 Ok(Value::String(s.join(&sep)))
+            }
+            // iter() returns the Vec itself (we don't have a separate Iterator type)
+            "iter" | "into_iter" | "iter_mut" => Ok(Value::Vec(v)),
+            // map(|x| expr) — applies closure to each element
+            "map" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::map() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                let mut result = Vec::new();
+                for item in &v {
+                    let mapped =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    result.push(mapped);
+                }
+                Ok(Value::Vec(result))
+            }
+            // filter(|x| bool_expr) — keeps elements where closure returns true
+            "filter" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::filter() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                let mut result = Vec::new();
+                for item in &v {
+                    let keep = self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    if keep.is_truthy() {
+                        result.push(item.clone());
+                    }
+                }
+                Ok(Value::Vec(result))
+            }
+            // for_each(|x| { ... }) — runs closure on each element
+            "for_each" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::for_each() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                for item in &v {
+                    self.call_function(func, &[item.clone()], span.line, span.column)?;
+                }
+                Ok(Value::Unit)
+            }
+            // fold(init, |acc, x| expr) — reduces to a single value
+            "fold" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::fold() takes 2 arguments, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let mut acc = args[0].clone();
+                let func = &args[1];
+                for item in &v {
+                    acc = self.call_function(func, &[acc, item.clone()], span.line, span.column)?;
+                }
+                Ok(acc)
+            }
+            // any(|x| bool_expr) — returns true if any element matches
+            "any" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::any() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                for item in &v {
+                    let result =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    if result.is_truthy() {
+                        return Ok(Value::Bool(true));
+                    }
+                }
+                Ok(Value::Bool(false))
+            }
+            // all(|x| bool_expr) — returns true if all elements match
+            "all" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::all() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                for item in &v {
+                    let result =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    if !result.is_truthy() {
+                        return Ok(Value::Bool(false));
+                    }
+                }
+                Ok(Value::Bool(true))
+            }
+            // find(|x| bool_expr) — returns Option<T>
+            "find" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::find() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                for item in &v {
+                    let result =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    if result.is_truthy() {
+                        return Ok(Value::EnumVariant {
+                            enum_name: "Option".to_string(),
+                            variant: "Some".to_string(),
+                            data: vec![item.clone()],
+                        });
+                    }
+                }
+                Ok(Value::EnumVariant {
+                    enum_name: "Option".to_string(),
+                    variant: "None".to_string(),
+                    data: vec![],
+                })
+            }
+            // enumerate() — returns Vec of (index, element) tuples
+            "enumerate" => {
+                let result: Vec<Value> = v
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| Value::Tuple(vec![Value::Integer(i as i64), item.clone()]))
+                    .collect();
+                Ok(Value::Vec(result))
+            }
+            // collect() — identity on Vec (already collected)
+            "collect" => Ok(Value::Vec(v)),
+            // flat_map(|x| vec_expr) — maps and flattens
+            "flat_map" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::flat_map() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                let mut result = Vec::new();
+                for item in &v {
+                    let mapped =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    match mapped {
+                        Value::Vec(inner) => result.extend(inner),
+                        other => result.push(other),
+                    }
+                }
+                Ok(Value::Vec(result))
+            }
+            // position(|x| bool_expr) — returns Option<usize>
+            "position" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::position() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let func = &args[0];
+                for (i, item) in v.iter().enumerate() {
+                    let result =
+                        self.call_function(func, &[item.clone()], span.line, span.column)?;
+                    if result.is_truthy() {
+                        return Ok(Value::EnumVariant {
+                            enum_name: "Option".to_string(),
+                            variant: "Some".to_string(),
+                            data: vec![Value::Integer(i as i64)],
+                        });
+                    }
+                }
+                Ok(Value::EnumVariant {
+                    enum_name: "Option".to_string(),
+                    variant: "None".to_string(),
+                    data: vec![],
+                })
             }
             _ => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on Vec"),
@@ -4501,5 +4734,280 @@ fn main() {
             .unwrap_err()
             .to_string()
             .contains("called `Result::unwrap()` on an `Err` value"));
+    }
+
+    // === Phase 10: Closures & Higher-Order Functions ===
+
+    #[test]
+    fn test_closure_basic() {
+        let output = run_and_capture(
+            r#"fn main() {
+let add = |a: i64, b: i64| a + b;
+println!("{}", add(3, 4));
+}"#,
+        );
+        assert_eq!(output, vec!["7\n"]);
+    }
+
+    #[test]
+    fn test_closure_no_type_annotation() {
+        let output = run_and_capture(
+            r#"fn main() {
+let double = |x| x * 2;
+println!("{}", double(5));
+}"#,
+        );
+        assert_eq!(output, vec!["10\n"]);
+    }
+
+    #[test]
+    fn test_closure_no_params() {
+        let output = run_and_capture(
+            r#"fn main() {
+let greet = || "hello";
+println!("{}", greet());
+}"#,
+        );
+        assert_eq!(output, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_closure_block_body() {
+        let output = run_and_capture(
+            r#"fn main() {
+let compute = |x: i64| {
+    let y = x * 2;
+    y + 1
+};
+println!("{}", compute(10));
+}"#,
+        );
+        assert_eq!(output, vec!["21\n"]);
+    }
+
+    #[test]
+    fn test_closure_captures_variable() {
+        let output = run_and_capture(
+            r#"fn main() {
+let factor = 3;
+let multiply = |x| x * factor;
+println!("{}", multiply(5));
+}"#,
+        );
+        assert_eq!(output, vec!["15\n"]);
+    }
+
+    #[test]
+    fn test_closure_as_argument() {
+        let output = run_and_capture(
+            r#"fn apply(f: Fn, x: i64) -> i64 {
+    f(x)
+}
+fn main() {
+    let result = apply(|x| x * x, 7);
+    println!("{}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["49\n"]);
+    }
+
+    #[test]
+    fn test_closure_returned_from_function() {
+        let output = run_and_capture(
+            r#"fn make_adder(n: i64) -> Fn {
+    |x| x + n
+}
+fn main() {
+    let add5 = make_adder(5);
+    println!("{}", add5(10));
+}"#,
+        );
+        assert_eq!(output, vec!["15\n"]);
+    }
+
+    #[test]
+    fn test_move_closure() {
+        let output = run_and_capture(
+            r#"fn main() {
+let name = "world";
+let greet = move || format!("hello {}", name);
+println!("{}", greet());
+}"#,
+        );
+        assert_eq!(output, vec!["hello world\n"]);
+    }
+
+    #[test]
+    fn test_vec_map() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3];
+let doubled = v.map(|x| x * 2);
+println!("{:?}", doubled);
+}"#,
+        );
+        assert_eq!(output, vec!["[2, 4, 6]\n"]);
+    }
+
+    #[test]
+    fn test_vec_filter() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3, 4, 5];
+let evens = v.filter(|x| x % 2 == 0);
+println!("{:?}", evens);
+}"#,
+        );
+        assert_eq!(output, vec!["[2, 4]\n"]);
+    }
+
+    #[test]
+    fn test_vec_for_each() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![10, 20, 30];
+v.for_each(|x| println!("{}", x));
+}"#,
+        );
+        assert_eq!(output, vec!["10\n", "20\n", "30\n"]);
+    }
+
+    #[test]
+    fn test_vec_fold() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3, 4];
+let sum = v.fold(0, |acc, x| acc + x);
+println!("{}", sum);
+}"#,
+        );
+        assert_eq!(output, vec!["10\n"]);
+    }
+
+    #[test]
+    fn test_vec_any_all() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3, 4, 5];
+println!("{}", v.any(|x| x > 4));
+println!("{}", v.all(|x| x > 0));
+println!("{}", v.all(|x| x > 3));
+}"#,
+        );
+        assert_eq!(output, vec!["true\n", "true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_vec_find() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3, 4, 5];
+let found = v.find(|x| x > 3);
+println!("{:?}", found);
+let not_found = v.find(|x| x > 10);
+println!("{:?}", not_found);
+}"#,
+        );
+        assert_eq!(output, vec!["Some(4)\n", "None\n"]);
+    }
+
+    #[test]
+    fn test_vec_enumerate() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec!["a", "b", "c"];
+let pairs = v.enumerate();
+println!("{:?}", pairs);
+}"#,
+        );
+        assert_eq!(output, vec!["[(0, \"a\"), (1, \"b\"), (2, \"c\")]\n"]);
+    }
+
+    #[test]
+    fn test_vec_chain_map_filter() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3, 4, 5];
+let result = v.map(|x| x * 2).filter(|x| x > 4);
+println!("{:?}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["[6, 8, 10]\n"]);
+    }
+
+    #[test]
+    fn test_vec_flat_map() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3];
+let result = v.flat_map(|x| vec![x, x * 10]);
+println!("{:?}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 10, 2, 20, 3, 30]\n"]);
+    }
+
+    #[test]
+    fn test_vec_position() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![10, 20, 30];
+println!("{:?}", v.position(|x| x == 20));
+println!("{:?}", v.position(|x| x == 99));
+}"#,
+        );
+        assert_eq!(output, vec!["Some(1)\n", "None\n"]);
+    }
+
+    #[test]
+    fn test_option_map_with_closure() {
+        let output = run_and_capture(
+            r#"fn main() {
+let val = Some(5);
+let doubled = val.map(|x| x * 2);
+println!("{:?}", doubled);
+let none_val: Option<i64> = None;
+let mapped = none_val.map(|x| x * 2);
+println!("{:?}", mapped);
+}"#,
+        );
+        assert_eq!(output, vec!["Some(10)\n", "None\n"]);
+    }
+
+    #[test]
+    fn test_result_map_with_closure() {
+        let output = run_and_capture(
+            r#"fn main() {
+let val: Result<i64, String> = Ok(5);
+let doubled = val.map(|x| x * 2);
+println!("{:?}", doubled);
+}"#,
+        );
+        assert_eq!(output, vec!["Ok(10)\n"]);
+    }
+
+    #[test]
+    fn test_closure_as_method_callback() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3];
+let sum = v.fold(0, |acc, x| acc + x);
+let product = v.fold(1, |acc, x| acc * x);
+println!("{} {}", sum, product);
+}"#,
+        );
+        assert_eq!(output, vec!["6 6\n"]);
+    }
+
+    #[test]
+    fn test_iter_collect() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3];
+let v2 = v.iter().collect();
+println!("{:?}", v2);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
     }
 }

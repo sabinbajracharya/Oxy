@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 9: Error Handling — COMPLETE. 276 tests passing.
+Phase 10: Closures & Higher-Order Functions — COMPLETE. 302 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -169,5 +169,12 @@ Phase 9: Error Handling — COMPLETE. 276 tests passing.
 - `todo!()` — panics with "not yet implemented"
 - `unimplemented!()` — panics with "not implemented"
 - `dbg!(expr)` — prints debug value and returns it
+- Closures: `|x| x * 2`, `|x, y| x + y`, `|| 42`, `move |x| x + n`
+- Closure type annotations: `|x: i64| -> i64 { x * 2 }`
+- Variable capture: closures capture enclosing scope via Rc clone
+- Closures as function arguments and return values
+- `move` keyword accepted on closures (semantically same as regular capture)
+- Vec iterator methods: `.iter()`, `.map()`, `.filter()`, `.for_each()`, `.fold()`, `.any()`, `.all()`, `.find()`, `.enumerate()`, `.collect()`, `.flat_map()`, `.position()`
+- Method chaining: `v.map(|x| x * 2).filter(|x| x > 4).collect()`
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`
