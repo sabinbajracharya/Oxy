@@ -149,19 +149,30 @@ fn run_repl() {
                 println!("  {}    Show this help", ":help, :h".cyan());
                 println!("  {}    Exit the REPL", ":quit, :q".cyan());
                 println!();
-                println!("Enter expressions or function definitions.");
+                println!("Enter Ferrite code directly. Items (fn, struct, enum, impl,");
+                println!("trait, type, const, use, mod, pub, async, #[...]) are");
+                println!("registered and persist. Expressions and statements execute");
+                println!("immediately. Multi-line input continues with '...' prompt");
+                println!("until braces are balanced.");
                 continue;
             }
             _ => {}
         }
 
-        // Try to parse as function definition
-        if trimmed.starts_with("fn ")
+        // Try to parse as item definition
+        let is_item = trimmed.starts_with("fn ")
             || trimmed.starts_with("struct ")
             || trimmed.starts_with("enum ")
             || trimmed.starts_with("impl ")
             || trimmed.starts_with("trait ")
-        {
+            || trimmed.starts_with("pub ")
+            || trimmed.starts_with("async ")
+            || trimmed.starts_with("type ")
+            || trimmed.starts_with("const ")
+            || trimmed.starts_with("use ")
+            || trimmed.starts_with("mod ")
+            || trimmed.starts_with("#[");
+        if is_item {
             // Accumulate multi-line input for definitions
             let mut input = line.clone();
             while !balanced_braces(&input) {
@@ -196,11 +207,10 @@ fn run_repl() {
             continue;
         }
 
-        // Otherwise, wrap as expression/statement in a synthetic function
+        // Otherwise, try as expression/statement in the persistent REPL scope
         let wrapped = format!("fn __repl__() {{ {trimmed} }}");
         match ferrite_core::parser::parse(&wrapped) {
             Ok(program) => {
-                // Extract the body of __repl__ and execute statements directly
                 if let Some(ferrite_core::ast::Item::Function(f)) = program.items.first() {
                     for stmt in &f.body.stmts {
                         match interp.execute_stmt(stmt) {
@@ -216,7 +226,20 @@ fn run_repl() {
                     }
                 }
             }
-            Err(e) => display_error(&e, trimmed, &[]),
+            Err(_) => {
+                // If wrapping as expression failed, try parsing as item directly
+                // (handles edge cases like multi-line let + fn combos)
+                match ferrite_core::parser::parse(trimmed) {
+                    Ok(program) => {
+                        for item in &program.items {
+                            if let Err(e) = interp.register_item(item) {
+                                display_error(&e, trimmed, &[]);
+                            }
+                        }
+                    }
+                    Err(e) => display_error(&e, trimmed, &[]),
+                }
+            }
         }
     }
 
