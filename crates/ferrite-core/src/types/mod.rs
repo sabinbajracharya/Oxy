@@ -50,6 +50,8 @@ pub enum Value {
         variant: String,
         data: Vec<Value>,
     },
+    /// A hash map (string keys for simplicity).
+    HashMap(HashMap<String, Value>),
 }
 
 impl Value {
@@ -73,6 +75,7 @@ impl Value {
                 Box::leak(name.clone().into_boxed_str())
             }
             Value::EnumVariant { enum_name, .. } => Box::leak(enum_name.clone().into_boxed_str()),
+            Value::HashMap(_) => "HashMap",
         }
     }
 
@@ -87,6 +90,7 @@ impl Value {
             Value::Tuple(t) => !t.is_empty(),
             Value::Struct { .. } => true,
             Value::EnumVariant { .. } => true,
+            Value::HashMap(m) => !m.is_empty(),
             _ => true,
         }
     }
@@ -167,6 +171,18 @@ impl fmt::Display for Value {
                 }
                 Ok(())
             }
+            Value::HashMap(m) => {
+                write!(f, "{{")?;
+                let mut sorted: Vec<_> = m.iter().collect();
+                sorted.sort_by_key(|(k, _)| (*k).clone());
+                for (i, (k, v)) in sorted.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }
@@ -205,6 +221,7 @@ impl PartialEq for Value {
                     data: db,
                 },
             ) => ea == eb && va == vb && da == db,
+            (Value::HashMap(a), Value::HashMap(b)) => a == b,
             _ => false,
         }
     }

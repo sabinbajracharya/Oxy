@@ -22,6 +22,20 @@ pub enum Item {
     Module(ModuleDef),
     /// `use path::item;` or `use path::*;` or `use path::{a, b};`
     Use(UseDef),
+    /// `type Name = Type;`
+    TypeAlias {
+        name: String,
+        target: TypeAnnotation,
+        span: Span,
+    },
+    /// `const NAME: Type = expr;` or `static NAME: Type = expr;`
+    Const {
+        name: String,
+        type_ann: Option<TypeAnnotation>,
+        value: Expr,
+        is_static: bool,
+        span: Span,
+    },
 }
 
 impl Item {
@@ -35,6 +49,8 @@ impl Item {
             Item::ImplTrait(i) => i.span,
             Item::Module(m) => m.span,
             Item::Use(u) => u.span,
+            Item::TypeAlias { span, .. } => *span,
+            Item::Const { span, .. } => *span,
         }
     }
 }
@@ -253,6 +269,13 @@ pub enum Stmt {
         body: Block,
         span: Span,
     },
+    /// `for (a, b) in iterable { body }` — tuple destructuring
+    ForDestructure {
+        names: Vec<String>,
+        iterable: Box<Expr>,
+        body: Block,
+        span: Span,
+    },
 }
 
 impl Stmt {
@@ -265,7 +288,8 @@ impl Stmt {
             | Stmt::For { span, .. }
             | Stmt::Break { span, .. }
             | Stmt::Continue { span, .. }
-            | Stmt::WhileLet { span, .. } => *span,
+            | Stmt::WhileLet { span, .. }
+            | Stmt::ForDestructure { span, .. } => *span,
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -723,6 +747,24 @@ impl Item {
                     }
                 }
             }
+            Item::TypeAlias { name, target, .. } => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}type {name} = {};\n", target.name));
+            }
+            Item::Const {
+                name,
+                type_ann,
+                is_static,
+                ..
+            } => {
+                let pad = "  ".repeat(indent);
+                let kw = if *is_static { "static" } else { "const" };
+                if let Some(ta) = type_ann {
+                    out.push_str(&format!("{pad}{kw} {name}: {} = ...;\n", ta.name));
+                } else {
+                    out.push_str(&format!("{pad}{kw} {name} = ...;\n"));
+                }
+            }
         }
     }
 }
@@ -860,6 +902,20 @@ impl Stmt {
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 expr.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for s in &body.stmts {
+                    s.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                ..
+            } => {
+                out.push_str(&format!("{pad}for ({}) in ", names.join(", ")));
+                iterable.pretty_print(out, 0);
                 out.push_str(" {\n");
                 for s in &body.stmts {
                     s.pretty_print(out, indent + 1);

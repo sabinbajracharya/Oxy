@@ -34,6 +34,10 @@ pub struct Interpreter {
     modules: HashMap<String, ModuleData>,
     /// Base directory for file-based module resolution.
     base_dir: Option<String>,
+    /// Type aliases (documentation-only in a dynamically typed language).
+    type_aliases: HashMap<String, TypeAnnotation>,
+    /// Command-line arguments passed to the program.
+    cli_args: Vec<String>,
 }
 
 /// Data stored for a registered module.
@@ -61,6 +65,8 @@ impl Interpreter {
             current_self_type: None,
             modules: HashMap::new(),
             base_dir: None,
+            type_aliases: HashMap::new(),
+            cli_args: Vec::new(),
         }
     }
 
@@ -77,6 +83,8 @@ impl Interpreter {
             current_self_type: None,
             modules: HashMap::new(),
             base_dir: None,
+            type_aliases: HashMap::new(),
+            cli_args: Vec::new(),
         }
     }
 
@@ -93,12 +101,19 @@ impl Interpreter {
             current_self_type: None,
             modules: HashMap::new(),
             base_dir: None,
+            type_aliases: HashMap::new(),
+            cli_args: Vec::new(),
         }
     }
 
     /// Set the base directory for file-based module resolution.
     pub fn set_base_dir(&mut self, dir: String) {
         self.base_dir = Some(dir);
+    }
+
+    /// Set command-line arguments for the program.
+    pub fn set_cli_args(&mut self, args: Vec<String>) {
+        self.cli_args = args;
     }
 
     /// Get captured output (for testing).
@@ -191,6 +206,18 @@ impl Interpreter {
             }
             Item::Module(m) => self.register_module(m),
             Item::Use(u) => self.register_use(u),
+            Item::TypeAlias { name, target, .. } => {
+                self.type_aliases.insert(name.clone(), target.clone());
+                Ok(())
+            }
+            Item::Const {
+                name, value, span, ..
+            } => {
+                let val = self.eval_expr(value, &self.env.clone())?;
+                self.env.borrow_mut().define(name.clone(), val, false);
+                let _ = span;
+                Ok(())
+            }
         }
     }
 
@@ -250,8 +277,8 @@ impl Interpreter {
                         methods.push(method.clone());
                     }
                 }
-                Item::Module(_) | Item::Use(_) => {
-                    // Nested modules/use in modules: skip for now
+                Item::Module(_) | Item::Use(_) | Item::TypeAlias { .. } | Item::Const { .. } => {
+                    // Nested modules/use/type aliases/consts in modules: skip for now
                 }
             }
         }
@@ -544,6 +571,39 @@ impl Interpreter {
                 }
                 Ok(result)
             }
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                ..
+            } => {
+                let iter_val = self.eval_expr(iterable, env)?;
+                let values = self.value_to_iter(&iter_val, iterable.span())?;
+                let for_env = Environment::child(env);
+                for name in names {
+                    for_env.borrow_mut().define(name.clone(), Value::Unit, true);
+                }
+                for val in values {
+                    // Destructure tuple into individual variables
+                    if let Value::Tuple(ref elems) = val {
+                        for (i, name) in names.iter().enumerate() {
+                            let v = elems.get(i).cloned().unwrap_or(Value::Unit);
+                            for_env.borrow_mut().set(name, v).ok();
+                        }
+                    } else if names.len() == 1 {
+                        for_env.borrow_mut().set(&names[0], val).ok();
+                    }
+                    match self.eval_block(body, &for_env) {
+                        Ok(_) => {}
+                        Err(FerriError::Break(val)) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        }
+                        Err(FerriError::Continue) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(Value::Unit)
+            }
         }
     }
 
@@ -562,7 +622,10 @@ impl Interpreter {
                         result = val;
                     }
                     // Loop/while/for return their break value when last
-                    Stmt::Loop { .. } | Stmt::While { .. } | Stmt::For { .. } => {
+                    Stmt::Loop { .. }
+                    | Stmt::While { .. }
+                    | Stmt::For { .. }
+                    | Stmt::ForDestructure { .. } => {
                         result = val;
                     }
                     _ => {
@@ -1532,6 +1595,21 @@ impl Interpreter {
             Value::Range(start, end) => Ok((*start..*end).map(Value::Integer).collect()),
             Value::Vec(v) => Ok(v.clone()),
             Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
+            Value::HashMap(m) => {
+                // Iterate as (key, value) tuples
+                let mut pairs: Vec<_> = m
+                    .iter()
+                    .map(|(k, v)| Value::Tuple(vec![Value::String(k.clone()), v.clone()]))
+                    .collect();
+                pairs.sort_by(|a, b| {
+                    if let (Value::Tuple(a), Value::Tuple(b)) = (a, b) {
+                        a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                });
+                Ok(pairs)
+            }
             _ => Err(FerriError::Runtime {
                 message: format!("cannot iterate over {}", value.type_name()),
                 line: span.line,
@@ -1724,6 +1802,9 @@ impl Interpreter {
         match &receiver {
             Value::Vec(_) => self.call_vec_method(receiver, method, args, receiver_expr, env, span),
             Value::String(_) => self.call_string_method(receiver, method, args, span),
+            Value::HashMap(_) => {
+                self.call_hashmap_method(receiver, method, args, receiver_expr, env, span)
+            }
             Value::Tuple(_) => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on tuple"),
                 line: span.line,
@@ -2259,6 +2340,117 @@ impl Interpreter {
         }
     }
 
+    fn call_hashmap_method(
+        &mut self,
+        receiver: Value,
+        method: &str,
+        args: Vec<Value>,
+        receiver_expr: &Expr,
+        env: &Env,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        let Value::HashMap(m) = receiver else {
+            unreachable!()
+        };
+        match method {
+            "len" => Ok(Value::Integer(m.len() as i64)),
+            "is_empty" => Ok(Value::Bool(m.is_empty())),
+            "insert" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: format!("HashMap::insert() takes 2 arguments, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let key = format!("{}", args[0]);
+                let value = args[1].clone();
+                let mut new_m = m;
+                new_m.insert(key, value);
+                self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
+                Ok(Value::Unit)
+            }
+            "get" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("HashMap::get() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let key = format!("{}", args[0]);
+                match m.get(&key) {
+                    Some(val) => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: vec![val.clone()],
+                    }),
+                    None => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }),
+                }
+            }
+            "remove" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("HashMap::remove() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let key = format!("{}", args[0]);
+                let mut new_m = m;
+                let removed = new_m.remove(&key);
+                self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
+                match removed {
+                    Some(val) => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: vec![val],
+                    }),
+                    None => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }),
+                }
+            }
+            "contains_key" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!(
+                            "HashMap::contains_key() takes 1 argument, got {}",
+                            args.len()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let key = format!("{}", args[0]);
+                Ok(Value::Bool(m.contains_key(&key)))
+            }
+            "keys" => {
+                let mut keys: Vec<String> = m.keys().cloned().collect();
+                keys.sort();
+                Ok(Value::Vec(keys.into_iter().map(Value::String).collect()))
+            }
+            "values" => {
+                let mut pairs: Vec<(&String, &Value)> = m.iter().collect();
+                pairs.sort_by_key(|(k, _)| (*k).clone());
+                Ok(Value::Vec(
+                    pairs.into_iter().map(|(_, v)| v.clone()).collect(),
+                ))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("no method `{method}` on HashMap"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
     /// Handle built-in Option/Result methods.
     /// Returns `Ok(Some(value))` if the method was handled, `Ok(None)` if not found.
     fn call_option_result_method(
@@ -2628,6 +2820,11 @@ impl Interpreter {
                 return Ok(Value::String(format!("{}", args[0])));
             }
 
+            // Built-in HashMap::new
+            if type_name == "HashMap" && method_name == "new" && args.is_empty() {
+                return Ok(Value::HashMap(HashMap::new()));
+            }
+
             // Check for module function call: `module::function(args)`
             if let Some(module) = self.modules.get(type_name).cloned() {
                 if let Ok(val) = module.env.borrow().get(method_name) {
@@ -2684,6 +2881,86 @@ impl Interpreter {
                         }
                     }
                 }
+            }
+        }
+
+        // Handle std:: paths
+        if path.len() == 3 && path[0] == "std" {
+            let module = &path[1];
+            let func = &path[2];
+            match (module.as_str(), func.as_str()) {
+                ("fs", "read_to_string") => {
+                    if args.len() != 1 {
+                        return Err(FerriError::Runtime {
+                            message: "std::fs::read_to_string() takes 1 argument".into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    let path_str = format!("{}", args[0]);
+                    return match std::fs::read_to_string(&path_str) {
+                        Ok(content) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Ok".to_string(),
+                            data: vec![Value::String(content)],
+                        }),
+                        Err(e) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Err".to_string(),
+                            data: vec![Value::String(e.to_string())],
+                        }),
+                    };
+                }
+                ("fs", "write") => {
+                    if args.len() != 2 {
+                        return Err(FerriError::Runtime {
+                            message: "std::fs::write() takes 2 arguments".into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    let path_str = format!("{}", args[0]);
+                    let content = format!("{}", args[1]);
+                    return match std::fs::write(&path_str, &content) {
+                        Ok(()) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Ok".to_string(),
+                            data: vec![Value::Unit],
+                        }),
+                        Err(e) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Err".to_string(),
+                            data: vec![Value::String(e.to_string())],
+                        }),
+                    };
+                }
+                ("env", "args") => {
+                    let args_vec: Vec<Value> = self
+                        .cli_args
+                        .iter()
+                        .map(|a| Value::String(a.clone()))
+                        .collect();
+                    return Ok(Value::Vec(args_vec));
+                }
+                ("process", "exit") => {
+                    if args.len() != 1 {
+                        return Err(FerriError::Runtime {
+                            message: "std::process::exit() takes 1 argument".into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    if let Value::Integer(code) = &args[0] {
+                        std::process::exit(*code as i32);
+                    } else {
+                        return Err(FerriError::Runtime {
+                            message: "std::process::exit() requires an integer argument".into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -2950,6 +3227,21 @@ fn debug_format(val: &Value) -> String {
                 format!("{prefix}{variant}({})", items.join(", "))
             }
         }
+        Value::HashMap(m) => {
+            let mut sorted: Vec<_> = m.iter().collect();
+            sorted.sort_by_key(|(k, _)| (*k).clone());
+            let items: Vec<String> = sorted
+                .iter()
+                .map(|(k, v)| {
+                    format!(
+                        "{}: {}",
+                        debug_format(&Value::String(k.to_string())),
+                        debug_format(v)
+                    )
+                })
+                .collect();
+            format!("{{{}}}", items.join(", "))
+        }
         other => format!("{other}"),
     }
 }
@@ -2963,11 +3255,21 @@ pub fn run(source: &str) -> Result<Value, FerriError> {
 
 /// Parse and execute a Ferrite program from a file path (enables module resolution).
 pub fn run_file(path: &str, source: &str) -> Result<Value, FerriError> {
+    run_file_with_args(path, source, vec![])
+}
+
+/// Parse and execute a Ferrite program from a file path with CLI args.
+pub fn run_file_with_args(
+    path: &str,
+    source: &str,
+    cli_args: Vec<String>,
+) -> Result<Value, FerriError> {
     let program = crate::parser::parse(source)?;
     let mut interp = Interpreter::new();
     if let Some(parent) = std::path::Path::new(path).parent() {
         interp.set_base_dir(parent.to_string_lossy().to_string());
     }
+    interp.set_cli_args(cli_args);
     interp.execute_program(&program)
 }
 
@@ -5533,5 +5835,252 @@ fn main() {
 }"#,
         );
         assert_eq!(output, vec!["3\n"]);
+    }
+
+    // === Phase 12: Type Aliases ===
+
+    #[test]
+    fn test_type_alias() {
+        let output = run_and_capture(
+            r#"
+type Meters = f64;
+fn main() {
+    let d: Meters = 42.0;
+    println!("{}", d);
+}
+"#,
+        );
+        assert_eq!(output, vec!["42.0\n"]);
+    }
+
+    // === Phase 12: Constants ===
+
+    #[test]
+    fn test_const() {
+        let output = run_and_capture(
+            r#"
+const MAX: i64 = 100;
+fn main() {
+    println!("{}", MAX);
+}
+"#,
+        );
+        assert_eq!(output, vec!["100\n"]);
+    }
+
+    #[test]
+    fn test_static() {
+        let output = run_and_capture(
+            r#"
+static PI: f64 = 3.14;
+fn main() {
+    println!("{}", PI);
+}
+"#,
+        );
+        assert_eq!(output, vec!["3.14\n"]);
+    }
+
+    #[test]
+    fn test_const_no_type_ann() {
+        let output = run_and_capture(
+            r#"
+const GREETING = "hello";
+fn main() {
+    println!("{}", GREETING);
+}
+"#,
+        );
+        assert_eq!(output, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_const_used_in_function() {
+        let output = run_and_capture(
+            r#"
+const FACTOR: i64 = 10;
+fn multiply(x: i64) -> i64 {
+    x * FACTOR
+}
+fn main() {
+    println!("{}", multiply(5));
+}
+"#,
+        );
+        assert_eq!(output, vec!["50\n"]);
+    }
+
+    // === Phase 12: HashMap ===
+
+    #[test]
+    fn test_hashmap_new_and_insert() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("a", 1);
+    m.insert("b", 2);
+    println!("{}", m.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["2\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_get() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("key", 42);
+    let val = m.get("key");
+    println!("{}", val.unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_get_missing() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let m = HashMap::new();
+    let val = m.get("nope");
+    println!("{}", val.is_none());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_contains_key() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("x", 1);
+    println!("{}", m.contains_key("x"));
+    println!("{}", m.contains_key("y"));
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_remove() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("a", 10);
+    let removed = m.remove("a");
+    println!("{}", removed.unwrap());
+    println!("{}", m.is_empty());
+}
+"#,
+        );
+        assert_eq!(output, vec!["10\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_keys_values() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("b", 2);
+    m.insert("a", 1);
+    println!("{:?}", m.keys());
+    println!("{:?}", m.values());
+}
+"#,
+        );
+        assert_eq!(output, vec!["[\"a\", \"b\"]\n", "[1, 2]\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_debug_format() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("x", 1);
+    println!("{:?}", m);
+}
+"#,
+        );
+        assert_eq!(output, vec!["{\"x\": 1}\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_iteration() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut m = HashMap::new();
+    m.insert("a", 1);
+    m.insert("b", 2);
+    for (k, v) in m {
+        println!("{}: {}", k, v);
+    }
+}
+"#,
+        );
+        assert_eq!(output, vec!["a: 1\n", "b: 2\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_is_empty() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let m = HashMap::new();
+    println!("{}", m.is_empty());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    // === Phase 12: For Destructuring ===
+
+    #[test]
+    fn test_for_destructure_vec_of_tuples() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let pairs = vec![(1, "a"), (2, "b")];
+    for (num, letter) in pairs {
+        println!("{} {}", num, letter);
+    }
+}
+"#,
+        );
+        assert_eq!(output, vec!["1 a\n", "2 b\n"]);
+    }
+
+    // === Phase 12: CLI Args (via set_cli_args) ===
+
+    #[test]
+    fn test_cli_args() {
+        let src = r#"
+fn main() {
+    let args = std::env::args();
+    for arg in args {
+        println!("{}", arg);
+    }
+}
+"#;
+        let program = crate::parser::parse(src).unwrap();
+        let mut interp = Interpreter::new_with_captured_output();
+        interp.set_cli_args(vec!["test".to_string(), "arg1".to_string()]);
+        interp.execute_program(&program).unwrap();
+        let output = interp.captured_output().to_vec();
+        assert_eq!(output, vec!["test\n", "arg1\n"]);
     }
 }

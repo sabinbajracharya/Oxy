@@ -54,10 +54,21 @@ fn run_file(path: &str) {
         }
     };
 
-    match ferrite_core::interpreter::run_file(path, &source) {
+    // Collect program args: everything after the file argument
+    let all_args: Vec<String> = std::env::args().collect();
+    let cli_args: Vec<String> = if all_args.len() > 3 {
+        all_args[3..].to_vec()
+    } else {
+        vec![]
+    };
+    // Prepend program name
+    let mut program_args = vec![path.to_string()];
+    program_args.extend(cli_args);
+
+    match ferrite_core::interpreter::run_file_with_args(path, &source, program_args) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("error: {e}");
+            display_error(&e, &source);
             process::exit(1);
         }
     }
@@ -226,4 +237,29 @@ fn print_help() {
     println!("  --dump-ast <file>    Dump AST for a file");
     println!("  -V, --version        Print version information");
     println!("  -h, --help           Print this help message");
+}
+
+/// Display an error with source context when possible.
+fn display_error(err: &ferrite_core::errors::FerriError, source: &str) {
+    use ferrite_core::errors::FerriError;
+    match err {
+        FerriError::Runtime { line, column, .. }
+        | FerriError::Parser { line, column, .. }
+        | FerriError::Lexer { line, column, .. } => {
+            eprintln!("error: {err}");
+            if *line > 0 {
+                let lines: Vec<&str> = source.lines().collect();
+                if let Some(src_line) = lines.get(line - 1) {
+                    eprintln!("  --> line {line}:{column}");
+                    eprintln!("   |");
+                    eprintln!("{line:>4} | {src_line}");
+                    if *column > 0 {
+                        let caret = " ".repeat(*column - 1);
+                        eprintln!("   | {caret}^-- here");
+                    }
+                }
+            }
+        }
+        _ => eprintln!("error: {err}"),
+    }
 }

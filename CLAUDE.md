@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 11: Modules & Use Statements — COMPLETE. 318 tests passing.
+Phase 12: Advanced Features & Polish — COMPLETE. 338 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -181,5 +181,13 @@ Phase 11: Modules & Use Statements — COMPLETE. 318 tests passing.
 - Use statements: `use module::item;`, `use module::*;`, `use module::{a, b};`
 - Module path calls: `module::function()`, `module::Type::method()`
 - `pub` keyword accepted on modules, functions, structs (not enforced)
+- Type aliases: `type Name = Type;` (parsed and stored, dynamically typed)
+- Constants: `const X: i64 = 42;` and `static X: i64 = 42;`
+- HashMap: `HashMap::new()`, `.insert()`, `.get()` (returns Option), `.remove()`, `.contains_key()`, `.len()`, `.is_empty()`, `.keys()`, `.values()`
+- HashMap iteration: `for (k, v) in map { ... }` with tuple destructuring
+- File I/O: `std::fs::read_to_string(path)`, `std::fs::write(path, content)` (return Result)
+- Command-line args: `std::env::args()` returns Vec of strings
+- Process exit: `std::process::exit(code)`
+- Improved error messages with source line context and caret pointing to error column
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`

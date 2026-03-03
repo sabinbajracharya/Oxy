@@ -108,8 +108,11 @@ impl Parser {
             TokenKind::Trait => self.parse_trait_def().map(Item::Trait),
             TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
             TokenKind::Use => self.parse_use_def().map(Item::Use),
+            TokenKind::Type => self.parse_type_alias(),
+            TokenKind::Const => self.parse_const_def(false),
+            TokenKind::Static => self.parse_const_def(true),
             other => Err(self.error(format!(
-                "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait', 'mod', 'use'), found {}",
+                "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait', 'mod', 'use', 'const', 'type'), found {}",
                 other.description()
             ))),
         }
@@ -216,6 +219,47 @@ impl Parser {
         Ok(UseDef {
             path,
             tree: UseTree::Simple,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_type_alias(&mut self) -> Result<Item, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Type)?;
+        let name = self.expect_ident()?;
+        self.expect(TokenKind::Eq)?;
+        let target = self.parse_type_annotation()?;
+        let end_span = self.current_span();
+        self.expect(TokenKind::Semicolon)?;
+        Ok(Item::TypeAlias {
+            name,
+            target,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_const_def(&mut self, is_static: bool) -> Result<Item, FerriError> {
+        let start_span = self.current_span();
+        if is_static {
+            self.expect(TokenKind::Static)?;
+        } else {
+            self.expect(TokenKind::Const)?;
+        }
+        let name = self.expect_ident()?;
+        let type_ann = if self.match_token(&TokenKind::Colon) {
+            Some(self.parse_type_annotation()?)
+        } else {
+            None
+        };
+        self.expect(TokenKind::Eq)?;
+        let value = self.parse_expr(Precedence::None)?;
+        let end_span = self.current_span();
+        self.expect(TokenKind::Semicolon)?;
+        Ok(Item::Const {
+            name,
+            type_ann,
+            value,
+            is_static,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -823,6 +867,32 @@ impl Parser {
     fn parse_for_stmt(&mut self) -> Result<Stmt, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::For)?;
+
+        // Check for tuple destructuring: `for (a, b) in ...`
+        if self.check(&TokenKind::LParen) {
+            self.advance();
+            let mut names = Vec::new();
+            loop {
+                names.push(self.expect_ident()?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                if self.check(&TokenKind::RParen) {
+                    break;
+                }
+            }
+            self.expect(TokenKind::RParen)?;
+            self.expect(TokenKind::In)?;
+            let iterable = self.parse_expr(Precedence::None)?;
+            let body = self.parse_block()?;
+            let end_span = body.span;
+            return Ok(Stmt::ForDestructure {
+                names,
+                iterable: Box::new(iterable),
+                body,
+                span: self.merge_spans(start_span, end_span),
+            });
+        }
 
         let name = self.expect_ident()?;
         self.expect(TokenKind::In)?;
@@ -3016,5 +3086,54 @@ fn main() {}"#,
     fn test_pub_fn() {
         let program = parse("pub fn helper() -> i64 { 42 } fn main() {}").unwrap();
         assert!(matches!(&program.items[0], Item::Function(_)));
+    }
+
+    #[test]
+    fn test_type_alias() {
+        let program = parse("type Meters = f64; fn main() {}").unwrap();
+        let Item::TypeAlias { name, target, .. } = &program.items[0] else {
+            panic!("expected type alias");
+        };
+        assert_eq!(name, "Meters");
+        assert_eq!(target.name, "f64");
+    }
+
+    #[test]
+    fn test_const_def() {
+        let program = parse("const MAX: i64 = 100; fn main() {}").unwrap();
+        let Item::Const {
+            name,
+            type_ann,
+            is_static,
+            ..
+        } = &program.items[0]
+        else {
+            panic!("expected const");
+        };
+        assert_eq!(name, "MAX");
+        assert!(!is_static);
+        assert_eq!(type_ann.as_ref().unwrap().name, "i64");
+    }
+
+    #[test]
+    fn test_static_def() {
+        let program = parse("static COUNT: i64 = 0; fn main() {}").unwrap();
+        let Item::Const {
+            name, is_static, ..
+        } = &program.items[0]
+        else {
+            panic!("expected static");
+        };
+        assert_eq!(name, "COUNT");
+        assert!(is_static);
+    }
+
+    #[test]
+    fn test_for_destructure() {
+        let body = parse_fn_body("fn main() { for (k, v) in items { println!(\"{}\", k); } }");
+        assert!(matches!(&body[0], Stmt::ForDestructure { .. }));
+        if let Stmt::ForDestructure { names, .. } = &body[0] {
+            assert_eq!(names, &["k", "v"]);
+        }
     }
 }
