@@ -1,0 +1,17 @@
+[package]
+name = "ferrite-lsp"
+description = "Language Server Protocol implementation for the Ferrite programming language"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ferrite-lsp"
+path = "src/main.rs"
+
+[dependencies]
+ferrite-core = { workspace = true }
+tower-lsp = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }

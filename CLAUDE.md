@@ -17,6 +17,7 @@ cargo build --release          # Release build
 cargo test                     # Run all tests
 cargo test -p ferrite-core     # Core library tests only
 cargo test -p ferrite-cli      # CLI integration tests only
+cargo test -p ferrite-lsp      # LSP server tests only
 ```
 
 ### Lint
@@ -46,10 +47,11 @@ docker compose build build                # Build release Docker image
 
 ## Architecture
 
-Cargo workspace with two crates:
+Cargo workspace with three crates:
 
 - **`ferrite-core`** (library): Language engine — lexer, parser, AST, interpreter, types, environment, stdlib, errors
 - **`ferrite-cli`** (binary): CLI interface — REPL and file execution
+- **`ferrite-lsp`** (binary): Language Server Protocol server for editor integration
 
 ### Module Structure (ferrite-core)
 ```
@@ -61,8 +63,19 @@ src/
 ├── interpreter/    # Tree-walking evaluator
 ├── types/          # Value system (Rc<RefCell<Value>>)
 ├── env/            # Lexical scoping environment
-├── stdlib/         # Built-in functions and types
+├── json/           # JSON serialization/deserialization
+├── http/           # HTTP client (ureq)
 └── errors/         # Error types with span info
+```
+
+### VS Code Extension
+```
+editors/vscode/
+├── package.json                    # Extension manifest
+├── extension.js                    # LSP client (launches ferrite-lsp)
+├── language-configuration.json     # Brackets, comments, indentation
+└── syntaxes/
+    └── ferrite.tmLanguage.json     # TextMate grammar for syntax highlighting
 ```
 
 ## Conventions

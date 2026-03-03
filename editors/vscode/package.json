@@ -1,0 +1,53 @@
+{
+    "name": "ferrite-lang",
+    "displayName": "Ferrite Language",
+    "description": "Syntax highlighting and LSP support for the Ferrite programming language (.fe files)",
+    "version": "0.1.0",
+    "publisher": "ferrite-lang",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:ferrite"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "ferrite",
+                "aliases": ["Ferrite", "ferrite"],
+                "extensions": [".fe"],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "ferrite",
+                "scopeName": "source.ferrite",
+                "path": "./syntaxes/ferrite.tmLanguage.json"
+            }
+        ],
+        "configuration": {
+            "type": "object",
+            "title": "Ferrite",
+            "properties": {
+                "ferrite.lsp.path": {
+                    "type": "string",
+                    "default": "ferrite-lsp",
+                    "description": "Path to the ferrite-lsp binary. If not absolute, it will be looked up in PATH."
+                },
+                "ferrite.lsp.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable the Ferrite Language Server for diagnostics, completion, hover, and go-to-definition."
+                }
+            }
+        }
+    },
+    "dependencies": {
+        "vscode-languageclient": "^9.0.1"
+    }
+}
