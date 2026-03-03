@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 
 let client;
+let outputChannel;
 
 function findProjectRoot() {
     // Walk up from the extension directory to find the project root (has Cargo.toml)
@@ -30,10 +31,13 @@ function findProjectRoot() {
 }
 
 function activate(context) {
+    outputChannel = vscode.window.createOutputChannel("Ferrite LSP");
+
     const config = vscode.workspace.getConfiguration("ferrite.lsp");
     const enabled = config.get("enabled", true);
 
     if (!enabled) {
+        outputChannel.appendLine("Ferrite LSP is disabled via settings.");
         return;
     }
 
@@ -48,23 +52,27 @@ function activate(context) {
         const projectRoot = findProjectRoot();
         if (!projectRoot) {
             vscode.window.showErrorMessage(
-                "Ferrite: Could not find project root (Cargo.toml). Set ferrite.lsp.path to your ferrite-lsp binary."
+                "Ferrite: Could not find project root (Cargo.toml). Set ferrite.lsp.mode to 'native' and ferrite.lsp.path to your ferrite-lsp binary."
             );
             return;
         }
 
+        outputChannel.appendLine(`Project root: ${projectRoot}`);
+        outputChannel.appendLine("Starting Ferrite LSP via Docker...");
+
         serverOptions = {
             command: "docker",
             args: [
-                "compose",
-                "-f", path.join(projectRoot, "docker-compose.yml"),
-                "run", "--rm", "-T",
+                "compose", "run", "--rm", "-T",
                 "dev",
                 "cargo", "run", "--release", "-p", "ferrite-lsp", "--quiet",
             ],
+            options: { cwd: projectRoot },
             transport: TransportKind.stdio,
         };
     } else {
+        outputChannel.appendLine(`Starting Ferrite LSP native binary: ${lspPath}`);
+
         serverOptions = {
             command: lspPath,
             transport: TransportKind.stdio,
@@ -76,6 +84,7 @@ function activate(context) {
         synchronize: {
             fileEvents: vscode.workspace.createFileSystemWatcher("**/*.fe"),
         },
+        outputChannel: outputChannel,
     };
 
     client = new LanguageClient(
@@ -85,8 +94,15 @@ function activate(context) {
         clientOptions
     );
 
-    client.start();
+    client.start().catch((err) => {
+        outputChannel.appendLine(`Failed to start Ferrite LSP: ${err.message}`);
+        vscode.window.showErrorMessage(
+            `Ferrite LSP failed to start: ${err.message}. Check "Ferrite LSP" output channel for details.`
+        );
+    });
+
     context.subscriptions.push(client);
+    context.subscriptions.push(outputChannel);
 }
 
 function deactivate() {
