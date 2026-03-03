@@ -5,12 +5,41 @@
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::{FunctionData, FutureData, Value};
+
+/// Global PRNG state for rand:: module (xorshift64).
+static PRNG_STATE: AtomicU64 = AtomicU64::new(0);
+
+/// Get the next pseudo-random u64 from the global PRNG.
+fn simple_random_u64() -> u64 {
+    let mut state = PRNG_STATE.load(Ordering::Relaxed);
+    if state == 0 {
+        // Seed from current time on first use
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+        state = seed | 1; // Ensure non-zero
+        PRNG_STATE.store(state, Ordering::Relaxed);
+    }
+    // xorshift64
+    state ^= state << 13;
+    state ^= state >> 7;
+    state ^= state << 17;
+    PRNG_STATE.store(state, Ordering::Relaxed);
+    state
+}
+
+/// Get a pseudo-random f64 in [0.0, 1.0).
+fn simple_random_f64() -> f64 {
+    (simple_random_u64() >> 11) as f64 / ((1u64 << 53) as f64)
+}
 
 /// The Ferrite interpreter.
 pub struct Interpreter {
@@ -1915,6 +1944,9 @@ impl Interpreter {
                 let type_name = name.clone();
                 self.call_user_method(receiver, &type_name, method, args, receiver_expr, env, span)
             }
+            Value::Integer(_) | Value::Float(_) => {
+                self.call_numeric_method(receiver, method, args, span)
+            }
             _ => {
                 // Built-in .to_json() and .to_json_pretty() on all values
                 if method == "to_json" || method == "to_json_pretty" {
@@ -2947,6 +2979,21 @@ impl Interpreter {
                     let _ = edef; // suppress unused
                 }
             }
+
+            // Built-in math:: pseudo-module (after user module check)
+            if type_name == "math" {
+                return self.call_math_function(method_name, args, span);
+            }
+
+            // Built-in rand:: pseudo-module
+            if type_name == "rand" {
+                return self.call_rand_function(method_name, args, span);
+            }
+
+            // Built-in time:: pseudo-module
+            if type_name == "time" {
+                return self.call_time_function(method_name, args, span);
+            }
         }
 
         // Handle 3-segment paths: `module::Type::method(args)`
@@ -3099,6 +3146,15 @@ impl Interpreter {
                 }
             }
 
+            // Built-in math constants
+            if type_name == "math" {
+                match variant_name.as_str() {
+                    "PI" => return Ok(Value::Float(std::f64::consts::PI)),
+                    "E" => return Ok(Value::Float(std::f64::consts::E)),
+                    _ => {}
+                }
+            }
+
             // Module value access: `module::value`
             if let Some(module) = self.modules.get(type_name) {
                 if let Ok(val) = module.env.borrow().get(variant_name) {
@@ -3221,6 +3277,514 @@ impl Interpreter {
             line: span.line,
             column: span.column,
         })
+    }
+
+    /// Convert an f64 to Value, returning Integer if the value is a whole number.
+    fn float_to_value(f: f64) -> Value {
+        if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
+            Value::Integer(f as i64)
+        } else {
+            Value::Float(f)
+        }
+    }
+
+    /// Extract f64 from a Value (Integer or Float).
+    fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
+        match val {
+            Value::Integer(n) => Ok(*n as f64),
+            Value::Float(f) => Ok(*f),
+            _ => Err(FerriError::Runtime {
+                message: format!("expected numeric argument, got {}", val.type_name()),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    /// Built-in math:: module functions.
+    fn call_math_function(
+        &self,
+        func_name: &str,
+        args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match func_name {
+            "sqrt" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::sqrt() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.sqrt()))
+            }
+            "abs" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::abs() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match &args[0] {
+                    Value::Integer(n) => Ok(Value::Integer(n.abs())),
+                    Value::Float(f) => Ok(Self::float_to_value(f.abs())),
+                    _ => Err(FerriError::Runtime {
+                        message: format!(
+                            "math::abs() requires numeric argument, got {}",
+                            args[0].type_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
+            }
+            "pow" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: "math::pow() takes 2 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let base = Self::value_to_f64(&args[0], span)?;
+                let exp = Self::value_to_f64(&args[1], span)?;
+                Ok(Self::float_to_value(base.powf(exp)))
+            }
+            "sin" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::sin() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.sin()))
+            }
+            "cos" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::cos() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.cos()))
+            }
+            "tan" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::tan() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.tan()))
+            }
+            "asin" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::asin() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.asin()))
+            }
+            "acos" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::acos() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.acos()))
+            }
+            "atan" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::atan() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.atan()))
+            }
+            "floor" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::floor() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.floor()))
+            }
+            "ceil" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::ceil() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.ceil()))
+            }
+            "round" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::round() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.round()))
+            }
+            "min" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: "math::min() takes 2 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
+                    _ => {
+                        let a = Self::value_to_f64(&args[0], span)?;
+                        let b = Self::value_to_f64(&args[1], span)?;
+                        Ok(Self::float_to_value(a.min(b)))
+                    }
+                }
+            }
+            "max" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: "math::max() takes 2 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
+                    _ => {
+                        let a = Self::value_to_f64(&args[0], span)?;
+                        let b = Self::value_to_f64(&args[1], span)?;
+                        Ok(Self::float_to_value(a.max(b)))
+                    }
+                }
+            }
+            "log" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::log() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.ln()))
+            }
+            "log2" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::log2() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.log2()))
+            }
+            "log10" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "math::log10() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let x = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(x.log10()))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("unknown math function `math::{func_name}`"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    /// Built-in rand:: module functions using a simple PRNG.
+    fn call_rand_function(
+        &self,
+        func_name: &str,
+        args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match func_name {
+            "random" => {
+                if !args.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "rand::random() takes 0 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(Value::Float(simple_random_f64()))
+            }
+            "range" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: "rand::range() takes 2 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Integer(min), Value::Integer(max)) => {
+                        if min >= max {
+                            return Err(FerriError::Runtime {
+                                message: "rand::range() requires min < max".into(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        let range = (max - min) as u64;
+                        let raw = simple_random_u64();
+                        let val = min + (raw % range) as i64;
+                        Ok(Value::Integer(val))
+                    }
+                    _ => Err(FerriError::Runtime {
+                        message: "rand::range() requires integer arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
+            }
+            "bool" => {
+                if !args.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "rand::bool() takes 0 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(Value::Bool(simple_random_u64() % 2 == 0))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("unknown rand function `rand::{func_name}`"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    /// Built-in time:: module functions.
+    fn call_time_function(
+        &self,
+        func_name: &str,
+        args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match func_name {
+            "now" => {
+                if !args.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "time::now() takes 0 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let dur = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap();
+                Ok(Value::Float(dur.as_secs_f64()))
+            }
+            "millis" => {
+                if !args.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "time::millis() takes 0 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let dur = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap();
+                Ok(Value::Integer(dur.as_millis() as i64))
+            }
+            "elapsed" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "time::elapsed() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let start = Self::value_to_f64(&args[0], span)?;
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64();
+                Ok(Value::Float(now - start))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("unknown time function `time::{func_name}`"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    /// Built-in numeric methods on Integer and Float values.
+    fn call_numeric_method(
+        &self,
+        receiver: Value,
+        method: &str,
+        args: Vec<Value>,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match method {
+            "abs" => match &receiver {
+                Value::Integer(n) => Ok(Value::Integer(n.abs())),
+                Value::Float(f) => Ok(Self::float_to_value(f.abs())),
+                _ => unreachable!(),
+            },
+            "sqrt" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.sqrt()))
+            }
+            "floor" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.floor()))
+            }
+            "ceil" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.ceil()))
+            }
+            "round" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.round()))
+            }
+            "pow" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "pow() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let base = Self::value_to_f64(&receiver, span)?;
+                let exp = Self::value_to_f64(&args[0], span)?;
+                Ok(Self::float_to_value(base.powf(exp)))
+            }
+            "sin" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.sin()))
+            }
+            "cos" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.cos()))
+            }
+            "tan" => {
+                let x = Self::value_to_f64(&receiver, span)?;
+                Ok(Self::float_to_value(x.tan()))
+            }
+            "min" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "min() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&receiver, &args[0]) {
+                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
+                    _ => {
+                        let a = Self::value_to_f64(&receiver, span)?;
+                        let b = Self::value_to_f64(&args[0], span)?;
+                        Ok(Self::float_to_value(a.min(b)))
+                    }
+                }
+            }
+            "max" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: "max() takes 1 argument".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&receiver, &args[0]) {
+                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
+                    _ => {
+                        let a = Self::value_to_f64(&receiver, span)?;
+                        let b = Self::value_to_f64(&args[0], span)?;
+                        Ok(Self::float_to_value(a.max(b)))
+                    }
+                }
+            }
+            "clamp" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: "clamp() takes 2 arguments".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                match (&receiver, &args[0], &args[1]) {
+                    (Value::Integer(x), Value::Integer(min), Value::Integer(max)) => {
+                        Ok(Value::Integer(*x.max(min).min(max)))
+                    }
+                    _ => {
+                        let x = Self::value_to_f64(&receiver, span)?;
+                        let min = Self::value_to_f64(&args[0], span)?;
+                        let max = Self::value_to_f64(&args[1], span)?;
+                        Ok(Self::float_to_value(x.max(min).min(max)))
+                    }
+                }
+            }
+            _ => {
+                // Fall back to to_json methods
+                if method == "to_json" || method == "to_json_pretty" {
+                    let result = if method == "to_json" {
+                        crate::json::serialize(&receiver)
+                    } else {
+                        crate::json::serialize_pretty(&receiver)
+                    };
+                    return match result {
+                        Ok(json) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Ok".to_string(),
+                            data: vec![Value::String(json)],
+                        }),
+                        Err(e) => Ok(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Err".to_string(),
+                            data: vec![Value::String(e)],
+                        }),
+                    };
+                }
+                Err(FerriError::Runtime {
+                    message: format!("no method `{method}` on type {}", receiver.type_name()),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
+        }
     }
 
     fn call_json_function(
@@ -7379,5 +7943,176 @@ fn main() {
 }"#,
         );
         assert_eq!(output, vec!["item-42\n"]);
+    }
+
+    // === Math stdlib ===
+
+    #[test]
+    fn test_math_sqrt() {
+        let out = run_and_capture("fn main() { println!(\"{}\", math::sqrt(16.0)); }");
+        assert_eq!(out, vec!["4\n"]);
+    }
+
+    #[test]
+    fn test_math_trig() {
+        let out = run_and_capture(
+            "fn main() { println!(\"{}\", math::sin(0.0)); println!(\"{}\", math::cos(0.0)); }",
+        );
+        assert_eq!(out, vec!["0\n", "1\n"]);
+    }
+
+    #[test]
+    fn test_math_constants() {
+        let out = run_and_capture("fn main() { println!(\"{}\", math::PI); }");
+        assert_eq!(out, vec!["3.141592653589793\n"]);
+    }
+
+    #[test]
+    fn test_math_constant_e() {
+        let out = run_and_capture("fn main() { println!(\"{}\", math::E); }");
+        assert_eq!(out, vec!["2.718281828459045\n"]);
+    }
+
+    #[test]
+    fn test_math_pow() {
+        let out = run_and_capture("fn main() { println!(\"{}\", math::pow(2.0, 10.0)); }");
+        assert_eq!(out, vec!["1024\n"]);
+    }
+
+    #[test]
+    fn test_math_floor_ceil_round() {
+        let out = run_and_capture(
+            "fn main() { println!(\"{}\", math::floor(3.7)); println!(\"{}\", math::ceil(3.2)); println!(\"{}\", math::round(3.5)); }",
+        );
+        assert_eq!(out, vec!["3\n", "4\n", "4\n"]);
+    }
+
+    #[test]
+    fn test_math_abs() {
+        let out = run_and_capture(
+            "fn main() { println!(\"{}\", math::abs(-42)); println!(\"{}\", math::abs(-3.14)); }",
+        );
+        assert_eq!(out, vec!["42\n", "3.14\n"]);
+    }
+
+    #[test]
+    fn test_math_min_max() {
+        let out = run_and_capture(
+            "fn main() { println!(\"{}\", math::min(3, 7)); println!(\"{}\", math::max(3, 7)); }",
+        );
+        assert_eq!(out, vec!["3\n", "7\n"]);
+    }
+
+    #[test]
+    fn test_math_log() {
+        let out = run_and_capture("fn main() { println!(\"{}\", math::log(1.0)); }");
+        assert_eq!(out, vec!["0\n"]);
+    }
+
+    #[test]
+    fn test_math_log2_log10() {
+        let out = run_and_capture(
+            "fn main() { println!(\"{}\", math::log2(8.0)); println!(\"{}\", math::log10(100.0)); }",
+        );
+        assert_eq!(out, vec!["3\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_f64_methods() {
+        let out = run_and_capture(
+            r#"fn main() {
+    let x = 16.0;
+    println!("{}", x.sqrt());
+    let y = -5;
+    println!("{}", y.abs());
+    let z = 3.7;
+    println!("{}", z.floor());
+}"#,
+        );
+        assert_eq!(out, vec!["4\n", "5\n", "3\n"]);
+    }
+
+    #[test]
+    fn test_f64_clamp() {
+        let out = run_and_capture("fn main() { let x = 15; println!(\"{}\", x.clamp(0, 10)); }");
+        assert_eq!(out, vec!["10\n"]);
+    }
+
+    #[test]
+    fn test_f64_min_max_method() {
+        let out = run_and_capture(
+            r#"fn main() {
+    let a = 3;
+    let b = 7;
+    println!("{}", a.min(b));
+    println!("{}", a.max(b));
+}"#,
+        );
+        assert_eq!(out, vec!["3\n", "7\n"]);
+    }
+
+    #[test]
+    fn test_f64_pow_method() {
+        let out = run_and_capture("fn main() { let x = 2.0; println!(\"{}\", x.pow(10.0)); }");
+        assert_eq!(out, vec!["1024\n"]);
+    }
+
+    #[test]
+    fn test_f64_trig_methods() {
+        let out = run_and_capture(
+            r#"fn main() {
+    let x = 0.0;
+    println!("{}", x.sin());
+    println!("{}", x.cos());
+}"#,
+        );
+        assert_eq!(out, vec!["0\n", "1\n"]);
+    }
+
+    #[test]
+    fn test_rand_random() {
+        let out = run_and_capture(
+            "fn main() { let x = rand::random(); println!(\"{}\", x >= 0.0 && x < 1.0); }",
+        );
+        assert_eq!(out, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_rand_range() {
+        let out = run_and_capture(
+            "fn main() { let x = rand::range(1, 10); println!(\"{}\", x >= 1 && x < 10); }",
+        );
+        assert_eq!(out, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_rand_bool() {
+        let out = run_and_capture(
+            r#"fn main() {
+    let b = rand::bool();
+    println!("{}", b == true || b == false);
+}"#,
+        );
+        assert_eq!(out, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_time_now() {
+        let out = run_and_capture("fn main() { let t = time::now(); println!(\"{}\", t > 0.0); }");
+        assert_eq!(out, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_time_millis() {
+        let out = run_and_capture("fn main() { let t = time::millis(); println!(\"{}\", t > 0); }");
+        assert_eq!(out, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_time_elapsed() {
+        let out = run_and_capture(
+            "fn main() { let start = time::now(); let elapsed = time::elapsed(start); println!(\"{}\", elapsed >= 0.0); }",
+        );
+        assert_eq!(out, vec!["true\n"]);
     }
 }
