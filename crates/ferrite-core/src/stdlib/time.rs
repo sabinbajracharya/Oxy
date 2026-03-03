@@ -1,3 +1,8 @@
+//! Time standard library module.
+//!
+//! Provides access to wall-clock time and elapsed-time measurement.
+
+use crate::errors::check_arg_count;
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::stdlib::math::value_to_f64;
@@ -7,39 +12,21 @@ use crate::types::Value;
 pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
     match func_name {
         "now" => {
-            if !args.is_empty() {
-                return Err(FerriError::Runtime {
-                    message: "time::now() takes 0 arguments".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("time::now", 0, args, span)?;
             let dur = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap();
             Ok(Value::Float(dur.as_secs_f64()))
         }
         "millis" => {
-            if !args.is_empty() {
-                return Err(FerriError::Runtime {
-                    message: "time::millis() takes 0 arguments".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("time::millis", 0, args, span)?;
             let dur = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap();
             Ok(Value::Integer(dur.as_millis() as i64))
         }
         "elapsed" => {
-            if args.len() != 1 {
-                return Err(FerriError::Runtime {
-                    message: "time::elapsed() takes 1 argument".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("time::elapsed", 1, args, span)?;
             let start = value_to_f64(&args[0], span)?;
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

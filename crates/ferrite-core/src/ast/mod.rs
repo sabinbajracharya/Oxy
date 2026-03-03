@@ -12,11 +12,17 @@ pub struct Program {
 /// A top-level item (function, struct, enum, etc.).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
+    /// A function definition: `fn name(params) -> Type { body }`
     Function(FnDef),
+    /// A struct definition: `struct Name { ... }`
     Struct(StructDef),
+    /// An enum definition: `enum Name { ... }`
     Enum(EnumDef),
+    /// An inherent impl block: `impl Type { ... }`
     Impl(ImplBlock),
+    /// A trait definition: `trait Name { ... }`
     Trait(TraitDef),
+    /// A trait implementation: `impl Trait for Type { ... }`
     ImplTrait(ImplTraitBlock),
     /// `mod name { items }` or `mod name;` (file-based)
     Module(ModuleDef),
@@ -39,6 +45,7 @@ pub enum Item {
 }
 
 impl Item {
+    /// Returns the source span of this item.
     pub fn span(&self) -> Span {
         match self {
             Item::Function(f) => f.span,
@@ -290,6 +297,7 @@ pub enum Stmt {
 }
 
 impl Stmt {
+    /// Returns the source span of this statement.
     pub fn span(&self) -> Span {
         match self {
             Stmt::Let { span, .. }
@@ -496,24 +504,42 @@ impl Expr {
 /// Binary operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
-    Add,    // +
-    Sub,    // -
-    Mul,    // *
-    Div,    // /
-    Mod,    // %
-    Eq,     // ==
-    NotEq,  // !=
-    Lt,     // <
-    Gt,     // >
-    LtEq,   // <=
-    GtEq,   // >=
-    And,    // &&
-    Or,     // ||
-    BitAnd, // &
-    BitOr,  // |
-    BitXor, // ^
-    Shl,    // <<
-    Shr,    // >>
+    /// Addition: `+`
+    Add,
+    /// Subtraction: `-`
+    Sub,
+    /// Multiplication: `*`
+    Mul,
+    /// Division: `/`
+    Div,
+    /// Modulo: `%`
+    Mod,
+    /// Equality: `==`
+    Eq,
+    /// Inequality: `!=`
+    NotEq,
+    /// Less than: `<`
+    Lt,
+    /// Greater than: `>`
+    Gt,
+    /// Less than or equal: `<=`
+    LtEq,
+    /// Greater than or equal: `>=`
+    GtEq,
+    /// Logical and: `&&`
+    And,
+    /// Logical or: `||`
+    Or,
+    /// Bitwise and: `&`
+    BitAnd,
+    /// Bitwise or: `|`
+    BitOr,
+    /// Bitwise xor: `^`
+    BitXor,
+    /// Left shift: `<<`
+    Shl,
+    /// Right shift: `>>`
+    Shr,
 }
 
 impl std::fmt::Display for BinOp {
@@ -544,10 +570,14 @@ impl std::fmt::Display for BinOp {
 /// Unary operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
-    Neg,   // -
-    Not,   // !
-    Ref,   // & (parsed but semantically ignored)
-    Deref, // * (parsed but semantically ignored)
+    /// Arithmetic negation: `-`
+    Neg,
+    /// Logical not: `!`
+    Not,
+    /// Borrow: `&` (parsed but semantically ignored)
+    Ref,
+    /// Dereference: `*` (parsed but semantically ignored)
+    Deref,
 }
 
 /// A match arm: `pattern => expr`

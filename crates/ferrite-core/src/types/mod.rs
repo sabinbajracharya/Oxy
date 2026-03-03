@@ -9,15 +9,24 @@ use std::fmt;
 use crate::ast::{Block, Param, TypeAnnotation};
 use crate::env::Env;
 
-// Common string constants to avoid repeated heap allocations in hot paths.
+/// Type name constant for the built-in `Option` enum.
 pub const OPTION_TYPE: &str = "Option";
+/// Type name constant for the built-in `Result` enum.
 pub const RESULT_TYPE: &str = "Result";
+/// Variant name constant for `Option::Some`.
 pub const SOME_VARIANT: &str = "Some";
+/// Variant name constant for `Option::None`.
 pub const NONE_VARIANT: &str = "None";
+/// Variant name constant for `Result::Ok`.
 pub const OK_VARIANT: &str = "Ok";
+/// Variant name constant for `Result::Err`.
 pub const ERR_VARIANT: &str = "Err";
 
 /// A runtime value in Ferrite.
+// WHY: All values are Clone (backed by Rc where needed) because Ferrite has no borrow checker—
+// the interpreter cannot statically track ownership or lifetimes. Reference counting gives us
+// safe, automatic memory management (GC-like semantics) at the cost of cloning Rc pointers
+// when values are shared across scopes and closures.
 #[derive(Debug, Clone)]
 pub enum Value {
     /// 64-bit signed integer.
@@ -102,6 +111,7 @@ impl Value {
         }
     }
 
+    /// Constructs a `Some(val)` option variant.
     pub fn some(val: Value) -> Value {
         Value::EnumVariant {
             enum_name: OPTION_TYPE.to_string(),
@@ -110,6 +120,7 @@ impl Value {
         }
     }
 
+    /// Constructs a `None` option variant.
     pub fn none() -> Value {
         Value::EnumVariant {
             enum_name: OPTION_TYPE.to_string(),
@@ -118,6 +129,7 @@ impl Value {
         }
     }
 
+    /// Constructs an `Ok(val)` result variant.
     pub fn ok(val: Value) -> Value {
         Value::EnumVariant {
             enum_name: RESULT_TYPE.to_string(),
@@ -126,6 +138,7 @@ impl Value {
         }
     }
 
+    /// Constructs an `Err(val)` result variant.
     pub fn err(val: Value) -> Value {
         Value::EnumVariant {
             enum_name: RESULT_TYPE.to_string(),
@@ -173,6 +186,7 @@ impl Value {
     }
 }
 
+/// Formats a [`Value`] for user-facing display (e.g. `println!`).
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -266,6 +280,7 @@ impl fmt::Display for Value {
     }
 }
 
+/// Structural equality for [`Value`]; functions and futures are never equal.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -306,6 +321,7 @@ impl PartialEq for Value {
     }
 }
 
+/// Ordering for [`Value`]; only defined for scalar and string types.
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {

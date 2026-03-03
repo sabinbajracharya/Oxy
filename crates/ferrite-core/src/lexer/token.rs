@@ -1,3 +1,5 @@
+//! Token types and source span definitions for the Ferrite lexer.
+
 /// Source span for error reporting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -12,6 +14,7 @@ pub struct Span {
 }
 
 impl Span {
+    /// Creates a new span from byte offsets and a 1-based line/column position.
     pub fn new(start: usize, end: usize, line: usize, column: usize) -> Self {
         Self {
             start,
@@ -36,6 +39,7 @@ pub struct Token {
 }
 
 impl Token {
+    /// Creates a new token with the given kind and source span.
     pub fn new(kind: TokenKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -65,39 +69,73 @@ pub enum TokenKind {
     Ident(String),
 
     // === Keywords ===
+    /// `let` — variable binding
     Let,
+    /// `mut` — mutable binding modifier
     Mut,
+    /// `fn` — function definition
     Fn,
+    /// `return` — return from function
     Return,
+    /// `if` — conditional branch
     If,
+    /// `else` — alternative branch
     Else,
+    /// `while` — conditional loop
     While,
+    /// `loop` — infinite loop
     Loop,
+    /// `for` — iterator loop
     For,
+    /// `in` — iterator binding keyword
     In,
+    /// `break` — exit a loop
     Break,
+    /// `continue` — skip to next loop iteration
     Continue,
+    /// `struct` — struct definition
     Struct,
+    /// `enum` — enum definition
     Enum,
+    /// `impl` — implementation block
     Impl,
+    /// `trait` — trait definition
     Trait,
+    /// `match` — pattern matching
     Match,
+    /// `pub` — public visibility modifier
     Pub,
+    /// `use` — import declaration
     Use,
+    /// `mod` — module declaration
     Mod,
-    SelfLower, // `self`
-    SelfUpper, // `Self`
+    /// `self` — current instance reference
+    SelfLower,
+    /// `Self` — current type reference
+    SelfUpper,
+    /// `as` — type casting
     As,
+    /// `ref` — reference binding in patterns
     Ref,
+    /// `const` — compile-time constant
     Const,
+    /// `static` — static lifetime binding
     Static,
+    /// `type` — type alias
     Type,
+    /// `where` — generic constraint clause
     Where,
+    /// `move` — move capture in closures
     Move,
+    /// `async` — asynchronous function modifier
     Async,
+    /// `await` — await an asynchronous value
     Await,
+    /// `dyn` — dynamic dispatch trait object
     Dyn,
+    /// `super` — parent module reference
     Super,
+    /// `crate` — crate root reference
     Crate,
 
     // === Operators ===

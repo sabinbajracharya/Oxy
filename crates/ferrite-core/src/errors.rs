@@ -39,3 +39,20 @@ pub enum FerriError {
     #[error("continue outside of loop")]
     Continue,
 }
+
+/// Validates that a function/method received the expected number of arguments.
+pub fn check_arg_count(
+    name: &str,
+    expected: usize,
+    args: &[crate::types::Value],
+    span: &crate::lexer::Span,
+) -> Result<(), FerriError> {
+    if args.len() != expected {
+        return Err(FerriError::Runtime {
+            message: format!("{name}() takes {expected} argument(s), got {}", args.len()),
+            line: span.line,
+            column: span.column,
+        });
+    }
+    Ok(())
+}

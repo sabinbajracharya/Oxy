@@ -19,6 +19,10 @@ pub struct Environment {
     /// Variable bindings: name → (value, is_mutable).
     values: HashMap<String, (Value, bool)>,
     /// Parent scope (if any).
+    // WHY: Lexical scoping is implemented as a linked list of environments (child → parent)
+    // so that variable lookup walks outward through enclosing scopes. This is the classic
+    // "environment chain" model: simple, correct for closures (which capture their defining
+    // scope), and avoids copying the entire parent scope into each child.
     parent: Option<Env>,
 }
 

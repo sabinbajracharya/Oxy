@@ -1,5 +1,10 @@
+//! Random number generation standard library module.
+//!
+//! Uses a global xorshift64 PRNG seeded from system time on first use.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::errors::check_arg_count;
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::Value;
@@ -19,7 +24,10 @@ fn simple_random_u64() -> u64 {
         state = seed | 1; // Ensure non-zero
         PRNG_STATE.store(state, Ordering::Relaxed);
     }
-    // xorshift64
+    // WHY: xorshift64 chosen for its simplicity and speed in an interpreted language context;
+    // cryptographic strength is unnecessary here. The magic constants (13, 7, 17) are one of
+    // the specific shift-triplets proven by Marsaglia to produce a full 2^64-1 period,
+    // ensuring the PRNG visits every non-zero state before repeating.
     state ^= state << 13;
     state ^= state >> 7;
     state ^= state << 17;
@@ -36,23 +44,11 @@ fn simple_random_f64() -> f64 {
 pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
     match func_name {
         "random" => {
-            if !args.is_empty() {
-                return Err(FerriError::Runtime {
-                    message: "rand::random() takes 0 arguments".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("rand::random", 0, args, span)?;
             Ok(Value::Float(simple_random_f64()))
         }
         "range" => {
-            if args.len() != 2 {
-                return Err(FerriError::Runtime {
-                    message: "rand::range() takes 2 arguments".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("rand::range", 2, args, span)?;
             match (&args[0], &args[1]) {
                 (Value::Integer(min), Value::Integer(max)) => {
                     if min >= max {
@@ -75,13 +71,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             }
         }
         "bool" => {
-            if !args.is_empty() {
-                return Err(FerriError::Runtime {
-                    message: "rand::bool() takes 0 arguments".into(),
-                    line: span.line,
-                    column: span.column,
-                });
-            }
+            check_arg_count("rand::bool", 0, args, span)?;
             Ok(Value::Bool(simple_random_u64() % 2 == 0))
         }
         _ => Err(FerriError::Runtime {
