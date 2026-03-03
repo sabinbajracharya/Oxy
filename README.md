@@ -43,6 +43,7 @@ fn main() {
 | Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | ✅ |
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
+| HTTP server (routing, path params, static files) | ✅ |
 | Async/await, `spawn`, `sleep` | ✅ |
 | File I/O (`std::fs` — read, write, dirs, metadata) | ✅ |
 | Environment (`std::env` — vars, current_dir) | ✅ |
@@ -437,6 +438,55 @@ fn main() {
 }
 ```
 
+### Web Server
+
+Ferrite includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
+
+```rust
+fn main() {
+    let app = Server::new();
+
+    // Simple routes
+    app.get("/", |req| {
+        Response::html("<h1>Hello, Ferrite!</h1>")
+    });
+
+    // Path parameters
+    app.get("/users/:id", |req| {
+        let id = req.params.get("id").unwrap_or("unknown");
+        Response::json(format!("{{\"id\": \"{}\"}}", id))
+    });
+
+    // POST with request body
+    app.post("/echo", |req| {
+        Response::text(req.body)
+    });
+
+    // Custom status codes
+    app.get("/not-found", |req| {
+        Response::status(404, "Not Found")
+    });
+
+    // Static files
+    app.static_files("./public");
+
+    // Start listening
+    app.listen("127.0.0.1:8080");
+}
+```
+
+**Request object fields:** `method`, `path`, `body`, `params` (HashMap), `query` (HashMap), `headers` (HashMap)
+
+**Response helpers:**
+| Function | Description |
+|----------|-------------|
+| `Response::text(body)` | 200 plain text response |
+| `Response::json(body)` | 200 JSON response with `application/json` content type |
+| `Response::html(body)` | 200 HTML response with `text/html` content type |
+| `Response::status(code, body)` | Response with custom status code |
+
+**Supported HTTP methods:** `app.get()`, `app.post()`, `app.put()`, `app.delete()`, `app.patch()`
+
 > 📁 See the `examples/` directory for more complete examples covering all features.
 
 ---
@@ -457,6 +507,8 @@ Ferrite includes a comprehensive standard library accessible via `std::` paths:
 | `std::net` | `tcp_connect`, `tcp_send`, `tcp_listen`, `udp_bind`, `udp_send_to`, `lookup_host` | TCP/UDP networking |
 | `json` | `serialize`, `deserialize`, `parse`, `to_string_pretty` | JSON serialization |
 | `http` | `get`, `post`, `put`, `delete`, `patch`, `get_json`, `post_json` | HTTP client |
+| `Server` | `new`, `get`, `post`, `put`, `delete`, `patch`, `static_files`, `listen` | HTTP server with routing |
+| `Response` | `text`, `json`, `html`, `status` | HTTP response builders |
 
 ```rust
 fn main() {

@@ -23,6 +23,7 @@ mod methods;
 mod operations;
 mod path;
 mod pattern;
+mod server_dispatch;
 
 /// The Ferrite interpreter.
 pub struct Interpreter {
@@ -56,6 +57,12 @@ pub struct Interpreter {
     derived_traits: HashMap<String, HashSet<String>>,
     /// Call stack for runtime error traces.
     call_stack: Vec<crate::errors::CallFrame>,
+    /// Routes registered by HTTP servers, keyed by server ID.
+    server_routes: HashMap<String, Vec<crate::stdlib::server::Route>>,
+    /// Static file directory per server.
+    server_static_dirs: HashMap<String, String>,
+    /// Counter for generating unique server IDs.
+    server_id_counter: u64,
 }
 
 /// Data stored for a registered module.
@@ -88,6 +95,9 @@ impl Interpreter {
             async_fns: HashSet::new(),
             derived_traits: HashMap::new(),
             call_stack: Vec::new(),
+            server_routes: HashMap::new(),
+            server_static_dirs: HashMap::new(),
+            server_id_counter: 0,
         }
     }
 
@@ -6026,5 +6036,125 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["1 2 3\n"]);
+    }
+
+    #[test]
+    fn test_server_create() {
+        run_capturing(
+            r#"
+            fn main() {
+                let app = Server::new();
+            }
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_server_register_routes() {
+        run_capturing(
+            r#"
+            fn main() {
+                let app = Server::new();
+                app.get("/", |req| {
+                    Response::text("Hello")
+                });
+                app.post("/data", |req| {
+                    Response::json(req.body)
+                });
+            }
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_response_text() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let r = Response::text("hello");
+                println!("{}", r.body);
+                println!("{}", r.status);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["hello\n", "200\n"]);
+    }
+
+    #[test]
+    fn test_response_json() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let r = Response::json("{\"key\":1}");
+                println!("{}", r.body);
+                println!("{}", r.content_type);
+            }
+            "#,
+        );
+        assert_eq!(
+            output,
+            vec!["{\"key\":1}\n", "application/json; charset=utf-8\n"]
+        );
+    }
+
+    #[test]
+    fn test_response_html() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let r = Response::html("<h1>Hi</h1>");
+                println!("{}", r.body);
+                println!("{}", r.content_type);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["<h1>Hi</h1>\n", "text/html; charset=utf-8\n"]);
+    }
+
+    #[test]
+    fn test_response_status() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let r = Response::status(404, "Not Found");
+                println!("{}", r.status);
+                println!("{}", r.body);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["404\n", "Not Found\n"]);
+    }
+
+    #[test]
+    fn test_server_static_files() {
+        run_capturing(
+            r#"
+            fn main() {
+                let app = Server::new();
+                app.static_files("./public");
+            }
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_server_route_chaining() {
+        run_capturing(
+            r#"
+            fn main() {
+                let app = Server::new();
+                app.get("/", |req| { "home" });
+                app.get("/about", |req| { "about" });
+                app.post("/api/data", |req| { "data" });
+                app.put("/api/data", |req| { "update" });
+                app.delete("/api/data", |req| { "delete" });
+                app.patch("/api/data", |req| { "patch" });
+            }
+            "#,
+        )
+        .unwrap();
     }
 }

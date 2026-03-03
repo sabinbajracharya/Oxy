@@ -135,6 +135,11 @@ impl Interpreter {
                 return self.call_http_function(method_name, args, span);
             }
 
+            // Built-in Server::new() and Response::text/json/html/status
+            if type_name == "Server" || type_name == "Response" {
+                return self.call_server_path(type_name, method_name, args, span);
+            }
+
             // Check for module function call: `module::function(args)`
             if let Some(module) = self.modules.get(type_name).cloned() {
                 if let Ok(val) = module.env.borrow().get(method_name) {

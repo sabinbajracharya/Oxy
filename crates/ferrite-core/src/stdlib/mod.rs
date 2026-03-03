@@ -1,7 +1,8 @@
 //! Built-in standard library modules for the Ferrite language.
 //!
 //! Provides math, random number generation, time utilities, file system
-//! operations, environment access, process control, regex, and networking.
+//! operations, environment access, process control, regex, networking,
+//! and HTTP server.
 
 /// Environment variable and process argument access.
 pub mod env;
@@ -17,5 +18,7 @@ pub mod process;
 pub mod rand;
 /// Regular expression matching, searching, and replacement.
 pub mod regex;
+/// HTTP server with routing, path params, query strings, static files.
+pub mod server;
 /// Time and duration utilities.
 pub mod time;
