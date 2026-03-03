@@ -18,6 +18,10 @@ pub enum Item {
     Impl(ImplBlock),
     Trait(TraitDef),
     ImplTrait(ImplTraitBlock),
+    /// `mod name { items }` or `mod name;` (file-based)
+    Module(ModuleDef),
+    /// `use path::item;` or `use path::*;` or `use path::{a, b};`
+    Use(UseDef),
 }
 
 impl Item {
@@ -29,6 +33,8 @@ impl Item {
             Item::Impl(i) => i.span,
             Item::Trait(t) => t.span,
             Item::ImplTrait(i) => i.span,
+            Item::Module(m) => m.span,
+            Item::Use(u) => u.span,
         }
     }
 }
@@ -162,6 +168,37 @@ pub struct GenericParam {
 pub struct TypeAnnotation {
     pub name: String,
     pub span: Span,
+}
+
+/// An inline or file-based module definition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModuleDef {
+    pub name: String,
+    pub is_pub: bool,
+    /// `Some(items)` for inline modules, `None` for file-based (`mod name;`).
+    pub body: Option<Vec<Item>>,
+    pub span: Span,
+}
+
+/// A `use` declaration to import items from a module path.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UseDef {
+    /// Path segments: `["std", "collections"]` for `use std::collections::...`
+    pub path: Vec<String>,
+    /// What to import from the path.
+    pub tree: UseTree,
+    pub span: Span,
+}
+
+/// What to import from a use path.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UseTree {
+    /// Import a single item: `use path::item;`
+    Simple,
+    /// Glob import: `use path::*;`
+    Glob,
+    /// Multiple imports: `use path::{a, b, c};`
+    Group(Vec<String>),
 }
 
 /// A block: `{ stmts }` — the last expression (without semicolon) is the block's value.
@@ -660,6 +697,31 @@ impl Item {
                     m.pretty_print(out, indent + 1);
                 }
                 out.push_str(&format!("{pad}}}\n"));
+            }
+            Item::Module(m) => {
+                let pad = "  ".repeat(indent);
+                let pub_str = if m.is_pub { "pub " } else { "" };
+                if let Some(body) = &m.body {
+                    out.push_str(&format!("{pub_str}{pad}mod {} {{\n", m.name));
+                    for item in body {
+                        item.pretty_print(out, indent + 1);
+                    }
+                    out.push_str(&format!("{pad}}}\n"));
+                } else {
+                    out.push_str(&format!("{pub_str}{pad}mod {};\n", m.name));
+                }
+            }
+            Item::Use(u) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}use "));
+                let path_str = u.path.join("::");
+                match &u.tree {
+                    UseTree::Simple => out.push_str(&format!("{path_str};\n")),
+                    UseTree::Glob => out.push_str(&format!("{path_str}::*;\n")),
+                    UseTree::Group(names) => {
+                        out.push_str(&format!("{}::{{{}}};\n", path_str, names.join(", ")));
+                    }
+                }
             }
         }
     }

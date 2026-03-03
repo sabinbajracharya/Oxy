@@ -54,7 +54,7 @@ fn run_file(path: &str) {
         }
     };
 
-    match ferrite_core::interpreter::run(&source) {
+    match ferrite_core::interpreter::run_file(path, &source) {
         Ok(_) => {}
         Err(e) => {
             eprintln!("error: {e}");

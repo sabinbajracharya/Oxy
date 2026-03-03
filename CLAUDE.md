@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 10: Closures & Higher-Order Functions — COMPLETE. 302 tests passing.
+Phase 11: Modules & Use Statements — COMPLETE. 318 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -176,5 +176,10 @@ Phase 10: Closures & Higher-Order Functions — COMPLETE. 302 tests passing.
 - `move` keyword accepted on closures (semantically same as regular capture)
 - Vec iterator methods: `.iter()`, `.map()`, `.filter()`, `.for_each()`, `.fold()`, `.any()`, `.all()`, `.find()`, `.enumerate()`, `.collect()`, `.flat_map()`, `.position()`
 - Method chaining: `v.map(|x| x * 2).filter(|x| x > 4).collect()`
+- Inline modules: `mod name { ... }` with functions, structs, enums, traits, impl blocks
+- File-based modules: `mod name;` loads from `name.fe` or `name/mod.fe`
+- Use statements: `use module::item;`, `use module::*;`, `use module::{a, b};`
+- Module path calls: `module::function()`, `module::Type::method()`
+- `pub` keyword accepted on modules, functions, structs (not enforced)
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`

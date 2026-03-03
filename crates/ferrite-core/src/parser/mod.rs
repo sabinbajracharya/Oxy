@@ -95,17 +95,129 @@ impl Parser {
     // === Item parsing ===
 
     fn parse_item(&mut self) -> Result<Item, FerriError> {
+        // Handle optional `pub` keyword
+        let is_pub = self.check(&TokenKind::Pub);
+        if is_pub {
+            self.advance();
+        }
         match self.peek_kind() {
             TokenKind::Fn => self.parse_fn_def().map(Item::Function),
             TokenKind::Struct => self.parse_struct_def().map(Item::Struct),
             TokenKind::Enum => self.parse_enum_def().map(Item::Enum),
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
             TokenKind::Trait => self.parse_trait_def().map(Item::Trait),
+            TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
+            TokenKind::Use => self.parse_use_def().map(Item::Use),
             other => Err(self.error(format!(
-                "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait'), found {}",
+                "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait', 'mod', 'use'), found {}",
                 other.description()
             ))),
         }
+    }
+
+    fn parse_module_def(&mut self, is_pub: bool) -> Result<ModuleDef, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Mod)?;
+        let name = self.expect_ident()?;
+
+        if self.match_token(&TokenKind::Semicolon) {
+            // File-based module: `mod name;`
+            let end_span = self.prev_span();
+            Ok(ModuleDef {
+                name,
+                is_pub,
+                body: None,
+                span: self.merge_spans(start_span, end_span),
+            })
+        } else {
+            // Inline module: `mod name { items }`
+            self.expect(TokenKind::LBrace)?;
+            let mut items = Vec::new();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                items.push(self.parse_item()?);
+            }
+            let end_span = self.current_span();
+            self.expect(TokenKind::RBrace)?;
+            Ok(ModuleDef {
+                name,
+                is_pub,
+                body: Some(items),
+                span: self.merge_spans(start_span, end_span),
+            })
+        }
+    }
+
+    fn parse_use_def(&mut self) -> Result<UseDef, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Use)?;
+
+        let mut path = Vec::new();
+
+        // Handle special prefixes: `crate`, `self`, `super`
+        if self.check(&TokenKind::Crate) {
+            path.push("crate".to_string());
+            self.advance();
+        } else if self.check(&TokenKind::SelfLower) {
+            path.push("self".to_string());
+            self.advance();
+        } else if self.check(&TokenKind::Super) {
+            path.push("super".to_string());
+            self.advance();
+        } else {
+            path.push(self.expect_ident()?);
+        }
+
+        // Parse path segments: `::segment`
+        while self.check(&TokenKind::ColonColon) {
+            self.advance();
+
+            // Check for glob: `use path::*;`
+            if self.check(&TokenKind::Star) {
+                self.advance();
+                let end_span = self.current_span();
+                self.expect(TokenKind::Semicolon)?;
+                return Ok(UseDef {
+                    path,
+                    tree: UseTree::Glob,
+                    span: self.merge_spans(start_span, end_span),
+                });
+            }
+
+            // Check for group: `use path::{a, b, c};`
+            if self.check(&TokenKind::LBrace) {
+                self.advance();
+                let mut names = Vec::new();
+                loop {
+                    names.push(self.expect_ident()?);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.check(&TokenKind::RBrace) {
+                        break; // trailing comma
+                    }
+                }
+                let end_span = self.current_span();
+                self.expect(TokenKind::RBrace)?;
+                self.expect(TokenKind::Semicolon)?;
+                return Ok(UseDef {
+                    path,
+                    tree: UseTree::Group(names),
+                    span: self.merge_spans(start_span, end_span),
+                });
+            }
+
+            // Regular path segment
+            path.push(self.expect_ident()?);
+        }
+
+        // Simple import: `use path::item;`
+        let end_span = self.current_span();
+        self.expect(TokenKind::Semicolon)?;
+        Ok(UseDef {
+            path,
+            tree: UseTree::Simple,
+            span: self.merge_spans(start_span, end_span),
+        })
     }
 
     fn parse_fn_def(&mut self) -> Result<FnDef, FerriError> {
@@ -2834,5 +2946,75 @@ fn main() {}"#,
             panic!("expected let");
         };
         assert!(matches!(expr, Expr::Closure { .. }));
+    }
+
+    // === Phase 11: Modules & Use Statements ===
+
+    #[test]
+    fn test_inline_module() {
+        let program =
+            parse("mod math { fn add(a: i64, b: i64) -> i64 { a + b } } fn main() {}").unwrap();
+        assert!(
+            matches!(&program.items[0], Item::Module(m) if m.name == "math" && m.body.is_some())
+        );
+    }
+
+    #[test]
+    fn test_file_module() {
+        let program = parse("mod utils; fn main() {}").unwrap();
+        let Item::Module(m) = &program.items[0] else {
+            panic!("expected module");
+        };
+        assert_eq!(m.name, "utils");
+        assert!(m.body.is_none()); // file-based
+    }
+
+    #[test]
+    fn test_use_simple() {
+        let program = parse("use math::add; fn main() {}").unwrap();
+        let Item::Use(u) = &program.items[0] else {
+            panic!("expected use");
+        };
+        assert_eq!(u.path, vec!["math", "add"]);
+        assert!(matches!(u.tree, UseTree::Simple));
+    }
+
+    #[test]
+    fn test_use_glob() {
+        let program = parse("use math::*; fn main() {}").unwrap();
+        let Item::Use(u) = &program.items[0] else {
+            panic!("expected use");
+        };
+        assert_eq!(u.path, vec!["math"]);
+        assert!(matches!(u.tree, UseTree::Glob));
+    }
+
+    #[test]
+    fn test_use_group() {
+        let program = parse("use math::{add, sub}; fn main() {}").unwrap();
+        let Item::Use(u) = &program.items[0] else {
+            panic!("expected use");
+        };
+        assert_eq!(u.path, vec!["math"]);
+        let UseTree::Group(names) = &u.tree else {
+            panic!("expected group");
+        };
+        assert_eq!(names, &["add", "sub"]);
+    }
+
+    #[test]
+    fn test_pub_module() {
+        let program =
+            parse("pub mod math { fn add(a: i64, b: i64) -> i64 { a + b } } fn main() {}").unwrap();
+        let Item::Module(m) = &program.items[0] else {
+            panic!("expected module");
+        };
+        assert!(m.is_pub);
+    }
+
+    #[test]
+    fn test_pub_fn() {
+        let program = parse("pub fn helper() -> i64 { 42 } fn main() {}").unwrap();
+        assert!(matches!(&program.items[0], Item::Function(_)));
     }
 }

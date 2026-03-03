@@ -30,6 +30,21 @@ pub struct Interpreter {
     trait_impls: HashMap<(String, String), Vec<FnDef>>,
     /// Current `Self` type name (set when executing impl methods).
     current_self_type: Option<String>,
+    /// Module environments, keyed by module path (e.g., "math", "utils::helpers").
+    modules: HashMap<String, ModuleData>,
+    /// Base directory for file-based module resolution.
+    base_dir: Option<String>,
+}
+
+/// Data stored for a registered module.
+#[derive(Clone)]
+struct ModuleData {
+    env: Env,
+    struct_defs: HashMap<String, StructDef>,
+    enum_defs: HashMap<String, EnumDef>,
+    impl_methods: HashMap<String, Vec<FnDef>>,
+    trait_defs: HashMap<String, TraitDef>,
+    trait_impls: HashMap<(String, String), Vec<FnDef>>,
 }
 
 impl Interpreter {
@@ -44,6 +59,8 @@ impl Interpreter {
             trait_defs: HashMap::new(),
             trait_impls: HashMap::new(),
             current_self_type: None,
+            modules: HashMap::new(),
+            base_dir: None,
         }
     }
 
@@ -58,6 +75,8 @@ impl Interpreter {
             trait_defs: HashMap::new(),
             trait_impls: HashMap::new(),
             current_self_type: None,
+            modules: HashMap::new(),
+            base_dir: None,
         }
     }
 
@@ -72,7 +91,14 @@ impl Interpreter {
             trait_defs: HashMap::new(),
             trait_impls: HashMap::new(),
             current_self_type: None,
+            modules: HashMap::new(),
+            base_dir: None,
         }
+    }
+
+    /// Set the base directory for file-based module resolution.
+    pub fn set_base_dir(&mut self, dir: String) {
+        self.base_dir = Some(dir);
     }
 
     /// Get captured output (for testing).
@@ -162,6 +188,243 @@ impl Interpreter {
                     methods.push(method.clone());
                 }
                 Ok(())
+            }
+            Item::Module(m) => self.register_module(m),
+            Item::Use(u) => self.register_use(u),
+        }
+    }
+
+    /// Register an inline or file-based module.
+    fn register_module(&mut self, module: &ModuleDef) -> Result<(), FerriError> {
+        let items = if let Some(body) = &module.body {
+            // Inline module
+            body.clone()
+        } else {
+            // File-based module: load from `name.fe` or `name/mod.fe`
+            let source = self.load_module_file(&module.name, module.span)?;
+            let program = crate::parser::parse(&source)?;
+            program.items
+        };
+
+        // Create a sub-interpreter to process module items
+        let mod_env = Environment::new();
+        let mut mod_struct_defs = HashMap::new();
+        let mut mod_enum_defs = HashMap::new();
+        let mut mod_impl_methods: HashMap<String, Vec<FnDef>> = HashMap::new();
+        let mut mod_trait_defs = HashMap::new();
+        let mut mod_trait_impls: HashMap<(String, String), Vec<FnDef>> = HashMap::new();
+
+        for item in &items {
+            match item {
+                Item::Function(f) => {
+                    let value = Value::Function {
+                        name: f.name.clone(),
+                        params: f.params.clone(),
+                        return_type: f.return_type.clone(),
+                        body: f.body.clone(),
+                        closure_env: Rc::clone(&mod_env),
+                    };
+                    mod_env.borrow_mut().define(f.name.clone(), value, false);
+                }
+                Item::Struct(s) => {
+                    mod_struct_defs.insert(s.name.clone(), s.clone());
+                }
+                Item::Enum(e) => {
+                    mod_enum_defs.insert(e.name.clone(), e.clone());
+                }
+                Item::Impl(i) => {
+                    let methods = mod_impl_methods.entry(i.type_name.clone()).or_default();
+                    for method in &i.methods {
+                        methods.retain(|m| m.name != method.name);
+                        methods.push(method.clone());
+                    }
+                }
+                Item::Trait(t) => {
+                    mod_trait_defs.insert(t.name.clone(), t.clone());
+                }
+                Item::ImplTrait(i) => {
+                    let key = (i.type_name.clone(), i.trait_name.clone());
+                    let methods = mod_trait_impls.entry(key).or_default();
+                    for method in &i.methods {
+                        methods.retain(|m| m.name != method.name);
+                        methods.push(method.clone());
+                    }
+                }
+                Item::Module(_) | Item::Use(_) => {
+                    // Nested modules/use in modules: skip for now
+                }
+            }
+        }
+
+        self.modules.insert(
+            module.name.clone(),
+            ModuleData {
+                env: mod_env,
+                struct_defs: mod_struct_defs,
+                enum_defs: mod_enum_defs,
+                impl_methods: mod_impl_methods,
+                trait_defs: mod_trait_defs,
+                trait_impls: mod_trait_impls,
+            },
+        );
+        Ok(())
+    }
+
+    /// Load a file-based module's source code.
+    fn load_module_file(&self, name: &str, span: Span) -> Result<String, FerriError> {
+        let base = self.base_dir.as_deref().unwrap_or(".");
+
+        // Try `name.fe` first, then `name/mod.fe`
+        let path1 = format!("{base}/{name}.fe");
+        let path2 = format!("{base}/{name}/mod.fe");
+
+        if let Ok(source) = std::fs::read_to_string(&path1) {
+            return Ok(source);
+        }
+        if let Ok(source) = std::fs::read_to_string(&path2) {
+            return Ok(source);
+        }
+
+        Err(FerriError::Runtime {
+            message: format!("could not find module `{name}`: tried '{path1}' and '{path2}'"),
+            line: span.line,
+            column: span.column,
+        })
+    }
+
+    /// Process a `use` declaration — import items from a module into current scope.
+    fn register_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
+        // The last segment before the tree is the module name,
+        // unless it's a simple use (then the last is the item name).
+        let (mod_name, item_to_import) = match &use_def.tree {
+            UseTree::Simple => {
+                if use_def.path.len() < 2 {
+                    // `use item;` — no module, nothing to resolve
+                    return Ok(());
+                }
+                // `use module::item;`
+                let mod_name = use_def.path[..use_def.path.len() - 1].join("::");
+                let item_name = use_def.path.last().unwrap().clone();
+                (mod_name, Some(item_name))
+            }
+            UseTree::Glob => {
+                // `use module::*;`
+                let mod_name = use_def.path.join("::");
+                (mod_name, None)
+            }
+            UseTree::Group(_) => {
+                // `use module::{a, b};`
+                let mod_name = use_def.path.join("::");
+                (mod_name, None)
+            }
+        };
+
+        // Skip crate/self/super prefixes — resolve to just the module name
+        let resolved_mod = mod_name
+            .strip_prefix("crate::")
+            .or_else(|| mod_name.strip_prefix("self::"))
+            .unwrap_or(&mod_name)
+            .to_string();
+
+        let module = self.modules.get(&resolved_mod).cloned();
+        let Some(module) = module else {
+            // Module not found — silently ignore (may be a std lib reference)
+            return Ok(());
+        };
+
+        match &use_def.tree {
+            UseTree::Simple => {
+                if let Some(name) = item_to_import {
+                    self.import_item_from_module(&module, &name);
+                }
+            }
+            UseTree::Glob => {
+                // Import everything from the module
+                self.import_all_from_module(&module);
+            }
+            UseTree::Group(names) => {
+                for name in names {
+                    self.import_item_from_module(&module, name);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Import a single named item from a module into the current scope.
+    fn import_item_from_module(&mut self, module: &ModuleData, name: &str) {
+        // Check functions/values in module env
+        if let Ok(val) = module.env.borrow().get(name) {
+            self.env.borrow_mut().define(name.to_string(), val, false);
+        }
+        // Check struct defs
+        if let Some(s) = module.struct_defs.get(name) {
+            self.struct_defs.insert(name.to_string(), s.clone());
+        }
+        // Check enum defs
+        if let Some(e) = module.enum_defs.get(name) {
+            self.enum_defs.insert(name.to_string(), e.clone());
+        }
+        // Check trait defs
+        if let Some(t) = module.trait_defs.get(name) {
+            self.trait_defs.insert(name.to_string(), t.clone());
+        }
+        // Import impl methods for this type
+        if let Some(methods) = module.impl_methods.get(name) {
+            let entry = self.impl_methods.entry(name.to_string()).or_default();
+            for m in methods {
+                entry.retain(|existing| existing.name != m.name);
+                entry.push(m.clone());
+            }
+        }
+        // Import trait impls for this type
+        for ((type_name, trait_name), methods) in &module.trait_impls {
+            if type_name == name {
+                let key = (type_name.clone(), trait_name.clone());
+                let entry = self.trait_impls.entry(key).or_default();
+                for m in methods {
+                    entry.retain(|existing| existing.name != m.name);
+                    entry.push(m.clone());
+                }
+            }
+        }
+    }
+
+    /// Import all items from a module into the current scope.
+    fn import_all_from_module(&mut self, module: &ModuleData) {
+        // Import all functions/values
+        let bindings: Vec<(String, Value)> =
+            module.env.borrow().all_bindings().into_iter().collect();
+        for (name, val) in bindings {
+            self.env.borrow_mut().define(name, val, false);
+        }
+        // Import all struct defs
+        for (name, s) in &module.struct_defs {
+            self.struct_defs.insert(name.clone(), s.clone());
+        }
+        // Import all enum defs
+        for (name, e) in &module.enum_defs {
+            self.enum_defs.insert(name.clone(), e.clone());
+        }
+        // Import all trait defs
+        for (name, t) in &module.trait_defs {
+            self.trait_defs.insert(name.clone(), t.clone());
+        }
+        // Import all impl methods
+        for (type_name, methods) in &module.impl_methods {
+            let entry = self.impl_methods.entry(type_name.clone()).or_default();
+            for m in methods {
+                entry.retain(|existing| existing.name != m.name);
+                entry.push(m.clone());
+            }
+        }
+        // Import all trait impls
+        for (key, methods) in &module.trait_impls {
+            let entry = self.trait_impls.entry(key.clone()).or_default();
+            for m in methods {
+                entry.retain(|existing| existing.name != m.name);
+                entry.push(m.clone());
             }
         }
     }
@@ -2364,6 +2627,64 @@ impl Interpreter {
             if type_name == "String" && method_name == "from" && args.len() == 1 {
                 return Ok(Value::String(format!("{}", args[0])));
             }
+
+            // Check for module function call: `module::function(args)`
+            if let Some(module) = self.modules.get(type_name).cloned() {
+                if let Ok(val) = module.env.borrow().get(method_name) {
+                    if let Value::Function { .. } = &val {
+                        return self.call_function(&val, args, span.line, span.column);
+                    }
+                }
+                // Check for enum variant in module
+                if let Some(edef) = module.enum_defs.get(method_name) {
+                    // This handles module::EnumName — but the variant is the next segment
+                    // For 2-segment, this is module::function, already handled above
+                    let _ = edef; // suppress unused
+                }
+            }
+        }
+
+        // Handle 3-segment paths: `module::Type::method(args)`
+        if path.len() == 3 {
+            let mod_name = &path[0];
+            let type_name = &path[1];
+            let method_name = &path[2];
+
+            if let Some(module) = self.modules.get(mod_name).cloned() {
+                // Check for enum variant constructor in module
+                if let Some(edef) = module.enum_defs.get(type_name) {
+                    for variant in &edef.variants {
+                        if variant.name == *method_name {
+                            return Ok(Value::EnumVariant {
+                                enum_name: type_name.clone(),
+                                variant: method_name.clone(),
+                                data: args.to_vec(),
+                            });
+                        }
+                    }
+                }
+                // Check for associated function in module
+                if let Some(methods) = module.impl_methods.get(type_name) {
+                    for method_def in methods {
+                        if method_def.name == *method_name {
+                            let func_env = Environment::child(env);
+                            for (param, arg) in method_def.params.iter().zip(args.iter()) {
+                                func_env
+                                    .borrow_mut()
+                                    .define(param.name.clone(), arg.clone(), true);
+                            }
+                            let prev_self_type = self.current_self_type.take();
+                            self.current_self_type = Some(type_name.clone());
+                            let result = self.eval_block(&method_def.body, &func_env);
+                            self.current_self_type = prev_self_type;
+                            return match result {
+                                Err(FerriError::Return(val)) => Ok(*val),
+                                other => other,
+                            };
+                        }
+                    }
+                }
+            }
         }
 
         Err(FerriError::Runtime {
@@ -2388,6 +2709,36 @@ impl Interpreter {
                                 variant: variant_name.clone(),
                                 data: vec![],
                             });
+                        }
+                    }
+                }
+            }
+
+            // Module value access: `module::value`
+            if let Some(module) = self.modules.get(type_name) {
+                if let Ok(val) = module.env.borrow().get(variant_name) {
+                    return Ok(val);
+                }
+            }
+        }
+
+        // 3-segment: `module::Type::Variant`
+        if segments.len() == 3 {
+            let mod_name = &segments[0];
+            let type_name = &segments[1];
+            let variant_name = &segments[2];
+
+            if let Some(module) = self.modules.get(mod_name) {
+                if let Some(edef) = module.enum_defs.get(type_name) {
+                    for variant in &edef.variants {
+                        if variant.name == *variant_name {
+                            if let EnumVariantKind::Unit = variant.kind {
+                                return Ok(Value::EnumVariant {
+                                    enum_name: type_name.clone(),
+                                    variant: variant_name.clone(),
+                                    data: vec![],
+                                });
+                            }
                         }
                     }
                 }
@@ -2607,6 +2958,16 @@ fn debug_format(val: &Value) -> String {
 pub fn run(source: &str) -> Result<Value, FerriError> {
     let program = crate::parser::parse(source)?;
     let mut interp = Interpreter::new();
+    interp.execute_program(&program)
+}
+
+/// Parse and execute a Ferrite program from a file path (enables module resolution).
+pub fn run_file(path: &str, source: &str) -> Result<Value, FerriError> {
+    let program = crate::parser::parse(source)?;
+    let mut interp = Interpreter::new();
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        interp.set_base_dir(parent.to_string_lossy().to_string());
+    }
     interp.execute_program(&program)
 }
 
@@ -5009,5 +5370,168 @@ println!("{:?}", v2);
 }"#,
         );
         assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    // === Phase 11: Modules & Use Statements ===
+
+    #[test]
+    fn test_inline_module() {
+        let output = run_and_capture(
+            r#"
+mod math {
+    fn add(a: i64, b: i64) -> i64 {
+        a + b
+    }
+}
+use math::add;
+fn main() {
+    println!("{}", add(3, 4));
+}"#,
+        );
+        assert_eq!(output, vec!["7\n"]);
+    }
+
+    #[test]
+    fn test_module_path_call() {
+        let output = run_and_capture(
+            r#"
+mod math {
+    fn multiply(a: i64, b: i64) -> i64 {
+        a * b
+    }
+}
+fn main() {
+    println!("{}", math::multiply(3, 4));
+}"#,
+        );
+        assert_eq!(output, vec!["12\n"]);
+    }
+
+    #[test]
+    fn test_use_glob_import() {
+        let output = run_and_capture(
+            r#"
+mod utils {
+    fn greet(name: String) -> String {
+        format!("Hello, {}!", name)
+    }
+    fn farewell(name: String) -> String {
+        format!("Goodbye, {}!", name)
+    }
+}
+use utils::*;
+fn main() {
+    println!("{}", greet("Alice"));
+    println!("{}", farewell("Bob"));
+}"#,
+        );
+        assert_eq!(output, vec!["Hello, Alice!\n", "Goodbye, Bob!\n"]);
+    }
+
+    #[test]
+    fn test_use_group_import() {
+        let output = run_and_capture(
+            r#"
+mod ops {
+    fn add(a: i64, b: i64) -> i64 { a + b }
+    fn sub(a: i64, b: i64) -> i64 { a - b }
+    fn mul(a: i64, b: i64) -> i64 { a * b }
+}
+use ops::{add, sub};
+fn main() {
+    println!("{} {}", add(10, 3), sub(10, 3));
+}"#,
+        );
+        assert_eq!(output, vec!["13 7\n"]);
+    }
+
+    #[test]
+    fn test_module_with_struct() {
+        let output = run_and_capture(
+            r#"
+mod geometry {
+    struct Point { x: f64, y: f64 }
+    impl Point {
+        fn new(x: f64, y: f64) -> Self {
+            Point { x, y }
+        }
+        fn to_string(&self) -> String {
+            format!("({}, {})", self.x, self.y)
+        }
+    }
+}
+use geometry::Point;
+fn main() {
+    let p = Point::new(1.0, 2.0);
+    println!("{}", p.to_string());
+}"#,
+        );
+        assert_eq!(output, vec!["(1.0, 2.0)\n"]);
+    }
+
+    #[test]
+    fn test_module_with_enum() {
+        let output = run_and_capture(
+            r#"
+mod colors {
+    enum Color { Red, Green, Blue }
+}
+use colors::Color;
+fn main() {
+    let c = Color::Red;
+    match c {
+        Color::Red => println!("red"),
+        Color::Green => println!("green"),
+        Color::Blue => println!("blue"),
+    }
+}"#,
+        );
+        assert_eq!(output, vec!["red\n"]);
+    }
+
+    #[test]
+    fn test_pub_keyword_accepted() {
+        let output = run_and_capture(
+            r#"
+pub mod math {
+    pub fn add(a: i64, b: i64) -> i64 { a + b }
+}
+use math::add;
+fn main() {
+    println!("{}", add(1, 2));
+}"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_pub_fn_accepted() {
+        let output = run_and_capture(
+            r#"
+pub fn helper() -> i64 { 42 }
+fn main() {
+    println!("{}", helper());
+}"#,
+        );
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_multiple_modules() {
+        let output = run_and_capture(
+            r#"
+mod a {
+    fn foo() -> i64 { 1 }
+}
+mod b {
+    fn bar() -> i64 { 2 }
+}
+use a::foo;
+use b::bar;
+fn main() {
+    println!("{}", foo() + bar());
+}"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
     }
 }

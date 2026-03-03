@@ -82,6 +82,14 @@ impl Environment {
             })
         }
     }
+
+    /// Return all bindings in this scope (not parent scopes).
+    pub fn all_bindings(&self) -> Vec<(String, Value)> {
+        self.values
+            .iter()
+            .map(|(name, (val, _))| (name.clone(), val.clone()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
