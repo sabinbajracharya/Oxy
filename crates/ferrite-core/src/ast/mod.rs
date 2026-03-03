@@ -13,13 +13,18 @@ pub struct Program {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
     Function(FnDef),
-    // Future: Struct, Enum, Impl, Trait, Use, Mod
+    Struct(StructDef),
+    Enum(EnumDef),
+    Impl(ImplBlock),
 }
 
 impl Item {
     pub fn span(&self) -> Span {
         match self {
             Item::Function(f) => f.span,
+            Item::Struct(s) => s.span,
+            Item::Enum(e) => e.span,
+            Item::Impl(i) => i.span,
         }
     }
 }
@@ -39,6 +44,68 @@ pub struct FnDef {
 pub struct Param {
     pub name: String,
     pub type_ann: TypeAnnotation,
+    pub span: Span,
+}
+
+/// A struct definition: `struct Name { field: Type, ... }` or `struct Name(Type, ...);`
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructDef {
+    pub name: String,
+    pub kind: StructKind,
+    pub span: Span,
+}
+
+/// Whether a struct has named fields, is a tuple struct, or is a unit struct.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructKind {
+    /// Named fields: `struct S { x: i64, y: i64 }`
+    Named(Vec<StructField>),
+    /// Tuple struct: `struct S(i64, i64);`
+    Tuple(Vec<TypeAnnotation>),
+    /// Unit struct: `struct S;`
+    Unit,
+}
+
+/// A named struct field.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructField {
+    pub name: String,
+    pub type_ann: TypeAnnotation,
+    pub span: Span,
+}
+
+/// An enum definition: `enum Name { Variant, Variant(Type), Variant { field: Type } }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDef {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub span: Span,
+}
+
+/// A single enum variant.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariant {
+    pub name: String,
+    pub kind: EnumVariantKind,
+    pub span: Span,
+}
+
+/// The data a variant carries.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumVariantKind {
+    /// Unit variant: `Variant`
+    Unit,
+    /// Tuple variant: `Variant(Type, ...)`
+    Tuple(Vec<TypeAnnotation>),
+    /// Struct variant: `Variant { field: Type, ... }`
+    Struct(Vec<StructField>),
+}
+
+/// An impl block: `impl Name { fn ... }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplBlock {
+    pub type_name: String,
+    pub methods: Vec<FnDef>,
     pub span: Span,
 }
 
@@ -211,6 +278,22 @@ pub enum Expr {
     },
     /// Tuple literal: `(a, b, c)`
     Tuple { elements: Vec<Expr>, span: Span },
+    /// Struct instantiation: `Point { x: 1.0, y: 2.0 }`
+    StructInit {
+        name: String,
+        fields: Vec<(String, Expr)>,
+        span: Span,
+    },
+    /// Path expression: `Type::method(args)` — associated function or enum variant constructor
+    PathCall {
+        path: Vec<String>,
+        args: Vec<Expr>,
+        span: Span,
+    },
+    /// Path without call: `Type::Variant` — unit enum variant access
+    Path { segments: Vec<String>, span: Span },
+    /// `self` keyword in methods
+    SelfRef(Span),
 }
 
 impl Expr {
@@ -237,7 +320,11 @@ impl Expr {
             | Expr::Index { span: s, .. }
             | Expr::MethodCall { span: s, .. }
             | Expr::FieldAccess { span: s, .. }
-            | Expr::Tuple { span: s, .. } => *s,
+            | Expr::Tuple { span: s, .. }
+            | Expr::StructInit { span: s, .. }
+            | Expr::PathCall { span: s, .. }
+            | Expr::Path { span: s, .. }
+            | Expr::SelfRef(s) => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -308,7 +395,7 @@ pub struct MatchArm {
     pub span: Span,
 }
 
-/// A pattern for match arms (basic patterns for now).
+/// A pattern for match arms.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     /// Literal value: `42`, `"hello"`, `true`
@@ -317,6 +404,60 @@ pub enum Pattern {
     Wildcard(Span),
     /// Variable binding: `x`
     Ident(String, Span),
+    /// Enum variant pattern: `Shape::Circle(r)` or `Option::Some(x)`
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        fields: Vec<Pattern>,
+        span: Span,
+    },
+    /// Struct pattern: `Point { x, y }`
+    Struct {
+        name: String,
+        fields: Vec<(String, Pattern)>,
+        span: Span,
+    },
+}
+
+impl Pattern {
+    fn pretty_print(&self, out: &mut String) {
+        match self {
+            Pattern::Literal(e) => e.pretty_print(out, 0),
+            Pattern::Wildcard(_) => out.push('_'),
+            Pattern::Ident(name, _) => out.push_str(name),
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                fields,
+                ..
+            } => {
+                out.push_str(&format!("{enum_name}::{variant}"));
+                if !fields.is_empty() {
+                    out.push('(');
+                    for (i, f) in fields.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        f.pretty_print(out);
+                    }
+                    out.push(')');
+                }
+            }
+            Pattern::Struct { name, fields, .. } => {
+                out.push_str(name);
+                out.push_str(" { ");
+                for (i, (fname, pat)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    out.push_str(fname);
+                    out.push_str(": ");
+                    pat.pretty_print(out);
+                }
+                out.push_str(" }");
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for UnaryOp {
@@ -347,6 +488,70 @@ impl Item {
     fn pretty_print(&self, out: &mut String, indent: usize) {
         match self {
             Item::Function(f) => f.pretty_print(out, indent),
+            Item::Struct(s) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}struct {}", s.name));
+                match &s.kind {
+                    StructKind::Named(fields) => {
+                        out.push_str(" {\n");
+                        for f in fields {
+                            out.push_str(&format!("{pad}  {}: {},\n", f.name, f.type_ann.name));
+                        }
+                        out.push_str(&format!("{pad}}}\n"));
+                    }
+                    StructKind::Tuple(types) => {
+                        out.push('(');
+                        for (i, t) in types.iter().enumerate() {
+                            if i > 0 {
+                                out.push_str(", ");
+                            }
+                            out.push_str(&t.name);
+                        }
+                        out.push_str(");\n");
+                    }
+                    StructKind::Unit => out.push_str(";\n"),
+                }
+            }
+            Item::Enum(e) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}enum {} {{\n", e.name));
+                for v in &e.variants {
+                    out.push_str(&format!("{pad}  {}", v.name));
+                    match &v.kind {
+                        EnumVariantKind::Unit => {}
+                        EnumVariantKind::Tuple(types) => {
+                            out.push('(');
+                            for (i, t) in types.iter().enumerate() {
+                                if i > 0 {
+                                    out.push_str(", ");
+                                }
+                                out.push_str(&t.name);
+                            }
+                            out.push(')');
+                        }
+                        EnumVariantKind::Struct(fields) => {
+                            out.push_str(" { ");
+                            for (i, f) in fields.iter().enumerate() {
+                                if i > 0 {
+                                    out.push_str(", ");
+                                }
+                                out.push_str(&format!("{}: {}", f.name, f.type_ann.name));
+                            }
+                            out.push_str(" }");
+                        }
+                    }
+                    out.push_str(",\n");
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Item::Impl(i) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}impl {} {{\n", i.type_name));
+                for m in &i.methods {
+                    m.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
         }
     }
 }
@@ -555,11 +760,7 @@ impl Expr {
                 out.push_str(" {\n");
                 for arm in arms {
                     out.push_str("  ");
-                    match &arm.pattern {
-                        Pattern::Literal(e) => e.pretty_print(out, 0),
-                        Pattern::Wildcard(_) => out.push('_'),
-                        Pattern::Ident(name, _) => out.push_str(name),
-                    }
+                    arm.pattern.pretty_print(out);
                     out.push_str(" => ");
                     arm.body.pretty_print(out, 0);
                     out.push_str(",\n");
@@ -631,6 +832,36 @@ impl Expr {
                     out.push(',');
                 }
                 out.push(')');
+            }
+            Expr::StructInit { name, fields, .. } => {
+                out.push_str(name);
+                out.push_str(" { ");
+                for (i, (fname, fval)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    out.push_str(fname);
+                    out.push_str(": ");
+                    fval.pretty_print(out, 0);
+                }
+                out.push_str(" }");
+            }
+            Expr::PathCall { path, args, .. } => {
+                out.push_str(&path.join("::"));
+                out.push('(');
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    arg.pretty_print(out, 0);
+                }
+                out.push(')');
+            }
+            Expr::Path { segments, .. } => {
+                out.push_str(&segments.join("::"));
+            }
+            Expr::SelfRef(_) => {
+                out.push_str("self");
             }
         }
     }

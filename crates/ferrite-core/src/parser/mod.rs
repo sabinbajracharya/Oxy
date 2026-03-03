@@ -95,8 +95,11 @@ impl Parser {
     fn parse_item(&mut self) -> Result<Item, FerriError> {
         match self.peek_kind() {
             TokenKind::Fn => self.parse_fn_def().map(Item::Function),
+            TokenKind::Struct => self.parse_struct_def().map(Item::Struct),
+            TokenKind::Enum => self.parse_enum_def().map(Item::Enum),
+            TokenKind::Impl => self.parse_impl_block().map(Item::Impl),
             other => Err(self.error(format!(
-                "expected item (e.g., 'fn'), found {}",
+                "expected item (e.g., 'fn', 'struct', 'enum', 'impl'), found {}",
                 other.description()
             ))),
         }
@@ -148,6 +151,29 @@ impl Parser {
                 }
             }
 
+            // Accept `self` as a parameter (for methods)
+            if self.check(&TokenKind::SelfLower) || self.check(&TokenKind::Mut) {
+                let is_mut = self.check(&TokenKind::Mut);
+                if is_mut {
+                    self.advance(); // consume `mut`
+                }
+                if self.check(&TokenKind::SelfLower) {
+                    self.advance(); // consume `self`
+                    params.push(Param {
+                        name: "self".to_string(),
+                        type_ann: TypeAnnotation {
+                            name: "Self".to_string(),
+                            span: start_span,
+                        },
+                        span: start_span,
+                    });
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                    continue;
+                }
+            }
+
             let name = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
 
@@ -177,8 +203,180 @@ impl Parser {
 
     fn parse_type_annotation(&mut self) -> Result<TypeAnnotation, FerriError> {
         let span = self.current_span();
+        // Accept `Self` as a type
+        if self.check(&TokenKind::SelfUpper) {
+            self.advance();
+            return Ok(TypeAnnotation {
+                name: "Self".to_string(),
+                span,
+            });
+        }
         let name = self.expect_ident()?;
         Ok(TypeAnnotation { name, span })
+    }
+
+    // === Struct parsing ===
+
+    fn parse_struct_def(&mut self) -> Result<StructDef, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Struct)?;
+        let name = self.expect_ident()?;
+
+        // Unit struct: `struct Name;`
+        if self.match_token(&TokenKind::Semicolon) {
+            return Ok(StructDef {
+                name,
+                kind: StructKind::Unit,
+                span: self.merge_spans(start_span, self.prev_span()),
+            });
+        }
+
+        // Tuple struct: `struct Name(Type, ...);`
+        if self.check(&TokenKind::LParen) {
+            self.advance();
+            let mut types = Vec::new();
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    types.push(self.parse_type_annotation()?);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.check(&TokenKind::RParen) {
+                        break;
+                    }
+                }
+            }
+            let end_span = self.current_span();
+            self.expect(TokenKind::RParen)?;
+            self.expect(TokenKind::Semicolon)?;
+            return Ok(StructDef {
+                name,
+                kind: StructKind::Tuple(types),
+                span: self.merge_spans(start_span, end_span),
+            });
+        }
+
+        // Named struct: `struct Name { field: Type, ... }`
+        self.expect(TokenKind::LBrace)?;
+        let mut fields = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            let field_span = self.current_span();
+            let field_name = self.expect_ident()?;
+            self.expect(TokenKind::Colon)?;
+            let type_ann = self.parse_type_annotation()?;
+            fields.push(StructField {
+                span: self.merge_spans(field_span, type_ann.span),
+                name: field_name,
+                type_ann,
+            });
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+
+        Ok(StructDef {
+            name,
+            kind: StructKind::Named(fields),
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    // === Enum parsing ===
+
+    fn parse_enum_def(&mut self) -> Result<EnumDef, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Enum)?;
+        let name = self.expect_ident()?;
+        self.expect(TokenKind::LBrace)?;
+
+        let mut variants = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            let var_span = self.current_span();
+            let var_name = self.expect_ident()?;
+
+            let kind = if self.check(&TokenKind::LParen) {
+                // Tuple variant: `Variant(Type, ...)`
+                self.advance();
+                let mut types = Vec::new();
+                if !self.check(&TokenKind::RParen) {
+                    loop {
+                        types.push(self.parse_type_annotation()?);
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
+                        if self.check(&TokenKind::RParen) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(TokenKind::RParen)?;
+                EnumVariantKind::Tuple(types)
+            } else if self.check(&TokenKind::LBrace) {
+                // Struct variant: `Variant { field: Type, ... }`
+                self.advance();
+                let mut fields = Vec::new();
+                while !self.check(&TokenKind::RBrace) {
+                    let fspan = self.current_span();
+                    let fname = self.expect_ident()?;
+                    self.expect(TokenKind::Colon)?;
+                    let ftype = self.parse_type_annotation()?;
+                    fields.push(StructField {
+                        span: self.merge_spans(fspan, ftype.span),
+                        name: fname,
+                        type_ann: ftype,
+                    });
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::RBrace)?;
+                EnumVariantKind::Struct(fields)
+            } else {
+                // Unit variant: `Variant`
+                EnumVariantKind::Unit
+            };
+
+            variants.push(EnumVariant {
+                span: self.merge_spans(var_span, self.prev_span()),
+                name: var_name,
+                kind,
+            });
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+
+        Ok(EnumDef {
+            name,
+            variants,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    // === Impl block parsing ===
+
+    fn parse_impl_block(&mut self) -> Result<ImplBlock, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Impl)?;
+        let type_name = self.expect_ident()?;
+        self.expect(TokenKind::LBrace)?;
+
+        let mut methods = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            methods.push(self.parse_fn_def()?);
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+
+        Ok(ImplBlock {
+            type_name,
+            methods,
+            span: self.merge_spans(start_span, end_span),
+        })
     }
 
     // === Block parsing ===
@@ -370,6 +568,31 @@ impl Parser {
         })
     }
 
+    fn parse_struct_init(&mut self, name: String, start_span: Span) -> Result<Expr, FerriError> {
+        self.expect(TokenKind::LBrace)?;
+        let mut fields = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            let field_name = self.expect_ident()?;
+            // Shorthand: `Point { x, y }` where x and y are variables
+            let value = if self.match_token(&TokenKind::Colon) {
+                self.parse_expr(Precedence::None)?
+            } else {
+                Expr::Ident(field_name.clone(), self.prev_span())
+            };
+            fields.push((field_name, value));
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+        Ok(Expr::StructInit {
+            name,
+            fields,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
     // === Expression parsing (Pratt / precedence climbing) ===
 
     fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, FerriError> {
@@ -421,10 +644,22 @@ impl Parser {
                 Ok(Expr::CharLiteral(c, span))
             }
 
-            // Identifiers (could be followed by `!` for macro call, or `(` for function call)
-            TokenKind::Ident(_) => {
+            // `self` keyword
+            TokenKind::SelfLower => {
                 let span = self.current_span();
-                let name = self.expect_ident()?;
+                self.advance();
+                Ok(Expr::SelfRef(span))
+            }
+
+            // Identifiers (could be followed by `!` for macro, `::` for path, `{` for struct init)
+            TokenKind::Ident(_) | TokenKind::SelfUpper => {
+                let span = self.current_span();
+                let name = if self.check(&TokenKind::SelfUpper) {
+                    self.advance();
+                    "Self".to_string()
+                } else {
+                    self.expect_ident()?
+                };
 
                 // Check for macro call: `name!(...)` or `name![...]`
                 if self.check(&TokenKind::Bang) {
@@ -450,6 +685,46 @@ impl Parser {
                         args,
                         span: self.merge_spans(span, end_span),
                     });
+                }
+
+                // Check for path: `Name::...`
+                if self.check(&TokenKind::ColonColon) {
+                    self.advance();
+                    let mut segments = vec![name];
+                    segments.push(self.expect_ident()?);
+
+                    // Continue collecting path segments
+                    while self.check(&TokenKind::ColonColon) {
+                        self.advance();
+                        segments.push(self.expect_ident()?);
+                    }
+
+                    // Check if followed by `(` → PathCall
+                    if self.check(&TokenKind::LParen) {
+                        self.advance();
+                        let args = self.parse_arg_list()?;
+                        let end_span = self.current_span();
+                        self.expect(TokenKind::RParen)?;
+                        return Ok(Expr::PathCall {
+                            path: segments,
+                            args,
+                            span: self.merge_spans(span, end_span),
+                        });
+                    }
+
+                    // Check if followed by `{` → struct init with path (e.g. module::Struct { })
+                    // For now just return Path
+                    let end_span = self.prev_span();
+                    return Ok(Expr::Path {
+                        segments,
+                        span: self.merge_spans(span, end_span),
+                    });
+                }
+
+                // Check for struct init: `Name { field: value, ... }`
+                // Only if name starts with uppercase (convention for type names)
+                if self.check(&TokenKind::LBrace) && name.starts_with(|c: char| c.is_uppercase()) {
+                    return self.parse_struct_init(name, span);
                 }
 
                 Ok(Expr::Ident(name, span))
@@ -836,9 +1111,46 @@ impl Parser {
                 let expr = self.parse_prefix()?;
                 Ok(Pattern::Literal(expr))
             }
-            TokenKind::Ident(_) => {
+            TokenKind::Ident(_) | TokenKind::SelfUpper => {
                 let span = self.current_span();
-                let name = self.expect_ident()?;
+                let name = if self.check(&TokenKind::SelfUpper) {
+                    self.advance();
+                    "Self".to_string()
+                } else {
+                    self.expect_ident()?
+                };
+
+                // Check for path pattern: `Name::Variant` or `Name::Variant(x, y)`
+                if self.check(&TokenKind::ColonColon) {
+                    self.advance();
+                    let variant = self.expect_ident()?;
+                    let mut fields = Vec::new();
+
+                    if self.match_token(&TokenKind::LParen) {
+                        // Tuple variant destructuring: `Shape::Circle(r)`
+                        if !self.check(&TokenKind::RParen) {
+                            loop {
+                                fields.push(self.parse_pattern()?);
+                                if !self.match_token(&TokenKind::Comma) {
+                                    break;
+                                }
+                                if self.check(&TokenKind::RParen) {
+                                    break;
+                                }
+                            }
+                        }
+                        self.expect(TokenKind::RParen)?;
+                    }
+
+                    let end_span = self.prev_span();
+                    return Ok(Pattern::EnumVariant {
+                        enum_name: name,
+                        variant,
+                        fields,
+                        span: self.merge_spans(span, end_span),
+                    });
+                }
+
                 Ok(Pattern::Ident(name, span))
             }
             other => Err(self.error(format!("expected pattern, found {}", other.description()))),
@@ -894,6 +1206,14 @@ impl Parser {
 
     fn current_span(&self) -> Span {
         self.tokens[self.pos].span
+    }
+
+    fn prev_span(&self) -> Span {
+        if self.pos > 0 {
+            self.tokens[self.pos - 1].span
+        } else {
+            self.tokens[0].span
+        }
     }
 
     fn is_at_end(&self) -> bool {
@@ -979,14 +1299,18 @@ mod tests {
     /// Extract the function body statements from a single-function program.
     fn parse_fn_body(src: &str) -> Vec<Stmt> {
         let program = parse(src).unwrap();
-        let Item::Function(f) = &program.items[0];
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function item");
+        };
         f.body.stmts.clone()
     }
 
     /// Extract a FnDef from the first item.
     fn parse_fn(src: &str) -> FnDef {
         let program = parse(src).unwrap();
-        let Item::Function(f) = &program.items[0];
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function item");
+        };
         f.clone()
     }
 
@@ -1366,11 +1690,15 @@ fn main() {
         let program = parse(src).unwrap();
         assert_eq!(program.items.len(), 2);
 
-        let Item::Function(f0) = &program.items[0];
+        let Item::Function(f0) = &program.items[0] else {
+            panic!("expected function item");
+        };
         assert_eq!(f0.name, "add");
         assert_eq!(f0.params.len(), 2);
 
-        let Item::Function(f1) = &program.items[1];
+        let Item::Function(f1) = &program.items[1] else {
+            panic!("expected function item");
+        };
         assert_eq!(f1.name, "main");
         assert_eq!(f1.body.stmts.len(), 4);
     }
@@ -1666,5 +1994,166 @@ fn main() {
             panic!("expected Index");
         };
         assert!(matches!(object.as_ref(), Expr::Index { .. }));
+    }
+
+    // === Phase 7: Struct/Enum/Impl parsing ===
+
+    #[test]
+    fn test_struct_def() {
+        let program = parse(
+            r#"
+struct Point {
+    x: f64,
+    y: f64,
+}
+fn main() {}
+"#,
+        )
+        .unwrap();
+        let Item::Struct(s) = &program.items[0] else {
+            panic!("expected struct");
+        };
+        assert_eq!(s.name, "Point");
+        assert!(matches!(&s.kind, StructKind::Named(fields) if fields.len() == 2));
+    }
+
+    #[test]
+    fn test_enum_def() {
+        let program = parse(
+            r#"
+enum Shape {
+    Circle(f64),
+    Rectangle(f64, f64),
+    Point,
+}
+fn main() {}
+"#,
+        )
+        .unwrap();
+        let Item::Enum(e) = &program.items[0] else {
+            panic!("expected enum");
+        };
+        assert_eq!(e.name, "Shape");
+        assert_eq!(e.variants.len(), 3);
+        assert!(matches!(&e.variants[0].kind, EnumVariantKind::Tuple(t) if t.len() == 1));
+        assert!(matches!(&e.variants[2].kind, EnumVariantKind::Unit));
+    }
+
+    #[test]
+    fn test_impl_block() {
+        let program = parse(
+            r#"
+struct Point { x: f64, y: f64 }
+
+impl Point {
+    fn new(x: f64, y: f64) -> Self {
+        Point { x, y }
+    }
+}
+fn main() {}
+"#,
+        )
+        .unwrap();
+        let Item::Impl(i) = &program.items[1] else {
+            panic!("expected impl");
+        };
+        assert_eq!(i.type_name, "Point");
+        assert_eq!(i.methods.len(), 1);
+        assert_eq!(i.methods[0].name, "new");
+    }
+
+    #[test]
+    fn test_struct_init_expr() {
+        let stmts = parse_fn_body("fn main() { let p = Point { x: 1.0, y: 2.0 }; }");
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &stmts[0]
+        else {
+            panic!("expected let with value");
+        };
+        assert!(matches!(expr, Expr::StructInit { name, .. } if name == "Point"));
+    }
+
+    #[test]
+    fn test_path_call_expr() {
+        let stmts = parse_fn_body("fn main() { Point::new(1.0, 2.0); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        assert!(matches!(expr, Expr::PathCall { path, .. } if path == &["Point", "new"]));
+    }
+
+    #[test]
+    fn test_path_expr() {
+        let stmts = parse_fn_body("fn main() { Color::Red; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        assert!(matches!(expr, Expr::Path { segments, .. } if segments == &["Color", "Red"]));
+    }
+
+    #[test]
+    fn test_self_method_param() {
+        let program = parse(
+            r#"
+impl Foo {
+    fn bar(&self) -> i64 {
+        42
+    }
+}
+fn main() {}
+"#,
+        )
+        .unwrap();
+        let Item::Impl(i) = &program.items[0] else {
+            panic!("expected impl");
+        };
+        assert_eq!(i.methods[0].params[0].name, "self");
+    }
+
+    #[test]
+    fn test_enum_variant_pattern() {
+        let stmts = parse_fn_body(
+            r#"fn main() {
+    match x {
+        Shape::Circle(r) => r,
+        _ => 0.0,
+    };
+}"#,
+        );
+        let Stmt::Expr { expr, .. } = &stmts[0] else {
+            panic!();
+        };
+        let Expr::Match { arms, .. } = expr else {
+            panic!("expected match");
+        };
+        assert!(matches!(
+            &arms[0].pattern,
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                ..
+            } if enum_name == "Shape" && variant == "Circle"
+        ));
+    }
+
+    #[test]
+    fn test_unit_struct_def() {
+        let program = parse("struct Marker;\nfn main() {}").unwrap();
+        let Item::Struct(s) = &program.items[0] else {
+            panic!("expected struct");
+        };
+        assert_eq!(s.name, "Marker");
+        assert!(matches!(s.kind, StructKind::Unit));
+    }
+
+    #[test]
+    fn test_tuple_struct_def() {
+        let program = parse("struct Pair(i64, i64);\nfn main() {}").unwrap();
+        let Item::Struct(s) = &program.items[0] else {
+            panic!("expected struct");
+        };
+        assert_eq!(s.name, "Pair");
+        assert!(matches!(&s.kind, StructKind::Tuple(t) if t.len() == 2));
     }
 }

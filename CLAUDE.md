@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 6: Collections & Strings — COMPLETE. 201 tests passing.
+Phase 7: Structs, Enums & Impl Blocks — COMPLETE. 224 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -117,7 +117,7 @@ Phase 6: Collections & Strings — COMPLETE. 201 tests passing.
 - `for x in 0..10 { body }` and `0..=10` inclusive ranges
 - `for x in vec { body }` — iterate over Vec and String
 - `break` and `continue` in all loop types
-- `match expr { pattern => body }` with literal, wildcard (`_`), and variable patterns
+- `match expr { pattern => body }` with literal, wildcard (`_`), variable, and enum variant patterns
 - Function definitions and calls with proper scoping
 - Recursion (factorial, fibonacci)
 - `return` statements
@@ -130,6 +130,18 @@ Phase 6: Collections & Strings — COMPLETE. 201 tests passing.
 - Vec methods: `.push()`, `.pop()`, `.len()`, `.is_empty()`, `.contains()`, `.first()`, `.last()`, `.reverse()`, `.join()`
 - String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`
 - Tuples: `(a, b, c)`, tuple index `t.0`, empty tuple `()`, single-element `(x,)`
+- Structs: `struct Point { x: f64, y: f64 }`, unit structs, tuple structs
+- Struct instantiation: `Point { x: 1.0, y: 2.0 }`, shorthand `Point { x, y }`
+- Struct field access: `p.x`, field assignment: `p.x = 3.0`
+- Enums: `enum Shape { Circle(f64), Rectangle(f64, f64), Point }`
+- Enum variant construction: `Shape::Circle(5.0)`, unit variants `Color::Red`
+- Enum pattern matching: `Shape::Circle(r) => ...` with destructuring
+- Impl blocks: `impl Point { fn new(x: f64, y: f64) -> Self { ... } }`
+- Methods: `&self`, `&mut self`, `self` parameters, called via `p.method()`
+- Associated functions: `Point::new(1.0, 2.0)` via `Type::func()` syntax
+- `Self` type resolution in impl blocks
+- `self` keyword for accessing receiver in methods
+- Auto debug format for structs and enums via `{:?}`
 - `&` and `&mut` syntax parsed but ignored (no borrow checker)
 - Shadowing: `let x = 1; let x = "hello";`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`

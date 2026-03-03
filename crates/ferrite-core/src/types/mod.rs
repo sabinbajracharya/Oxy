@@ -3,6 +3,7 @@
 //! All values at runtime are represented by the [`Value`] enum.
 //! Ferrite uses reference counting internally — no borrow checker.
 
+use std::collections::HashMap;
 use std::fmt;
 
 use crate::ast::{Block, Param, TypeAnnotation};
@@ -38,6 +39,17 @@ pub enum Value {
     Vec(Vec<Value>),
     /// A tuple.
     Tuple(Vec<Value>),
+    /// A struct instance: `Point { x: 1.0, y: 2.0 }`
+    Struct {
+        name: String,
+        fields: HashMap<String, Value>,
+    },
+    /// An enum variant instance.
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        data: Vec<Value>,
+    },
 }
 
 impl Value {
@@ -54,6 +66,13 @@ impl Value {
             Value::Range(_, _) => "Range",
             Value::Vec(_) => "Vec",
             Value::Tuple(_) => "tuple",
+            Value::Struct { name, .. } => {
+                // Return a static str for common names, else fallback
+                // We leak the string since type_name returns &'static str
+                // This is fine — struct names live for the program lifetime
+                Box::leak(name.clone().into_boxed_str())
+            }
+            Value::EnumVariant { enum_name, .. } => Box::leak(enum_name.clone().into_boxed_str()),
         }
     }
 
@@ -66,6 +85,8 @@ impl Value {
             Value::Range(_, _) => true,
             Value::Vec(v) => !v.is_empty(),
             Value::Tuple(t) => !t.is_empty(),
+            Value::Struct { .. } => true,
+            Value::EnumVariant { .. } => true,
             _ => true,
         }
     }
@@ -111,6 +132,36 @@ impl fmt::Display for Value {
                 }
                 write!(f, ")")
             }
+            Value::Struct { name, fields } => {
+                write!(f, "{name} {{ ")?;
+                let mut sorted: Vec<_> = fields.iter().collect();
+                sorted.sort_by_key(|(k, _)| (*k).clone());
+                for (i, (k, v)) in sorted.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, " }}")
+            }
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => {
+                write!(f, "{enum_name}::{variant}")?;
+                if !data.is_empty() {
+                    write!(f, "(")?;
+                    for (i, v) in data.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{v}")?;
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -127,6 +178,28 @@ impl PartialEq for Value {
             (Value::Range(a1, a2), Value::Range(b1, b2)) => a1 == b1 && a2 == b2,
             (Value::Vec(a), Value::Vec(b)) => a == b,
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (
+                Value::Struct {
+                    name: na,
+                    fields: fa,
+                },
+                Value::Struct {
+                    name: nb,
+                    fields: fb,
+                },
+            ) => na == nb && fa == fb,
+            (
+                Value::EnumVariant {
+                    enum_name: ea,
+                    variant: va,
+                    data: da,
+                },
+                Value::EnumVariant {
+                    enum_name: eb,
+                    variant: vb,
+                    data: db,
+                },
+            ) => ea == eb && va == vb && da == db,
             _ => false,
         }
     }
