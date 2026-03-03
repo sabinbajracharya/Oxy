@@ -426,9 +426,23 @@ impl Interpreter {
             // Store use alias for std:: paths so shortened paths work.
             // e.g. `use std::env;` → alias "env" → ["std", "env"]
             if use_def.path.first().map(|s| s.as_str()) == Some("std") {
-                if let UseTree::Simple = &use_def.tree {
-                    if let Some(last) = use_def.path.last() {
-                        self.use_aliases.insert(last.clone(), use_def.path.clone());
+                match &use_def.tree {
+                    UseTree::Simple => {
+                        // `use std::env;` → alias "env" → ["std", "env"]
+                        if let Some(last) = use_def.path.last() {
+                            self.use_aliases.insert(last.clone(), use_def.path.clone());
+                        }
+                    }
+                    UseTree::Group(names) => {
+                        // `use std::{env, fs};` → alias "env" → ["std", "env"], "fs" → ["std", "fs"]
+                        for name in names {
+                            let mut full_path = use_def.path.clone();
+                            full_path.push(name.clone());
+                            self.use_aliases.insert(name.clone(), full_path);
+                        }
+                    }
+                    UseTree::Glob => {
+                        // `use std::*;` — no alias, not meaningful for std
                     }
                 }
             }
@@ -1364,6 +1378,13 @@ impl Interpreter {
                 let s = s.max(0) as usize;
                 let e = (e.min(len)) as usize;
                 Ok(Value::Vec(v[s..e].to_vec()))
+            }
+            (Value::HashMap(m), Value::String(k)) => {
+                m.get(k).cloned().ok_or_else(|| FerriError::Runtime {
+                    message: format!("key not found: \"{k}\""),
+                    line: span.line,
+                    column: span.column,
+                })
             }
             (Value::String(s), Value::Range(start, end)) => {
                 let chars: Vec<char> = s.chars().collect();
@@ -6440,5 +6461,52 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["1 hello\n"]);
+    }
+
+    #[test]
+    fn test_hashmap_index_access() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut m = HashMap::new();
+                m.insert("name", "Ferrite");
+                m.insert("version", "0.1");
+                println!("{}", m["name"]);
+                println!("{}", m["version"]);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["Ferrite\n", "0.1\n"]);
+    }
+
+    #[test]
+    fn test_use_group_std() {
+        let output = run_and_capture(
+            r#"
+            use std::{env, fs};
+            fn main() {
+                let vars = env::vars();
+                println!("{}", vars.len() > 0);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_db_execute_with_empty_vec() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let db = Db::memory();
+                db.execute("CREATE TABLE t (id INTEGER)");
+                db.execute("INSERT INTO t VALUES (1)", vec![]);
+                let rows = db.query("SELECT * FROM t");
+                println!("{}", rows.len());
+                db.close();
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["1\n"]);
     }
 }
