@@ -10,4 +10,11 @@ pub enum FerriError {
         line: usize,
         column: usize,
     },
+    /// Parser error with source location.
+    #[error("[{line}:{column}] {message}")]
+    Parser {
+        message: String,
+        line: usize,
+        column: usize,
+    },
 }

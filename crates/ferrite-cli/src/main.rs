@@ -17,6 +17,13 @@ fn main() {
             });
             dump_tokens(file);
         }
+        Some("--dump-ast") => {
+            let file = args.get(2).unwrap_or_else(|| {
+                eprintln!("error: --dump-ast requires a file argument");
+                process::exit(2);
+            });
+            dump_ast(file);
+        }
         Some(cmd) => {
             eprintln!("error: unknown command '{cmd}'");
             eprintln!("Run 'ferrite --help' for usage information.");
@@ -50,6 +57,26 @@ fn dump_tokens(path: &str) {
     }
 }
 
+fn dump_ast(path: &str) {
+    let source = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: could not read file '{path}': {e}");
+            process::exit(1);
+        }
+    };
+
+    match ferrite_core::parser::parse(&source) {
+        Ok(program) => {
+            print!("{}", program.pretty_print());
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            process::exit(1);
+        }
+    }
+}
+
 fn print_help() {
     println!("{}", ferrite_core::version_string());
     println!("Rust syntax, scripting freedom.\n");
@@ -59,6 +86,7 @@ fn print_help() {
     println!("  repl                 Start the interactive REPL\n");
     println!("Options:");
     println!("  --dump-tokens <file> Dump token stream for a file");
+    println!("  --dump-ast <file>    Dump AST for a file");
     println!("  -V, --version        Print version information");
     println!("  -h, --help           Print this help message");
 }
