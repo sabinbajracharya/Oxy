@@ -195,7 +195,7 @@ impl Interpreter {
         let fmt_val = self.eval_expr(&args[0], env)?;
         let Value::String(fmt_str) = fmt_val else {
             // If not a string, just print the value
-            return Ok(format!("{fmt_val}"));
+            return Ok(self.format_value(&fmt_val));
         };
 
         let mut result = String::new();
@@ -219,7 +219,7 @@ impl Interpreter {
                         });
                     }
                     let val = self.eval_expr(&args[arg_idx], env)?;
-                    result.push_str(&format!("{val}"));
+                    result.push_str(&self.format_value(&val));
                     arg_idx += 1;
                 } else if chars.peek() == Some(&':') {
                     // `{:?}` debug format — consume until `}`
@@ -251,5 +251,40 @@ impl Interpreter {
         }
 
         Ok(result)
+    }
+
+    /// Format a value, using its Display trait impl if available.
+    pub(crate) fn format_value(&mut self, val: &Value) -> String {
+        let type_name = match val {
+            Value::Struct { name, .. } => Some(name.clone()),
+            Value::EnumVariant { enum_name, .. } => Some(enum_name.clone()),
+            _ => None,
+        };
+        if let Some(tn) = type_name {
+            let key = (tn.clone(), "Display".to_string());
+            if self.trait_impls.contains_key(&key) {
+                if let Some(method_def) = self.find_trait_method(&tn, "fmt") {
+                    use crate::env::Environment;
+                    let func_env = Environment::child(&self.env);
+                    func_env
+                        .borrow_mut()
+                        .define("self".to_string(), val.clone(), true);
+                    let prev = self.current_self_type.take();
+                    self.current_self_type = Some(tn);
+                    let result = self.eval_block(&method_def.body, &func_env);
+                    self.current_self_type = prev;
+                    match result {
+                        Ok(Value::String(s)) => return s,
+                        Err(FerriError::Return(v)) => {
+                            if let Value::String(s) = *v {
+                                return s;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        format!("{val}")
     }
 }

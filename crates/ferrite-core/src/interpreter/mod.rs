@@ -1246,6 +1246,13 @@ impl Interpreter {
             if Self::pattern_matches(&arm.pattern, &val) {
                 let match_env = Environment::child(env);
                 Self::bind_pattern(&arm.pattern, &val, &match_env, false);
+                // Evaluate guard in the match env (pattern bindings are visible)
+                if let Some(guard) = &arm.guard {
+                    let guard_val = self.eval_expr(guard, &match_env)?;
+                    if guard_val != Value::Bool(true) {
+                        continue;
+                    }
+                }
                 return self.eval_expr(&arm.body, &match_env);
             }
         }
@@ -6508,5 +6515,132 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["1\n"]);
+    }
+
+    // === High-impact gap tests (H1-H4) ===
+
+    #[test]
+    fn test_match_guard() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let x = 5;
+                let result = match x {
+                    n if n < 0 => "negative",
+                    n if n == 0 => "zero",
+                    n if n > 0 => "positive",
+                    _ => "unknown",
+                };
+                println!("{}", result);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["positive\n"]);
+    }
+
+    #[test]
+    fn test_match_guard_with_binding() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let values = vec![1, -2, 3, -4, 5];
+                let mut pos = 0;
+                let mut neg = 0;
+                for v in values {
+                    match v {
+                        n if n > 0 => pos = pos + n,
+                        n if n < 0 => neg = neg + n,
+                        _ => {},
+                    }
+                }
+                println!("{} {}", pos, neg);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["9 -6\n"]);
+    }
+
+    #[test]
+    fn test_operator_overload_add() {
+        let output = run_and_capture(
+            r#"
+            struct Point { x: i64, y: i64 }
+
+            trait Add {
+                fn add(self, other: Point) -> Point;
+            }
+
+            impl Add for Point {
+                fn add(self, other: Point) -> Point {
+                    Point { x: self.x + other.x, y: self.y + other.y }
+                }
+            }
+
+            fn main() {
+                let a = Point { x: 1, y: 2 };
+                let b = Point { x: 3, y: 4 };
+                let c = a + b;
+                println!("{} {}", c.x, c.y);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["4 6\n"]);
+    }
+
+    #[test]
+    fn test_impl_display() {
+        let output = run_and_capture(
+            r#"
+            struct Point { x: i64, y: i64 }
+
+            trait Display {
+                fn fmt(&self) -> String;
+            }
+
+            impl Display for Point {
+                fn fmt(&self) -> String {
+                    format!("({}, {})", self.x, self.y)
+                }
+            }
+
+            fn main() {
+                let p = Point { x: 3, y: 4 };
+                println!("Point is: {}", p);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["Point is: (3, 4)\n"]);
+    }
+
+    #[test]
+    fn test_enum_methods() {
+        let output = run_and_capture(
+            r#"
+            enum Direction {
+                North,
+                South,
+                East,
+                West,
+            }
+
+            impl Direction {
+                fn is_horizontal(&self) -> bool {
+                    match self {
+                        Direction::East => true,
+                        Direction::West => true,
+                        _ => false,
+                    }
+                }
+            }
+
+            fn main() {
+                let d = Direction::East;
+                println!("{}", d.is_horizontal());
+                let d2 = Direction::North;
+                println!("{}", d2.is_horizontal());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
     }
 }

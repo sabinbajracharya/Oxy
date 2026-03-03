@@ -104,6 +104,7 @@ impl Interpreter {
                     BinOp::Sub => Some("Sub"),
                     BinOp::Mul => Some("Mul"),
                     BinOp::Div => Some("Div"),
+                    BinOp::Mod => Some("Rem"),
                     _ => None,
                 };
                 let method_name = match op {
@@ -111,6 +112,7 @@ impl Interpreter {
                     BinOp::Sub => Some("sub"),
                     BinOp::Mul => Some("mul"),
                     BinOp::Div => Some("div"),
+                    BinOp::Mod => Some("rem"),
                     _ => None,
                 };
                 let type_name = match left {
@@ -171,7 +173,7 @@ impl Interpreter {
     /// Note: `&` and `*` are no-ops — Ferrite has no borrow checker,
     /// so references and dereferences just pass the value through.
     pub(crate) fn eval_unary_op(
-        &self,
+        &mut self,
         op: UnaryOp,
         val: &Value,
         line: usize,
@@ -185,6 +187,32 @@ impl Interpreter {
             (UnaryOp::Ref, v) => Ok(v.clone()),
             // * (deref) — just pass through the value
             (UnaryOp::Deref, v) => Ok(v.clone()),
+            // Neg trait overloading for user types
+            (UnaryOp::Neg, Value::Struct { name, .. })
+            | (UnaryOp::Neg, Value::EnumVariant { enum_name: name, .. }) => {
+                if let Some(method_def) = self.find_trait_method(name, "neg") {
+                    let key = (name.clone(), "Neg".to_string());
+                    if self.trait_impls.contains_key(&key) {
+                        let func_env = Environment::child(&self.env);
+                        func_env
+                            .borrow_mut()
+                            .define("self".to_string(), val.clone(), true);
+                        let prev = self.current_self_type.take();
+                        self.current_self_type = Some(name.clone());
+                        let result = self.eval_block(&method_def.body, &func_env);
+                        self.current_self_type = prev;
+                        return match result {
+                            Err(FerriError::Return(v)) => Ok(*v),
+                            other => other,
+                        };
+                    }
+                }
+                Err(FerriError::Runtime {
+                    message: format!("unsupported unary operation: {op}{}", val.type_name()),
+                    line,
+                    column: col,
+                })
+            }
             _ => Err(FerriError::Runtime {
                 message: format!("unsupported unary operation: {op}{}", val.type_name()),
                 line,

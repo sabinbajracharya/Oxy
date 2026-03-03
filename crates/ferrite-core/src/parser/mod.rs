@@ -1771,6 +1771,14 @@ impl Parser {
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
             let arm_span = self.current_span();
             let pattern = self.parse_pattern()?;
+
+            // Parse optional guard: `pattern if condition =>`
+            let guard = if self.match_token(&TokenKind::If) {
+                Some(Box::new(self.parse_expr(Precedence::None)?))
+            } else {
+                None
+            };
+
             self.expect(TokenKind::FatArrow)?;
 
             // Arm body can be a block or a single expression
@@ -1784,6 +1792,7 @@ impl Parser {
             let end_span = body.span();
             arms.push(MatchArm {
                 pattern,
+                guard,
                 body,
                 span: self.merge_spans(arm_span, end_span),
             });

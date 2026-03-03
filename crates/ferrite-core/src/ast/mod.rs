@@ -594,10 +594,11 @@ pub enum UnaryOp {
     Deref,
 }
 
-/// A match arm: `pattern => expr`
+/// A match arm: `pattern => expr` or `pattern if guard => expr`
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: Pattern,
+    pub guard: Option<Box<Expr>>,
     pub body: Expr,
     pub span: Span,
 }
