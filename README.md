@@ -320,42 +320,55 @@ Ferrite has a VS Code extension with syntax highlighting and a built-in Language
 - 🗂️ **Document symbols** — outline view (functions, structs, enums, traits)
 - 🔗 **Go-to definition** — jump to definitions in the same file
 
-### Setup
+### Option A: Install from source (symlink)
 
-#### 1. Install the extension
-
-Symlink (or copy) the extension folder into VS Code's extensions directory:
+Best for development — changes to the extension are reflected immediately.
 
 ```bash
-# macOS / Linux
-ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/ferrite-lang
-```
-
-#### 2. Install extension dependencies
-
-If you haven't run setup already:
-
-```bash
+# 1. Install extension dependencies (one-time)
 docker compose run --rm setup
+
+# 2. Symlink into VS Code extensions
+ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/ferrite-lang
+
+# 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
 ```
 
-#### 3. Reload VS Code
+### Option B: Build and install as .vsix
 
-Press `Cmd+Shift+P` (or `Ctrl+Shift+P`) → type "Reload Window" → Enter.
+Best for distribution — produces a standalone installable package.
 
-Open any `.fe` file and you should see syntax highlighting and LSP features. The LSP server launches automatically via Docker — no extra configuration needed.
+```bash
+# 1. Build the .vsix package
+docker compose run --rm build-ext
 
-> **How it works**: When you open a `.fe` file, the extension runs `docker compose run --rm -T dev cargo run --release -p ferrite-lsp --quiet` in the background. Docker starts once and the LSP stays running for your entire session.
+# 2. Install in VS Code
+code --install-extension editors/vscode/ferrite-lang-0.1.0.vsix
 
-#### Advanced: Using a native binary
+# 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
+```
 
-If you have Rust installed locally and want faster LSP startup:
+### How the LSP works
+
+When you open a `.fe` file, the extension automatically starts the Ferrite Language Server via Docker:
+
+```
+VS Code ←→ docker compose run --rm -T dev cargo run --release -p ferrite-lsp ←→ stdin/stdout
+```
+
+- Docker starts **once** and the LSP stays running for your entire VS Code session
+- No local Rust installation needed — everything runs inside the container
+- First launch takes ~5-10 seconds (Docker + compile), subsequent opens are instant
+
+### Advanced: Using a native binary
+
+If you have Rust installed locally and want instant LSP startup:
 
 ```bash
 cargo build --release -p ferrite-lsp
 ```
 
-Then in VS Code settings:
+Then in VS Code settings (`Cmd+,`):
 
 ```json
 {
@@ -363,6 +376,14 @@ Then in VS Code settings:
     "ferrite.lsp.path": "/absolute/path/to/project-ferrite/target/release/ferrite-lsp"
 }
 ```
+
+### Extension Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ferrite.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
+| `ferrite.lsp.path` | `ferrite-lsp` | Path to local binary (only used in `native` mode) |
+| `ferrite.lsp.enabled` | `true` | Enable/disable the language server |
 
 ---
 
@@ -392,6 +413,7 @@ project-ferrite/
 | `setup` | `docker compose run --rm setup` | One-time: install npm deps for VS Code extension |
 | `dev` | `docker compose run --rm dev bash` | Interactive dev shell with Rust + Node.js |
 | `test` | `docker compose run --rm test` | Run full CI checks (fmt + clippy + tests) |
+| `build-ext` | `docker compose run --rm build-ext` | Package VS Code extension as `.vsix` |
 | `build` | `docker compose build build` | Build release Docker image |
 
 ## Development

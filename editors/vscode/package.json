@@ -4,6 +4,10 @@
     "description": "Syntax highlighting and LSP support for the Ferrite programming language (.fe files)",
     "version": "0.1.0",
     "publisher": "ferrite-lang",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/nickel-lang/project-ferrite"
+    },
     "engines": {
         "vscode": "^1.75.0"
     },
@@ -18,8 +22,13 @@
         "languages": [
             {
                 "id": "ferrite",
-                "aliases": ["Ferrite", "ferrite"],
-                "extensions": [".fe"],
+                "aliases": [
+                    "Ferrite",
+                    "ferrite"
+                ],
+                "extensions": [
+                    ".fe"
+                ],
                 "configuration": "./language-configuration.json"
             }
         ],
@@ -42,7 +51,11 @@
                 "ferrite.lsp.mode": {
                     "type": "string",
                     "default": "auto",
-                    "enum": ["auto", "docker", "native"],
+                    "enum": [
+                        "auto",
+                        "docker",
+                        "native"
+                    ],
                     "enumDescriptions": [
                         "Auto-detect: uses Docker if no custom path is set, native binary otherwise",
                         "Always launch LSP via Docker (no local Rust needed)",
@@ -60,5 +73,12 @@
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"
+    },
+    "devDependencies": {
+        "@vscode/vsce": "^2.24.0"
+    },
+    "scripts": {
+        "package": "vsce package --no-dependencies",
+        "install-ext": "code --install-extension ferrite-lang-*.vsix"
     }
 }

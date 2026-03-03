@@ -46,6 +46,21 @@ services:
         echo '✅ All checks passed'
       "
 
+  build-ext:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - node-modules:/app/editors/vscode/node_modules
+    working_dir: /app/editors/vscode
+    command: >
+      bash -c "
+        npm install &&
+        npx vsce package --no-dependencies &&
+        echo '✅ Extension packaged: editors/vscode/ferrite-lang-*.vsix'
+      "
+
   build:
     build:
       context: .

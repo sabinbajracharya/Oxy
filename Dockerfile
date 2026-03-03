@@ -38,11 +38,12 @@ FROM rust:1.85-slim AS dev
 
 RUN rustup component add rustfmt clippy
 
-# Install Node.js (for VS Code extension dependencies)
+# Install Node.js 20 (for VS Code extension tooling)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
-        nodejs \
-        npm \
+        curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
