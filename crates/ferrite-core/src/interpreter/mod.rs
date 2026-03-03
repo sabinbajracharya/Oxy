@@ -127,7 +127,7 @@ impl Interpreter {
                 } else {
                     Value::Unit
                 };
-                Err(FerriError::Return(val))
+                Err(FerriError::Return(Box::new(val)))
             }
             Stmt::While {
                 condition, body, ..
@@ -139,7 +139,9 @@ impl Interpreter {
                     }
                     match self.eval_block(body, env) {
                         Ok(_) => {}
-                        Err(FerriError::Break(val)) => return Ok(val.unwrap_or(Value::Unit)),
+                        Err(FerriError::Break(val)) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        }
                         Err(FerriError::Continue) => continue,
                         Err(e) => return Err(e),
                     }
@@ -149,7 +151,9 @@ impl Interpreter {
             Stmt::Loop { body, .. } => loop {
                 match self.eval_block(body, env) {
                     Ok(_) => {}
-                    Err(FerriError::Break(val)) => return Ok(val.unwrap_or(Value::Unit)),
+                    Err(FerriError::Break(val)) => {
+                        return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                    }
                     Err(FerriError::Continue) => continue,
                     Err(e) => return Err(e),
                 }
@@ -168,7 +172,9 @@ impl Interpreter {
                     for_env.borrow_mut().set(name, val).ok();
                     match self.eval_block(body, &for_env) {
                         Ok(_) => {}
-                        Err(FerriError::Break(val)) => return Ok(val.unwrap_or(Value::Unit)),
+                        Err(FerriError::Break(val)) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        }
                         Err(FerriError::Continue) => continue,
                         Err(e) => return Err(e),
                     }
@@ -177,7 +183,7 @@ impl Interpreter {
             }
             Stmt::Break { value, .. } => {
                 let val = if let Some(expr) = value {
-                    Some(self.eval_expr(expr, env)?)
+                    Some(Box::new(self.eval_expr(expr, env)?))
                 } else {
                     None
                 };
@@ -732,7 +738,7 @@ impl Interpreter {
         // Execute the function body
         match self.eval_block(body, &call_env) {
             Ok(val) => Ok(val),
-            Err(FerriError::Return(val)) => Ok(val),
+            Err(FerriError::Return(val)) => Ok(*val),
             Err(e) => Err(e),
         }
     }

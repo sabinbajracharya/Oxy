@@ -29,11 +29,11 @@ pub enum FerriError {
     /// Control flow: `return` statement carrying a value.
     /// Not a real error — caught at function call boundaries.
     #[error("return outside of function")]
-    Return(Value),
+    Return(Box<Value>),
     /// Control flow: `break` with optional value.
     /// Not a real error — caught at loop boundaries.
     #[error("break outside of loop")]
-    Break(Option<Value>),
+    Break(Option<Box<Value>>),
     /// Control flow: `continue`.
     /// Not a real error — caught at loop boundaries.
     #[error("continue outside of loop")]
