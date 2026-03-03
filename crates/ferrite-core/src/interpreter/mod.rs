@@ -5,41 +5,12 @@
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::{FunctionData, FutureData, Value};
-
-/// Global PRNG state for rand:: module (xorshift64).
-static PRNG_STATE: AtomicU64 = AtomicU64::new(0);
-
-/// Get the next pseudo-random u64 from the global PRNG.
-fn simple_random_u64() -> u64 {
-    let mut state = PRNG_STATE.load(Ordering::Relaxed);
-    if state == 0 {
-        // Seed from current time on first use
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64;
-        state = seed | 1; // Ensure non-zero
-        PRNG_STATE.store(state, Ordering::Relaxed);
-    }
-    // xorshift64
-    state ^= state << 13;
-    state ^= state >> 7;
-    state ^= state << 17;
-    PRNG_STATE.store(state, Ordering::Relaxed);
-    state
-}
-
-/// Get a pseudo-random f64 in [0.0, 1.0).
-fn simple_random_f64() -> f64 {
-    (simple_random_u64() >> 11) as f64 / ((1u64 << 53) as f64)
-}
 
 /// The Ferrite interpreter.
 pub struct Interpreter {
@@ -2902,17 +2873,17 @@ impl Interpreter {
 
             // Built-in math:: pseudo-module (after user module check)
             if type_name == "math" {
-                return self.call_math_function(method_name, args, span);
+                return crate::stdlib::math::call(method_name, args, span);
             }
 
             // Built-in rand:: pseudo-module
             if type_name == "rand" {
-                return self.call_rand_function(method_name, args, span);
+                return crate::stdlib::rand::call(method_name, args, span);
             }
 
             // Built-in time:: pseudo-module
             if type_name == "time" {
-                return self.call_time_function(method_name, args, span);
+                return crate::stdlib::time::call(method_name, args, span);
             }
         }
 
@@ -3052,10 +3023,8 @@ impl Interpreter {
 
             // Built-in math constants
             if type_name == "math" {
-                match variant_name.as_str() {
-                    "PI" => return Ok(Value::Float(std::f64::consts::PI)),
-                    "E" => return Ok(Value::Float(std::f64::consts::E)),
-                    _ => {}
+                if let Some(val) = crate::stdlib::math::constant(variant_name) {
+                    return Ok(val);
                 }
             }
 
@@ -3216,272 +3185,6 @@ impl Interpreter {
         }
     }
 
-    /// Convert an f64 to Value, returning Integer if the value is a whole number.
-    fn float_to_value(f: f64) -> Value {
-        if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
-            Value::Integer(f as i64)
-        } else {
-            Value::Float(f)
-        }
-    }
-
-    /// Extract f64 from a Value (Integer or Float).
-    fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
-        match val {
-            Value::Integer(n) => Ok(*n as f64),
-            Value::Float(f) => Ok(*f),
-            _ => Err(FerriError::Runtime {
-                message: format!("expected numeric argument, got {}", val.type_name()),
-                line: span.line,
-                column: span.column,
-            }),
-        }
-    }
-
-    /// Helper for unary math functions (1 argument, f64 -> f64).
-    fn unary_math_op(
-        name: &str,
-        args: &[Value],
-        op: fn(f64) -> f64,
-        span: &Span,
-    ) -> Result<Value, FerriError> {
-        if args.len() != 1 {
-            return Err(FerriError::Runtime {
-                message: format!("math::{}() takes 1 argument", name),
-                line: span.line,
-                column: span.column,
-            });
-        }
-        let x = Self::value_to_f64(&args[0], span)?;
-        Ok(Self::float_to_value(op(x)))
-    }
-
-    /// Helper for binary math functions (2 arguments, (f64, f64) -> f64).
-    fn binary_math_op(
-        name: &str,
-        args: &[Value],
-        op: fn(f64, f64) -> f64,
-        span: &Span,
-    ) -> Result<Value, FerriError> {
-        if args.len() != 2 {
-            return Err(FerriError::Runtime {
-                message: format!("math::{}() takes 2 arguments", name),
-                line: span.line,
-                column: span.column,
-            });
-        }
-        let a = Self::value_to_f64(&args[0], span)?;
-        let b = Self::value_to_f64(&args[1], span)?;
-        Ok(Self::float_to_value(op(a, b)))
-    }
-
-    /// Built-in math:: module functions.
-    fn call_math_function(
-        &self,
-        func_name: &str,
-        args: &[Value],
-        span: &Span,
-    ) -> Result<Value, FerriError> {
-        match func_name {
-            "sqrt" => Self::unary_math_op("sqrt", args, f64::sqrt, span),
-            "abs" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::abs() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                match &args[0] {
-                    Value::Integer(n) => Ok(Value::Integer(n.abs())),
-                    Value::Float(f) => Ok(Self::float_to_value(f.abs())),
-                    _ => Err(FerriError::Runtime {
-                        message: format!(
-                            "math::abs() requires numeric argument, got {}",
-                            args[0].type_name()
-                        ),
-                        line: span.line,
-                        column: span.column,
-                    }),
-                }
-            }
-            "pow" => Self::binary_math_op("pow", args, f64::powf, span),
-            "sin" => Self::unary_math_op("sin", args, f64::sin, span),
-            "cos" => Self::unary_math_op("cos", args, f64::cos, span),
-            "tan" => Self::unary_math_op("tan", args, f64::tan, span),
-            "asin" => Self::unary_math_op("asin", args, f64::asin, span),
-            "acos" => Self::unary_math_op("acos", args, f64::acos, span),
-            "atan" => Self::unary_math_op("atan", args, f64::atan, span),
-            "floor" => Self::unary_math_op("floor", args, f64::floor, span),
-            "ceil" => Self::unary_math_op("ceil", args, f64::ceil, span),
-            "round" => Self::unary_math_op("round", args, f64::round, span),
-            "min" => {
-                if args.len() != 2 {
-                    return Err(FerriError::Runtime {
-                        message: "math::min() takes 2 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                match (&args[0], &args[1]) {
-                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
-                    _ => {
-                        let a = Self::value_to_f64(&args[0], span)?;
-                        let b = Self::value_to_f64(&args[1], span)?;
-                        Ok(Self::float_to_value(a.min(b)))
-                    }
-                }
-            }
-            "max" => {
-                if args.len() != 2 {
-                    return Err(FerriError::Runtime {
-                        message: "math::max() takes 2 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                match (&args[0], &args[1]) {
-                    (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
-                    _ => {
-                        let a = Self::value_to_f64(&args[0], span)?;
-                        let b = Self::value_to_f64(&args[1], span)?;
-                        Ok(Self::float_to_value(a.max(b)))
-                    }
-                }
-            }
-            "log" => Self::unary_math_op("log", args, f64::ln, span),
-            "log2" => Self::unary_math_op("log2", args, f64::log2, span),
-            "log10" => Self::unary_math_op("log10", args, f64::log10, span),
-            _ => Err(FerriError::Runtime {
-                message: format!("unknown math function `math::{func_name}`"),
-                line: span.line,
-                column: span.column,
-            }),
-        }
-    }
-
-    /// Built-in rand:: module functions using a simple PRNG.
-    fn call_rand_function(
-        &self,
-        func_name: &str,
-        args: &[Value],
-        span: &Span,
-    ) -> Result<Value, FerriError> {
-        match func_name {
-            "random" => {
-                if !args.is_empty() {
-                    return Err(FerriError::Runtime {
-                        message: "rand::random() takes 0 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                Ok(Value::Float(simple_random_f64()))
-            }
-            "range" => {
-                if args.len() != 2 {
-                    return Err(FerriError::Runtime {
-                        message: "rand::range() takes 2 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                match (&args[0], &args[1]) {
-                    (Value::Integer(min), Value::Integer(max)) => {
-                        if min >= max {
-                            return Err(FerriError::Runtime {
-                                message: "rand::range() requires min < max".into(),
-                                line: span.line,
-                                column: span.column,
-                            });
-                        }
-                        let range = (max - min) as u64;
-                        let raw = simple_random_u64();
-                        let val = min + (raw % range) as i64;
-                        Ok(Value::Integer(val))
-                    }
-                    _ => Err(FerriError::Runtime {
-                        message: "rand::range() requires integer arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    }),
-                }
-            }
-            "bool" => {
-                if !args.is_empty() {
-                    return Err(FerriError::Runtime {
-                        message: "rand::bool() takes 0 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                Ok(Value::Bool(simple_random_u64() % 2 == 0))
-            }
-            _ => Err(FerriError::Runtime {
-                message: format!("unknown rand function `rand::{func_name}`"),
-                line: span.line,
-                column: span.column,
-            }),
-        }
-    }
-
-    /// Built-in time:: module functions.
-    fn call_time_function(
-        &self,
-        func_name: &str,
-        args: &[Value],
-        span: &Span,
-    ) -> Result<Value, FerriError> {
-        match func_name {
-            "now" => {
-                if !args.is_empty() {
-                    return Err(FerriError::Runtime {
-                        message: "time::now() takes 0 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let dur = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap();
-                Ok(Value::Float(dur.as_secs_f64()))
-            }
-            "millis" => {
-                if !args.is_empty() {
-                    return Err(FerriError::Runtime {
-                        message: "time::millis() takes 0 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let dur = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap();
-                Ok(Value::Integer(dur.as_millis() as i64))
-            }
-            "elapsed" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "time::elapsed() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let start = Self::value_to_f64(&args[0], span)?;
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs_f64();
-                Ok(Value::Float(now - start))
-            }
-            _ => Err(FerriError::Runtime {
-                message: format!("unknown time function `time::{func_name}`"),
-                line: span.line,
-                column: span.column,
-            }),
-        }
-    }
-
     /// Built-in numeric methods on Integer and Float values.
     fn call_numeric_method(
         &self,
@@ -3493,24 +3196,24 @@ impl Interpreter {
         match method {
             "abs" => match &receiver {
                 Value::Integer(n) => Ok(Value::Integer(n.abs())),
-                Value::Float(f) => Ok(Self::float_to_value(f.abs())),
+                Value::Float(f) => Ok(crate::stdlib::math::float_to_value(f.abs())),
                 _ => unreachable!(),
             },
             "sqrt" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.sqrt()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.sqrt()))
             }
             "floor" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.floor()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.floor()))
             }
             "ceil" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.ceil()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.ceil()))
             }
             "round" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.round()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.round()))
             }
             "pow" => {
                 if args.len() != 1 {
@@ -3520,21 +3223,21 @@ impl Interpreter {
                         column: span.column,
                     });
                 }
-                let base = Self::value_to_f64(&receiver, span)?;
-                let exp = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(base.powf(exp)))
+                let base = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                let exp = crate::stdlib::math::value_to_f64(&args[0], span)?;
+                Ok(crate::stdlib::math::float_to_value(base.powf(exp)))
             }
             "sin" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.sin()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.sin()))
             }
             "cos" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.cos()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.cos()))
             }
             "tan" => {
-                let x = Self::value_to_f64(&receiver, span)?;
-                Ok(Self::float_to_value(x.tan()))
+                let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                Ok(crate::stdlib::math::float_to_value(x.tan()))
             }
             "min" => {
                 if args.len() != 1 {
@@ -3547,9 +3250,9 @@ impl Interpreter {
                 match (&receiver, &args[0]) {
                     (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
                     _ => {
-                        let a = Self::value_to_f64(&receiver, span)?;
-                        let b = Self::value_to_f64(&args[0], span)?;
-                        Ok(Self::float_to_value(a.min(b)))
+                        let a = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                        let b = crate::stdlib::math::value_to_f64(&args[0], span)?;
+                        Ok(crate::stdlib::math::float_to_value(a.min(b)))
                     }
                 }
             }
@@ -3564,9 +3267,9 @@ impl Interpreter {
                 match (&receiver, &args[0]) {
                     (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
                     _ => {
-                        let a = Self::value_to_f64(&receiver, span)?;
-                        let b = Self::value_to_f64(&args[0], span)?;
-                        Ok(Self::float_to_value(a.max(b)))
+                        let a = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                        let b = crate::stdlib::math::value_to_f64(&args[0], span)?;
+                        Ok(crate::stdlib::math::float_to_value(a.max(b)))
                     }
                 }
             }
@@ -3583,10 +3286,10 @@ impl Interpreter {
                         Ok(Value::Integer(*x.max(min).min(max)))
                     }
                     _ => {
-                        let x = Self::value_to_f64(&receiver, span)?;
-                        let min = Self::value_to_f64(&args[0], span)?;
-                        let max = Self::value_to_f64(&args[1], span)?;
-                        Ok(Self::float_to_value(x.max(min).min(max)))
+                        let x = crate::stdlib::math::value_to_f64(&receiver, span)?;
+                        let min = crate::stdlib::math::value_to_f64(&args[0], span)?;
+                        let max = crate::stdlib::math::value_to_f64(&args[1], span)?;
+                        Ok(crate::stdlib::math::float_to_value(x.max(min).min(max)))
                     }
                 }
             }

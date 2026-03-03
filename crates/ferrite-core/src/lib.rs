@@ -11,6 +11,7 @@ pub mod interpreter;
 pub mod json;
 pub mod lexer;
 pub mod parser;
+pub mod stdlib;
 pub mod types;
 
 /// The current version of the Ferrite language.
