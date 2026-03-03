@@ -1,6 +1,8 @@
 use std::io::{self, BufRead, Write};
 use std::process;
 
+use colored::Colorize;
+use ferrite_core::errors::{CallFrame, FerriError};
 use ferrite_core::interpreter::Interpreter;
 
 fn main() {
@@ -15,7 +17,7 @@ fn main() {
         }
         Some("run") => {
             let file = args.get(2).unwrap_or_else(|| {
-                eprintln!("error: 'run' requires a file argument");
+                eprintln!("{} 'run' requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
             run_file(file);
@@ -25,20 +27,26 @@ fn main() {
         }
         Some("--dump-tokens") => {
             let file = args.get(2).unwrap_or_else(|| {
-                eprintln!("error: --dump-tokens requires a file argument");
+                eprintln!(
+                    "{} --dump-tokens requires a file argument",
+                    "error:".red().bold()
+                );
                 process::exit(2);
             });
             dump_tokens(file);
         }
         Some("--dump-ast") => {
             let file = args.get(2).unwrap_or_else(|| {
-                eprintln!("error: --dump-ast requires a file argument");
+                eprintln!(
+                    "{} --dump-ast requires a file argument",
+                    "error:".red().bold()
+                );
                 process::exit(2);
             });
             dump_ast(file);
         }
         Some(cmd) => {
-            eprintln!("error: unknown command '{cmd}'");
+            eprintln!("{} unknown command '{cmd}'", "error:".red().bold());
             eprintln!("Run 'ferrite --help' for usage information.");
             process::exit(2);
         }
@@ -49,7 +57,10 @@ fn run_file(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: could not read file '{path}': {e}");
+            eprintln!(
+                "{} could not read file '{path}': {e}",
+                "error:".red().bold()
+            );
             process::exit(1);
         }
     };
@@ -67,8 +78,8 @@ fn run_file(path: &str) {
 
     match ferrite_core::interpreter::run_file_with_args(path, &source, program_args) {
         Ok(_) => {}
-        Err(e) => {
-            display_error(&e, &source);
+        Err(runtime_err) => {
+            display_error(&runtime_err.error, &source, &runtime_err.call_stack);
             process::exit(1);
         }
     }
@@ -76,25 +87,48 @@ fn run_file(path: &str) {
 
 fn run_repl() {
     println!("{}", ferrite_core::version_string());
-    println!("Type :help for help, :quit to exit.\n");
+    println!(
+        "Type {} for help, {} to exit.\n",
+        ":help".cyan(),
+        ":quit".cyan()
+    );
 
     let mut interp = Interpreter::new();
-    let stdin = io::stdin();
-    let stdout = io::stdout();
+
+    // Try to use rustyline for a better REPL experience
+    let history_path = dirs_home().map(|h| format!("{}/.ferrite_history", h));
+    let mut rl = match rustyline::DefaultEditor::new() {
+        Ok(mut editor) => {
+            if let Some(ref path) = history_path {
+                let _ = editor.load_history(path);
+            }
+            Some(editor)
+        }
+        Err(_) => None,
+    };
 
     loop {
-        print!("fe> ");
-        stdout.lock().flush().unwrap();
-
-        let mut line = String::new();
-        match stdin.lock().read_line(&mut line) {
-            Ok(0) => break, // EOF
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("error reading input: {e}");
-                break;
+        let line = if let Some(ref mut editor) = rl {
+            match editor.readline("fe> ") {
+                Ok(line) => {
+                    let _ = editor.add_history_entry(&line);
+                    line
+                }
+                Err(rustyline::error::ReadlineError::Interrupted) => continue,
+                Err(rustyline::error::ReadlineError::Eof) => break,
+                Err(_) => break,
             }
-        }
+        } else {
+            // Fallback to raw stdin
+            print!("fe> ");
+            io::stdout().lock().flush().unwrap();
+            let mut buf = String::new();
+            match io::stdin().lock().read_line(&mut buf) {
+                Ok(0) => break,
+                Ok(_) => buf,
+                Err(_) => break,
+            }
+        };
 
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -104,9 +138,9 @@ fn run_repl() {
         match trimmed {
             ":quit" | ":q" => break,
             ":help" | ":h" => {
-                println!("Commands:");
-                println!("  :help, :h    Show this help");
-                println!("  :quit, :q    Exit the REPL");
+                println!("{}:", "Commands".bold());
+                println!("  {}    Show this help", ":help, :h".cyan());
+                println!("  {}    Exit the REPL", ":quit, :q".cyan());
                 println!();
                 println!("Enter expressions or function definitions.");
                 continue;
@@ -115,29 +149,42 @@ fn run_repl() {
         }
 
         // Try to parse as function definition
-        if trimmed.starts_with("fn ") {
-            // Accumulate multi-line input for function definitions
+        if trimmed.starts_with("fn ")
+            || trimmed.starts_with("struct ")
+            || trimmed.starts_with("enum ")
+            || trimmed.starts_with("impl ")
+            || trimmed.starts_with("trait ")
+        {
+            // Accumulate multi-line input for definitions
             let mut input = line.clone();
             while !balanced_braces(&input) {
-                print!("... ");
-                stdout.lock().flush().unwrap();
-                let mut more = String::new();
-                match stdin.lock().read_line(&mut more) {
-                    Ok(0) => break,
-                    Ok(_) => input.push_str(&more),
-                    Err(_) => break,
-                }
+                let more = if let Some(ref mut editor) = rl {
+                    match editor.readline("... ") {
+                        Ok(l) => l + "\n",
+                        Err(_) => break,
+                    }
+                } else {
+                    print!("... ");
+                    io::stdout().lock().flush().unwrap();
+                    let mut buf = String::new();
+                    match io::stdin().lock().read_line(&mut buf) {
+                        Ok(0) => break,
+                        Ok(_) => buf,
+                        Err(_) => break,
+                    }
+                };
+                input.push_str(&more);
             }
 
             match ferrite_core::parser::parse(&input) {
                 Ok(program) => {
                     for item in &program.items {
                         if let Err(e) = interp.register_item(item) {
-                            eprintln!("error: {e}");
+                            display_error(&e, &input, &[]);
                         }
                     }
                 }
-                Err(e) => eprintln!("error: {e}"),
+                Err(e) => display_error(&e, &input, &[]),
             }
             continue;
         }
@@ -156,15 +203,27 @@ fn run_repl() {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("error: {e}");
+                                display_error(&e, trimmed, &[]);
                             }
                         }
                     }
                 }
             }
-            Err(e) => eprintln!("error: {e}"),
+            Err(e) => display_error(&e, trimmed, &[]),
         }
     }
+
+    // Save history on exit
+    if let (Some(ref mut editor), Some(ref path)) = (&mut rl, &history_path) {
+        let _ = editor.save_history(path);
+    }
+}
+
+/// Get the user's home directory.
+fn dirs_home() -> Option<String> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
 }
 
 /// Check if braces are balanced (simple heuristic for multi-line input).
@@ -184,7 +243,10 @@ fn dump_tokens(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: could not read file '{path}': {e}");
+            eprintln!(
+                "{} could not read file '{path}': {e}",
+                "error:".red().bold()
+            );
             process::exit(1);
         }
     };
@@ -199,7 +261,7 @@ fn dump_tokens(path: &str) {
             }
         }
         Err(e) => {
-            eprintln!("error: {e}");
+            display_error(&e, &source, &[]);
             process::exit(1);
         }
     }
@@ -209,7 +271,10 @@ fn dump_ast(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: could not read file '{path}': {e}");
+            eprintln!(
+                "{} could not read file '{path}': {e}",
+                "error:".red().bold()
+            );
             process::exit(1);
         }
     };
@@ -219,7 +284,7 @@ fn dump_ast(path: &str) {
             print!("{}", program.pretty_print());
         }
         Err(e) => {
-            eprintln!("error: {e}");
+            display_error(&e, &source, &[]);
             process::exit(1);
         }
     }
@@ -227,39 +292,211 @@ fn dump_ast(path: &str) {
 
 fn print_help() {
     println!("{}", ferrite_core::version_string());
-    println!("Rust syntax, scripting freedom.\n");
-    println!("Usage: ferrite [command] [options]\n");
-    println!("Commands:");
-    println!("  run <file.fe>        Execute a Ferrite source file");
-    println!("  repl                 Start the interactive REPL\n");
-    println!("Options:");
-    println!("  --dump-tokens <file> Dump token stream for a file");
-    println!("  --dump-ast <file>    Dump AST for a file");
-    println!("  -V, --version        Print version information");
-    println!("  -h, --help           Print this help message");
+    println!("{}\n", "Rust syntax, scripting freedom.".italic());
+    println!("{} ferrite [command] [options]\n", "Usage:".bold());
+    println!("{}:", "Commands".bold());
+    println!(
+        "  {}        Execute a Ferrite source file",
+        "run <file.fe>".cyan()
+    );
+    println!(
+        "  {}                 Start the interactive REPL\n",
+        "repl".cyan()
+    );
+    println!("{}:", "Options".bold());
+    println!(
+        "  {} Dump token stream for a file",
+        "--dump-tokens <file>".cyan()
+    );
+    println!("  {}    Dump AST for a file", "--dump-ast <file>".cyan());
+    println!(
+        "  {}           Print version information",
+        "-V, --version".cyan()
+    );
+    println!(
+        "  {}              Print this help message",
+        "-h, --help".cyan()
+    );
 }
 
-/// Display an error with source context when possible.
-fn display_error(err: &ferrite_core::errors::FerriError, source: &str) {
-    use ferrite_core::errors::FerriError;
+/// Display a rich error with colored output, source context, and optional stack trace.
+fn display_error(err: &FerriError, source: &str, call_stack: &[CallFrame]) {
+    let is_tty = atty_stderr();
+
     match err {
-        FerriError::Runtime { line, column, .. }
-        | FerriError::Parser { line, column, .. }
-        | FerriError::Lexer { line, column, .. } => {
-            eprintln!("error: {err}");
+        FerriError::Runtime {
+            message,
+            line,
+            column,
+        } => {
+            print_error_header("runtime error", message, *line, *column, is_tty);
             if *line > 0 {
-                let lines: Vec<&str> = source.lines().collect();
-                if let Some(src_line) = lines.get(line - 1) {
-                    eprintln!("  --> line {line}:{column}");
-                    eprintln!("   |");
-                    eprintln!("{line:>4} | {src_line}");
-                    if *column > 0 {
-                        let caret = " ".repeat(*column - 1);
-                        eprintln!("   | {caret}^-- here");
+                print_source_context(source, *line, *column, is_tty);
+            }
+            // Print "did you mean?" as a separate help line if embedded in message
+            if message.contains("did you mean") {
+                // Already in the message, extract and format as help
+            }
+            // Print stack trace
+            if !call_stack.is_empty() {
+                eprintln!();
+                if is_tty {
+                    eprint!("{}", "stack trace".blue().bold());
+                    eprintln!("{}", " (most recent call last):".blue());
+                } else {
+                    eprintln!("stack trace (most recent call last):");
+                }
+                for frame in call_stack.iter().rev() {
+                    if is_tty {
+                        eprintln!(
+                            "  {} `{}` {} {}:{}",
+                            "in".dimmed(),
+                            frame.name.yellow(),
+                            "at".dimmed(),
+                            frame.line,
+                            frame.column,
+                        );
+                    } else {
+                        eprintln!("{frame}");
                     }
                 }
             }
         }
-        _ => eprintln!("error: {err}"),
+        FerriError::Parser {
+            message,
+            line,
+            column,
+        } => {
+            print_error_header("parse error", message, *line, *column, is_tty);
+            if *line > 0 {
+                print_source_context(source, *line, *column, is_tty);
+            }
+        }
+        FerriError::Lexer {
+            message,
+            line,
+            column,
+        } => {
+            print_error_header("lex error", message, *line, *column, is_tty);
+            if *line > 0 {
+                print_source_context(source, *line, *column, is_tty);
+            }
+        }
+        _ => {
+            if is_tty {
+                eprintln!("{} {err}", "error:".red().bold());
+            } else {
+                eprintln!("error: {err}");
+            }
+        }
     }
+}
+
+/// Print the error header line: `error[kind]: message`
+fn print_error_header(kind: &str, message: &str, line: usize, column: usize, is_tty: bool) {
+    if is_tty {
+        eprintln!(
+            "{}{}{}{} {}",
+            "error".red().bold(),
+            "[".dimmed(),
+            kind.red(),
+            "]".dimmed(),
+            message.bold(),
+        );
+    } else {
+        eprintln!("error[{kind}]: {message}");
+    }
+
+    if line > 0 {
+        if is_tty {
+            eprintln!(" {} line {}:{}", "-->".blue().bold(), line, column,);
+        } else {
+            eprintln!("  --> line {line}:{column}");
+        }
+    }
+}
+
+/// Print source context: the error line ± 1, with line numbers and an underline.
+fn print_source_context(source: &str, line: usize, column: usize, is_tty: bool) {
+    let lines: Vec<&str> = source.lines().collect();
+    let gutter_width = format!("{}", (line + 1).min(lines.len())).len();
+
+    // Empty gutter separator
+    let gutter_sep = if is_tty {
+        format!("{:>gutter_width$} {}", "", "|".blue().bold())
+    } else {
+        format!("{:>gutter_width$} |", "")
+    };
+
+    eprintln!("{gutter_sep}");
+
+    // Show line before (context)
+    if line >= 2 {
+        if let Some(prev) = lines.get(line - 2) {
+            let ln = line - 1;
+            if is_tty {
+                eprintln!(
+                    "{:>gutter_width$} {} {}",
+                    ln.to_string().dimmed(),
+                    "|".blue().bold(),
+                    prev.dimmed(),
+                );
+            } else {
+                eprintln!("{ln:>gutter_width$} | {prev}");
+            }
+        }
+    }
+
+    // Show the error line
+    if let Some(src_line) = lines.get(line - 1) {
+        if is_tty {
+            eprintln!(
+                "{:>gutter_width$} {} {}",
+                line.to_string().bold(),
+                "|".blue().bold(),
+                src_line,
+            );
+        } else {
+            eprintln!("{line:>gutter_width$} | {src_line}");
+        }
+
+        // Underline / caret
+        if column > 0 {
+            let padding = " ".repeat(column - 1);
+            if is_tty {
+                eprintln!(
+                    "{:>gutter_width$} {} {}{}",
+                    "",
+                    "|".blue().bold(),
+                    padding,
+                    "^-- here".cyan().bold(),
+                );
+            } else {
+                eprintln!("{:>gutter_width$} | {padding}^-- here", "");
+            }
+        }
+    }
+
+    // Show line after (context)
+    if let Some(next) = lines.get(line) {
+        let ln = line + 1;
+        if is_tty {
+            eprintln!(
+                "{:>gutter_width$} {} {}",
+                ln.to_string().dimmed(),
+                "|".blue().bold(),
+                next.dimmed(),
+            );
+        } else {
+            eprintln!("{ln:>gutter_width$} | {next}");
+        }
+    }
+
+    eprintln!("{gutter_sep}");
+}
+
+/// Check if stderr is a TTY (for colored output).
+fn atty_stderr() -> bool {
+    use std::io::IsTerminal;
+    io::stderr().is_terminal()
 }

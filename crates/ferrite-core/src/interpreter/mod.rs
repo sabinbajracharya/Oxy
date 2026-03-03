@@ -54,6 +54,8 @@ pub struct Interpreter {
     async_fns: HashSet<String>,
     /// Derived traits per type, e.g. `"Point" -> {"Debug", "Clone", "PartialEq"}`.
     derived_traits: HashMap<String, HashSet<String>>,
+    /// Call stack for runtime error traces.
+    call_stack: Vec<crate::errors::CallFrame>,
 }
 
 /// Data stored for a registered module.
@@ -85,6 +87,7 @@ impl Interpreter {
             cli_args: Vec::new(),
             async_fns: HashSet::new(),
             derived_traits: HashMap::new(),
+            call_stack: Vec::new(),
         }
     }
 
@@ -116,6 +119,11 @@ impl Interpreter {
     /// Get captured output (for testing).
     pub fn captured_output(&self) -> &[String] {
         self.output.as_deref().unwrap_or(&[])
+    }
+
+    /// Get a snapshot of the call stack (for error reporting).
+    pub fn call_stack(&self) -> &[crate::errors::CallFrame] {
+        &self.call_stack
     }
 
     /// Get the current environment (for REPL persistence).
@@ -683,10 +691,19 @@ impl Interpreter {
                 if name == NONE_VARIANT {
                     return Ok(Value::none());
                 }
-                env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                    message: format!("undefined variable '{name}'"),
-                    line: span.line,
-                    column: span.column,
+                env.borrow().get(name).map_err(|_| {
+                    let mut msg = format!("undefined variable '{name}'");
+                    let names = env.borrow().all_names();
+                    if let Some(suggestion) =
+                        crate::errors::suggest_name(name, names.iter().map(|s| s.as_str()))
+                    {
+                        msg.push_str(&format!(" — did you mean '{suggestion}'?"));
+                    }
+                    FerriError::Runtime {
+                        message: msg,
+                        line: span.line,
+                        column: span.column,
+                    }
                 })
             }
 
@@ -1502,6 +1519,13 @@ impl Interpreter {
             });
         }
 
+        // Push call frame for stack trace
+        self.call_stack.push(crate::errors::CallFrame {
+            name: func_data.name.clone(),
+            line,
+            column: col,
+        });
+
         // Create a new scope from the closure environment
         let call_env = Environment::child(&func_data.closure_env);
         for (param, arg) in func_data.params.iter().zip(args.iter()) {
@@ -1510,11 +1534,17 @@ impl Interpreter {
                 .define(param.name.clone(), arg.clone(), true);
         }
 
-        // Execute the function body
+        // Execute the function body — keep call frame on error for stack trace
         match self.eval_block(&func_data.body, &call_env) {
-            Ok(val) => Ok(val),
-            Err(FerriError::Return(val)) => Ok(*val),
-            Err(e) => Err(e),
+            Ok(val) => {
+                self.call_stack.pop();
+                Ok(val)
+            }
+            Err(FerriError::Return(val)) => {
+                self.call_stack.pop();
+                Ok(*val)
+            }
+            Err(e) => Err(e), // leave frame on stack for trace
         }
     }
 
@@ -1571,23 +1601,37 @@ pub fn run(source: &str) -> Result<Value, FerriError> {
 }
 
 /// Parse and execute a Ferrite program from a file path (enables module resolution).
-pub fn run_file(path: &str, source: &str) -> Result<Value, FerriError> {
+pub fn run_file(path: &str, source: &str) -> Result<Value, RuntimeError> {
     run_file_with_args(path, source, vec![])
 }
 
+/// A runtime error bundled with its call stack trace.
+#[derive(Debug)]
+pub struct RuntimeError {
+    pub error: FerriError,
+    pub call_stack: Vec<crate::errors::CallFrame>,
+}
+
 /// Parse and execute a Ferrite program from a file path with CLI args.
+/// Returns `RuntimeError` (error + call stack) on failure.
 pub fn run_file_with_args(
     path: &str,
     source: &str,
     cli_args: Vec<String>,
-) -> Result<Value, FerriError> {
-    let program = crate::parser::parse(source)?;
+) -> Result<Value, RuntimeError> {
+    let program = crate::parser::parse(source).map_err(|e| RuntimeError {
+        error: e,
+        call_stack: vec![],
+    })?;
     let mut interp = Interpreter::new();
     if let Some(parent) = std::path::Path::new(path).parent() {
         interp.set_base_dir(parent.to_string_lossy().to_string());
     }
     interp.set_cli_args(cli_args);
-    interp.execute_program(&program)
+    interp.execute_program(&program).map_err(|e| RuntimeError {
+        call_stack: interp.call_stack().to_vec(),
+        error: e,
+    })
 }
 
 /// Run a program and capture its output (for testing).
@@ -5423,5 +5467,87 @@ fn main() {
 "#,
         );
         assert_eq!(out, vec!["Shape::Circle(5.0)\n"]);
+    }
+
+    // === DX: "Did you mean?" suggestions ===
+
+    #[test]
+    fn test_did_you_mean_suggestion() {
+        let result = run(r#"
+fn main() {
+    let name = "Alice";
+    println!("{}", nme);
+}
+"#);
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("undefined variable 'nme'"));
+        assert!(err.contains("did you mean 'name'"));
+    }
+
+    #[test]
+    fn test_no_suggestion_for_distant_name() {
+        let result = run(r#"
+fn main() {
+    let x = 1;
+    println!("{}", completely_different);
+}
+"#);
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("undefined variable"));
+        assert!(!err.contains("did you mean"));
+    }
+
+    // === DX: Stack traces ===
+
+    #[test]
+    fn test_stack_trace_on_runtime_error() {
+        let source = r#"
+fn inner() {
+    let x = 1 / 0;
+}
+fn outer() {
+    inner();
+}
+fn main() {
+    outer();
+}
+"#;
+        let result = run_file_with_args("test.fe", source, vec![]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Should have call frames for inner/outer/main
+        assert!(
+            err.call_stack.len() >= 2,
+            "expected at least 2 frames, got {:?}",
+            err.call_stack
+        );
+    }
+
+    // === DX: Edit distance ===
+
+    #[test]
+    fn test_edit_distance() {
+        use crate::errors::edit_distance;
+        assert_eq!(edit_distance("kitten", "sitting"), 3);
+        assert_eq!(edit_distance("", "abc"), 3);
+        assert_eq!(edit_distance("abc", "abc"), 0);
+        assert_eq!(edit_distance("name", "nme"), 1);
+    }
+
+    #[test]
+    fn test_suggest_name() {
+        use crate::errors::suggest_name;
+        assert_eq!(
+            suggest_name("nme", ["name", "age", "value"].into_iter()),
+            Some("name".to_string())
+        );
+        assert_eq!(
+            suggest_name("xyz", ["name", "age", "value"].into_iter()),
+            None
+        );
+        assert_eq!(
+            suggest_name("prnt", ["print", "println", "parse"].into_iter()),
+            Some("print".to_string())
+        );
     }
 }

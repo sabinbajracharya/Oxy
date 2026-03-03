@@ -94,6 +94,17 @@ impl Environment {
             .map(|(name, (val, _))| (name.clone(), val.clone()))
             .collect()
     }
+
+    /// Collect all variable names visible in this scope and parent scopes.
+    pub fn all_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.values.keys().cloned().collect();
+        if let Some(parent) = &self.parent {
+            names.extend(parent.borrow().all_names());
+        }
+        names.sort();
+        names.dedup();
+        names
+    }
 }
 
 #[cfg(test)]
