@@ -326,7 +326,7 @@ impl Parser {
         let name = self.expect_ident()?;
 
         // Optional generic parameters: `<T, U: Bound>`
-        let generic_params = if self.check(&TokenKind::Lt) {
+        let mut generic_params = if self.check(&TokenKind::Lt) {
             self.parse_generic_params()?
         } else {
             Vec::new()
@@ -344,12 +344,30 @@ impl Parser {
             None
         };
 
-        // Skip optional `where` clause (parse but ignore)
+        // Parse optional `where` clause and merge bounds into generic_params
         if self.check(&TokenKind::Where) {
             self.advance();
-            // Consume tokens until `{`
             while !self.check(&TokenKind::LBrace) && !self.is_at_end() {
-                self.advance();
+                let param_name = self.expect_ident()?;
+                self.expect(TokenKind::Colon)?;
+                let mut bounds = Vec::new();
+                bounds.push(self.expect_ident()?);
+                while self.check(&TokenKind::Plus) {
+                    self.advance();
+                    bounds.push(self.expect_ident()?);
+                }
+                // Merge bounds into matching generic param
+                if let Some(gp) = generic_params.iter_mut().find(|g| g.name == param_name) {
+                    for b in bounds {
+                        if !gp.bounds.contains(&b) {
+                            gp.bounds.push(b);
+                        }
+                    }
+                }
+                // Skip optional comma
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                }
             }
         }
 

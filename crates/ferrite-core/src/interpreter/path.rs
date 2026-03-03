@@ -54,7 +54,7 @@ impl Interpreter {
         env: &Env,
     ) -> Result<Value, FerriError> {
         if path.len() == 2 {
-            let type_name = &path[0];
+            let type_name = &self.resolve_type_alias(&path[0]);
             let method_name = &path[1];
 
             // Check for enum variant constructor: `Shape::Circle(5.0)`
@@ -233,7 +233,7 @@ impl Interpreter {
     /// Resolve a path expression (without calling it) — for enum variants and constants.
     pub(crate) fn eval_path(&self, segments: &[String], span: &Span) -> Result<Value, FerriError> {
         if segments.len() == 2 {
-            let type_name = &segments[0];
+            let type_name = &self.resolve_type_alias(&segments[0]);
             let variant_name = &segments[1];
 
             // Unit enum variant: `Color::Red`

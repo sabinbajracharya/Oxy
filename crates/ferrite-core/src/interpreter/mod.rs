@@ -111,6 +111,15 @@ impl Interpreter {
         self.base_dir = Some(dir);
     }
 
+    /// Resolve a type name through type aliases.
+    fn resolve_type_alias(&self, name: &str) -> String {
+        if let Some(alias) = self.type_aliases.get(name) {
+            self.resolve_type_alias(&alias.name)
+        } else {
+            name.to_string()
+        }
+    }
+
     /// Set command-line arguments for the program.
     pub fn set_cli_args(&mut self, args: Vec<String>) {
         self.cli_args = args;
@@ -1336,7 +1345,7 @@ impl Interpreter {
                 .clone()
                 .unwrap_or_else(|| name.to_string())
         } else {
-            name.to_string()
+            self.resolve_type_alias(name)
         };
         let mut field_map = HashMap::new();
         for (fname, fexpr) in fields {
@@ -5896,5 +5905,126 @@ fn main() {
     #[test]
     fn test_pub_enum() {
         run_capturing("pub enum Color { Red, Blue } fn main() { let c = Color::Red; }").unwrap();
+    }
+
+    // === Type aliases ===
+
+    #[test]
+    fn test_type_alias_struct() {
+        let output = run_and_capture(
+            r#"
+            struct Point { x: f64, y: f64 }
+            type Pos = Point;
+            fn main() {
+                let p = Pos { x: 1.0, y: 2.0 };
+                println!("{} {}", p.x, p.y);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["1.0 2.0\n"]);
+    }
+
+    #[test]
+    fn test_type_alias_enum() {
+        run_capturing(
+            r#"
+            enum Dir { Up, Down }
+            type Direction = Dir;
+            fn main() { let d = Direction::Up; }
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_type_alias_associated_fn() {
+        let output = run_and_capture(
+            r#"
+            struct Point { x: f64, y: f64 }
+            impl Point { fn origin() -> Point { Point { x: 0.0, y: 0.0 } } }
+            type P = Point;
+            fn main() {
+                let p = P::origin();
+                println!("{} {}", p.x, p.y);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["0.0 0.0\n"]);
+    }
+
+    // === Where clauses ===
+
+    #[test]
+    fn test_where_clause_parses() {
+        let output = run_and_capture(
+            r#"
+            trait Greet { fn greet(&self) -> String; }
+            struct Dog { name: String }
+            impl Greet for Dog { fn greet(&self) -> String { format!("Woof! I'm {}", self.name) } }
+            fn say_hi<T>(item: T) where T: Greet {
+                println!("{}", item.greet());
+            }
+            fn main() {
+                say_hi(Dog { name: "Rex".to_string() });
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["Woof! I'm Rex\n"]);
+    }
+
+    // === Enum impl ===
+
+    #[test]
+    fn test_enum_impl_methods() {
+        let output = run_and_capture(
+            r#"
+            enum Color { Red, Blue }
+            impl Color {
+                fn name(&self) -> String {
+                    match self {
+                        Color::Red => "red".to_string(),
+                        Color::Blue => "blue".to_string(),
+                    }
+                }
+            }
+            fn main() { println!("{}", Color::Red.name()); }
+            "#,
+        );
+        assert_eq!(output, vec!["red\n"]);
+    }
+
+    // === Mutable closure captures ===
+
+    #[test]
+    fn test_mutable_closure_capture() {
+        let output = run_and_capture(
+            r#"fn main() {
+                let mut count = 0;
+                let inc = || { count = count + 1; };
+                inc();
+                inc();
+                inc();
+                println!("{}", count);
+            }"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_closure_counter_pattern() {
+        let output = run_and_capture(
+            r#"
+            fn make_counter() {
+                let mut n = 0;
+                let inc = || { n = n + 1; n };
+                inc
+            }
+            fn main() {
+                let c = make_counter();
+                println!("{} {} {}", c(), c(), c());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["1 2 3\n"]);
     }
 }
