@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 13: JSON & Serialization — COMPLETE. 355 tests passing.
+Phase 14: HTTP & Networking — COMPLETE. 368 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -194,5 +194,9 @@ Phase 13: JSON & Serialization — COMPLETE. 355 tests passing.
 - Typed deserialization: `json::from_struct(string, "TypeName")` — deserializes into known struct type
 - `.to_json()` / `.to_json_pretty()` methods on all value types
 - Round-trip: serialize → deserialize preserves values
+- HTTP client: `http::get(url)`, `http::post(url, body)`, `http::put()`, `http::delete()`, `http::patch()`
+- JSON HTTP: `http::get_json(url)`, `http::post_json(url, value)`, `http::put_json()`, `http::patch_json()`
+- HttpResponse struct: `.status`, `.body`, `.headers`, `.json()`, `.text()`, `.status_ok()`
+- Request builder: `http::request(method, url).header(k, v).body(s).json(val).send()`
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`

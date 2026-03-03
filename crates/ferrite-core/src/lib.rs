@@ -6,6 +6,7 @@
 pub mod ast;
 pub mod env;
 pub mod errors;
+pub mod http;
 pub mod interpreter;
 pub mod json;
 pub mod lexer;

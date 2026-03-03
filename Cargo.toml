@@ -12,3 +12,4 @@ repository = "https://github.com/nickel-lang/project-ferrite"
 [workspace.dependencies]
 ferrite-core = { path = "crates/ferrite-core" }
 thiserror = "2"
+ureq = "2"
