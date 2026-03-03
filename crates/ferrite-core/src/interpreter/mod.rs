@@ -50,6 +50,8 @@ pub struct Interpreter {
     base_dir: Option<String>,
     /// Type aliases (documentation-only in a dynamically typed language).
     type_aliases: HashMap<String, TypeAnnotation>,
+    /// Use-path aliases: `use std::env;` stores `"env" → ["std", "env"]`.
+    use_aliases: HashMap<String, Vec<String>>,
     /// Command-line arguments passed to the program.
     cli_args: Vec<String>,
     /// Names of functions declared with `async fn`.
@@ -96,6 +98,7 @@ impl Interpreter {
             modules: HashMap::new(),
             base_dir: None,
             type_aliases: HashMap::new(),
+            use_aliases: HashMap::new(),
             cli_args: Vec::new(),
             async_fns: HashSet::new(),
             derived_traits: HashMap::new(),
@@ -420,7 +423,15 @@ impl Interpreter {
 
         let module = self.modules.get(&resolved_mod).cloned();
         let Some(module) = module else {
-            // Module not found — silently ignore (may be a std lib reference)
+            // Store use alias for std:: paths so shortened paths work.
+            // e.g. `use std::env;` → alias "env" → ["std", "env"]
+            if use_def.path.first().map(|s| s.as_str()) == Some("std") {
+                if let UseTree::Simple = &use_def.tree {
+                    if let Some(last) = use_def.path.last() {
+                        self.use_aliases.insert(last.clone(), use_def.path.clone());
+                    }
+                }
+            }
             return Ok(());
         };
 
@@ -1233,24 +1244,72 @@ impl Interpreter {
 
     fn eval_range_expr(
         &mut self,
-        start: &Expr,
-        end: &Expr,
+        start: &Option<Box<Expr>>,
+        end: &Option<Box<Expr>>,
         inclusive: bool,
         span: &Span,
         env: &Env,
     ) -> Result<Value, FerriError> {
-        let start_val = self.eval_expr(start, env)?;
-        let end_val = self.eval_expr(end, env)?;
+        let start_val = match start {
+            Some(s) => Some(self.eval_expr(s, env)?),
+            None => None,
+        };
+        let end_val = match end {
+            Some(e) => Some(self.eval_expr(e, env)?),
+            None => None,
+        };
         match (&start_val, &end_val) {
-            (Value::Integer(s), Value::Integer(e)) => {
+            (Some(Value::Integer(s)), Some(Value::Integer(e))) => {
                 let end_n = if inclusive { *e + 1 } else { *e };
                 Ok(Value::Range(*s, end_n))
+            }
+            (None, _) | (_, None) => {
+                // Open-ended ranges are used for slicing, return as Range with sentinel
+                let s = match &start_val {
+                    Some(Value::Integer(i)) => *i,
+                    None => i64::MIN,
+                    _ => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "range bound must be integer, got {}",
+                                start_val.unwrap().type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                let e = match &end_val {
+                    Some(Value::Integer(i)) => {
+                        if inclusive {
+                            *i + 1
+                        } else {
+                            *i
+                        }
+                    }
+                    None => i64::MAX,
+                    _ => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "range bound must be integer, got {}",
+                                end_val.unwrap().type_name()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                Ok(Value::Range(s, e))
             }
             _ => Err(FerriError::Runtime {
                 message: format!(
                     "range bounds must be integers, got {} and {}",
-                    start_val.type_name(),
-                    end_val.type_name()
+                    start_val
+                        .map(|v| v.type_name())
+                        .unwrap_or_else(|| "none".to_string()),
+                    end_val
+                        .map(|v| v.type_name())
+                        .unwrap_or_else(|| "none".to_string())
                 ),
                 line: span.line,
                 column: span.column,
@@ -1297,6 +1356,23 @@ impl Interpreter {
                     line: span.line,
                     column: span.column,
                 })
+            }
+            (Value::Vec(v), Value::Range(start, end)) => {
+                let len = v.len() as i64;
+                let s = if *start == i64::MIN { 0 } else { *start };
+                let e = if *end == i64::MAX { len } else { *end };
+                let s = s.max(0) as usize;
+                let e = (e.min(len)) as usize;
+                Ok(Value::Vec(v[s..e].to_vec()))
+            }
+            (Value::String(s), Value::Range(start, end)) => {
+                let chars: Vec<char> = s.chars().collect();
+                let len = chars.len() as i64;
+                let st = if *start == i64::MIN { 0 } else { *start };
+                let en = if *end == i64::MAX { len } else { *end };
+                let st = st.max(0) as usize;
+                let en = (en.min(len)) as usize;
+                Ok(Value::String(chars[st..en].iter().collect()))
             }
             _ => Err(FerriError::Runtime {
                 message: format!("cannot index {} with {}", obj.type_name(), idx.type_name()),
@@ -6271,5 +6347,98 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["2\n"]);
+    }
+
+    // === Syntax improvements (G1-G4) ===
+
+    #[test]
+    fn test_vec_empty_macro() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut v = vec![];
+                println!("{}", v.len());
+                v.push(42);
+                println!("{}", v.len());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["0\n", "1\n"]);
+    }
+
+    #[test]
+    fn test_use_import_shortcut() {
+        let output = run_and_capture(
+            r#"
+            use std::env;
+            fn main() {
+                let vars = env::vars();
+                println!("{}", vars.len() >= 0);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_range_slicing_vec() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let v = vec![10, 20, 30, 40, 50];
+                let a = v[1..4];
+                println!("{} {} {}", a[0], a[1], a[2]);
+                let b = v[..2];
+                println!("{} {}", b[0], b[1]);
+                let c = v[3..];
+                println!("{} {}", c[0], c[1]);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["20 30 40\n", "10 20\n", "40 50\n"]);
+    }
+
+    #[test]
+    fn test_range_slicing_string() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let s = "hello world";
+                println!("{}", s[..5]);
+                println!("{}", s[6..]);
+                println!("{}", s[2..8]);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["hello\n", "world\n", "llo wo\n"]);
+    }
+
+    #[test]
+    fn test_clone_vec() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let a = vec![1, 2, 3];
+                let mut b = a.clone();
+                b.push(4);
+                println!("{} {}", a.len(), b.len());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["3 4\n"]);
+    }
+
+    #[test]
+    fn test_clone_tuple() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let t = (1, "hello", true);
+                let t2 = t.clone();
+                println!("{} {}", t.0, t2.1);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["1 hello\n"]);
     }
 }

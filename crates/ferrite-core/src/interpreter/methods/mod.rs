@@ -37,7 +37,13 @@ impl Interpreter {
             Value::HashMap(_) => {
                 self.call_hashmap_method(receiver, method, args, receiver_expr, env, span)
             }
-            Value::Tuple(_) => self.try_to_json_method(receiver, method, span, "tuple"),
+            Value::Tuple(_) => {
+                if method == "clone" {
+                    Ok(receiver)
+                } else {
+                    self.try_to_json_method(receiver, method, span, "tuple")
+                }
+            }
             Value::Struct { name, .. }
             | Value::EnumVariant {
                 enum_name: name, ..

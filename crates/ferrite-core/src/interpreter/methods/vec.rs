@@ -357,6 +357,7 @@ impl Interpreter {
                     .unwrap();
                 Ok(Value::some(max))
             }
+            "clone" => Ok(Value::Vec(v)),
             _ => self.try_to_json_method(Value::Vec(v), method, span, "Vec"),
         }
     }

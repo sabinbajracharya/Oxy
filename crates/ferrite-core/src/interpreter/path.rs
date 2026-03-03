@@ -53,6 +53,19 @@ impl Interpreter {
         span: &Span,
         env: &Env,
     ) -> Result<Value, FerriError> {
+        // Expand use aliases: `env::args()` → `std::env::args()` if `use std::env;`
+        let expanded;
+        let path = if let Some(alias) = self.use_aliases.get(&path[0]) {
+            expanded = alias
+                .iter()
+                .chain(path[1..].iter())
+                .cloned()
+                .collect::<Vec<_>>();
+            &expanded
+        } else {
+            path
+        };
+
         if path.len() == 2 {
             let type_name = &self.resolve_type_alias(&path[0]);
             let method_name = &path[1];

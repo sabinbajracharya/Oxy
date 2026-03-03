@@ -73,6 +73,7 @@ impl Interpreter {
                     pairs.into_iter().map(|(_, v)| v.clone()).collect(),
                 ))
             }
+            "clone" => Ok(Value::HashMap(m)),
             _ => self.try_to_json_method(Value::HashMap(m), method, span, "HashMap"),
         }
     }

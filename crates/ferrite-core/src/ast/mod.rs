@@ -407,10 +407,10 @@ pub enum Expr {
         arms: Vec<MatchArm>,
         span: Span,
     },
-    /// Range expression: `start..end` or `start..=end`
+    /// Range expression: `start..end`, `start..=end`, `start..`, `..end`, `..`
     Range {
-        start: Box<Expr>,
-        end: Box<Expr>,
+        start: Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
         inclusive: bool,
         span: Span,
     },
@@ -1169,13 +1169,17 @@ impl Expr {
                 inclusive,
                 ..
             } => {
-                start.pretty_print(out, 0);
+                if let Some(s) = start {
+                    s.pretty_print(out, 0);
+                }
                 if *inclusive {
                     out.push_str("..=");
                 } else {
                     out.push_str("..");
                 }
-                end.pretty_print(out, 0);
+                if let Some(e) = end {
+                    e.pretty_print(out, 0);
+                }
             }
             Expr::Array { elements, .. } => {
                 out.push('[');

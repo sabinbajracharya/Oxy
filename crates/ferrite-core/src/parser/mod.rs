@@ -1396,6 +1396,28 @@ impl Parser {
             // Closure with no params: `|| expr` or `|| { body }`
             TokenKind::PipePipe => self.parse_empty_closure(),
 
+            // Prefix range: `..end` or `..=end`
+            TokenKind::DotDot | TokenKind::DotDotEq => {
+                let span = self.current_span();
+                let inclusive = matches!(self.peek_kind(), TokenKind::DotDotEq);
+                self.advance();
+                let end = if self.check(&TokenKind::RBracket)
+                    || self.check(&TokenKind::RParen)
+                    || self.check(&TokenKind::Semicolon)
+                {
+                    None
+                } else {
+                    Some(Box::new(self.parse_expr(Precedence::Range)?))
+                };
+                let end_span = end.as_ref().map(|e| e.span()).unwrap_or(span);
+                Ok(Expr::Range {
+                    start: None,
+                    end,
+                    inclusive,
+                    span: self.merge_spans(span, end_span),
+                })
+            }
+
             // `move` closure: `move |params| expr` or `move || expr`
             TokenKind::Move => {
                 self.advance(); // consume `move`
@@ -1460,11 +1482,25 @@ impl Parser {
         if matches!(op_kind, TokenKind::DotDot | TokenKind::DotDotEq) {
             let inclusive = op_kind == TokenKind::DotDotEq;
             self.advance();
-            let right = self.parse_expr(prec)?;
-            let span = self.merge_spans(left.span(), right.span());
+            // Check if end is omitted (e.g., `start..` followed by `]` or `)` or `{` or `;`)
+            let end = if self.check(&TokenKind::RBracket)
+                || self.check(&TokenKind::RParen)
+                || self.check(&TokenKind::LBrace)
+                || self.check(&TokenKind::Semicolon)
+                || self.check(&TokenKind::Comma)
+            {
+                None
+            } else {
+                Some(Box::new(self.parse_expr(prec)?))
+            };
+            let end_span = end
+                .as_ref()
+                .map(|e| e.span())
+                .unwrap_or_else(|| left.span());
+            let span = self.merge_spans(left.span(), end_span);
             return Ok(Expr::Range {
-                start: Box::new(left),
-                end: Box::new(right),
+                start: Some(Box::new(left)),
+                end,
                 inclusive,
                 span,
             });
@@ -1986,7 +2022,7 @@ impl Parser {
     fn parse_arg_list(&mut self) -> Result<Vec<Expr>, FerriError> {
         let mut args = Vec::new();
 
-        if self.check(&TokenKind::RParen) {
+        if self.check(&TokenKind::RParen) || self.check(&TokenKind::RBracket) {
             return Ok(args);
         }
 
