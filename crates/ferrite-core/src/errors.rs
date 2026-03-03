@@ -40,6 +40,15 @@ pub enum FerriError {
     Continue,
 }
 
+/// Shorthand constructor for `FerriError::Runtime`.
+pub fn runtime_error(message: impl Into<String>, span: &crate::lexer::Span) -> FerriError {
+    FerriError::Runtime {
+        message: message.into(),
+        line: span.line,
+        column: span.column,
+    }
+}
+
 /// Validates that a function/method received the expected number of arguments.
 pub fn check_arg_count(
     name: &str,
@@ -48,11 +57,40 @@ pub fn check_arg_count(
     span: &crate::lexer::Span,
 ) -> Result<(), FerriError> {
     if args.len() != expected {
-        return Err(FerriError::Runtime {
-            message: format!("{name}() takes {expected} argument(s), got {}", args.len()),
-            line: span.line,
-            column: span.column,
-        });
+        return Err(runtime_error(
+            format!("{name}() takes {expected} argument(s), got {}", args.len()),
+            span,
+        ));
     }
     Ok(())
+}
+
+/// Extracts a `&str` from a `Value::String`, or returns a typed runtime error.
+pub fn expect_string<'a>(
+    val: &'a crate::types::Value,
+    context: &str,
+    span: &crate::lexer::Span,
+) -> Result<&'a str, FerriError> {
+    match val {
+        crate::types::Value::String(s) => Ok(s.as_str()),
+        _ => Err(runtime_error(
+            format!("{context}: expected string, got {}", val.type_name()),
+            span,
+        )),
+    }
+}
+
+/// Extracts an `i64` from a `Value::Integer`, or returns a typed runtime error.
+pub fn expect_integer(
+    val: &crate::types::Value,
+    context: &str,
+    span: &crate::lexer::Span,
+) -> Result<i64, FerriError> {
+    match val {
+        crate::types::Value::Integer(n) => Ok(*n),
+        _ => Err(runtime_error(
+            format!("{context}: expected integer, got {}", val.type_name()),
+            span,
+        )),
+    }
 }

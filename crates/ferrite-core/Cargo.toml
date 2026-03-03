@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
+regex = { workspace = true }
 ureq = { workspace = true }
 
 [dev-dependencies]

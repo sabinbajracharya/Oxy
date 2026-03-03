@@ -55,8 +55,17 @@ project-ferrite/
 │   │       │       └── numeric.rs  # Numeric methods (abs, pow, clamp, etc.)
 │   │       ├── types/          # Value enum, FunctionData, type constants
 │   │       ├── env/            # Lexical scoping (Environment with parent chain)
-│   │       ├── stdlib/         # Built-in functions (math, rand, time)
-│   │       └── errors/         # FerriError enum, check_arg_count helper
+│   │       ├── stdlib/         # Built-in standard library modules
+│   │       │   ├── mod.rs      # Module declarations
+│   │       │   ├── math.rs     # Math functions and constants (sqrt, sin, PI, etc.)
+│   │       │   ├── rand.rs     # Pseudo-random number generation
+│   │       │   ├── time.rs     # Time and duration utilities
+│   │       │   ├── fs.rs       # File system operations (read, write, dirs, metadata)
+│   │       │   ├── env.rs      # Environment variables and working directory
+│   │       │   ├── process.rs  # Process control and command execution
+│   │       │   ├── regex.rs    # Regular expression matching and replacement
+│   │       │   └── net.rs      # TCP/UDP networking and DNS lookup
+│   │       └── errors/         # FerriError enum, check_arg_count, expect_type helpers
 │   ├── ferrite-cli/     # CLI binary (REPL + file execution)
 │   └── ferrite-lsp/     # Language Server Protocol implementation
 ├── editors/

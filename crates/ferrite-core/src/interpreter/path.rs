@@ -196,68 +196,31 @@ impl Interpreter {
             }
         }
 
-        // Handle std:: paths (fs, env, process)
+        // Handle std:: paths — delegate to stdlib modules (SRP)
         if path.len() == 3 && path[0] == "std" {
             let module = &path[1];
             let func = &path[2];
-            match (module.as_str(), func.as_str()) {
-                ("fs", "read_to_string") => {
-                    if args.len() != 1 {
-                        return Err(FerriError::Runtime {
-                            message: "std::fs::read_to_string() takes 1 argument".into(),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    }
-                    let path_str = format!("{}", args[0]);
-                    return match std::fs::read_to_string(&path_str) {
-                        Ok(content) => Ok(Value::ok(Value::String(content))),
-                        Err(e) => Ok(Value::err(Value::String(e.to_string()))),
-                    };
-                }
-                ("fs", "write") => {
-                    if args.len() != 2 {
-                        return Err(FerriError::Runtime {
-                            message: "std::fs::write() takes 2 arguments".into(),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    }
-                    let path_str = format!("{}", args[0]);
-                    let content = format!("{}", args[1]);
-                    return match std::fs::write(&path_str, &content) {
-                        Ok(()) => Ok(Value::ok(Value::Unit)),
-                        Err(e) => Ok(Value::err(Value::String(e.to_string()))),
-                    };
-                }
-                ("env", "args") => {
+            return match module.as_str() {
+                "fs" => crate::stdlib::fs::call(func, args, span),
+                "env" if func == "args" => {
+                    // args() needs interpreter state, handled here
                     let args_vec: Vec<Value> = self
                         .cli_args
                         .iter()
                         .map(|a| Value::String(a.clone()))
                         .collect();
-                    return Ok(Value::Vec(args_vec));
+                    Ok(Value::Vec(args_vec))
                 }
-                ("process", "exit") => {
-                    if args.len() != 1 {
-                        return Err(FerriError::Runtime {
-                            message: "std::process::exit() takes 1 argument".into(),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    }
-                    if let Value::Integer(code) = &args[0] {
-                        std::process::exit(*code as i32);
-                    } else {
-                        return Err(FerriError::Runtime {
-                            message: "std::process::exit() requires an integer argument".into(),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    }
-                }
-                _ => {}
-            }
+                "env" => crate::stdlib::env::call(func, args, span),
+                "process" => crate::stdlib::process::call(func, args, span),
+                "regex" => crate::stdlib::regex::call(func, args, span),
+                "net" => crate::stdlib::net::call(func, args, span),
+                _ => Err(FerriError::Runtime {
+                    message: format!("unknown std module `std::{module}`"),
+                    line: span.line,
+                    column: span.column,
+                }),
+            };
         }
 
         Err(FerriError::Runtime {
