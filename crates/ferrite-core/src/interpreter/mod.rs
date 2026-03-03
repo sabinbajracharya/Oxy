@@ -277,6 +277,57 @@ impl Interpreter {
                         }
                     })?;
                     Ok(Value::Unit)
+                } else if let Expr::Index { object, index, .. } = target.as_ref() {
+                    // Index assignment: `v[0] = x`
+                    let idx = self.eval_expr(index, env)?;
+                    let Value::Integer(i) = idx else {
+                        return Err(FerriError::Runtime {
+                            message: format!("index must be integer, got {}", idx.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    };
+                    let i = i as usize;
+                    if let Expr::Ident(name, _) = object.as_ref() {
+                        let mut current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                            message: format!("undefined variable '{name}'"),
+                            line: span.line,
+                            column: span.column,
+                        })?;
+                        match &mut current {
+                            Value::Vec(v) => {
+                                if i >= v.len() {
+                                    return Err(FerriError::Runtime {
+                                        message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                v[i] = val;
+                            }
+                            _ => {
+                                return Err(FerriError::Runtime {
+                                    message: format!("cannot index-assign into {}", current.type_name()),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        env.borrow_mut().set(name, current).map_err(|e| {
+                            FerriError::Runtime {
+                                message: e.to_string(),
+                                line: span.line,
+                                column: span.column,
+                            }
+                        })?;
+                        Ok(Value::Unit)
+                    } else {
+                        Err(FerriError::Runtime {
+                            message: "invalid index assignment target".into(),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 } else {
                     Err(FerriError::Runtime {
                         message: "invalid assignment target".into(),
@@ -354,6 +405,99 @@ impl Interpreter {
                         column: span.column,
                     }),
                 }
+            }
+
+            Expr::Array { elements, .. } => {
+                let vals: Vec<Value> = elements
+                    .iter()
+                    .map(|e| self.eval_expr(e, env))
+                    .collect::<Result<_, _>>()?;
+                Ok(Value::Vec(vals))
+            }
+
+            Expr::Tuple { elements, .. } => {
+                let vals: Vec<Value> = elements
+                    .iter()
+                    .map(|e| self.eval_expr(e, env))
+                    .collect::<Result<_, _>>()?;
+                Ok(Value::Tuple(vals))
+            }
+
+            Expr::Index { object, index, span } => {
+                let obj = self.eval_expr(object, env)?;
+                let idx = self.eval_expr(index, env)?;
+                match (&obj, &idx) {
+                    (Value::Vec(v), Value::Integer(i)) => {
+                        let i = *i as usize;
+                        v.get(i).cloned().ok_or_else(|| FerriError::Runtime {
+                            message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                    (Value::String(s), Value::Integer(i)) => {
+                        let i = *i as usize;
+                        s.chars().nth(i).map(Value::Char).ok_or_else(|| FerriError::Runtime {
+                            message: format!("index out of bounds: len is {}, but index is {i}", s.len()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                    (Value::Tuple(t), Value::Integer(i)) => {
+                        let i = *i as usize;
+                        t.get(i).cloned().ok_or_else(|| FerriError::Runtime {
+                            message: format!("index out of bounds: len is {}, but index is {i}", t.len()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                    _ => Err(FerriError::Runtime {
+                        message: format!(
+                            "cannot index {} with {}",
+                            obj.type_name(),
+                            idx.type_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
+            }
+
+            Expr::FieldAccess { object, field, span } => {
+                let obj = self.eval_expr(object, env)?;
+                // Tuple index access: t.0, t.1 etc.
+                if let Ok(idx) = field.parse::<usize>() {
+                    match &obj {
+                        Value::Tuple(t) => {
+                            t.get(idx).cloned().ok_or_else(|| FerriError::Runtime {
+                                message: format!("index out of bounds: len is {}, but index is {idx}", t.len()),
+                                line: span.line,
+                                column: span.column,
+                            })
+                        }
+                        _ => Err(FerriError::Runtime {
+                            message: format!("cannot access field `.{field}` on {}", obj.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        }),
+                    }
+                } else {
+                    // Named field access — will be used for structs in Phase 7
+                    Err(FerriError::Runtime {
+                        message: format!("cannot access field `.{field}` on {}", obj.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+
+            Expr::MethodCall { object, method, args, span } => {
+                let obj = self.eval_expr(object, env)?;
+                let arg_vals: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a, env))
+                    .collect::<Result<_, _>>()?;
+                self.call_method(obj, method, arg_vals, object, env, span)
             }
         }
     }
@@ -557,6 +701,8 @@ impl Interpreter {
             Value::Range(start, end) => {
                 Ok((*start..*end).map(Value::Integer).collect())
             }
+            Value::Vec(v) => Ok(v.clone()),
+            Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
             _ => Err(FerriError::Runtime {
                 message: format!("cannot iterate over {}", value.type_name()),
                 line: span.line,
@@ -586,6 +732,13 @@ impl Interpreter {
                 let output = self.format_macro_args(args, env, line, col)?;
                 self.write_output(&output);
                 Ok(Value::Unit)
+            }
+            "vec" => {
+                let vals: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a, env))
+                    .collect::<Result<_, _>>()?;
+                Ok(Value::Vec(vals))
             }
             _ => Err(FerriError::Runtime {
                 message: format!("unknown macro '{name}!'"),
@@ -682,6 +835,301 @@ impl Interpreter {
             print!("{s}");
         }
     }
+
+    // === Method dispatch ===
+
+    fn call_method(
+        &mut self,
+        receiver: Value,
+        method: &str,
+        args: Vec<Value>,
+        receiver_expr: &Expr,
+        env: &Env,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        match receiver {
+            Value::Vec(_) => self.call_vec_method(receiver, method, args, receiver_expr, env, span),
+            Value::String(_) => self.call_string_method(receiver, method, args, span),
+            Value::Tuple(_) => Err(FerriError::Runtime {
+                message: format!("no method `{method}` on tuple"),
+                line: span.line,
+                column: span.column,
+            }),
+            _ => Err(FerriError::Runtime {
+                message: format!("no method `{method}` on type {}", receiver.type_name()),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn call_vec_method(
+        &mut self,
+        receiver: Value,
+        method: &str,
+        args: Vec<Value>,
+        receiver_expr: &Expr,
+        env: &Env,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        let Value::Vec(v) = receiver else { unreachable!() };
+        match method {
+            "len" => Ok(Value::Integer(v.len() as i64)),
+            "is_empty" => Ok(Value::Bool(v.is_empty())),
+            "contains" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::contains() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(Value::Bool(v.contains(&args[0])))
+            }
+            "push" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::push() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let mut new_v = v;
+                new_v.push(args.into_iter().next().unwrap());
+                self.mutate_variable(receiver_expr, Value::Vec(new_v), env, span)?;
+                Ok(Value::Unit)
+            }
+            "pop" => {
+                let mut new_v = v;
+                let popped = new_v.pop();
+                self.mutate_variable(receiver_expr, Value::Vec(new_v), env, span)?;
+                match popped {
+                    Some(val) => Ok(val),
+                    None => Ok(Value::Unit),
+                }
+            }
+            "first" => Ok(v.first().cloned().unwrap_or(Value::Unit)),
+            "last" => Ok(v.last().cloned().unwrap_or(Value::Unit)),
+            "reverse" => {
+                let mut new_v = v;
+                new_v.reverse();
+                self.mutate_variable(receiver_expr, Value::Vec(new_v), env, span)?;
+                Ok(Value::Unit)
+            }
+            "join" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("Vec::join() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let sep = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => format!("{other}"),
+                };
+                let s: Vec<String> = v.iter().map(|e| format!("{e}")).collect();
+                Ok(Value::String(s.join(&sep)))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("no method `{method}` on Vec"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    fn call_string_method(
+        &mut self,
+        receiver: Value,
+        method: &str,
+        args: Vec<Value>,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        let Value::String(s) = receiver else { unreachable!() };
+        match method {
+            "len" => Ok(Value::Integer(s.len() as i64)),
+            "is_empty" => Ok(Value::Bool(s.is_empty())),
+            "contains" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::contains() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let needle = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    Value::Char(c) => c.to_string(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("String::contains() expects a string or char, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                Ok(Value::Bool(s.contains(&needle)))
+            }
+            "to_uppercase" => Ok(Value::String(s.to_uppercase())),
+            "to_lowercase" => Ok(Value::String(s.to_lowercase())),
+            "trim" => Ok(Value::String(s.trim().to_string())),
+            "starts_with" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::starts_with() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let prefix = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                Ok(Value::Bool(s.starts_with(&prefix)))
+            }
+            "ends_with" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::ends_with() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let suffix = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                Ok(Value::Bool(s.ends_with(&suffix)))
+            }
+            "replace" => {
+                if args.len() != 2 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::replace() takes 2 arguments, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let from = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                let to = match &args[1] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                Ok(Value::String(s.replace(&from, &to)))
+            }
+            "chars" => {
+                let chars: Vec<Value> = s.chars().map(Value::Char).collect();
+                Ok(Value::Vec(chars))
+            }
+            "split" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::split() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let delim = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                let parts: Vec<Value> = s.split(&delim).map(|p| Value::String(p.to_string())).collect();
+                Ok(Value::Vec(parts))
+            }
+            "repeat" => {
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::repeat() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let n = match &args[0] {
+                    Value::Integer(n) => *n as usize,
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected integer, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                Ok(Value::String(s.repeat(n)))
+            }
+            "push_str" => {
+                // push_str is immutable in Ferrite — returns new string
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("String::push_str() takes 1 argument, got {}", args.len()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let suffix = match &args[0] {
+                    Value::String(s) => s.clone(),
+                    other => return Err(FerriError::Runtime {
+                        message: format!("expected string, got {}", other.type_name()),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                };
+                let mut new_s = s;
+                new_s.push_str(&suffix);
+                Ok(Value::String(new_s))
+            }
+            _ => Err(FerriError::Runtime {
+                message: format!("no method `{method}` on String"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
+    /// Mutate the variable that the receiver expression refers to.
+    fn mutate_variable(
+        &mut self,
+        expr: &Expr,
+        new_val: Value,
+        env: &Env,
+        span: &Span,
+    ) -> Result<(), FerriError> {
+        match expr {
+            Expr::Ident(name, _) => {
+                env.borrow_mut().set(name, new_val).map_err(|e| match e {
+                    FerriError::Runtime { message, .. } => FerriError::Runtime {
+                        message,
+                        line: span.line,
+                        column: span.column,
+                    },
+                    other => other,
+                })
+            }
+            _ => Err(FerriError::Runtime {
+                message: "cannot mutate non-variable receiver".into(),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
 }
 
 impl Default for Interpreter {
@@ -695,6 +1143,18 @@ fn debug_format(val: &Value) -> String {
     match val {
         Value::String(s) => format!("\"{s}\""),
         Value::Char(c) => format!("'{c}'"),
+        Value::Vec(v) => {
+            let items: Vec<String> = v.iter().map(debug_format).collect();
+            format!("[{}]", items.join(", "))
+        }
+        Value::Tuple(t) => {
+            let items: Vec<String> = t.iter().map(debug_format).collect();
+            if t.len() == 1 {
+                format!("({},)", items[0])
+            } else {
+                format!("({})", items.join(", "))
+            }
+        }
         other => format!("{other}"),
     }
 }
@@ -1431,5 +1891,325 @@ fn main() {
                 "Buzz\n", "11\n", "Fizz\n", "13\n", "14\n", "FizzBuzz\n"
             ]
         );
+    }
+
+    // === Phase 6: Collections & Strings ===
+
+    #[test]
+    fn test_array_literal() {
+        let output = run_and_capture("fn main() { let a = [1, 2, 3]; println!(\"{:?}\", a); }");
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_empty_array() {
+        let output = run_and_capture("fn main() { let a = []; println!(\"{:?}\", a); }");
+        assert_eq!(output, vec!["[]\n"]);
+    }
+
+    #[test]
+    fn test_vec_macro() {
+        let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{:?}\", v); }");
+        assert_eq!(output, vec!["[10, 20, 30]\n"]);
+    }
+
+    #[test]
+    fn test_vec_index() {
+        let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }");
+        assert_eq!(output, vec!["20\n"]);
+    }
+
+    #[test]
+    fn test_vec_push() {
+        let output = run_and_capture(
+            r#"fn main() {
+let mut v = vec![1, 2];
+v.push(3);
+println!("{:?}", v);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_vec_pop() {
+        let output = run_and_capture(
+            r#"fn main() {
+let mut v = vec![1, 2, 3];
+let x = v.pop();
+println!("{} {:?}", x, v);
+}"#,
+        );
+        assert_eq!(output, vec!["3 [1, 2]\n"]);
+    }
+
+    #[test]
+    fn test_vec_len() {
+        let output = run_and_capture("fn main() { let v = vec![1, 2, 3]; println!(\"{}\", v.len()); }");
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_vec_is_empty() {
+        let output = run_and_capture(
+            r#"fn main() {
+let a = [];
+let b = vec![1];
+println!("{} {}", a.is_empty(), b.is_empty());
+}"#,
+        );
+        assert_eq!(output, vec!["true false\n"]);
+    }
+
+    #[test]
+    fn test_vec_contains() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![1, 2, 3];
+println!("{} {}", v.contains(2), v.contains(5));
+}"#,
+        );
+        assert_eq!(output, vec!["true false\n"]);
+    }
+
+    #[test]
+    fn test_vec_index_assign() {
+        let output = run_and_capture(
+            r#"fn main() {
+let mut v = vec![1, 2, 3];
+v[1] = 99;
+println!("{:?}", v);
+}"#,
+        );
+        assert_eq!(output, vec!["[1, 99, 3]\n"]);
+    }
+
+    #[test]
+    fn test_vec_iteration() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![10, 20, 30];
+let mut sum = 0;
+for x in v {
+    sum += x;
+}
+println!("{}", sum);
+}"#,
+        );
+        assert_eq!(output, vec!["60\n"]);
+    }
+
+    #[test]
+    fn test_vec_join() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec!["a", "b", "c"];
+println!("{}", v.join(", "));
+}"#,
+        );
+        assert_eq!(output, vec!["a, b, c\n"]);
+    }
+
+    #[test]
+    fn test_tuple_literal() {
+        let output = run_and_capture("fn main() { let t = (1, 2, 3); println!(\"{:?}\", t); }");
+        assert_eq!(output, vec!["(1, 2, 3)\n"]);
+    }
+
+    #[test]
+    fn test_tuple_index() {
+        let output = run_and_capture(
+            r#"fn main() {
+let t = (10, "hello", true);
+println!("{} {} {}", t.0, t.1, t.2);
+}"#,
+        );
+        assert_eq!(output, vec!["10 hello true\n"]);
+    }
+
+    #[test]
+    fn test_empty_tuple() {
+        let output = run_and_capture("fn main() { let t = (); println!(\"{:?}\", t); }");
+        assert_eq!(output, vec!["()\n"]);
+    }
+
+    #[test]
+    fn test_single_element_tuple() {
+        let output = run_and_capture("fn main() { let t = (42,); println!(\"{:?}\", t); }");
+        assert_eq!(output, vec!["(42,)\n"]);
+    }
+
+    #[test]
+    fn test_string_len() {
+        let output = run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.len()); }"#);
+        assert_eq!(output, vec!["5\n"]);
+    }
+
+    #[test]
+    fn test_string_contains() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "hello world";
+println!("{} {}", s.contains("world"), s.contains("xyz"));
+}"#,
+        );
+        assert_eq!(output, vec!["true false\n"]);
+    }
+
+    #[test]
+    fn test_string_to_uppercase() {
+        let output = run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.to_uppercase()); }"#);
+        assert_eq!(output, vec!["HELLO\n"]);
+    }
+
+    #[test]
+    fn test_string_to_lowercase() {
+        let output = run_and_capture(r#"fn main() { let s = "HELLO"; println!("{}", s.to_lowercase()); }"#);
+        assert_eq!(output, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_string_trim() {
+        let output = run_and_capture(r#"fn main() { let s = "  hello  "; println!(">{}<", s.trim()); }"#);
+        assert_eq!(output, vec![">hello<\n"]);
+    }
+
+    #[test]
+    fn test_string_starts_with() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "hello world";
+println!("{} {}", s.starts_with("hello"), s.starts_with("world"));
+}"#,
+        );
+        assert_eq!(output, vec!["true false\n"]);
+    }
+
+    #[test]
+    fn test_string_ends_with() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "hello world";
+println!("{} {}", s.ends_with("world"), s.ends_with("hello"));
+}"#,
+        );
+        assert_eq!(output, vec!["true false\n"]);
+    }
+
+    #[test]
+    fn test_string_replace() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "hello world";
+println!("{}", s.replace("world", "ferrite"));
+}"#,
+        );
+        assert_eq!(output, vec!["hello ferrite\n"]);
+    }
+
+    #[test]
+    fn test_string_split() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "a,b,c";
+let parts = s.split(",");
+println!("{:?}", parts);
+}"#,
+        );
+        assert_eq!(output, vec!["[\"a\", \"b\", \"c\"]\n"]);
+    }
+
+    #[test]
+    fn test_string_chars() {
+        let output = run_and_capture(
+            r#"fn main() {
+let s = "hi";
+let chars = s.chars();
+println!("{:?}", chars);
+}"#,
+        );
+        assert_eq!(output, vec!["['h', 'i']\n"]);
+    }
+
+    #[test]
+    fn test_string_repeat() {
+        let output = run_and_capture(r#"fn main() { println!("{}", "ab".repeat(3)); }"#);
+        assert_eq!(output, vec!["ababab\n"]);
+    }
+
+    #[test]
+    fn test_string_iteration() {
+        let output = run_and_capture(
+            r#"fn main() {
+for c in "abc" {
+    println!("{}", c);
+}
+}"#,
+        );
+        assert_eq!(output, vec!["a\n", "b\n", "c\n"]);
+    }
+
+    #[test]
+    fn test_vec_first_last() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![10, 20, 30];
+println!("{} {}", v.first(), v.last());
+}"#,
+        );
+        assert_eq!(output, vec!["10 30\n"]);
+    }
+
+    #[test]
+    fn test_vec_reverse() {
+        let output = run_and_capture(
+            r#"fn main() {
+let mut v = vec![1, 2, 3];
+v.reverse();
+println!("{:?}", v);
+}"#,
+        );
+        assert_eq!(output, vec!["[3, 2, 1]\n"]);
+    }
+
+    #[test]
+    fn test_nested_vec() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec![vec![1, 2], vec![3, 4]];
+println!("{}", v[0][1]);
+println!("{:?}", v);
+}"#,
+        );
+        assert_eq!(output, vec!["2\n", "[[1, 2], [3, 4]]\n"]);
+    }
+
+    #[test]
+    fn test_debug_format_collections() {
+        let output = run_and_capture(
+            r#"fn main() {
+let v = vec!["hello", "world"];
+println!("{:?}", v);
+let t = (1, "two", true);
+println!("{:?}", t);
+}"#,
+        );
+        assert_eq!(output, vec!["[\"hello\", \"world\"]\n", "(1, \"two\", true)\n"]);
+    }
+
+    #[test]
+    fn test_index_out_of_bounds() {
+        let result = run("fn main() { let v = vec![1, 2]; let x = v[5]; }");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("index out of bounds"));
+    }
+
+    #[test]
+    fn test_tuple_index_out_of_bounds() {
+        let result = run("fn main() { let t = (1, 2); let x = t.5; }");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("index out of bounds"));
     }
 }

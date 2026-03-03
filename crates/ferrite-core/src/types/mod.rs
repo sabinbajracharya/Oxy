@@ -34,6 +34,10 @@ pub enum Value {
     },
     /// A range value: `start..end` (end-exclusive, stored as actual end).
     Range(i64, i64),
+    /// A vector (dynamic array).
+    Vec(Vec<Value>),
+    /// A tuple.
+    Tuple(Vec<Value>),
 }
 
 impl Value {
@@ -48,6 +52,8 @@ impl Value {
             Value::Unit => "()",
             Value::Function { .. } => "fn",
             Value::Range(_, _) => "Range",
+            Value::Vec(_) => "Vec",
+            Value::Tuple(_) => "tuple",
         }
     }
 
@@ -58,6 +64,8 @@ impl Value {
             Value::Integer(n) => *n != 0,
             Value::Unit => false,
             Value::Range(_, _) => true,
+            Value::Vec(v) => !v.is_empty(),
+            Value::Tuple(t) => !t.is_empty(),
             _ => true,
         }
     }
@@ -80,6 +88,29 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Function { name, .. } => write!(f, "<fn {name}>"),
             Value::Range(start, end) => write!(f, "{start}..{end}"),
+            Value::Vec(v) => {
+                write!(f, "[")?;
+                for (i, elem) in v.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "]")
+            }
+            Value::Tuple(t) => {
+                write!(f, "(")?;
+                for (i, elem) in t.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                if t.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -94,6 +125,8 @@ impl PartialEq for Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Unit, Value::Unit) => true,
             (Value::Range(a1, a2), Value::Range(b1, b2)) => a1 == b1 && a2 == b2,
+            (Value::Vec(a), Value::Vec(b)) => a == b,
+            (Value::Tuple(a), Value::Tuple(b)) => a == b,
             _ => false,
         }
     }

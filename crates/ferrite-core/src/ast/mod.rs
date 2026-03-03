@@ -184,7 +184,7 @@ pub enum Expr {
         value: Box<Expr>,
         span: Span,
     },
-    /// Grouped expression: `(expr)`
+    /// Grouped expression: `(expr)` or tuple: `(a, b, c)`
     Grouped(Box<Expr>, Span),
     /// Match expression: `match expr { arms }`
     Match {
@@ -197,6 +197,35 @@ pub enum Expr {
         start: Box<Expr>,
         end: Box<Expr>,
         inclusive: bool,
+        span: Span,
+    },
+    /// Array literal: `[1, 2, 3]`
+    Array {
+        elements: Vec<Expr>,
+        span: Span,
+    },
+    /// Index expression: `expr[index]`
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>,
+        span: Span,
+    },
+    /// Method call: `expr.method(args)`
+    MethodCall {
+        object: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
+    /// Field/tuple index access: `expr.0`, `expr.field`
+    FieldAccess {
+        object: Box<Expr>,
+        field: String,
+        span: Span,
+    },
+    /// Tuple literal: `(a, b, c)`
+    Tuple {
+        elements: Vec<Expr>,
         span: Span,
     },
 }
@@ -220,7 +249,12 @@ impl Expr {
             | Expr::CompoundAssign { span: s, .. }
             | Expr::Grouped(_, s)
             | Expr::Match { span: s, .. }
-            | Expr::Range { span: s, .. } => *s,
+            | Expr::Range { span: s, .. }
+            | Expr::Array { span: s, .. }
+            | Expr::Index { span: s, .. }
+            | Expr::MethodCall { span: s, .. }
+            | Expr::FieldAccess { span: s, .. }
+            | Expr::Tuple { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -529,6 +563,53 @@ impl Expr {
                     out.push_str("..");
                 }
                 end.pretty_print(out, 0);
+            }
+            Expr::Array { elements, .. } => {
+                out.push('[');
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    elem.pretty_print(out, 0);
+                }
+                out.push(']');
+            }
+            Expr::Index { object, index, .. } => {
+                object.pretty_print(out, 0);
+                out.push('[');
+                index.pretty_print(out, 0);
+                out.push(']');
+            }
+            Expr::MethodCall { object, method, args, .. } => {
+                object.pretty_print(out, 0);
+                out.push('.');
+                out.push_str(method);
+                out.push('(');
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    arg.pretty_print(out, 0);
+                }
+                out.push(')');
+            }
+            Expr::FieldAccess { object, field, .. } => {
+                object.pretty_print(out, 0);
+                out.push('.');
+                out.push_str(field);
+            }
+            Expr::Tuple { elements, .. } => {
+                out.push('(');
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    elem.pretty_print(out, 0);
+                }
+                if elements.len() == 1 {
+                    out.push(',');
+                }
+                out.push(')');
             }
         }
     }

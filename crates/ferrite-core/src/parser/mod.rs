@@ -50,7 +50,7 @@ impl Precedence {
             TokenKind::Shl | TokenKind::Shr => Precedence::Shift,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
-            TokenKind::LParen => Precedence::Call,
+            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket => Precedence::Call,
             TokenKind::Eq | TokenKind::PlusEq | TokenKind::MinusEq | TokenKind::StarEq
             | TokenKind::SlashEq | TokenKind::PercentEq => Precedence::Assignment,
             TokenKind::DotDot | TokenKind::DotDotEq => Precedence::Range,
@@ -422,9 +422,21 @@ impl Parser {
                 let span = self.current_span();
                 let name = self.expect_ident()?;
 
-                // Check for macro call: `name!(...)`
+                // Check for macro call: `name!(...)` or `name![...]`
                 if self.check(&TokenKind::Bang) {
                     self.advance(); // consume `!`
+                    if self.check(&TokenKind::LBracket) {
+                        // `name![...]`
+                        self.advance();
+                        let args = self.parse_arg_list()?;
+                        let end_span = self.current_span();
+                        self.expect(TokenKind::RBracket)?;
+                        return Ok(Expr::MacroCall {
+                            name,
+                            args,
+                            span: self.merge_spans(span, end_span),
+                        });
+                    }
                     self.expect(TokenKind::LParen)?;
                     let args = self.parse_arg_list()?;
                     let end_span = self.current_span();
@@ -439,15 +451,45 @@ impl Parser {
                 Ok(Expr::Ident(name, span))
             }
 
-            // Grouped expression: `(expr)`
+            // Grouped expression `(expr)` or tuple `(a, b, c)`
             TokenKind::LParen => {
                 let start_span = self.current_span();
                 self.advance();
-                let expr = self.parse_expr(Precedence::None)?;
+
+                // Empty tuple: `()`
+                if self.check(&TokenKind::RParen) {
+                    let end_span = self.current_span();
+                    self.advance();
+                    return Ok(Expr::Tuple {
+                        elements: Vec::new(),
+                        span: self.merge_spans(start_span, end_span),
+                    });
+                }
+
+                let first = self.parse_expr(Precedence::None)?;
+
+                // Check for comma → tuple
+                if self.check(&TokenKind::Comma) {
+                    let mut elements = vec![first];
+                    while self.match_token(&TokenKind::Comma) {
+                        if self.check(&TokenKind::RParen) {
+                            break; // trailing comma
+                        }
+                        elements.push(self.parse_expr(Precedence::None)?);
+                    }
+                    let end_span = self.current_span();
+                    self.expect(TokenKind::RParen)?;
+                    return Ok(Expr::Tuple {
+                        elements,
+                        span: self.merge_spans(start_span, end_span),
+                    });
+                }
+
+                // Single expression → grouped
                 let end_span = self.current_span();
                 self.expect(TokenKind::RParen)?;
                 Ok(Expr::Grouped(
-                    Box::new(expr),
+                    Box::new(first),
                     self.merge_spans(start_span, end_span),
                 ))
             }
@@ -456,6 +498,31 @@ impl Parser {
             TokenKind::LBrace => {
                 let block = self.parse_block()?;
                 Ok(Expr::Block(block))
+            }
+
+            // Array literal: `[1, 2, 3]`
+            TokenKind::LBracket => {
+                let start_span = self.current_span();
+                self.advance();
+                let mut elements = Vec::new();
+                if !self.check(&TokenKind::RBracket) {
+                    loop {
+                        elements.push(self.parse_expr(Precedence::None)?);
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
+                        // Allow trailing comma
+                        if self.check(&TokenKind::RBracket) {
+                            break;
+                        }
+                    }
+                }
+                let end_span = self.current_span();
+                self.expect(TokenKind::RBracket)?;
+                Ok(Expr::Array {
+                    elements,
+                    span: self.merge_spans(start_span, end_span),
+                })
             }
 
             // If expression
@@ -605,6 +672,60 @@ impl Parser {
             return Ok(Expr::Call {
                 callee: Box::new(left),
                 args,
+                span: self.merge_spans(op_span, end_span),
+            });
+        }
+
+        // Index: `expr[index]`
+        if op_kind == TokenKind::LBracket {
+            self.advance();
+            let index = self.parse_expr(Precedence::None)?;
+            let end_span = self.current_span();
+            self.expect(TokenKind::RBracket)?;
+            return Ok(Expr::Index {
+                object: Box::new(left),
+                index: Box::new(index),
+                span: self.merge_spans(op_span, end_span),
+            });
+        }
+
+        // Dot: `.method()`, `.field`, `.0`
+        if op_kind == TokenKind::Dot {
+            self.advance();
+
+            // Check for tuple index: `.0`, `.1` etc.
+            if let TokenKind::IntLiteral(n) = self.peek_kind() {
+                let n = *n;
+                let end_span = self.current_span();
+                self.advance();
+                return Ok(Expr::FieldAccess {
+                    object: Box::new(left),
+                    field: n.to_string(),
+                    span: self.merge_spans(op_span, end_span),
+                });
+            }
+
+            let name = self.expect_ident()?;
+
+            // Check for method call: `.name(...)`
+            if self.check(&TokenKind::LParen) {
+                self.advance();
+                let args = self.parse_arg_list()?;
+                let end_span = self.current_span();
+                self.expect(TokenKind::RParen)?;
+                return Ok(Expr::MethodCall {
+                    object: Box::new(left),
+                    method: name,
+                    args,
+                    span: self.merge_spans(op_span, end_span),
+                });
+            }
+
+            // Otherwise field access: `.name`
+            let end_span = self.current_span();
+            return Ok(Expr::FieldAccess {
+                object: Box::new(left),
+                field: name,
                 span: self.merge_spans(op_span, end_span),
             });
         }
@@ -1280,5 +1401,104 @@ fn main() {
         let stmts = parse_fn_body("fn main() { 0..=10; }");
         let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
         assert!(matches!(expr, Expr::Range { inclusive: true, .. }));
+    }
+
+    // === Phase 6: Collections & Strings ===
+
+    #[test]
+    fn test_array_literal() {
+        let stmts = parse_fn_body("fn main() { [1, 2, 3]; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Array { elements, .. } = expr else { panic!("expected Array"); };
+        assert_eq!(elements.len(), 3);
+    }
+
+    #[test]
+    fn test_empty_array() {
+        let stmts = parse_fn_body("fn main() { []; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Array { elements, .. } = expr else { panic!("expected Array"); };
+        assert_eq!(elements.len(), 0);
+    }
+
+    #[test]
+    fn test_index_expr() {
+        let stmts = parse_fn_body("fn main() { v[0]; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(expr, Expr::Index { .. }));
+    }
+
+    #[test]
+    fn test_method_call() {
+        let stmts = parse_fn_body("fn main() { v.push(1); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::MethodCall { method, args, .. } = expr else { panic!("expected MethodCall"); };
+        assert_eq!(method, "push");
+        assert_eq!(args.len(), 1);
+    }
+
+    #[test]
+    fn test_field_access() {
+        let stmts = parse_fn_body("fn main() { t.0; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::FieldAccess { field, .. } = expr else { panic!("expected FieldAccess"); };
+        assert_eq!(field, "0");
+    }
+
+    #[test]
+    fn test_tuple_literal() {
+        let stmts = parse_fn_body("fn main() { (1, 2, 3); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple, got {expr:?}"); };
+        assert_eq!(elements.len(), 3);
+    }
+
+    #[test]
+    fn test_single_element_tuple() {
+        let stmts = parse_fn_body("fn main() { (42,); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple"); };
+        assert_eq!(elements.len(), 1);
+    }
+
+    #[test]
+    fn test_grouped_expr_not_tuple() {
+        let stmts = parse_fn_body("fn main() { (42); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        assert!(matches!(expr, Expr::Grouped(_, _)));
+    }
+
+    #[test]
+    fn test_empty_tuple() {
+        let stmts = parse_fn_body("fn main() { (); }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Tuple { elements, .. } = expr else { panic!("expected Tuple"); };
+        assert_eq!(elements.len(), 0);
+    }
+
+    #[test]
+    fn test_vec_macro_brackets() {
+        let stmts = parse_fn_body("fn main() { vec![1, 2, 3]; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::MacroCall { name, args, .. } = expr else { panic!("expected MacroCall"); };
+        assert_eq!(name, "vec");
+        assert_eq!(args.len(), 3);
+    }
+
+    #[test]
+    fn test_chained_method_calls() {
+        let stmts = parse_fn_body(r#"fn main() { s.trim().to_uppercase(); }"#);
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::MethodCall { method, object, .. } = expr else { panic!("expected MethodCall"); };
+        assert_eq!(method, "to_uppercase");
+        assert!(matches!(object.as_ref(), Expr::MethodCall { method, .. } if method == "trim"));
+    }
+
+    #[test]
+    fn test_chained_index() {
+        let stmts = parse_fn_body("fn main() { v[0][1]; }");
+        let Stmt::Expr { expr, .. } = &stmts[0] else { panic!(); };
+        let Expr::Index { object, .. } = expr else { panic!("expected Index"); };
+        assert!(matches!(object.as_ref(), Expr::Index { .. }));
     }
 }

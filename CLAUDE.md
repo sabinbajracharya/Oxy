@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 5: Control Flow — COMPLETE. 163 tests passing.
+Phase 6: Collections & Strings — COMPLETE. 201 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -115,13 +115,21 @@ Phase 5: Control Flow — COMPLETE. 163 tests passing.
 - `while condition { body }` loops
 - `loop { body }` with `break value` support
 - `for x in 0..10 { body }` and `0..=10` inclusive ranges
+- `for x in vec { body }` — iterate over Vec and String
 - `break` and `continue` in all loop types
 - `match expr { pattern => body }` with literal, wildcard (`_`), and variable patterns
 - Function definitions and calls with proper scoping
 - Recursion (factorial, fibonacci)
 - `return` statements
-- `println!("{}", x)` with `{}` format placeholders
+- `println!("{}", x)` with `{}` format placeholders and `{:?}` debug format
 - `print!()` without newline
+- `vec![1, 2, 3]` macro for vector creation
+- `[1, 2, 3]` array literal syntax (creates Vec)
+- `v[0]` index access for Vec, String, Tuple
+- `v[0] = x` index assignment for Vec
+- Vec methods: `.push()`, `.pop()`, `.len()`, `.is_empty()`, `.contains()`, `.first()`, `.last()`, `.reverse()`, `.join()`
+- String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`
+- Tuples: `(a, b, c)`, tuple index `t.0`, empty tuple `()`, single-element `(x,)`
 - `&` and `&mut` syntax parsed but ignored (no borrow checker)
 - Shadowing: `let x = 1; let x = "hello";`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
