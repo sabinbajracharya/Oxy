@@ -95,6 +95,12 @@ impl Parser {
     // === Item parsing ===
 
     fn parse_item(&mut self) -> Result<Item, FerriError> {
+        // Parse optional attributes: `#[name(arg1, arg2, ...)]`
+        let mut attributes = Vec::new();
+        while self.check(&TokenKind::Hash) {
+            attributes.push(self.parse_attribute()?);
+        }
+
         // Handle optional `pub` keyword
         let is_pub = self.check(&TokenKind::Pub);
         if is_pub {
@@ -106,8 +112,8 @@ impl Parser {
                 self.advance(); // consume `async`
                 self.parse_fn_def(true).map(Item::Function)
             }
-            TokenKind::Struct => self.parse_struct_def().map(Item::Struct),
-            TokenKind::Enum => self.parse_enum_def().map(Item::Enum),
+            TokenKind::Struct => self.parse_struct_def(attributes).map(Item::Struct),
+            TokenKind::Enum => self.parse_enum_def(attributes).map(Item::Enum),
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
             TokenKind::Trait => self.parse_trait_def().map(Item::Trait),
             TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
@@ -120,6 +126,45 @@ impl Parser {
                 other.description()
             ))),
         }
+    }
+
+    /// Parse a single attribute: `#[name(arg1, arg2, ...)]` or `#[name]`.
+    fn parse_attribute(&mut self) -> Result<Attribute, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Hash)?;
+        self.expect(TokenKind::LBracket)?;
+        let name = self.expect_ident()?;
+        let mut args = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            // Parse comma-separated arguments (identifiers or strings)
+            while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                match self.peek_kind().clone() {
+                    TokenKind::Ident(s) => {
+                        args.push(s);
+                        self.advance();
+                    }
+                    TokenKind::StringLiteral(s) => {
+                        args.push(s);
+                        self.advance();
+                    }
+                    _ => {
+                        // Skip unknown tokens inside attribute args
+                        self.advance();
+                    }
+                }
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.expect(TokenKind::RParen)?;
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBracket)?;
+        Ok(Attribute {
+            name,
+            args,
+            span: self.merge_spans(start_span, end_span),
+        })
     }
 
     fn parse_module_def(&mut self, is_pub: bool) -> Result<ModuleDef, FerriError> {
@@ -475,7 +520,7 @@ impl Parser {
 
     // === Struct parsing ===
 
-    fn parse_struct_def(&mut self) -> Result<StructDef, FerriError> {
+    fn parse_struct_def(&mut self, attributes: Vec<Attribute>) -> Result<StructDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Struct)?;
         let name = self.expect_ident()?;
@@ -484,6 +529,7 @@ impl Parser {
         if self.match_token(&TokenKind::Semicolon) {
             return Ok(StructDef {
                 name,
+                attributes: attributes.clone(),
                 kind: StructKind::Unit,
                 span: self.merge_spans(start_span, self.prev_span()),
             });
@@ -509,6 +555,7 @@ impl Parser {
             self.expect(TokenKind::Semicolon)?;
             return Ok(StructDef {
                 name,
+                attributes: attributes.clone(),
                 kind: StructKind::Tuple(types),
                 span: self.merge_spans(start_span, end_span),
             });
@@ -536,6 +583,7 @@ impl Parser {
 
         Ok(StructDef {
             name,
+            attributes,
             kind: StructKind::Named(fields),
             span: self.merge_spans(start_span, end_span),
         })
@@ -543,7 +591,7 @@ impl Parser {
 
     // === Enum parsing ===
 
-    fn parse_enum_def(&mut self) -> Result<EnumDef, FerriError> {
+    fn parse_enum_def(&mut self, attributes: Vec<Attribute>) -> Result<EnumDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Enum)?;
         let name = self.expect_ident()?;
@@ -610,6 +658,7 @@ impl Parser {
 
         Ok(EnumDef {
             name,
+            attributes,
             variants,
             span: self.merge_spans(start_span, end_span),
         })

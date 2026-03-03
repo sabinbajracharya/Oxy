@@ -69,6 +69,8 @@ pub struct Interpreter {
     cli_args: Vec<String>,
     /// Names of functions declared with `async fn`.
     async_fns: HashSet<String>,
+    /// Derived traits per type, e.g. `"Point" -> {"Debug", "Clone", "PartialEq"}`.
+    derived_traits: HashMap<String, HashSet<String>>,
 }
 
 /// Data stored for a registered module.
@@ -99,6 +101,7 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
             async_fns: HashSet::new(),
+            derived_traits: HashMap::new(),
         }
     }
 
@@ -118,6 +121,7 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
             async_fns: HashSet::new(),
+            derived_traits: HashMap::new(),
         }
     }
 
@@ -137,6 +141,7 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
             async_fns: HashSet::new(),
+            derived_traits: HashMap::new(),
         }
     }
 
@@ -158,6 +163,27 @@ impl Interpreter {
     /// Get the current environment (for REPL persistence).
     pub fn env(&self) -> &Env {
         &self.env
+    }
+
+    /// Register derived traits from `#[derive(...)]` attributes on a type.
+    fn register_derive_traits(&mut self, type_name: &str, attributes: &[Attribute]) {
+        for attr in attributes {
+            if attr.name == "derive" {
+                for trait_name in &attr.args {
+                    self.derived_traits
+                        .entry(type_name.to_string())
+                        .or_default()
+                        .insert(trait_name.clone());
+                }
+            }
+        }
+    }
+
+    /// Check if a type has a specific derived trait.
+    fn has_derive(&self, type_name: &str, trait_name: &str) -> bool {
+        self.derived_traits
+            .get(type_name)
+            .is_some_and(|traits| traits.contains(trait_name))
     }
 
     /// Execute a complete program: register all functions, then call `main()`.
@@ -212,10 +238,12 @@ impl Interpreter {
                 Ok(())
             }
             Item::Struct(s) => {
+                self.register_derive_traits(&s.name, &s.attributes);
                 self.struct_defs.insert(s.name.clone(), s.clone());
                 Ok(())
             }
             Item::Enum(e) => {
+                self.register_derive_traits(&e.name, &e.attributes);
                 self.enum_defs.insert(e.name.clone(), e.clone());
                 Ok(())
             }
@@ -294,9 +322,11 @@ impl Interpreter {
                     }
                 }
                 Item::Struct(s) => {
+                    self.register_derive_traits(&s.name, &s.attributes);
                     mod_struct_defs.insert(s.name.clone(), s.clone());
                 }
                 Item::Enum(e) => {
+                    self.register_derive_traits(&e.name, &e.attributes);
                     mod_enum_defs.insert(e.name.clone(), e.clone());
                 }
                 Item::Impl(i) => {
@@ -2969,6 +2999,12 @@ impl Interpreter {
                 return Ok(Value::HashMap(HashMap::new()));
             }
 
+            // Built-in Type::default() for #[derive(Default)]
+            if method_name == "default" && args.is_empty() && self.has_derive(type_name, "Default")
+            {
+                return self.create_default_value(type_name, span);
+            }
+
             // Built-in json:: pseudo-module
             if type_name == "json" {
                 return self.call_json_function(method_name, args, span);
@@ -3253,6 +3289,11 @@ impl Interpreter {
             return self.try_to_json_method(receiver, method, span, type_name);
         }
 
+        // Built-in .clone() for types with #[derive(Clone)]
+        if method == "clone" && self.has_derive(type_name, "Clone") {
+            return Ok(receiver.clone());
+        }
+
         Err(FerriError::Runtime {
             message: format!("no method `{method}` found for type `{type_name}`"),
             line: span.line,
@@ -3291,6 +3332,42 @@ impl Interpreter {
             line: span.line,
             column: span.column,
         })
+    }
+
+    /// Create a default value for a struct with `#[derive(Default)]`.
+    fn create_default_value(&self, type_name: &str, span: &Span) -> Result<Value, FerriError> {
+        if let Some(sdef) = self.struct_defs.get(type_name).cloned() {
+            if let StructKind::Named(ref fields) = sdef.kind {
+                let mut field_map = HashMap::new();
+                for field in fields {
+                    let default = Self::default_for_type(&field.type_ann.name);
+                    field_map.insert(field.name.clone(), default);
+                }
+                return Ok(Value::Struct {
+                    name: type_name.to_string(),
+                    fields: field_map,
+                });
+            }
+        }
+        Err(FerriError::Runtime {
+            message: format!("cannot create default for `{type_name}`"),
+            line: span.line,
+            column: span.column,
+        })
+    }
+
+    /// Return the default value for a type annotation name.
+    fn default_for_type(type_name: &str) -> Value {
+        match type_name {
+            "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "usize" | "isize" => {
+                Value::Integer(0)
+            }
+            "f64" | "f32" => Value::Float(0.0),
+            "bool" => Value::Bool(false),
+            "String" | "&str" => Value::String(String::new()),
+            "char" => Value::Char('\0'),
+            _ => Value::Unit,
+        }
     }
 
     /// Convert an f64 to Value, returning Integer if the value is a whole number.
@@ -8189,5 +8266,172 @@ fn main() {
             r#"fn main() { let greeting = f"Hi {1 + 1}"; println!("{}", greeting); }"#,
         );
         assert_eq!(out, vec!["Hi 2\n"]);
+    }
+
+    // === Derive attribute tests ===
+
+    #[test]
+    fn test_derive_debug() {
+        let out = run_and_capture(
+            r#"
+#[derive(Debug)]
+struct Point { x: f64, y: f64 }
+
+fn main() {
+    let p = Point { x: 1.0, y: 2.0 };
+    println!("{:?}", p);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Point { x: 1.0, y: 2.0 }\n"]);
+    }
+
+    #[test]
+    fn test_derive_clone() {
+        let out = run_and_capture(
+            r#"
+#[derive(Clone)]
+struct Point { x: f64, y: f64 }
+
+fn main() {
+    let p = Point { x: 1.0, y: 2.0 };
+    let p2 = p.clone();
+    println!("{} {}", p2.x, p2.y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["1.0 2.0\n"]);
+    }
+
+    #[test]
+    fn test_derive_partial_eq() {
+        let out = run_and_capture(
+            r#"
+#[derive(PartialEq)]
+struct Point { x: f64, y: f64 }
+
+fn main() {
+    let a = Point { x: 1.0, y: 2.0 };
+    let b = Point { x: 1.0, y: 2.0 };
+    let c = Point { x: 3.0, y: 4.0 };
+    println!("{}", a == b);
+    println!("{}", a == c);
+}
+"#,
+        );
+        assert_eq!(out, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_derive_multiple() {
+        let out = run_and_capture(
+            r#"
+#[derive(Debug, Clone, PartialEq)]
+struct Color { r: i64, g: i64, b: i64 }
+
+fn main() {
+    let c1 = Color { r: 255, g: 0, b: 0 };
+    let c2 = c1.clone();
+    println!("{:?}", c1);
+    println!("{}", c1 == c2);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Color { b: 0, g: 0, r: 255 }\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_derive_default() {
+        let out = run_and_capture(
+            r#"
+#[derive(Default, Debug)]
+struct Config { width: i64, height: i64, title: String }
+
+fn main() {
+    let c = Config::default();
+    println!("{:?}", c);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Config { height: 0, title: \"\", width: 0 }\n"]);
+    }
+
+    #[test]
+    fn test_derive_enum_debug() {
+        let out = run_and_capture(
+            r#"
+#[derive(Debug)]
+enum Color { Red, Green, Blue }
+
+fn main() {
+    println!("{:?}", Color::Red);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Color::Red\n"]);
+    }
+
+    #[test]
+    fn test_derive_enum_partial_eq() {
+        let out = run_and_capture(
+            r#"
+#[derive(PartialEq)]
+enum Direction { Up, Down, Left, Right }
+
+fn main() {
+    println!("{}", Direction::Up == Direction::Up);
+    println!("{}", Direction::Up == Direction::Down);
+}
+"#,
+        );
+        assert_eq!(out, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_no_derive_clone_error() {
+        let result = run_capturing(
+            r#"
+struct Foo { x: i64 }
+
+fn main() {
+    let f = Foo { x: 1 };
+    let f2 = f.clone();
+}
+"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_attribute_ignored_unknown() {
+        let out = run_and_capture(
+            r#"
+#[serde(rename_all)]
+struct Foo { x: i64 }
+
+fn main() {
+    let f = Foo { x: 42 };
+    println!("{}", f.x);
+}
+"#,
+        );
+        assert_eq!(out, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_derive_enum_clone() {
+        let out = run_and_capture(
+            r#"
+#[derive(Clone, Debug)]
+enum Shape { Circle(f64), Square(f64) }
+
+fn main() {
+    let s = Shape::Circle(5.0);
+    let s2 = s.clone();
+    println!("{:?}", s2);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Shape::Circle(5.0)\n"]);
     }
 }

@@ -83,10 +83,19 @@ pub struct ClosureParam {
     pub span: Span,
 }
 
+/// An attribute on an item, e.g. `#[derive(Debug, Clone)]`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attribute {
+    pub name: String,
+    pub args: Vec<String>,
+    pub span: Span,
+}
+
 /// A struct definition: `struct Name { field: Type, ... }` or `struct Name(Type, ...);`
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDef {
     pub name: String,
+    pub attributes: Vec<Attribute>,
     pub kind: StructKind,
     pub span: Span,
 }
@@ -114,6 +123,7 @@ pub struct StructField {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDef {
     pub name: String,
+    pub attributes: Vec<Attribute>,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
 }
