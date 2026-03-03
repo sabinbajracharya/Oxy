@@ -21,3 +21,4 @@
 *.profraw
 lcov.info
 coverage/
+core

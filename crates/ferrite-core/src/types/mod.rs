@@ -25,14 +25,7 @@ pub enum Value {
     /// Unit value `()`.
     Unit,
     /// A function value (closure).
-    Function {
-        name: String,
-        params: Vec<Param>,
-        return_type: Option<TypeAnnotation>,
-        body: Block,
-        /// The environment captured at function definition time.
-        closure_env: Env,
-    },
+    Function(Box<FunctionData>),
     /// A range value: `start..end` (end-exclusive, stored as actual end).
     Range(i64, i64),
     /// A vector (dynamic array).
@@ -52,6 +45,31 @@ pub enum Value {
     },
     /// A hash map (string keys for simplicity).
     HashMap(HashMap<String, Value>),
+    /// A future (lazy thunk wrapping an async function call).
+    Future(Box<FutureData>),
+    /// A join handle (eagerly evaluated, wraps a result).
+    JoinHandle(Box<Value>),
+}
+
+/// Data for an async future (boxed to keep Value enum small).
+#[derive(Debug, Clone)]
+pub struct FutureData {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeAnnotation>,
+    pub body: Block,
+    pub closure_env: Env,
+    pub args: Vec<Value>,
+}
+
+/// Data for a function value (boxed to keep Value enum small).
+#[derive(Debug, Clone)]
+pub struct FunctionData {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeAnnotation>,
+    pub body: Block,
+    pub closure_env: Env,
 }
 
 impl Value {
@@ -64,7 +82,7 @@ impl Value {
             Value::String(_) => "String",
             Value::Char(_) => "char",
             Value::Unit => "()",
-            Value::Function { .. } => "fn",
+            Value::Function(_) => "fn",
             Value::Range(_, _) => "Range",
             Value::Vec(_) => "Vec",
             Value::Tuple(_) => "tuple",
@@ -76,6 +94,8 @@ impl Value {
             }
             Value::EnumVariant { enum_name, .. } => Box::leak(enum_name.clone().into_boxed_str()),
             Value::HashMap(_) => "HashMap",
+            Value::Future(_) => "Future",
+            Value::JoinHandle(_) => "JoinHandle",
         }
     }
 
@@ -91,6 +111,8 @@ impl Value {
             Value::Struct { .. } => true,
             Value::EnumVariant { .. } => true,
             Value::HashMap(m) => !m.is_empty(),
+            Value::Future(_) => true,
+            Value::JoinHandle(_) => true,
             _ => true,
         }
     }
@@ -111,7 +133,7 @@ impl fmt::Display for Value {
             Value::String(s) => write!(f, "{s}"),
             Value::Char(c) => write!(f, "{c}"),
             Value::Unit => write!(f, "()"),
-            Value::Function { name, .. } => write!(f, "<fn {name}>"),
+            Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::Range(start, end) => write!(f, "{start}..{end}"),
             Value::Vec(v) => {
                 write!(f, "[")?;
@@ -183,6 +205,8 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
+            Value::Future(_) => write!(f, "<future>"),
+            Value::JoinHandle(_) => write!(f, "<join_handle>"),
         }
     }
 }

@@ -3,14 +3,14 @@
 //! Evaluates the AST produced by the parser, executing statements and
 //! evaluating expressions to produce [`Value`]s.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
 use crate::lexer::Span;
-use crate::types::Value;
+use crate::types::{FunctionData, FutureData, Value};
 
 /// The Ferrite interpreter.
 pub struct Interpreter {
@@ -38,6 +38,8 @@ pub struct Interpreter {
     type_aliases: HashMap<String, TypeAnnotation>,
     /// Command-line arguments passed to the program.
     cli_args: Vec<String>,
+    /// Names of functions declared with `async fn`.
+    async_fns: HashSet<String>,
 }
 
 /// Data stored for a registered module.
@@ -67,6 +69,7 @@ impl Interpreter {
             base_dir: None,
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
+            async_fns: HashSet::new(),
         }
     }
 
@@ -85,6 +88,7 @@ impl Interpreter {
             base_dir: None,
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
+            async_fns: HashSet::new(),
         }
     }
 
@@ -103,6 +107,7 @@ impl Interpreter {
             base_dir: None,
             type_aliases: HashMap::new(),
             cli_args: Vec::new(),
+            async_fns: HashSet::new(),
         }
     }
 
@@ -144,7 +149,7 @@ impl Interpreter {
                 column: 0,
             })?;
 
-        if let Value::Function { .. } = &main_fn {
+        if let Value::Function(_) = &main_fn {
             self.call_function(&main_fn, &[], 0, 0)
         } else {
             Err(FerriError::Runtime {
@@ -164,14 +169,17 @@ impl Interpreter {
     pub fn register_item(&mut self, item: &Item) -> Result<(), FerriError> {
         match item {
             Item::Function(f) => {
-                let value = Value::Function {
+                let value = Value::Function(Box::new(FunctionData {
                     name: f.name.clone(),
                     params: f.params.clone(),
                     return_type: f.return_type.clone(),
                     body: f.body.clone(),
                     closure_env: Rc::clone(&self.env),
-                };
+                }));
                 self.env.borrow_mut().define(f.name.clone(), value, false);
+                if f.is_async {
+                    self.async_fns.insert(f.name.clone());
+                }
                 Ok(())
             }
             Item::Struct(s) => {
@@ -244,14 +252,17 @@ impl Interpreter {
         for item in &items {
             match item {
                 Item::Function(f) => {
-                    let value = Value::Function {
+                    let value = Value::Function(Box::new(FunctionData {
                         name: f.name.clone(),
                         params: f.params.clone(),
                         return_type: f.return_type.clone(),
                         body: f.body.clone(),
                         closure_env: Rc::clone(&mod_env),
-                    };
+                    }));
                     mod_env.borrow_mut().define(f.name.clone(), value, false);
+                    if f.is_async {
+                        self.async_fns.insert(f.name.clone());
+                    }
                 }
                 Item::Struct(s) => {
                     mod_struct_defs.insert(s.name.clone(), s.clone());
@@ -742,6 +753,46 @@ impl Interpreter {
                                 data: vec![val],
                             });
                         }
+                        "spawn" => {
+                            if args.len() != 1 {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "spawn() takes exactly 1 argument, got {}",
+                                        args.len()
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            let func = self.eval_expr(&args[0], env)?;
+                            let result = self.call_function(&func, &[], span.line, span.column)?;
+                            return Ok(Value::JoinHandle(Box::new(result)));
+                        }
+                        "sleep" => {
+                            if args.len() != 1 {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "sleep() takes exactly 1 argument, got {}",
+                                        args.len()
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            let val = self.eval_expr(&args[0], env)?;
+                            if let Value::Integer(ms) = val {
+                                std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+                                return Ok(Value::Unit);
+                            }
+                            return Err(FerriError::Runtime {
+                                message: format!(
+                                    "sleep() expects integer milliseconds, got {}",
+                                    val.type_name()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
                         _ => {}
                     }
                 }
@@ -749,6 +800,19 @@ impl Interpreter {
                 let mut arg_values = Vec::with_capacity(args.len());
                 for arg in args {
                     arg_values.push(self.eval_expr(arg, env)?);
+                }
+                // If calling an async function, return a Future thunk
+                if let Value::Function(ref func_data) = func {
+                    if self.async_fns.contains(&func_data.name) {
+                        return Ok(Value::Future(Box::new(FutureData {
+                            name: func_data.name.clone(),
+                            params: func_data.params.clone(),
+                            return_type: func_data.return_type.clone(),
+                            body: func_data.body.clone(),
+                            closure_env: Rc::clone(&func_data.closure_env),
+                            args: arg_values,
+                        })));
+                    }
                 }
                 self.call_function(&func, &arg_values, span.line, span.column)
             }
@@ -1284,13 +1348,34 @@ impl Interpreter {
                     },
                 };
 
-                Ok(Value::Function {
+                Ok(Value::Function(Box::new(FunctionData {
                     name: "<closure>".to_string(),
                     params: fn_params,
                     return_type: return_type.clone(),
                     body: closure_body,
                     closure_env: env.clone(),
-                })
+                })))
+            }
+
+            Expr::Await { expr, .. } => {
+                let val = self.eval_expr(expr, env)?;
+                match val {
+                    Value::Future(future) => {
+                        let call_env = Environment::child(&future.closure_env);
+                        for (param, arg) in future.params.iter().zip(future.args.iter()) {
+                            call_env
+                                .borrow_mut()
+                                .define(param.name.clone(), arg.clone(), true);
+                        }
+                        match self.eval_block(&future.body, &call_env) {
+                            Ok(val) => Ok(val),
+                            Err(FerriError::Return(val)) => Ok(*val),
+                            Err(e) => Err(e),
+                        }
+                    }
+                    Value::JoinHandle(val) => Ok(*val),
+                    other => Ok(other),
+                }
             }
         }
     }
@@ -1477,14 +1562,7 @@ impl Interpreter {
         line: usize,
         col: usize,
     ) -> Result<Value, FerriError> {
-        let Value::Function {
-            name,
-            params,
-            body,
-            closure_env,
-            ..
-        } = func
-        else {
+        let Value::Function(func_data) = func else {
             return Err(FerriError::Runtime {
                 message: format!("'{}' is not callable", func.type_name()),
                 line,
@@ -1492,11 +1570,12 @@ impl Interpreter {
             });
         };
 
-        if args.len() != params.len() {
+        if args.len() != func_data.params.len() {
             return Err(FerriError::Runtime {
                 message: format!(
-                    "function '{name}' expects {} argument(s), got {}",
-                    params.len(),
+                    "function '{}' expects {} argument(s), got {}",
+                    func_data.name,
+                    func_data.params.len(),
                     args.len()
                 ),
                 line,
@@ -1505,15 +1584,15 @@ impl Interpreter {
         }
 
         // Create a new scope from the closure environment
-        let call_env = Environment::child(closure_env);
-        for (param, arg) in params.iter().zip(args.iter()) {
+        let call_env = Environment::child(&func_data.closure_env);
+        for (param, arg) in func_data.params.iter().zip(args.iter()) {
             call_env
                 .borrow_mut()
                 .define(param.name.clone(), arg.clone(), true);
         }
 
         // Execute the function body
-        match self.eval_block(body, &call_env) {
+        match self.eval_block(&func_data.body, &call_env) {
             Ok(val) => Ok(val),
             Err(FerriError::Return(val)) => Ok(*val),
             Err(e) => Err(e),
@@ -2529,7 +2608,7 @@ impl Interpreter {
             ("Option", "unwrap_or_else") => {
                 if variant == "Some" {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
-                } else if let Some(Value::Function { .. }) = args.first() {
+                } else if let Some(Value::Function(_)) = args.first() {
                     let result = self.call_function(&args[0], &[], span.line, span.column)?;
                     Ok(Some(result))
                 } else {
@@ -2622,7 +2701,7 @@ impl Interpreter {
             ("Result", "unwrap_or_else") => {
                 if variant == "Ok" {
                     Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
-                } else if let Some(Value::Function { .. }) = args.first() {
+                } else if let Some(Value::Function(_)) = args.first() {
                     let err_val = data.first().cloned().unwrap_or(Value::Unit);
                     let result =
                         self.call_function(&args[0], &[err_val], span.line, span.column)?;
@@ -2857,7 +2936,7 @@ impl Interpreter {
             // Check for module function call: `module::function(args)`
             if let Some(module) = self.modules.get(type_name).cloned() {
                 if let Ok(val) = module.env.borrow().get(method_name) {
-                    if let Value::Function { .. } = &val {
+                    if let Value::Function(_) = &val {
                         return self.call_function(&val, args, span.line, span.column);
                     }
                 }
@@ -3833,6 +3912,8 @@ fn debug_format(val: &Value) -> String {
                 .collect();
             format!("{{{}}}", items.join(", "))
         }
+        Value::Future(f) => format!("Future<{}>", f.name),
+        Value::JoinHandle(v) => format!("JoinHandle({})", debug_format(v)),
         other => format!("{other}"),
     }
 }
@@ -7134,5 +7215,169 @@ fn main() {
 }"#,
         );
         assert!(result.is_err());
+    }
+
+    // === Async/Await ===
+
+    #[test]
+    fn test_async_fn_basic() {
+        let output = run_and_capture(
+            r#"
+async fn fetch_data() -> i64 {
+    42
+}
+fn main() {
+    let future = fetch_data();
+    let result = future.await;
+    println!("{}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_async_fn_with_args() {
+        let output = run_and_capture(
+            r#"
+async fn add(a: i64, b: i64) -> i64 {
+    a + b
+}
+fn main() {
+    let result = add(3, 4).await;
+    println!("{}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["7\n"]);
+    }
+
+    #[test]
+    fn test_await_chain() {
+        let output = run_and_capture(
+            r#"
+async fn double(x: i64) -> i64 {
+    x * 2
+}
+fn main() {
+    let a = double(5).await;
+    let b = double(a).await;
+    println!("{}", b);
+}"#,
+        );
+        assert_eq!(output, vec!["20\n"]);
+    }
+
+    #[test]
+    fn test_spawn_and_await() {
+        let output = run_and_capture(
+            r#"
+fn compute() -> i64 {
+    let mut sum = 0;
+    for i in 0..10 {
+        sum += i;
+    }
+    sum
+}
+fn main() {
+    let handle = spawn(compute);
+    let result = handle.await;
+    println!("{}", result);
+}"#,
+        );
+        assert_eq!(output, vec!["45\n"]);
+    }
+
+    #[test]
+    fn test_spawn_with_closure() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let x = 10;
+    let handle = spawn(|| x * 2);
+    println!("{}", handle.await);
+}"#,
+        );
+        assert_eq!(output, vec!["20\n"]);
+    }
+
+    #[test]
+    fn test_sleep() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    sleep(1);
+    println!("done");
+}"#,
+        );
+        assert_eq!(output, vec!["done\n"]);
+    }
+
+    #[test]
+    fn test_async_with_result() {
+        let output = run_and_capture(
+            r#"
+async fn safe_divide(a: f64, b: f64) -> Result<f64, String> {
+    if b == 0.0 {
+        Err("division by zero".to_string())
+    } else {
+        Ok(a / b)
+    }
+}
+fn main() {
+    let result = safe_divide(10.0, 3.0).await;
+    match result {
+        Ok(v) => println!("ok"),
+        Err(e) => println!("err: {}", e),
+    }
+}"#,
+        );
+        assert_eq!(output, vec!["ok\n"]);
+    }
+
+    #[test]
+    fn test_pub_async_fn() {
+        let output = run_and_capture(
+            r#"
+pub async fn greet(name: String) -> String {
+    format!("Hello, {}!", name)
+}
+fn main() {
+    let msg = greet("World".to_string()).await;
+    println!("{}", msg);
+}"#,
+        );
+        assert_eq!(output, vec!["Hello, World!\n"]);
+    }
+
+    #[test]
+    fn test_multiple_spawns() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let h1 = spawn(|| 1);
+    let h2 = spawn(|| 2);
+    let h3 = spawn(|| 3);
+    let sum = h1.await + h2.await + h3.await;
+    println!("{}", sum);
+}"#,
+        );
+        assert_eq!(output, vec!["6\n"]);
+    }
+
+    #[test]
+    fn test_async_fn_in_module() {
+        let output = run_and_capture(
+            r#"
+mod api {
+    async fn fetch(id: i64) -> String {
+        format!("item-{}", id)
+    }
+}
+use api::fetch;
+fn main() {
+    let item = fetch(42).await;
+    println!("{}", item);
+}"#,
+        );
+        assert_eq!(output, vec!["item-42\n"]);
     }
 }

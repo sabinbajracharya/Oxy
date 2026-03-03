@@ -59,6 +59,7 @@ impl Item {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnDef {
     pub name: String,
+    pub is_async: bool,
     pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub return_type: Option<TypeAnnotation>,
@@ -428,6 +429,8 @@ pub enum Expr {
         body: Box<Expr>,
         span: Span,
     },
+    /// Await expression: `expr.await`
+    Await { expr: Box<Expr>, span: Span },
 }
 
 impl Expr {
@@ -461,7 +464,8 @@ impl Expr {
             | Expr::SelfRef(s)
             | Expr::IfLet { span: s, .. }
             | Expr::Try { span: s, .. }
-            | Expr::Closure { span: s, .. } => *s,
+            | Expr::Closure { span: s, .. }
+            | Expr::Await { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -772,7 +776,11 @@ impl Item {
 impl FnDef {
     fn pretty_print(&self, out: &mut String, indent: usize) {
         let pad = "  ".repeat(indent);
-        out.push_str(&format!("{pad}fn {}", self.name));
+        if self.is_async {
+            out.push_str(&format!("{pad}async fn {}", self.name));
+        } else {
+            out.push_str(&format!("{pad}fn {}", self.name));
+        }
         if !self.generic_params.is_empty() {
             out.push('<');
             for (i, gp) in self.generic_params.iter().enumerate() {
@@ -1170,6 +1178,10 @@ impl Expr {
                 }
                 out.push(' ');
                 body.pretty_print(out, indent);
+            }
+            Expr::Await { expr, .. } => {
+                expr.pretty_print(out, indent);
+                out.push_str(".await");
             }
         }
     }

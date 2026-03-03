@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 14: HTTP & Networking — COMPLETE. 368 tests passing.
+Phase 15: Async/Await — COMPLETE. 378 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -198,5 +198,10 @@ Phase 14: HTTP & Networking — COMPLETE. 368 tests passing.
 - JSON HTTP: `http::get_json(url)`, `http::post_json(url, value)`, `http::put_json()`, `http::patch_json()`
 - HttpResponse struct: `.status`, `.body`, `.headers`, `.json()`, `.text()`, `.status_ok()`
 - Request builder: `http::request(method, url).header(k, v).body(s).json(val).send()`
+- Async functions: `async fn name() { ... }` returns Future on call
+- `.await` operator: resolves Future/JoinHandle values
+- `spawn(closure)` — eagerly evaluates closure, wraps result in JoinHandle
+- `sleep(ms)` — pauses execution for given milliseconds
+- `pub async fn` supported, async fns work in modules
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`

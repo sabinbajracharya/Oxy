@@ -34,8 +34,10 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             variant,
             data,
         } => serialize_enum(enum_name, variant, data),
-        Value::Function { .. } => Err("cannot serialize function".to_string()),
+        Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
+        Value::Future(_) => Err("cannot serialize future".to_string()),
+        Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }
 }
 
@@ -70,8 +72,10 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
             variant,
             data,
         } => serialize_enum_pretty(enum_name, variant, data, indent),
-        Value::Function { .. } => Err("cannot serialize function".to_string()),
+        Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
+        Value::Future(_) => Err("cannot serialize future".to_string()),
+        Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }
 }
 

@@ -101,7 +101,11 @@ impl Parser {
             self.advance();
         }
         match self.peek_kind() {
-            TokenKind::Fn => self.parse_fn_def().map(Item::Function),
+            TokenKind::Fn => self.parse_fn_def(false).map(Item::Function),
+            TokenKind::Async => {
+                self.advance(); // consume `async`
+                self.parse_fn_def(true).map(Item::Function)
+            }
             TokenKind::Struct => self.parse_struct_def().map(Item::Struct),
             TokenKind::Enum => self.parse_enum_def().map(Item::Enum),
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
@@ -264,7 +268,7 @@ impl Parser {
         })
     }
 
-    fn parse_fn_def(&mut self) -> Result<FnDef, FerriError> {
+    fn parse_fn_def(&mut self, is_async: bool) -> Result<FnDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Fn)?;
 
@@ -302,6 +306,7 @@ impl Parser {
 
         Ok(FnDef {
             name,
+            is_async,
             generic_params,
             params,
             return_type,
@@ -626,7 +631,7 @@ impl Parser {
 
             let mut methods = Vec::new();
             while !self.check(&TokenKind::RBrace) {
-                methods.push(self.parse_fn_def()?);
+                methods.push(self.parse_fn_def(false)?);
             }
             let end_span = self.current_span();
             self.expect(TokenKind::RBrace)?;
@@ -644,7 +649,7 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.check(&TokenKind::RBrace) {
-            methods.push(self.parse_fn_def()?);
+            methods.push(self.parse_fn_def(false)?);
         }
         let end_span = self.current_span();
         self.expect(TokenKind::RBrace)?;
@@ -695,6 +700,7 @@ impl Parser {
                 let body = self.parse_block()?;
                 default_methods.push(FnDef {
                     name: method_name,
+                    is_async: false,
                     generic_params: Vec::new(),
                     params,
                     return_type,
@@ -1371,9 +1377,19 @@ impl Parser {
             });
         }
 
-        // Dot: `.method()`, `.field`, `.0`
+        // Dot: `.method()`, `.field`, `.0`, `.await`
         if op_kind == TokenKind::Dot {
             self.advance();
+
+            // Check for `.await`
+            if self.check(&TokenKind::Await) {
+                let end_span = self.current_span();
+                self.advance();
+                return Ok(Expr::Await {
+                    expr: Box::new(left),
+                    span: self.merge_spans(op_span, end_span),
+                });
+            }
 
             // Check for tuple index: `.0`, `.1` etc.
             if let TokenKind::IntLiteral(n) = self.peek_kind() {
