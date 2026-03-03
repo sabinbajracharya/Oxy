@@ -97,9 +97,10 @@ impl Parser {
             TokenKind::Fn => self.parse_fn_def().map(Item::Function),
             TokenKind::Struct => self.parse_struct_def().map(Item::Struct),
             TokenKind::Enum => self.parse_enum_def().map(Item::Enum),
-            TokenKind::Impl => self.parse_impl_block().map(Item::Impl),
+            TokenKind::Impl => self.parse_impl_or_impl_trait(),
+            TokenKind::Trait => self.parse_trait_def().map(Item::Trait),
             other => Err(self.error(format!(
-                "expected item (e.g., 'fn', 'struct', 'enum', 'impl'), found {}",
+                "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait'), found {}",
                 other.description()
             ))),
         }
@@ -110,6 +111,14 @@ impl Parser {
         self.expect(TokenKind::Fn)?;
 
         let name = self.expect_ident()?;
+
+        // Optional generic parameters: `<T, U: Bound>`
+        let generic_params = if self.check(&TokenKind::Lt) {
+            self.parse_generic_params()?
+        } else {
+            Vec::new()
+        };
+
         self.expect(TokenKind::LParen)?;
 
         let params = self.parse_param_list()?;
@@ -122,10 +131,20 @@ impl Parser {
             None
         };
 
+        // Skip optional `where` clause (parse but ignore)
+        if self.check(&TokenKind::Where) {
+            self.advance();
+            // Consume tokens until `{`
+            while !self.check(&TokenKind::LBrace) && !self.is_at_end() {
+                self.advance();
+            }
+        }
+
         let body = self.parse_block()?;
 
         Ok(FnDef {
             name,
+            generic_params,
             params,
             return_type,
             body: body.clone(),
@@ -206,13 +225,89 @@ impl Parser {
         // Accept `Self` as a type
         if self.check(&TokenKind::SelfUpper) {
             self.advance();
+            // Skip generic type args if present: `Self<T>`
+            if self.check(&TokenKind::Lt) {
+                self.skip_generic_args();
+            }
             return Ok(TypeAnnotation {
                 name: "Self".to_string(),
                 span,
             });
         }
+        // Accept `impl Trait` syntax (e.g., `impl Display`) — treat as the trait name
+        if self.check(&TokenKind::Impl) {
+            self.advance();
+            let name = self.expect_ident()?;
+            return Ok(TypeAnnotation { name, span });
+        }
+        // Accept `&` or `&mut` before type
+        if self.check(&TokenKind::Amp) {
+            self.advance();
+            if self.check(&TokenKind::Mut) {
+                self.advance();
+            }
+        }
         let name = self.expect_ident()?;
+        // Skip generic type args: `Vec<i64>`, `HashMap<K, V>`
+        if self.check(&TokenKind::Lt) {
+            self.skip_generic_args();
+        }
         Ok(TypeAnnotation { name, span })
+    }
+
+    /// Skip generic type arguments `<...>` — handles nesting.
+    fn skip_generic_args(&mut self) {
+        if !self.match_token(&TokenKind::Lt) {
+            return;
+        }
+        let mut depth = 1;
+        while depth > 0 && !self.is_at_end() {
+            if self.check(&TokenKind::Lt) {
+                depth += 1;
+            } else if self.check(&TokenKind::Gt) {
+                depth -= 1;
+            }
+            self.advance();
+        }
+    }
+
+    fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, FerriError> {
+        self.expect(TokenKind::Lt)?;
+        let mut params = Vec::new();
+
+        if self.check(&TokenKind::Gt) {
+            self.advance();
+            return Ok(params);
+        }
+
+        loop {
+            let span = self.current_span();
+            let name = self.expect_ident()?;
+            let mut bounds = Vec::new();
+
+            // Parse optional bounds: `T: Display + Clone`
+            if self.match_token(&TokenKind::Colon) {
+                loop {
+                    let bound = self.expect_ident()?;
+                    bounds.push(bound);
+                    if !self.match_token(&TokenKind::Plus) {
+                        break;
+                    }
+                }
+            }
+
+            params.push(GenericParam { name, bounds, span });
+
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+            if self.check(&TokenKind::Gt) {
+                break;
+            }
+        }
+
+        self.expect(TokenKind::Gt)?;
+        Ok(params)
     }
 
     // === Struct parsing ===
@@ -359,10 +454,34 @@ impl Parser {
 
     // === Impl block parsing ===
 
-    fn parse_impl_block(&mut self) -> Result<ImplBlock, FerriError> {
+    /// Parse `impl Type { ... }` or `impl Trait for Type { ... }`
+    fn parse_impl_or_impl_trait(&mut self) -> Result<Item, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Impl)?;
-        let type_name = self.expect_ident()?;
+        let first_name = self.expect_ident()?;
+
+        // Check for `impl Trait for Type { ... }`
+        if self.check(&TokenKind::For) {
+            self.advance();
+            let type_name = self.expect_ident()?;
+            self.expect(TokenKind::LBrace)?;
+
+            let mut methods = Vec::new();
+            while !self.check(&TokenKind::RBrace) {
+                methods.push(self.parse_fn_def()?);
+            }
+            let end_span = self.current_span();
+            self.expect(TokenKind::RBrace)?;
+
+            return Ok(Item::ImplTrait(ImplTraitBlock {
+                trait_name: first_name,
+                type_name,
+                methods,
+                span: self.merge_spans(start_span, end_span),
+            }));
+        }
+
+        // Regular `impl Type { ... }`
         self.expect(TokenKind::LBrace)?;
 
         let mut methods = Vec::new();
@@ -372,9 +491,77 @@ impl Parser {
         let end_span = self.current_span();
         self.expect(TokenKind::RBrace)?;
 
-        Ok(ImplBlock {
-            type_name,
+        Ok(Item::Impl(ImplBlock {
+            type_name: first_name,
             methods,
+            span: self.merge_spans(start_span, end_span),
+        }))
+    }
+
+    // === Trait parsing ===
+
+    fn parse_trait_def(&mut self) -> Result<TraitDef, FerriError> {
+        let start_span = self.current_span();
+        self.expect(TokenKind::Trait)?;
+        let name = self.expect_ident()?;
+        self.expect(TokenKind::LBrace)?;
+
+        let mut methods = Vec::new();
+        let mut default_methods = Vec::new();
+
+        while !self.check(&TokenKind::RBrace) {
+            let sig_start = self.current_span();
+            self.expect(TokenKind::Fn)?;
+            let method_name = self.expect_ident()?;
+
+            // Optional generic params on trait method
+            let _generic_params = if self.check(&TokenKind::Lt) {
+                self.parse_generic_params()?
+            } else {
+                Vec::new()
+            };
+
+            self.expect(TokenKind::LParen)?;
+            let params = self.parse_param_list()?;
+            self.expect(TokenKind::RParen)?;
+
+            let return_type = if self.check(&TokenKind::Arrow) {
+                self.advance();
+                Some(self.parse_type_annotation()?)
+            } else {
+                None
+            };
+
+            // If followed by `{`, it's a default method implementation
+            if self.check(&TokenKind::LBrace) {
+                let body = self.parse_block()?;
+                default_methods.push(FnDef {
+                    name: method_name,
+                    generic_params: Vec::new(),
+                    params,
+                    return_type,
+                    body: body.clone(),
+                    span: self.merge_spans(sig_start, body.span),
+                });
+            } else {
+                // Method signature only — ends with `;`
+                let end_span = self.current_span();
+                self.expect(TokenKind::Semicolon)?;
+                methods.push(TraitMethodSig {
+                    name: method_name,
+                    params,
+                    return_type,
+                    span: self.merge_spans(sig_start, end_span),
+                });
+            }
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+
+        Ok(TraitDef {
+            name,
+            methods,
+            default_methods,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -2155,5 +2342,104 @@ fn main() {}
         };
         assert_eq!(s.name, "Pair");
         assert!(matches!(&s.kind, StructKind::Tuple(t) if t.len() == 2));
+    }
+
+    // === Phase 8: Traits & Generics ===
+
+    #[test]
+    fn test_trait_def() {
+        let program = parse("trait Greet { fn greet(&self) -> String; }\nfn main() {}").unwrap();
+        let Item::Trait(t) = &program.items[0] else {
+            panic!("expected trait");
+        };
+        assert_eq!(t.name, "Greet");
+        assert_eq!(t.methods.len(), 1);
+        assert_eq!(t.methods[0].name, "greet");
+    }
+
+    #[test]
+    fn test_trait_with_default_method() {
+        let program = parse(
+            r#"trait Foo { fn bar(&self) -> i64 { 42 } }
+fn main() {}"#,
+        )
+        .unwrap();
+        let Item::Trait(t) = &program.items[0] else {
+            panic!("expected trait");
+        };
+        assert_eq!(t.name, "Foo");
+        assert_eq!(t.methods.len(), 0);
+        assert_eq!(t.default_methods.len(), 1);
+        assert_eq!(t.default_methods[0].name, "bar");
+    }
+
+    #[test]
+    fn test_impl_trait_for_type() {
+        let program = parse(
+            r#"trait Greet { fn greet(&self) -> String; }
+struct Person { name: String }
+impl Greet for Person { fn greet(&self) -> String { self.name } }
+fn main() {}"#,
+        )
+        .unwrap();
+        assert!(matches!(&program.items[0], Item::Trait(_)));
+        let Item::ImplTrait(i) = &program.items[2] else {
+            panic!("expected impl trait block");
+        };
+        assert_eq!(i.trait_name, "Greet");
+        assert_eq!(i.type_name, "Person");
+        assert_eq!(i.methods.len(), 1);
+    }
+
+    #[test]
+    fn test_generic_fn_def() {
+        let program = parse("fn identity<T>(x: T) -> T { x }\nfn main() {}").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        assert_eq!(f.name, "identity");
+        assert_eq!(f.generic_params.len(), 1);
+        assert_eq!(f.generic_params[0].name, "T");
+        assert!(f.generic_params[0].bounds.is_empty());
+    }
+
+    #[test]
+    fn test_generic_fn_with_bounds() {
+        let program =
+            parse("fn print_val<T: Display>(x: T) { println!(\"{}\", x); }\nfn main() {}").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        assert_eq!(f.generic_params.len(), 1);
+        assert_eq!(f.generic_params[0].name, "T");
+        assert_eq!(f.generic_params[0].bounds, vec!["Display"]);
+    }
+
+    #[test]
+    fn test_generic_fn_multiple_params() {
+        let program = parse("fn foo<A, B: Clone + Debug>(a: A, b: B) { }\nfn main() {}").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        assert_eq!(f.generic_params.len(), 2);
+        assert_eq!(f.generic_params[0].name, "A");
+        assert!(f.generic_params[0].bounds.is_empty());
+        assert_eq!(f.generic_params[1].name, "B");
+        assert_eq!(f.generic_params[1].bounds, vec!["Clone", "Debug"]);
+    }
+
+    #[test]
+    fn test_impl_trait_for_add() {
+        let program = parse(
+            r#"struct Vec2 { x: f64, y: f64 }
+impl Add for Vec2 { fn add(&self, other: &Vec2) -> Vec2 { Vec2 { x: 0.0, y: 0.0 } } }
+fn main() {}"#,
+        )
+        .unwrap();
+        let Item::ImplTrait(i) = &program.items[1] else {
+            panic!("expected impl trait block");
+        };
+        assert_eq!(i.trait_name, "Add");
+        assert_eq!(i.type_name, "Vec2");
     }
 }

@@ -16,6 +16,8 @@ pub enum Item {
     Struct(StructDef),
     Enum(EnumDef),
     Impl(ImplBlock),
+    Trait(TraitDef),
+    ImplTrait(ImplTraitBlock),
 }
 
 impl Item {
@@ -25,6 +27,8 @@ impl Item {
             Item::Struct(s) => s.span,
             Item::Enum(e) => e.span,
             Item::Impl(i) => i.span,
+            Item::Trait(t) => t.span,
+            Item::ImplTrait(i) => i.span,
         }
     }
 }
@@ -33,6 +37,7 @@ impl Item {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnDef {
     pub name: String,
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
@@ -106,6 +111,41 @@ pub enum EnumVariantKind {
 pub struct ImplBlock {
     pub type_name: String,
     pub methods: Vec<FnDef>,
+    pub span: Span,
+}
+
+/// A trait definition: `trait Name { fn method(&self) -> Type; }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitDef {
+    pub name: String,
+    pub methods: Vec<TraitMethodSig>,
+    pub default_methods: Vec<FnDef>,
+    pub span: Span,
+}
+
+/// A trait method signature (no body): `fn method(&self, x: i64) -> i64;`
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitMethodSig {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeAnnotation>,
+    pub span: Span,
+}
+
+/// An impl-trait block: `impl Trait for Type { fn ... }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplTraitBlock {
+    pub trait_name: String,
+    pub type_name: String,
+    pub methods: Vec<FnDef>,
+    pub span: Span,
+}
+
+/// A generic type parameter, e.g., `T` or `T: Display + Clone`
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericParam {
+    pub name: String,
+    pub bounds: Vec<String>,
     pub span: Span,
 }
 
@@ -552,6 +592,39 @@ impl Item {
                 }
                 out.push_str(&format!("{pad}}}\n"));
             }
+            Item::Trait(t) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}trait {} {{\n", t.name));
+                for sig in &t.methods {
+                    out.push_str(&format!("{pad}  fn {}(", sig.name));
+                    for (i, p) in sig.params.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        out.push_str(&format!("{}: {}", p.name, p.type_ann.name));
+                    }
+                    out.push(')');
+                    if let Some(ret) = &sig.return_type {
+                        out.push_str(&format!(" -> {}", ret.name));
+                    }
+                    out.push_str(";\n");
+                }
+                for m in &t.default_methods {
+                    m.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            Item::ImplTrait(i) => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!(
+                    "{pad}impl {} for {} {{\n",
+                    i.trait_name, i.type_name
+                ));
+                for m in &i.methods {
+                    m.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
         }
     }
 }
@@ -559,7 +632,22 @@ impl Item {
 impl FnDef {
     fn pretty_print(&self, out: &mut String, indent: usize) {
         let pad = "  ".repeat(indent);
-        out.push_str(&format!("{pad}fn {}(", self.name));
+        out.push_str(&format!("{pad}fn {}", self.name));
+        if !self.generic_params.is_empty() {
+            out.push('<');
+            for (i, gp) in self.generic_params.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&gp.name);
+                if !gp.bounds.is_empty() {
+                    out.push_str(": ");
+                    out.push_str(&gp.bounds.join(" + "));
+                }
+            }
+            out.push('>');
+        }
+        out.push('(');
         for (i, p) in self.params.iter().enumerate() {
             if i > 0 {
                 out.push_str(", ");

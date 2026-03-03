@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 7: Structs, Enums & Impl Blocks — COMPLETE. 224 tests passing.
+Phase 8: Traits & Generics — COMPLETE. 252 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -123,12 +123,15 @@ Phase 7: Structs, Enums & Impl Blocks — COMPLETE. 224 tests passing.
 - `return` statements
 - `println!("{}", x)` with `{}` format placeholders and `{:?}` debug format
 - `print!()` without newline
+- `format!("...", args)` — returns String value
+- `eprintln!()` — prints to stderr
 - `vec![1, 2, 3]` macro for vector creation
 - `[1, 2, 3]` array literal syntax (creates Vec)
 - `v[0]` index access for Vec, String, Tuple
 - `v[0] = x` index assignment for Vec
 - Vec methods: `.push()`, `.pop()`, `.len()`, `.is_empty()`, `.contains()`, `.first()`, `.last()`, `.reverse()`, `.join()`
-- String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`
+- String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`, `.clone()`, `.to_string()`
+- `String::from("...")` associated function
 - Tuples: `(a, b, c)`, tuple index `t.0`, empty tuple `()`, single-element `(x,)`
 - Structs: `struct Point { x: f64, y: f64 }`, unit structs, tuple structs
 - Struct instantiation: `Point { x: 1.0, y: 2.0 }`, shorthand `Point { x, y }`
@@ -142,6 +145,16 @@ Phase 7: Structs, Enums & Impl Blocks — COMPLETE. 224 tests passing.
 - `Self` type resolution in impl blocks
 - `self` keyword for accessing receiver in methods
 - Auto debug format for structs and enums via `{:?}`
+- Trait definitions: `trait Name { fn method(&self) -> Type; }`
+- Trait default methods: `trait Name { fn method(&self) { default_body } }`
+- Trait implementations: `impl Trait for Type { fn method(&self) { ... } }`
+- Method dispatch searches: impl blocks → trait impls → trait defaults
+- Multiple traits per type supported
+- Traits work on both structs and enums
+- Generic function syntax: `fn foo<T>(x: T) -> T { x }` (parsed, dynamically typed)
+- Generic bounds syntax: `fn foo<T: Display>(x: T)` (parsed, not enforced)
+- Multiple generic params: `fn foo<A, B: Clone + Debug>(a: A, b: B)`
+- Operator overloading via `impl Add/Sub/Mul/Div for Type { fn add/sub/mul/div(&self, other) -> Type }`
 - `&` and `&mut` syntax parsed but ignored (no borrow checker)
 - Shadowing: `let x = 1; let x = "hello";`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`

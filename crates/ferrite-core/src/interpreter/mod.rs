@@ -24,6 +24,10 @@ pub struct Interpreter {
     enum_defs: HashMap<String, EnumDef>,
     /// Methods registered via `impl` blocks, keyed by type name.
     impl_methods: HashMap<String, Vec<FnDef>>,
+    /// Registered trait definitions.
+    trait_defs: HashMap<String, TraitDef>,
+    /// Methods registered via `impl Trait for Type`, keyed by (type_name, trait_name).
+    trait_impls: HashMap<(String, String), Vec<FnDef>>,
     /// Current `Self` type name (set when executing impl methods).
     current_self_type: Option<String>,
 }
@@ -37,6 +41,8 @@ impl Interpreter {
             struct_defs: HashMap::new(),
             enum_defs: HashMap::new(),
             impl_methods: HashMap::new(),
+            trait_defs: HashMap::new(),
+            trait_impls: HashMap::new(),
             current_self_type: None,
         }
     }
@@ -49,6 +55,8 @@ impl Interpreter {
             struct_defs: HashMap::new(),
             enum_defs: HashMap::new(),
             impl_methods: HashMap::new(),
+            trait_defs: HashMap::new(),
+            trait_impls: HashMap::new(),
             current_self_type: None,
         }
     }
@@ -61,6 +69,8 @@ impl Interpreter {
             struct_defs: HashMap::new(),
             enum_defs: HashMap::new(),
             impl_methods: HashMap::new(),
+            trait_defs: HashMap::new(),
+            trait_impls: HashMap::new(),
             current_self_type: None,
         }
     }
@@ -135,6 +145,19 @@ impl Interpreter {
                 let methods = self.impl_methods.entry(i.type_name.clone()).or_default();
                 for method in &i.methods {
                     // Remove existing method with same name (allow re-definition)
+                    methods.retain(|m| m.name != method.name);
+                    methods.push(method.clone());
+                }
+                Ok(())
+            }
+            Item::Trait(t) => {
+                self.trait_defs.insert(t.name.clone(), t.clone());
+                Ok(())
+            }
+            Item::ImplTrait(i) => {
+                let key = (i.type_name.clone(), i.trait_name.clone());
+                let methods = self.trait_impls.entry(key).or_default();
+                for method in &i.methods {
                     methods.retain(|m| m.name != method.name);
                     methods.push(method.clone());
                 }
@@ -750,7 +773,7 @@ impl Interpreter {
     // === Binary operations ===
 
     fn eval_binary_op(
-        &self,
+        &mut self,
         left: &Value,
         op: BinOp,
         right: &Value,
@@ -826,15 +849,72 @@ impl Interpreter {
             (Value::Integer(a), BinOp::Shl, Value::Integer(b)) => Ok(Value::Integer(a << b)),
             (Value::Integer(a), BinOp::Shr, Value::Integer(b)) => Ok(Value::Integer(a >> b)),
 
-            _ => Err(FerriError::Runtime {
-                message: format!(
-                    "unsupported operation: {} {op} {}",
-                    left.type_name(),
-                    right.type_name()
-                ),
-                line,
-                column: col,
-            }),
+            _ => {
+                // Try operator overloading for user types
+                let trait_name = match op {
+                    BinOp::Add => Some("Add"),
+                    BinOp::Sub => Some("Sub"),
+                    BinOp::Mul => Some("Mul"),
+                    BinOp::Div => Some("Div"),
+                    _ => None,
+                };
+                let method_name = match op {
+                    BinOp::Add => Some("add"),
+                    BinOp::Sub => Some("sub"),
+                    BinOp::Mul => Some("mul"),
+                    BinOp::Div => Some("div"),
+                    _ => None,
+                };
+                let type_name = match left {
+                    Value::Struct { name, .. } => Some(name.clone()),
+                    Value::EnumVariant { enum_name, .. } => Some(enum_name.clone()),
+                    _ => None,
+                };
+                if let (Some(tn), Some(trait_n), Some(method_n)) =
+                    (&type_name, trait_name, method_name)
+                {
+                    if let Some(method_def) = self.find_trait_method(tn, method_n) {
+                        // Check method is from the right trait
+                        let key = (tn.clone(), trait_n.to_string());
+                        if self.trait_impls.contains_key(&key) {
+                            let func_env = Environment::child(&self.env);
+                            func_env
+                                .borrow_mut()
+                                .define("self".to_string(), left.clone(), true);
+                            // Bind `other`/`rhs` param
+                            let non_self_params: Vec<_> = method_def
+                                .params
+                                .iter()
+                                .filter(|p| p.name != "self")
+                                .collect();
+                            if let Some(param) = non_self_params.first() {
+                                func_env.borrow_mut().define(
+                                    param.name.clone(),
+                                    right.clone(),
+                                    true,
+                                );
+                            }
+                            let prev = self.current_self_type.take();
+                            self.current_self_type = Some(tn.clone());
+                            let result = self.eval_block(&method_def.body, &func_env);
+                            self.current_self_type = prev;
+                            return match result {
+                                Err(FerriError::Return(val)) => Ok(*val),
+                                other => other,
+                            };
+                        }
+                    }
+                }
+                Err(FerriError::Runtime {
+                    message: format!(
+                        "unsupported operation: {} {op} {}",
+                        left.type_name(),
+                        right.type_name()
+                    ),
+                    line,
+                    column: col,
+                })
+            }
         }
     }
 
@@ -1026,6 +1106,15 @@ impl Interpreter {
                     .map(|a| self.eval_expr(a, env))
                     .collect::<Result<_, _>>()?;
                 Ok(Value::Vec(vals))
+            }
+            "format" => {
+                let output = self.format_macro_args(args, env, line, col)?;
+                Ok(Value::String(output))
+            }
+            "eprintln" => {
+                let output = self.format_macro_args(args, env, line, col)?;
+                eprintln!("{output}");
+                Ok(Value::Unit)
             }
             _ => Err(FerriError::Runtime {
                 message: format!("unknown macro '{name}!'"),
@@ -1422,6 +1511,8 @@ impl Interpreter {
                 new_s.push_str(&suffix);
                 Ok(Value::String(new_s))
             }
+            "clone" => Ok(Value::String(s)),
+            "to_string" => Ok(Value::String(s)),
             _ => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on String"),
                 line: span.line,
@@ -1519,6 +1610,41 @@ impl Interpreter {
                     }
                 }
             }
+
+            // Check for associated functions in trait impls
+            for ((tn, _), methods) in &self.trait_impls.clone() {
+                if tn == type_name {
+                    for method_def in methods {
+                        if method_def.name == *method_name {
+                            let is_method =
+                                method_def.params.first().is_some_and(|p| p.name == "self");
+                            if !is_method {
+                                let func_env = Environment::child(env);
+                                for (param, arg) in method_def.params.iter().zip(args.iter()) {
+                                    func_env.borrow_mut().define(
+                                        param.name.clone(),
+                                        arg.clone(),
+                                        true,
+                                    );
+                                }
+                                let prev_self_type = self.current_self_type.take();
+                                self.current_self_type = Some(type_name.clone());
+                                let result = self.eval_block(&method_def.body, &func_env);
+                                self.current_self_type = prev_self_type;
+                                return match result {
+                                    Err(FerriError::Return(val)) => Ok(*val),
+                                    other => other,
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Built-in String::from
+            if type_name == "String" && method_name == "from" && args.len() == 1 {
+                return Ok(Value::String(format!("{}", args[0])));
+            }
         }
 
         Err(FerriError::Runtime {
@@ -1567,48 +1693,34 @@ impl Interpreter {
         env: &Env,
         span: &Span,
     ) -> Result<Value, FerriError> {
+        // First, search direct impl methods
         if let Some(methods) = self.impl_methods.get(type_name).cloned() {
             for method_def in &methods {
                 if method_def.name == method {
-                    let func_env = Environment::child(env);
-
-                    // Bind `self`
-                    func_env
-                        .borrow_mut()
-                        .define("self".to_string(), receiver.clone(), true);
-
-                    // Bind remaining params (skip `self` in params)
-                    let non_self_params: Vec<_> = method_def
-                        .params
-                        .iter()
-                        .filter(|p| p.name != "self")
-                        .collect();
-
-                    for (param, arg) in non_self_params.iter().zip(args.iter()) {
-                        func_env
-                            .borrow_mut()
-                            .define(param.name.clone(), arg.clone(), true);
-                    }
-
-                    let prev_self_type = self.current_self_type.take();
-                    self.current_self_type = Some(type_name.to_string());
-                    let result = self.eval_block(&method_def.body, &func_env);
-
-                    // If method mutated `self`, propagate changes back
-                    if let Ok(updated_self) = func_env.borrow().get("self") {
-                        if updated_self != receiver {
-                            let _ = self.mutate_variable(receiver_expr, updated_self, env, span);
-                        }
-                    }
-
-                    self.current_self_type = prev_self_type;
-
-                    return match result {
-                        Err(FerriError::Return(val)) => Ok(*val),
-                        other => other,
-                    };
+                    return self.dispatch_method(
+                        &method_def.clone(),
+                        receiver,
+                        type_name,
+                        args,
+                        receiver_expr,
+                        env,
+                        span,
+                    );
                 }
             }
+        }
+
+        // Then search trait impl methods
+        if let Some(method_def) = self.find_trait_method(type_name, method) {
+            return self.dispatch_method(
+                &method_def,
+                receiver,
+                type_name,
+                args,
+                receiver_expr,
+                env,
+                span,
+            );
         }
 
         Err(FerriError::Runtime {
@@ -1616,6 +1728,81 @@ impl Interpreter {
             line: span.line,
             column: span.column,
         })
+    }
+
+    /// Search trait impls for a method, including default implementations.
+    fn find_trait_method(&self, type_name: &str, method: &str) -> Option<FnDef> {
+        // Search all trait impls for this type
+        for ((tn, trait_name), methods) in &self.trait_impls {
+            if tn == type_name {
+                // Check explicit impl methods first
+                for m in methods {
+                    if m.name == method {
+                        return Some(m.clone());
+                    }
+                }
+                // Check default methods from the trait definition
+                if let Some(trait_def) = self.trait_defs.get(trait_name) {
+                    for m in &trait_def.default_methods {
+                        if m.name == method {
+                            return Some(m.clone());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Dispatch a method call: bind self, params, execute body.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_method(
+        &mut self,
+        method_def: &FnDef,
+        receiver: Value,
+        type_name: &str,
+        args: Vec<Value>,
+        receiver_expr: &Expr,
+        env: &Env,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        let func_env = Environment::child(env);
+
+        // Bind `self`
+        func_env
+            .borrow_mut()
+            .define("self".to_string(), receiver.clone(), true);
+
+        // Bind remaining params (skip `self` in params)
+        let non_self_params: Vec<_> = method_def
+            .params
+            .iter()
+            .filter(|p| p.name != "self")
+            .collect();
+
+        for (param, arg) in non_self_params.iter().zip(args.iter()) {
+            func_env
+                .borrow_mut()
+                .define(param.name.clone(), arg.clone(), true);
+        }
+
+        let prev_self_type = self.current_self_type.take();
+        self.current_self_type = Some(type_name.to_string());
+        let result = self.eval_block(&method_def.body, &func_env);
+
+        // If method mutated `self`, propagate changes back
+        if let Ok(updated_self) = func_env.borrow().get("self") {
+            if updated_self != receiver {
+                let _ = self.mutate_variable(receiver_expr, updated_self, env, span);
+            }
+        }
+
+        self.current_self_type = prev_self_type;
+
+        match result {
+            Err(FerriError::Return(val)) => Ok(*val),
+            other => other,
+        }
     }
 
     fn mutate_variable(
@@ -3048,5 +3235,337 @@ fn main() {
 "#,
         );
         assert_eq!(out, vec!["1.0 2.0\n"]);
+    }
+
+    // === Phase 8: Traits & Generics ===
+
+    #[test]
+    fn test_trait_basic() {
+        let out = run_and_capture(
+            r#"
+trait Greet {
+    fn greet(&self) -> String;
+}
+
+struct Person {
+    name: String,
+}
+
+impl Greet for Person {
+    fn greet(&self) -> String {
+        format!("Hello, I'm {}!", self.name)
+    }
+}
+
+fn main() {
+    let p = Person { name: String::from("Alice") };
+    println!("{}", p.greet());
+}
+"#,
+        );
+        assert_eq!(out, vec!["Hello, I'm Alice!\n"]);
+    }
+
+    #[test]
+    fn test_trait_multiple_methods() {
+        let out = run_and_capture(
+            r#"
+trait Shape {
+    fn area(&self) -> f64;
+    fn name(&self) -> String;
+}
+
+struct Circle {
+    radius: f64,
+}
+
+impl Shape for Circle {
+    fn area(&self) -> f64 {
+        3.14159 * self.radius * self.radius
+    }
+
+    fn name(&self) -> String {
+        String::from("Circle")
+    }
+}
+
+fn main() {
+    let c = Circle { radius: 5.0 };
+    println!("{}: {}", c.name(), c.area());
+}
+"#,
+        );
+        assert_eq!(out, vec!["Circle: 78.53975\n"]);
+    }
+
+    #[test]
+    fn test_trait_default_method() {
+        let out = run_and_capture(
+            r#"
+trait Describable {
+    fn name(&self) -> String;
+    fn describe(&self) -> String {
+        format!("I am {}", self.name())
+    }
+}
+
+struct Dog {
+    breed: String,
+}
+
+impl Describable for Dog {
+    fn name(&self) -> String {
+        self.breed.clone()
+    }
+}
+
+fn main() {
+    let d = Dog { breed: String::from("Labrador") };
+    println!("{}", d.describe());
+}
+"#,
+        );
+        assert_eq!(out, vec!["I am Labrador\n"]);
+    }
+
+    #[test]
+    fn test_format_macro() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let s = format!("Hello, {}!", "world");
+    println!("{}", s);
+    let n = 42;
+    let msg = format!("The answer is {}", n);
+    println!("{}", msg);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Hello, world!\n", "The answer is 42\n"]);
+    }
+
+    #[test]
+    fn test_operator_overloading_add() {
+        let out = run_and_capture(
+            r#"
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+impl Vec2 {
+    fn new(x: f64, y: f64) -> Self {
+        Vec2 { x, y }
+    }
+}
+
+impl Add for Vec2 {
+    fn add(&self, other: &Vec2) -> Vec2 {
+        Vec2::new(self.x + other.x, self.y + other.y)
+    }
+}
+
+fn main() {
+    let a = Vec2::new(1.0, 2.0);
+    let b = Vec2::new(3.0, 4.0);
+    let c = a + b;
+    println!("{} {}", c.x, c.y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["4.0 6.0\n"]);
+    }
+
+    #[test]
+    fn test_operator_overloading_mul() {
+        let out = run_and_capture(
+            r#"
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+impl Mul for Vec2 {
+    fn mul(&self, other: &Vec2) -> Vec2 {
+        Vec2 { x: self.x * other.x, y: self.y * other.y }
+    }
+}
+
+fn main() {
+    let a = Vec2 { x: 2.0, y: 3.0 };
+    let b = Vec2 { x: 4.0, y: 5.0 };
+    let c = a * b;
+    println!("{} {}", c.x, c.y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["8.0 15.0\n"]);
+    }
+
+    #[test]
+    fn test_generic_function() {
+        let out = run_and_capture(
+            r#"
+fn identity<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    let a = identity(42);
+    let b = identity("hello");
+    println!("{} {}", a, b);
+}
+"#,
+        );
+        assert_eq!(out, vec!["42 hello\n"]);
+    }
+
+    #[test]
+    fn test_generic_function_with_bounds() {
+        let out = run_and_capture(
+            r#"
+fn print_val<T: Display>(x: T) {
+    println!("{}", x);
+}
+
+fn main() {
+    print_val(42);
+    print_val("hello");
+}
+"#,
+        );
+        assert_eq!(out, vec!["42\n", "hello\n"]);
+    }
+
+    #[test]
+    fn test_trait_with_impl_and_direct_methods() {
+        let out = run_and_capture(
+            r#"
+trait Summary {
+    fn summarize(&self) -> String;
+}
+
+struct Article {
+    title: String,
+    content: String,
+}
+
+impl Article {
+    fn new(title: String, content: String) -> Self {
+        Article { title, content }
+    }
+}
+
+impl Summary for Article {
+    fn summarize(&self) -> String {
+        format!("{}: {}", self.title, self.content)
+    }
+}
+
+fn main() {
+    let a = Article::new(String::from("Ferrite"), String::from("A Rust-like language"));
+    println!("{}", a.summarize());
+}
+"#,
+        );
+        assert_eq!(out, vec!["Ferrite: A Rust-like language\n"]);
+    }
+
+    #[test]
+    fn test_multiple_traits_for_type() {
+        let out = run_and_capture(
+            r#"
+trait Greet {
+    fn greet(&self) -> String;
+}
+
+trait Farewell {
+    fn farewell(&self) -> String;
+}
+
+struct Person {
+    name: String,
+}
+
+impl Greet for Person {
+    fn greet(&self) -> String {
+        format!("Hi, I'm {}", self.name)
+    }
+}
+
+impl Farewell for Person {
+    fn farewell(&self) -> String {
+        format!("Goodbye from {}", self.name)
+    }
+}
+
+fn main() {
+    let p = Person { name: String::from("Bob") };
+    println!("{}", p.greet());
+    println!("{}", p.farewell());
+}
+"#,
+        );
+        assert_eq!(out, vec!["Hi, I'm Bob\n", "Goodbye from Bob\n"]);
+    }
+
+    #[test]
+    fn test_string_from() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let s = String::from("hello");
+    println!("{}", s);
+}
+"#,
+        );
+        assert_eq!(out, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_trait_on_enum() {
+        let out = run_and_capture(
+            r#"
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+impl Describe for Color {
+    fn describe(&self) -> String {
+        match self {
+            Color::Red => String::from("red"),
+            Color::Green => String::from("green"),
+            Color::Blue => String::from("blue"),
+        }
+    }
+}
+
+fn main() {
+    let c = Color::Green;
+    println!("{}", c.describe());
+}
+"#,
+        );
+        assert_eq!(out, vec!["green\n"]);
+    }
+
+    #[test]
+    fn test_clone_method_on_string() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let s = String::from("hello");
+    let s2 = s.clone();
+    println!("{} {}", s, s2);
+}
+"#,
+        );
+        assert_eq!(out, vec!["hello hello\n"]);
     }
 }
