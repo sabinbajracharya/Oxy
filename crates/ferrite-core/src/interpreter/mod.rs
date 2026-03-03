@@ -597,7 +597,7 @@ impl Interpreter {
                         break;
                     }
                     let iter_env = Environment::child(env);
-                    Self::bind_pattern(pattern, &val, &iter_env);
+                    Self::bind_pattern(pattern, &val, &iter_env, false);
                     match self.eval_block(body, &iter_env) {
                         Ok(v) => result = v,
                         Err(FerriError::Break(v)) => {
@@ -641,6 +641,23 @@ impl Interpreter {
                         Err(e) => return Err(e),
                     }
                 }
+                Ok(Value::Unit)
+            }
+            Stmt::LetPattern {
+                pattern,
+                mutable,
+                value,
+                span,
+            } => {
+                let val = self.eval_expr(value, env)?;
+                if !Self::pattern_matches(pattern, &val) {
+                    return Err(FerriError::Runtime {
+                        message: "destructuring pattern does not match value".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Self::bind_pattern(pattern, &val, env, *mutable);
                 Ok(Value::Unit)
             }
         }
@@ -1177,7 +1194,7 @@ impl Interpreter {
         for arm in arms {
             if Self::pattern_matches(&arm.pattern, &val) {
                 let match_env = Environment::child(env);
-                Self::bind_pattern(&arm.pattern, &val, &match_env);
+                Self::bind_pattern(&arm.pattern, &val, &match_env, false);
                 return self.eval_expr(&arm.body, &match_env);
             }
         }
@@ -1360,7 +1377,7 @@ impl Interpreter {
         let val = self.eval_expr(expr, env)?;
         if Self::pattern_matches(pattern, &val) {
             let child_env = Environment::child(env);
-            Self::bind_pattern(pattern, &val, &child_env);
+            Self::bind_pattern(pattern, &val, &child_env, false);
             self.eval_block(then_block, &child_env)
         } else if let Some(else_expr) = else_block {
             self.eval_expr(else_expr, env)
@@ -1640,6 +1657,62 @@ pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), FerriError> {
     let mut interp = Interpreter::new_with_captured_output();
     let result = interp.execute_program(&program)?;
     Ok((result, interp.captured_output().to_vec()))
+}
+
+/// Result of running a test suite.
+pub struct TestResult {
+    pub name: String,
+    pub passed: bool,
+    pub error: Option<String>,
+}
+
+/// Discover and run `#[test]` functions in a Ferrite source file.
+/// Returns a list of test results.
+pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, FerriError> {
+    let program = crate::parser::parse(source)?;
+
+    // First register all items (structs, enums, functions, impls, etc.)
+    let mut interp = Interpreter::new();
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        interp.set_base_dir(parent.to_string_lossy().to_string());
+    }
+    for item in &program.items {
+        interp.register_item(item)?;
+    }
+
+    // Discover #[test] functions
+    let test_fns: Vec<&FnDef> = program
+        .items
+        .iter()
+        .filter_map(|item| {
+            if let crate::ast::Item::Function(f) = item {
+                if f.attributes.iter().any(|a| a.name == "test") {
+                    return Some(f);
+                }
+            }
+            None
+        })
+        .collect();
+
+    let mut results = Vec::new();
+    for test_fn in &test_fns {
+        // Run each test in a child scope for isolation
+        let test_env = crate::env::Environment::child(&interp.env);
+        let result = interp.eval_block(&test_fn.body, &test_env);
+        match result {
+            Ok(_) => results.push(TestResult {
+                name: test_fn.name.clone(),
+                passed: true,
+                error: None,
+            }),
+            Err(e) => results.push(TestResult {
+                name: test_fn.name.clone(),
+                passed: false,
+                error: Some(e.to_string()),
+            }),
+        }
+    }
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -5549,5 +5622,279 @@ fn main() {
             suggest_name("prnt", ["print", "println", "parse"].into_iter()),
             Some("print".to_string())
         );
+    }
+
+    // === Assert macros ===
+
+    #[test]
+    fn test_assert_pass() {
+        run_capturing("fn main() { assert!(true); }").unwrap();
+        run_capturing("fn main() { assert!(1 == 1); }").unwrap();
+    }
+
+    #[test]
+    fn test_assert_fail() {
+        let err = run_capturing("fn main() { assert!(false); }").unwrap_err();
+        assert!(format!("{err}").contains("assertion failed"));
+    }
+
+    #[test]
+    fn test_assert_with_message() {
+        let err = run_capturing(r#"fn main() { assert!(false, "custom message"); }"#).unwrap_err();
+        assert!(format!("{err}").contains("custom message"));
+    }
+
+    #[test]
+    fn test_assert_eq_pass() {
+        run_capturing("fn main() { assert_eq!(1, 1); }").unwrap();
+        run_capturing(r#"fn main() { assert_eq!("hello", "hello"); }"#).unwrap();
+    }
+
+    #[test]
+    fn test_assert_eq_fail() {
+        let err = run_capturing("fn main() { assert_eq!(1, 2); }").unwrap_err();
+        assert!(format!("{err}").contains("assertion failed"));
+    }
+
+    #[test]
+    fn test_assert_ne_pass() {
+        run_capturing("fn main() { assert_ne!(1, 2); }").unwrap();
+    }
+
+    #[test]
+    fn test_assert_ne_fail() {
+        let err = run_capturing("fn main() { assert_ne!(1, 1); }").unwrap_err();
+        assert!(format!("{err}").contains("assertion failed"));
+    }
+
+    // === Test runner ===
+
+    #[test]
+    fn test_test_runner_basic() {
+        let source = r#"
+            #[test]
+            fn test_addition() {
+                assert_eq!(1 + 1, 2);
+            }
+
+            #[test]
+            fn test_string() {
+                assert_eq!("hello".len(), 5);
+            }
+        "#;
+        let results = super::run_tests("test.fe", source).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.passed));
+    }
+
+    #[test]
+    fn test_test_runner_failure() {
+        let source = r#"
+            #[test]
+            fn test_bad() {
+                assert_eq!(1, 2);
+            }
+        "#;
+        let results = super::run_tests("test.fe", source).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].passed);
+        assert!(results[0].error.is_some());
+    }
+
+    #[test]
+    fn test_test_runner_no_tests() {
+        let source = "fn foo() { }";
+        let results = super::run_tests("test.fe", source).unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    // === Let destructuring ===
+
+    #[test]
+    fn test_let_tuple_destructure() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let t = (1, 2, 3);
+            let (a, b, c) = t;
+            println!("{} {} {}", a, b, c);
+            }"#,
+        );
+        assert_eq!(output, vec!["1 2 3\n"]);
+    }
+
+    #[test]
+    fn test_let_slice_destructure() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![10, 20];
+            let [x, y] = v;
+            println!("{} {}", x, y);
+            }"#,
+        );
+        assert_eq!(output, vec!["10 20\n"]);
+    }
+
+    // === Iterator chaining methods ===
+
+    #[test]
+    fn test_vec_zip() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let a = vec![1, 2, 3];
+            let b = vec!["a", "b", "c"];
+            let zipped = a.zip(b);
+            println!("{:?}", zipped);
+            }"#,
+        );
+        assert_eq!(output, vec!["[(1, \"a\"), (2, \"b\"), (3, \"c\")]\n"]);
+    }
+
+    #[test]
+    fn test_vec_take_skip() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3, 4, 5];
+            let first = v.take(3);
+            let rest = v.skip(2);
+            println!("{:?} {:?}", first, rest);
+            }"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3] [3, 4, 5]\n"]);
+    }
+
+    #[test]
+    fn test_vec_chain() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let a = vec![1, 2];
+            let b = vec![3, 4];
+            let c = a.chain(b);
+            println!("{:?}", c);
+            }"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3, 4]\n"]);
+    }
+
+    #[test]
+    fn test_vec_flatten() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let nested = vec![vec![1, 2], vec![3, 4]];
+            let flat = nested.flatten();
+            println!("{:?}", flat);
+            }"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3, 4]\n"]);
+    }
+
+    #[test]
+    fn test_vec_sum() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3, 4, 5];
+            println!("{}", v.sum());
+            }"#,
+        );
+        assert_eq!(output, vec!["15\n"]);
+    }
+
+    #[test]
+    fn test_vec_rev() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3];
+            println!("{:?}", v.rev());
+            }"#,
+        );
+        assert_eq!(output, vec!["[3, 2, 1]\n"]);
+    }
+
+    #[test]
+    fn test_vec_sort() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![3, 1, 4, 1, 5];
+            println!("{:?}", v.sort());
+            }"#,
+        );
+        assert_eq!(output, vec!["[1, 1, 3, 4, 5]\n"]);
+    }
+
+    #[test]
+    fn test_vec_dedup() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 1, 2, 2, 3];
+            println!("{:?}", v.dedup());
+            }"#,
+        );
+        assert_eq!(output, vec!["[1, 2, 3]\n"]);
+    }
+
+    #[test]
+    fn test_vec_min_max() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![3, 1, 4, 1, 5];
+            println!("{:?} {:?}", v.min(), v.max());
+            }"#,
+        );
+        assert_eq!(output, vec!["Some(1) Some(5)\n"]);
+    }
+
+    #[test]
+    fn test_vec_windows() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3, 4];
+            let w = v.windows(2);
+            println!("{:?}", w);
+            }"#,
+        );
+        assert_eq!(output, vec!["[[1, 2], [2, 3], [3, 4]]\n"]);
+    }
+
+    #[test]
+    fn test_vec_chunks() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3, 4, 5];
+            let c = v.chunks(2);
+            println!("{:?}", c);
+            }"#,
+        );
+        assert_eq!(output, vec!["[[1, 2], [3, 4], [5]]\n"]);
+    }
+
+    #[test]
+    fn test_iterator_chaining() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![1, 2, 3, 4, 5, 6];
+            let result = v.filter(|x| x % 2 == 0).map(|x| x * 10).sum();
+            println!("{}", result);
+            }"#,
+        );
+        assert_eq!(output, vec!["120\n"]);
+    }
+
+    // === Visibility modifiers ===
+
+    #[test]
+    fn test_pub_fn() {
+        run_capturing("pub fn greet() { println!(\"hello\"); } fn main() { greet(); }").unwrap();
+    }
+
+    #[test]
+    fn test_pub_struct() {
+        run_capturing(
+            "pub struct Point { pub x: i64, pub y: i64 } fn main() { let p = Point { x: 1, y: 2 }; }",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_pub_enum() {
+        run_capturing("pub enum Color { Red, Blue } fn main() { let c = Color::Red; }").unwrap();
     }
 }

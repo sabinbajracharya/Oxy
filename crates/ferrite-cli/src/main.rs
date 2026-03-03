@@ -25,6 +25,13 @@ fn main() {
         Some("repl") => {
             run_repl();
         }
+        Some("test") => {
+            let file = args.get(2).unwrap_or_else(|| {
+                eprintln!("{} 'test' requires a file argument", "error:".red().bold());
+                process::exit(2);
+            });
+            run_test_file(file);
+        }
         Some("--dump-tokens") => {
             let file = args.get(2).unwrap_or_else(|| {
                 eprintln!(
@@ -239,6 +246,60 @@ fn balanced_braces(s: &str) -> bool {
     depth <= 0
 }
 
+fn run_test_file(path: &str) {
+    let source = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "{} could not read file '{path}': {e}",
+                "error:".red().bold()
+            );
+            process::exit(1);
+        }
+    };
+
+    println!("\n{} tests in {}\n", "running".bold(), path.cyan());
+
+    match ferrite_core::interpreter::run_tests(path, &source) {
+        Ok(results) => {
+            let mut passed = 0;
+            let mut failed = 0;
+
+            for result in &results {
+                if result.passed {
+                    println!("  {} ... {}", result.name, "ok".green().bold());
+                    passed += 1;
+                } else {
+                    println!("  {} ... {}", result.name, "FAILED".red().bold());
+                    if let Some(ref err) = result.error {
+                        println!("    {}", err.red());
+                    }
+                    failed += 1;
+                }
+            }
+
+            println!();
+            if failed > 0 {
+                println!(
+                    "{}: {} passed, {} failed",
+                    "test result: FAILED".red().bold(),
+                    passed,
+                    failed
+                );
+                process::exit(1);
+            } else if passed == 0 {
+                println!("{}", "no tests found".yellow());
+            } else {
+                println!("{}: {} passed", "test result: ok".green().bold(), passed);
+            }
+        }
+        Err(e) => {
+            display_error(&e, &source, &[]);
+            process::exit(1);
+        }
+    }
+}
+
 fn dump_tokens(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
@@ -298,6 +359,10 @@ fn print_help() {
     println!(
         "  {}        Execute a Ferrite source file",
         "run <file.fe>".cyan()
+    );
+    println!(
+        "  {}       Run #[test] functions in a file",
+        "test <file.fe>".cyan()
     );
     println!(
         "  {}                 Start the interactive REPL\n",

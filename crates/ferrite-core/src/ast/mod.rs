@@ -71,6 +71,8 @@ pub struct FnDef {
     pub params: Vec<Param>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
+    pub attributes: Vec<Attribute>,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -104,6 +106,7 @@ pub struct StructDef {
     pub name: String,
     pub attributes: Vec<Attribute>,
     pub kind: StructKind,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -123,6 +126,7 @@ pub enum StructKind {
 pub struct StructField {
     pub name: String,
     pub type_ann: TypeAnnotation,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -132,6 +136,7 @@ pub struct EnumDef {
     pub name: String,
     pub attributes: Vec<Attribute>,
     pub variants: Vec<EnumVariant>,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -168,6 +173,7 @@ pub struct TraitDef {
     pub name: String,
     pub methods: Vec<TraitMethodSig>,
     pub default_methods: Vec<FnDef>,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -294,6 +300,13 @@ pub enum Stmt {
         body: Block,
         span: Span,
     },
+    /// `let pattern = expr;` — destructuring let binding
+    LetPattern {
+        pattern: Box<Pattern>,
+        mutable: bool,
+        value: Expr,
+        span: Span,
+    },
 }
 
 impl Stmt {
@@ -308,7 +321,8 @@ impl Stmt {
             | Stmt::Break { span, .. }
             | Stmt::Continue { span, .. }
             | Stmt::WhileLet { span, .. }
-            | Stmt::ForDestructure { span, .. } => *span,
+            | Stmt::ForDestructure { span, .. }
+            | Stmt::LetPattern { span, .. } => *span,
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -588,7 +602,7 @@ pub struct MatchArm {
     pub span: Span,
 }
 
-/// A pattern for match arms.
+/// A pattern for match arms and let destructuring.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     /// Literal value: `42`, `"hello"`, `true`
@@ -610,9 +624,30 @@ pub enum Pattern {
         fields: Vec<(String, Pattern)>,
         span: Span,
     },
+    /// Tuple pattern: `(x, y, z)`
+    Tuple(Vec<Pattern>, Span),
+    /// Or-pattern: `A | B | C`
+    Or(Vec<Pattern>, Span),
+    /// Slice pattern: `[a, b, ..]`
+    Slice(Vec<Pattern>, Span),
+    /// Rest pattern: `..` (used inside slice/tuple patterns)
+    Rest(Span),
 }
 
 impl Pattern {
+    /// Returns the source span of this pattern.
+    pub fn span(&self) -> Span {
+        match self {
+            Pattern::Literal(e) => e.span(),
+            Pattern::Wildcard(s) | Pattern::Ident(_, s) | Pattern::Rest(s) => *s,
+            Pattern::EnumVariant { span, .. }
+            | Pattern::Struct { span, .. }
+            | Pattern::Tuple(_, span)
+            | Pattern::Or(_, span)
+            | Pattern::Slice(_, span) => *span,
+        }
+    }
+
     fn pretty_print(&self, out: &mut String) {
         match self {
             Pattern::Literal(e) => e.pretty_print(out, 0),
@@ -648,6 +683,37 @@ impl Pattern {
                     pat.pretty_print(out);
                 }
                 out.push_str(" }");
+            }
+            Pattern::Tuple(pats, _) => {
+                out.push('(');
+                for (i, p) in pats.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    p.pretty_print(out);
+                }
+                out.push(')');
+            }
+            Pattern::Or(pats, _) => {
+                for (i, p) in pats.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(" | ");
+                    }
+                    p.pretty_print(out);
+                }
+            }
+            Pattern::Slice(pats, _) => {
+                out.push('[');
+                for (i, p) in pats.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    p.pretty_print(out);
+                }
+                out.push(']');
+            }
+            Pattern::Rest(_) => {
+                out.push_str("..");
             }
         }
     }
@@ -981,6 +1047,18 @@ impl Stmt {
                     s.pretty_print(out, indent + 1);
                 }
                 out.push_str(&format!("{pad}}}\n"));
+            }
+            Stmt::LetPattern {
+                pattern,
+                mutable,
+                value,
+                ..
+            } => {
+                out.push_str(&format!("{pad}let {}", if *mutable { "mut " } else { "" }));
+                pattern.pretty_print(out);
+                out.push_str(" = ");
+                value.pretty_print(out, 0);
+                out.push_str(";\n");
             }
         }
     }

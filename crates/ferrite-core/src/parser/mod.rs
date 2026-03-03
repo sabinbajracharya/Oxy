@@ -108,15 +108,15 @@ impl Parser {
             self.advance();
         }
         match self.peek_kind() {
-            TokenKind::Fn => self.parse_fn_def(false).map(Item::Function),
+            TokenKind::Fn => self.parse_fn_def(false, attributes, is_pub).map(Item::Function),
             TokenKind::Async => {
                 self.advance(); // consume `async`
-                self.parse_fn_def(true).map(Item::Function)
+                self.parse_fn_def(true, attributes, is_pub).map(Item::Function)
             }
-            TokenKind::Struct => self.parse_struct_def(attributes).map(Item::Struct),
-            TokenKind::Enum => self.parse_enum_def(attributes).map(Item::Enum),
+            TokenKind::Struct => self.parse_struct_def(attributes, is_pub).map(Item::Struct),
+            TokenKind::Enum => self.parse_enum_def(attributes, is_pub).map(Item::Enum),
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
-            TokenKind::Trait => self.parse_trait_def().map(Item::Trait),
+            TokenKind::Trait => self.parse_trait_def(is_pub).map(Item::Trait),
             TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
             TokenKind::Use => self.parse_use_def().map(Item::Use),
             TokenKind::Type => self.parse_type_alias(),
@@ -314,7 +314,12 @@ impl Parser {
         })
     }
 
-    fn parse_fn_def(&mut self, is_async: bool) -> Result<FnDef, FerriError> {
+    fn parse_fn_def(
+        &mut self,
+        is_async: bool,
+        attributes: Vec<Attribute>,
+        is_pub: bool,
+    ) -> Result<FnDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Fn)?;
 
@@ -357,6 +362,8 @@ impl Parser {
             params,
             return_type,
             body: body.clone(),
+            attributes,
+            is_pub,
             span: self.merge_spans(start_span, body.span),
         })
     }
@@ -521,7 +528,11 @@ impl Parser {
 
     // === Struct parsing ===
 
-    fn parse_struct_def(&mut self, attributes: Vec<Attribute>) -> Result<StructDef, FerriError> {
+    fn parse_struct_def(
+        &mut self,
+        attributes: Vec<Attribute>,
+        is_pub: bool,
+    ) -> Result<StructDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Struct)?;
         let name = self.expect_ident()?;
@@ -532,6 +543,7 @@ impl Parser {
                 name,
                 attributes: attributes.clone(),
                 kind: StructKind::Unit,
+                is_pub,
                 span: self.merge_spans(start_span, self.prev_span()),
             });
         }
@@ -558,6 +570,7 @@ impl Parser {
                 name,
                 attributes: attributes.clone(),
                 kind: StructKind::Tuple(types),
+                is_pub,
                 span: self.merge_spans(start_span, end_span),
             });
         }
@@ -566,6 +579,7 @@ impl Parser {
         self.expect(TokenKind::LBrace)?;
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) {
+            let field_pub = self.match_token(&TokenKind::Pub);
             let field_span = self.current_span();
             let field_name = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
@@ -574,6 +588,7 @@ impl Parser {
                 span: self.merge_spans(field_span, type_ann.span),
                 name: field_name,
                 type_ann,
+                is_pub: field_pub,
             });
             if !self.match_token(&TokenKind::Comma) {
                 break;
@@ -586,13 +601,18 @@ impl Parser {
             name,
             attributes,
             kind: StructKind::Named(fields),
+            is_pub,
             span: self.merge_spans(start_span, end_span),
         })
     }
 
     // === Enum parsing ===
 
-    fn parse_enum_def(&mut self, attributes: Vec<Attribute>) -> Result<EnumDef, FerriError> {
+    fn parse_enum_def(
+        &mut self,
+        attributes: Vec<Attribute>,
+        is_pub: bool,
+    ) -> Result<EnumDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Enum)?;
         let name = self.expect_ident()?;
@@ -633,6 +653,7 @@ impl Parser {
                         span: self.merge_spans(fspan, ftype.span),
                         name: fname,
                         type_ann: ftype,
+                        is_pub: false,
                     });
                     if !self.match_token(&TokenKind::Comma) {
                         break;
@@ -661,6 +682,7 @@ impl Parser {
             name,
             attributes,
             variants,
+            is_pub,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -681,7 +703,8 @@ impl Parser {
 
             let mut methods = Vec::new();
             while !self.check(&TokenKind::RBrace) {
-                methods.push(self.parse_fn_def(false)?);
+                let is_pub_method = self.match_token(&TokenKind::Pub);
+                methods.push(self.parse_fn_def(false, vec![], is_pub_method)?);
             }
             let end_span = self.current_span();
             self.expect(TokenKind::RBrace)?;
@@ -699,7 +722,8 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.check(&TokenKind::RBrace) {
-            methods.push(self.parse_fn_def(false)?);
+            let is_pub_method = self.match_token(&TokenKind::Pub);
+            methods.push(self.parse_fn_def(false, vec![], is_pub_method)?);
         }
         let end_span = self.current_span();
         self.expect(TokenKind::RBrace)?;
@@ -713,7 +737,7 @@ impl Parser {
 
     // === Trait parsing ===
 
-    fn parse_trait_def(&mut self) -> Result<TraitDef, FerriError> {
+    fn parse_trait_def(&mut self, is_pub: bool) -> Result<TraitDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Trait)?;
         let name = self.expect_ident()?;
@@ -755,6 +779,8 @@ impl Parser {
                     params,
                     return_type,
                     body: body.clone(),
+                    attributes: vec![],
+                    is_pub: false,
                     span: self.merge_spans(sig_start, body.span),
                 });
             } else {
@@ -776,6 +802,7 @@ impl Parser {
             name,
             methods,
             default_methods,
+            is_pub,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -821,7 +848,38 @@ impl Parser {
         self.expect(TokenKind::Let)?;
 
         let mutable = self.match_token(&TokenKind::Mut);
+
+        // Check for destructuring: `let (x, y) = ...` or `let [a, b] = ...`
+        if self.check(&TokenKind::LParen) || self.check(&TokenKind::LBracket) {
+            let pattern = self.parse_pattern()?;
+            self.expect(TokenKind::Eq)?;
+            let value = self.parse_expr(Precedence::None)?;
+            let end_span = self.current_span();
+            self.expect(TokenKind::Semicolon)?;
+            return Ok(Stmt::LetPattern {
+                pattern: Box::new(pattern),
+                mutable,
+                value,
+                span: self.merge_spans(start_span, end_span),
+            });
+        }
+
         let name = self.expect_ident()?;
+
+        // Check for struct destructuring: `let Name { x, y } = ...`
+        if self.check(&TokenKind::LBrace) {
+            let struct_pattern = self.parse_struct_pattern(name, start_span)?;
+            self.expect(TokenKind::Eq)?;
+            let value = self.parse_expr(Precedence::None)?;
+            let end_span = self.current_span();
+            self.expect(TokenKind::Semicolon)?;
+            return Ok(Stmt::LetPattern {
+                pattern: Box::new(struct_pattern),
+                mutable,
+                value,
+                span: self.merge_spans(start_span, end_span),
+            });
+        }
 
         let type_ann = if self.match_token(&TokenKind::Colon) {
             // Accept optional & or &mut in type position
@@ -1691,11 +1749,113 @@ impl Parser {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, FerriError> {
+        let first = self.parse_single_pattern()?;
+
+        // Check for or-pattern: `A | B | C`
+        if self.check(&TokenKind::Pipe) {
+            let span = first.span();
+            let mut alternatives = vec![first];
+            while self.match_token(&TokenKind::Pipe) {
+                alternatives.push(self.parse_single_pattern()?);
+            }
+            Ok(Pattern::Or(alternatives, span))
+        } else {
+            Ok(first)
+        }
+    }
+
+    /// Parse a struct pattern after name and `{` have been identified.
+    fn parse_struct_pattern(
+        &mut self,
+        name: String,
+        start_span: Span,
+    ) -> Result<Pattern, FerriError> {
+        self.expect(TokenKind::LBrace)?;
+        let mut fields = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            if self.check(&TokenKind::DotDot) {
+                // `..` rest pattern — ignore remaining fields
+                self.advance();
+                break;
+            }
+            let field_name = self.expect_ident()?;
+            let pat = if self.match_token(&TokenKind::Colon) {
+                self.parse_pattern()?
+            } else {
+                // Shorthand: `{ x }` means `{ x: x }`
+                Pattern::Ident(field_name.clone(), self.prev_span())
+            };
+            fields.push((field_name, pat));
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
+        Ok(Pattern::Struct {
+            name,
+            fields,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    /// Parse a single pattern (without or-pattern `|` handling).
+    fn parse_single_pattern(&mut self) -> Result<Pattern, FerriError> {
         match self.peek_kind().clone() {
             TokenKind::Underscore => {
                 let span = self.current_span();
                 self.advance();
                 Ok(Pattern::Wildcard(span))
+            }
+            // Tuple pattern: `(x, y, z)`
+            TokenKind::LParen => {
+                let span = self.current_span();
+                self.advance();
+                let mut pats = Vec::new();
+                if !self.check(&TokenKind::RParen) {
+                    loop {
+                        pats.push(self.parse_pattern()?);
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
+                        if self.check(&TokenKind::RParen) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(TokenKind::RParen)?;
+                Ok(Pattern::Tuple(pats, span))
+            }
+            // Slice pattern: `[a, b, ..]`
+            TokenKind::LBracket => {
+                let span = self.current_span();
+                self.advance();
+                let mut pats = Vec::new();
+                if !self.check(&TokenKind::RBracket) {
+                    loop {
+                        if self.check(&TokenKind::DotDot) {
+                            let rest_span = self.current_span();
+                            self.advance();
+                            pats.push(Pattern::Rest(rest_span));
+                        } else {
+                            pats.push(self.parse_pattern()?);
+                        }
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
+                        if self.check(&TokenKind::RBracket) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(TokenKind::RBracket)?;
+                Ok(Pattern::Slice(pats, span))
+            }
+            // Rest pattern standalone: `..`
+            TokenKind::DotDot => {
+                let span = self.current_span();
+                self.advance();
+                Ok(Pattern::Rest(span))
             }
             TokenKind::IntLiteral(_)
             | TokenKind::FloatLiteral(_)
@@ -1792,6 +1952,11 @@ impl Parser {
                         fields,
                         span: self.merge_spans(span, end_span),
                     });
+                }
+
+                // Check for struct pattern: `Name { x, y }`
+                if self.check(&TokenKind::LBrace) {
+                    return self.parse_struct_pattern(name, span);
                 }
 
                 Ok(Pattern::Ident(name, span))

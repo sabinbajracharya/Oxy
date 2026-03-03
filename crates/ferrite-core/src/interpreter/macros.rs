@@ -86,6 +86,88 @@ impl Interpreter {
                 self.write_output(&format!("[dbg] {debug}\n"));
                 Ok(val)
             }
+            "assert" => {
+                if args.is_empty() || args.len() > 2 {
+                    return Err(FerriError::Runtime {
+                        message: format!("assert!() takes 1-2 arguments, got {}", args.len()),
+                        line,
+                        column: col,
+                    });
+                }
+                let val = self.eval_expr(&args[0], env)?;
+                if !val.is_truthy() {
+                    let msg = if args.len() == 2 {
+                        let m = self.eval_expr(&args[1], env)?;
+                        format!("assertion failed: {m}")
+                    } else {
+                        "assertion failed".to_string()
+                    };
+                    return Err(FerriError::Runtime {
+                        message: msg,
+                        line,
+                        column: col,
+                    });
+                }
+                Ok(Value::Unit)
+            }
+            "assert_eq" => {
+                if args.len() < 2 || args.len() > 3 {
+                    return Err(FerriError::Runtime {
+                        message: format!("assert_eq!() takes 2-3 arguments, got {}", args.len()),
+                        line,
+                        column: col,
+                    });
+                }
+                let left = self.eval_expr(&args[0], env)?;
+                let right = self.eval_expr(&args[1], env)?;
+                if left != right {
+                    let msg = if args.len() == 3 {
+                        let m = self.eval_expr(&args[2], env)?;
+                        format!("assertion failed: `left == right`\n  left: `{}`\n right: `{}`\n    {m}", debug_format(&left), debug_format(&right))
+                    } else {
+                        format!(
+                            "assertion failed: `left == right`\n  left: `{}`\n right: `{}`",
+                            debug_format(&left),
+                            debug_format(&right)
+                        )
+                    };
+                    return Err(FerriError::Runtime {
+                        message: msg,
+                        line,
+                        column: col,
+                    });
+                }
+                Ok(Value::Unit)
+            }
+            "assert_ne" => {
+                if args.len() < 2 || args.len() > 3 {
+                    return Err(FerriError::Runtime {
+                        message: format!("assert_ne!() takes 2-3 arguments, got {}", args.len()),
+                        line,
+                        column: col,
+                    });
+                }
+                let left = self.eval_expr(&args[0], env)?;
+                let right = self.eval_expr(&args[1], env)?;
+                if left == right {
+                    let msg = if args.len() == 3 {
+                        let m = self.eval_expr(&args[2], env)?;
+                        format!("assertion failed: `left != right`\n  left: `{}`\n right: `{}`\n    {m}", debug_format(&left), debug_format(&right))
+                    } else {
+                        format!(
+                            "assertion failed: `left != right`\n  left: `{}`\n right: `{}`",
+                            debug_format(&left),
+                            debug_format(&right)
+                        )
+                    };
+                    return Err(FerriError::Runtime {
+                        message: msg,
+                        line,
+                        column: col,
+                    });
+                }
+                Ok(Value::Unit)
+            }
             _ => Err(FerriError::Runtime {
                 message: format!("unknown macro '{name}!'"),
                 line,

@@ -17,7 +17,7 @@ impl Interpreter {
     /// Used in `match` arms to find the first matching pattern.
     pub(crate) fn pattern_matches(pattern: &Pattern, value: &Value) -> bool {
         match pattern {
-            Pattern::Wildcard(_) => true,
+            Pattern::Wildcard(_) | Pattern::Rest(_) => true,
             Pattern::Ident(_, _) => true, // Variable pattern always matches
             Pattern::Literal(expr) => match (expr, value) {
                 (Expr::IntLiteral(n, _), Value::Integer(v)) => *n == *v,
@@ -78,6 +78,53 @@ impl Interpreter {
                     false
                 }
             }
+            Pattern::Tuple(pats, _) => {
+                if let Value::Tuple(vals) = value {
+                    Self::match_with_rest(pats, vals)
+                } else {
+                    false
+                }
+            }
+            Pattern::Slice(pats, _) => {
+                if let Value::Vec(vals) = value {
+                    Self::match_with_rest(pats, vals)
+                } else {
+                    false
+                }
+            }
+            Pattern::Or(alternatives, _) => {
+                alternatives.iter().any(|p| Self::pattern_matches(p, value))
+            }
+        }
+    }
+
+    /// Match patterns against values, supporting `..` rest patterns.
+    fn match_with_rest(pats: &[Pattern], vals: &[Value]) -> bool {
+        let has_rest = pats.iter().any(|p| matches!(p, Pattern::Rest(_)));
+        if has_rest {
+            let rest_pos = pats
+                .iter()
+                .position(|p| matches!(p, Pattern::Rest(_)))
+                .unwrap();
+            let before = &pats[..rest_pos];
+            let after = &pats[rest_pos + 1..];
+            if vals.len() < before.len() + after.len() {
+                return false;
+            }
+            before
+                .iter()
+                .zip(vals.iter())
+                .all(|(p, v)| Self::pattern_matches(p, v))
+                && after
+                    .iter()
+                    .zip(vals[vals.len() - after.len()..].iter())
+                    .all(|(p, v)| Self::pattern_matches(p, v))
+        } else {
+            pats.len() == vals.len()
+                && pats
+                    .iter()
+                    .zip(vals.iter())
+                    .all(|(p, v)| Self::pattern_matches(p, v))
         }
     }
 
@@ -121,15 +168,16 @@ impl Interpreter {
     ///
     /// Called after `pattern_matches` returns true to actually define
     /// the captured variables (e.g. `Some(x)` binds `x` to the inner value).
-    pub(crate) fn bind_pattern(pattern: &Pattern, value: &Value, env: &Env) {
+    pub(crate) fn bind_pattern(pattern: &Pattern, value: &Value, env: &Env, mutable: bool) {
         match pattern {
             Pattern::Ident(name, _) => {
-                env.borrow_mut().define(name.clone(), value.clone(), false);
+                env.borrow_mut()
+                    .define(name.clone(), value.clone(), mutable);
             }
             Pattern::EnumVariant { fields, .. } => {
                 if let Value::EnumVariant { data, .. } = value {
                     for (pat, val) in fields.iter().zip(data.iter()) {
-                        Self::bind_pattern(pat, val, env);
+                        Self::bind_pattern(pat, val, env, mutable);
                     }
                 }
             }
@@ -140,12 +188,54 @@ impl Interpreter {
                 {
                     for (fname, pat) in fields {
                         if let Some(val) = sfields.get(fname) {
-                            Self::bind_pattern(pat, val, env);
+                            Self::bind_pattern(pat, val, env, mutable);
                         }
                     }
                 }
             }
-            Pattern::Wildcard(_) | Pattern::Literal(_) => {}
+            Pattern::Tuple(pats, _) => {
+                if let Value::Tuple(vals) = value {
+                    Self::bind_with_rest(pats, vals, env, mutable);
+                }
+            }
+            Pattern::Slice(pats, _) => {
+                if let Value::Vec(vals) = value {
+                    Self::bind_with_rest(pats, vals, env, mutable);
+                }
+            }
+            Pattern::Or(alternatives, _) => {
+                // Bind using the first matching alternative
+                for alt in alternatives {
+                    if Self::pattern_matches(alt, value) {
+                        Self::bind_pattern(alt, value, env, mutable);
+                        break;
+                    }
+                }
+            }
+            Pattern::Wildcard(_) | Pattern::Literal(_) | Pattern::Rest(_) => {}
+        }
+    }
+
+    /// Bind patterns against values, supporting `..` rest patterns.
+    fn bind_with_rest(pats: &[Pattern], vals: &[Value], env: &Env, mutable: bool) {
+        let has_rest = pats.iter().any(|p| matches!(p, Pattern::Rest(_)));
+        if has_rest {
+            let rest_pos = pats
+                .iter()
+                .position(|p| matches!(p, Pattern::Rest(_)))
+                .unwrap();
+            let before = &pats[..rest_pos];
+            let after = &pats[rest_pos + 1..];
+            for (pat, val) in before.iter().zip(vals.iter()) {
+                Self::bind_pattern(pat, val, env, mutable);
+            }
+            for (pat, val) in after.iter().zip(vals[vals.len() - after.len()..].iter()) {
+                Self::bind_pattern(pat, val, env, mutable);
+            }
+        } else {
+            for (pat, val) in pats.iter().zip(vals.iter()) {
+                Self::bind_pattern(pat, val, env, mutable);
+            }
         }
     }
 }
