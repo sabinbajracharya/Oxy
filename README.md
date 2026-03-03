@@ -34,8 +34,12 @@ fn main() {
 | Error handling (`Result`, `Option`, `?` operator) | ✅ |
 | Modules (`mod`, `use`) | ✅ |
 | Collections (`Vec`, `HashMap`, tuples, ranges) | ✅ |
+| Iterator methods (`map`, `filter`, `zip`, `chain`, `sum`, `flatten`, …) | ✅ |
+| Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`) | ✅ |
 | String operations, f-string interpolation | ✅ |
 | `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
+| `#[test]` + built-in test runner (`ferrite test`) | ✅ |
+| Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | ✅ |
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
 | Async/await, `spawn`, `sleep` | ✅ |
@@ -46,7 +50,8 @@ fn main() {
 | Networking (`std::net` — TCP, UDP, DNS) | ✅ |
 | Math, random, time stdlib | ✅ |
 | CLI args (`std::env::args`) | ✅ |
-| REPL (interactive shell) | ✅ |
+| REPL (interactive shell with history) | ✅ |
+| Colored error messages with suggestions | ✅ |
 
 ## What Works Differently from Rust
 
@@ -155,6 +160,7 @@ ferrite [OPTIONS] <COMMAND>
 
 Commands:
   run <file.fe>          Run a Ferrite source file
+  test <file.fe>         Run #[test] functions in a file
   repl                   Start the interactive REPL
 
 Options:
@@ -169,11 +175,13 @@ Options:
 ```bash
 # Via Docker
 docker compose run --rm dev bash -c "cargo run -- run examples/hello.fe"
+docker compose run --rm dev bash -c "cargo run -- test examples/tests.fe"
 docker compose run --rm dev bash -c "cargo run -- repl"
 docker compose run --rm dev bash -c "cargo run -- --dump-ast examples/hello.fe"
 
 # Via Cargo (if Rust is installed)
 cargo run -- run examples/hello.fe
+cargo run -- test examples/tests.fe
 cargo run -- repl
 ```
 
@@ -280,6 +288,125 @@ fn main() {
     println!("Sum: {}", sum);
 }
 ```
+
+### Iterator Chaining
+
+Ferrite supports Rust-style iterator chaining on `Vec`:
+
+```rust
+fn main() {
+    let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    // Chain operations together
+    let result = data.filter(|x| x % 2 == 0)
+                     .map(|x| x * 10)
+                     .take(3)
+                     .sum();
+    println!("{}", result);  // 60
+
+    // Zip, flatten, sort, etc.
+    let a = vec![1, 3, 2];
+    let b = vec!["one", "three", "two"];
+    println!("{:?}", a.zip(b));       // [(1, "one"), (3, "three"), (2, "two")]
+    println!("{:?}", a.sort());       // [1, 2, 3]
+    println!("{:?}", a.rev());        // [2, 3, 1]
+    println!("{:?}", a.min());        // Some(1)
+
+    let nested = vec![vec![1, 2], vec![3, 4]];
+    println!("{:?}", nested.flatten()); // [1, 2, 3, 4]
+}
+```
+
+**Available methods:** `map`, `filter`, `fold`, `any`, `all`, `find`, `position`, `enumerate`, `flat_map`, `collect`, `for_each`, `zip`, `take`, `skip`, `chain`, `flatten`, `sum`, `count`, `rev`, `sort`, `dedup`, `windows`, `chunks`, `min`, `max`
+
+### Pattern Destructuring
+
+```rust
+fn main() {
+    // Tuple destructuring
+    let point = (10, 20);
+    let (x, y) = point;
+    println!("x={}, y={}", x, y);
+
+    // Slice/Vec destructuring
+    let coords = vec![1, 2, 3];
+    let [a, b, c] = coords;
+    println!("{} {} {}", a, b, c);
+
+    // Or-patterns in match
+    let n = 3;
+    match n {
+        1 | 2 => println!("one or two"),
+        3 | 4 => println!("three or four"),
+        _ => println!("other"),
+    }
+}
+```
+
+### Testing
+
+Ferrite has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
+
+```rust
+// math_tests.fe
+
+fn add(a: i64, b: i64) -> i64 {
+    a + b
+}
+
+fn factorial(n: i64) -> i64 {
+    if n <= 1 { 1 } else { n * factorial(n - 1) }
+}
+
+#[test]
+fn test_add() {
+    assert_eq!(add(2, 3), 5);
+    assert_eq!(add(-1, 1), 0);
+}
+
+#[test]
+fn test_factorial() {
+    assert_eq!(factorial(0), 1);
+    assert_eq!(factorial(5), 120);
+}
+
+#[test]
+fn test_negative() {
+    assert_ne!(add(1, 1), 3);
+    assert!(add(1, 1) > 0, "sum should be positive");
+}
+```
+
+Run your tests:
+
+```bash
+# Via Docker
+docker compose run --rm dev bash -c "cargo run -- test math_tests.fe"
+
+# Via Cargo
+cargo run -- test math_tests.fe
+```
+
+Output:
+
+```
+running tests in math_tests.fe
+
+  test_add ... ok
+  test_factorial ... ok
+  test_negative ... ok
+
+test result: ok. 3 passed
+```
+
+#### Assert Macros
+
+| Macro | Description |
+|-------|-------------|
+| `assert!(expr)` | Fails if `expr` is falsy |
+| `assert!(expr, "message")` | Fails with custom message |
+| `assert_eq!(left, right)` | Fails if `left != right`, shows both values |
+| `assert_ne!(left, right)` | Fails if `left == right`, shows both values |
 
 ### JSON
 
@@ -470,7 +597,7 @@ project-ferrite/
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (471 tests)
+# Run all tests (500+ tests)
 docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting
