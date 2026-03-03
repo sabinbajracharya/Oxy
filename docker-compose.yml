@@ -7,9 +7,27 @@ services:
       - .:/app
       - cargo-cache:/usr/local/cargo/registry
       - target-cache:/app/target
+      - node-modules:/app/editors/vscode/node_modules
     working_dir: /app
     stdin_open: true
     tty: true
+
+  setup:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+      - node-modules:/app/editors/vscode/node_modules
+    working_dir: /app
+    command: >
+      bash -c "
+        echo '📦 Installing VS Code extension dependencies...' &&
+        cd editors/vscode && npm install --omit=dev &&
+        echo '✅ Setup complete'
+      "
 
   test:
     build:
@@ -36,3 +54,4 @@ services:
 volumes:
   cargo-cache:
   target-cache:
+  node-modules:
