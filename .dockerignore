@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+*.md
+!README.md
+LICENSE
+.editorconfig
+.gitignore
+.idea/
+.vscode/

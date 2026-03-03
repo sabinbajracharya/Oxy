@@ -1,0 +1,38 @@
+services:
+  dev:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    working_dir: /app
+    stdin_open: true
+    tty: true
+
+  test:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    working_dir: /app
+    command: >
+      bash -c "
+        cargo fmt --check &&
+        cargo clippy -- -D warnings &&
+        cargo test &&
+        echo '✅ All checks passed'
+      "
+
+  build:
+    build:
+      context: .
+      target: runtime
+
+volumes:
+  cargo-cache:
+  target-cache:
