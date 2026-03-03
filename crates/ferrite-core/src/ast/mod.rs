@@ -296,6 +296,15 @@ impl Stmt {
     }
 }
 
+/// A part of an f-string: either a literal segment or an interpolated expression.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FStringPart {
+    /// A literal text segment.
+    Literal(String),
+    /// An interpolated expression.
+    Expr(Box<Expr>),
+}
+
 /// An expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -431,6 +440,8 @@ pub enum Expr {
     },
     /// Await expression: `expr.await`
     Await { expr: Box<Expr>, span: Span },
+    /// F-string expression: `f"Hello {name}!"`
+    FString { parts: Vec<FStringPart>, span: Span },
 }
 
 impl Expr {
@@ -465,7 +476,8 @@ impl Expr {
             | Expr::IfLet { span: s, .. }
             | Expr::Try { span: s, .. }
             | Expr::Closure { span: s, .. }
-            | Expr::Await { span: s, .. } => *s,
+            | Expr::Await { span: s, .. }
+            | Expr::FString { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -1182,6 +1194,20 @@ impl Expr {
             Expr::Await { expr, .. } => {
                 expr.pretty_print(out, indent);
                 out.push_str(".await");
+            }
+            Expr::FString { parts, .. } => {
+                out.push_str("f\"");
+                for part in parts {
+                    match part {
+                        FStringPart::Literal(s) => out.push_str(s),
+                        FStringPart::Expr(expr) => {
+                            out.push('{');
+                            expr.pretty_print(out, 0);
+                            out.push('}');
+                        }
+                    }
+                }
+                out.push('"');
             }
         }
     }

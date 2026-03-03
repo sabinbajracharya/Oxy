@@ -1031,6 +1031,12 @@ impl Parser {
                 self.advance();
                 Ok(Expr::StringLiteral(s, span))
             }
+            TokenKind::FStringLiteral(raw) => {
+                let span = self.current_span();
+                self.advance();
+                let parts = self.parse_fstring_parts(&raw, span)?;
+                Ok(Expr::FString { parts, span })
+            }
             TokenKind::CharLiteral(c) => {
                 let span = self.current_span();
                 self.advance();
@@ -1865,6 +1871,89 @@ impl Parser {
 
     fn merge_spans(&self, start: Span, end: Span) -> Span {
         Span::new(start.start, end.end, start.line, start.column)
+    }
+
+    /// Parse the raw content of an f-string into `FStringPart`s.
+    fn parse_fstring_parts(&self, raw: &str, span: Span) -> Result<Vec<FStringPart>, FerriError> {
+        let mut parts = Vec::new();
+        let mut literal = String::new();
+        let chars: Vec<char> = raw.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            if chars[i] == '{' {
+                // Escaped brace `{{` → literal `{`
+                if i + 1 < chars.len() && chars[i + 1] == '{' {
+                    literal.push('{');
+                    i += 2;
+                    continue;
+                }
+                // Interpolation: collect until matching `}`
+                if !literal.is_empty() {
+                    parts.push(FStringPart::Literal(std::mem::take(&mut literal)));
+                }
+                i += 1; // skip `{`
+                let mut depth = 1;
+                let mut expr_text = String::new();
+                while i < chars.len() && depth > 0 {
+                    let c = chars[i];
+                    if c == '{' {
+                        depth += 1;
+                        expr_text.push(c);
+                    } else if c == '}' {
+                        depth -= 1;
+                        if depth > 0 {
+                            expr_text.push(c);
+                        }
+                    } else {
+                        expr_text.push(c);
+                    }
+                    i += 1;
+                }
+                if depth > 0 {
+                    return Err(FerriError::Parser {
+                        message: "unterminated interpolation in f-string".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                // Parse the expression text via a sub-parser
+                let tokens =
+                    crate::lexer::tokenize(&expr_text).map_err(|_| FerriError::Parser {
+                        message: format!("failed to tokenize f-string expression: {expr_text}"),
+                        line: span.line,
+                        column: span.column,
+                    })?;
+                let mut sub_parser = Parser::new(tokens);
+                let expr =
+                    sub_parser
+                        .parse_expr(Precedence::None)
+                        .map_err(|_| FerriError::Parser {
+                            message: format!("failed to parse f-string expression: {expr_text}"),
+                            line: span.line,
+                            column: span.column,
+                        })?;
+                parts.push(FStringPart::Expr(Box::new(expr)));
+            } else if chars[i] == '}' {
+                // Escaped brace `}}` → literal `}`
+                if i + 1 < chars.len() && chars[i + 1] == '}' {
+                    literal.push('}');
+                    i += 2;
+                    continue;
+                }
+                literal.push('}');
+                i += 1;
+            } else {
+                literal.push(chars[i]);
+                i += 1;
+            }
+        }
+
+        if !literal.is_empty() {
+            parts.push(FStringPart::Literal(literal));
+        }
+
+        Ok(parts)
     }
 }
 

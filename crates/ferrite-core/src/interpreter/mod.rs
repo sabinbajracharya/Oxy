@@ -1406,6 +1406,20 @@ impl Interpreter {
                     other => Ok(other),
                 }
             }
+
+            Expr::FString { parts, .. } => {
+                let mut result = String::new();
+                for part in parts {
+                    match part {
+                        FStringPart::Literal(s) => result.push_str(s),
+                        FStringPart::Expr(expr) => {
+                            let val = self.eval_expr(expr, env)?;
+                            result.push_str(&val.to_string());
+                        }
+                    }
+                }
+                Ok(Value::String(result))
+            }
         }
     }
 
@@ -8114,5 +8128,66 @@ fn main() {
             "fn main() { let start = time::now(); let elapsed = time::elapsed(start); println!(\"{}\", elapsed >= 0.0); }",
         );
         assert_eq!(out, vec!["true\n"]);
+    }
+
+    // === F-string interpolation ===
+
+    #[test]
+    fn test_fstring_basic() {
+        let out = run_and_capture(
+            r#"fn main() { let name = "World"; println!("{}", f"Hello {name}!"); }"#,
+        );
+        assert_eq!(out, vec!["Hello World!\n"]);
+    }
+
+    #[test]
+    fn test_fstring_expression() {
+        let out =
+            run_and_capture(r#"fn main() { let x = 10; println!("{}", f"x + 5 = {x + 5}"); }"#);
+        assert_eq!(out, vec!["x + 5 = 15\n"]);
+    }
+
+    #[test]
+    fn test_fstring_multiple_interpolations() {
+        let out = run_and_capture(
+            r#"fn main() { let a = 1; let b = 2; println!("{}", f"{a} + {b} = {a + b}"); }"#,
+        );
+        assert_eq!(out, vec!["1 + 2 = 3\n"]);
+    }
+
+    #[test]
+    fn test_fstring_no_interpolation() {
+        let out = run_and_capture(r#"fn main() { println!("{}", f"plain string"); }"#);
+        assert_eq!(out, vec!["plain string\n"]);
+    }
+
+    #[test]
+    fn test_fstring_escaped_braces() {
+        let out = run_and_capture(r#"fn main() { println!("{}", f"use {{braces}}"); }"#);
+        assert_eq!(out, vec!["use {braces}\n"]);
+    }
+
+    #[test]
+    fn test_fstring_method_call() {
+        let out = run_and_capture(
+            r#"fn main() { let v = vec![1, 2, 3]; println!("{}", f"len = {v.len()}"); }"#,
+        );
+        assert_eq!(out, vec!["len = 3\n"]);
+    }
+
+    #[test]
+    fn test_fstring_nested_function() {
+        let out = run_and_capture(
+            r#"fn double(x: i64) -> i64 { x * 2 } fn main() { println!("{}", f"double(5) = {double(5)}"); }"#,
+        );
+        assert_eq!(out, vec!["double(5) = 10\n"]);
+    }
+
+    #[test]
+    fn test_fstring_in_variable() {
+        let out = run_and_capture(
+            r#"fn main() { let greeting = f"Hi {1 + 1}"; println!("{}", greeting); }"#,
+        );
+        assert_eq!(out, vec!["Hi 2\n"]);
     }
 }

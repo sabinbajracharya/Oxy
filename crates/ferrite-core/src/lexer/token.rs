@@ -53,6 +53,8 @@ pub enum TokenKind {
     StringLiteral(String),
     /// Character literal, e.g. `'a'`
     CharLiteral(char),
+    /// F-string literal, e.g. `f"Hello {name}!"` — raw content with `{expr}` intact
+    FStringLiteral(String),
     /// Boolean `true`
     True,
     /// Boolean `false`
@@ -244,6 +246,7 @@ impl TokenKind {
             Self::FloatLiteral(_) => "float literal",
             Self::StringLiteral(_) => "string literal",
             Self::CharLiteral(_) => "character literal",
+            Self::FStringLiteral(_) => "f-string literal",
             Self::True => "'true'",
             Self::False => "'false'",
             Self::Ident(_) => "identifier",
@@ -336,6 +339,7 @@ impl std::fmt::Display for TokenKind {
             Self::FloatLiteral(n) => write!(f, "{n}"),
             Self::StringLiteral(s) => write!(f, "\"{s}\""),
             Self::CharLiteral(c) => write!(f, "'{c}'"),
+            Self::FStringLiteral(s) => write!(f, "f\"{s}\""),
             Self::Ident(name) => write!(f, "{name}"),
             other => write!(f, "{}", other.description()),
         }

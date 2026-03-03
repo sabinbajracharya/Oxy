@@ -215,7 +215,15 @@ impl<'src> Lexer<'src> {
             c if c.is_ascii_digit() => self.scan_number(c, start_offset)?,
 
             // Identifier or keyword (including _)
-            c if c == '_' || c.is_ascii_alphabetic() => self.scan_identifier(c, start_offset),
+            // Special case: `f"..."` is an f-string literal
+            c if c == '_' || c.is_ascii_alphabetic() => {
+                if c == 'f' && !self.is_at_end() && self.peek() == '"' {
+                    self.advance(); // consume the '"'
+                    self.scan_fstring(start_offset)?
+                } else {
+                    self.scan_identifier(c, start_offset)
+                }
+            }
 
             other => {
                 return Err(FerriError::Lexer {
@@ -287,6 +295,107 @@ impl<'src> Lexer<'src> {
         }
 
         Ok(TokenKind::StringLiteral(value))
+    }
+
+    /// Scan an f-string literal: `f"..."`. The opening `f"` has already been consumed.
+    /// The raw content (including `{expr}` segments) is stored as-is.
+    fn scan_fstring(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+        let start_line = self.line;
+        let start_col = self.column;
+        let mut raw = String::new();
+
+        loop {
+            if self.is_at_end() {
+                return Err(FerriError::Lexer {
+                    message: "unterminated f-string literal".into(),
+                    line: start_line,
+                    column: start_col - 1,
+                });
+            }
+
+            let ch = self.advance();
+            match ch {
+                '"' => break,
+                '\\' => {
+                    if self.is_at_end() {
+                        return Err(FerriError::Lexer {
+                            message: "unterminated escape sequence in f-string".into(),
+                            line: self.line,
+                            column: self.column,
+                        });
+                    }
+                    let escaped = self.advance();
+                    match escaped {
+                        'n' => raw.push('\n'),
+                        't' => raw.push('\t'),
+                        'r' => raw.push('\r'),
+                        '\\' => raw.push('\\'),
+                        '"' => raw.push('"'),
+                        '0' => raw.push('\0'),
+                        '\'' => raw.push('\''),
+                        _ => {
+                            return Err(FerriError::Lexer {
+                                message: format!("unknown escape sequence '\\{escaped}'"),
+                                line: self.line,
+                                column: self.column - 1,
+                            });
+                        }
+                    }
+                }
+                '{' => {
+                    // Escaped brace `{{` → literal `{`
+                    if !self.is_at_end() && self.peek() == '{' {
+                        self.advance();
+                        raw.push_str("{{");
+                    } else {
+                        // Expression interpolation — collect until matching `}`
+                        raw.push('{');
+                        let mut depth = 1;
+                        while !self.is_at_end() && depth > 0 {
+                            let c = self.advance();
+                            raw.push(c);
+                            if c == '{' {
+                                depth += 1;
+                            } else if c == '}' {
+                                depth -= 1;
+                            } else if c == '"' {
+                                // Skip string literals inside expressions
+                                while !self.is_at_end() {
+                                    let sc = self.advance();
+                                    raw.push(sc);
+                                    if sc == '"' {
+                                        break;
+                                    }
+                                    if sc == '\\' && !self.is_at_end() {
+                                        let esc = self.advance();
+                                        raw.push(esc);
+                                    }
+                                }
+                            }
+                        }
+                        if depth > 0 {
+                            return Err(FerriError::Lexer {
+                                message: "unterminated interpolation in f-string".into(),
+                                line: start_line,
+                                column: start_col - 1,
+                            });
+                        }
+                    }
+                }
+                '}' => {
+                    // Escaped brace `}}` → literal `}`
+                    if !self.is_at_end() && self.peek() == '}' {
+                        self.advance();
+                        raw.push_str("}}");
+                    } else {
+                        raw.push('}');
+                    }
+                }
+                _ => raw.push(ch),
+            }
+        }
+
+        Ok(TokenKind::FStringLiteral(raw))
     }
 
     fn scan_char(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
