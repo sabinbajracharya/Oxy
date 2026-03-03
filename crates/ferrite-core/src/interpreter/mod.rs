@@ -85,11 +85,11 @@ struct ModuleData {
 }
 
 impl Interpreter {
-    /// Create a new interpreter with a fresh global environment.
-    pub fn new() -> Self {
+    /// Internal constructor with all fields parameterized.
+    fn new_internal(env: Env, output: Option<Vec<String>>) -> Self {
         Self {
-            env: Environment::new(),
-            output: None,
+            env,
+            output,
             struct_defs: HashMap::new(),
             enum_defs: HashMap::new(),
             impl_methods: HashMap::new(),
@@ -103,46 +103,21 @@ impl Interpreter {
             async_fns: HashSet::new(),
             derived_traits: HashMap::new(),
         }
+    }
+
+    /// Create a new interpreter with a fresh global environment.
+    pub fn new() -> Self {
+        Self::new_internal(Environment::new(), None)
     }
 
     /// Create an interpreter that captures output instead of printing.
     pub fn new_with_captured_output() -> Self {
-        Self {
-            env: Environment::new(),
-            output: Some(Vec::new()),
-            struct_defs: HashMap::new(),
-            enum_defs: HashMap::new(),
-            impl_methods: HashMap::new(),
-            trait_defs: HashMap::new(),
-            trait_impls: HashMap::new(),
-            current_self_type: None,
-            modules: HashMap::new(),
-            base_dir: None,
-            type_aliases: HashMap::new(),
-            cli_args: Vec::new(),
-            async_fns: HashSet::new(),
-            derived_traits: HashMap::new(),
-        }
+        Self::new_internal(Environment::new(), Some(Vec::new()))
     }
 
     /// Create an interpreter with an existing environment (for REPL).
     pub fn with_env(env: Env) -> Self {
-        Self {
-            env,
-            output: None,
-            struct_defs: HashMap::new(),
-            enum_defs: HashMap::new(),
-            impl_methods: HashMap::new(),
-            trait_defs: HashMap::new(),
-            trait_impls: HashMap::new(),
-            current_self_type: None,
-            modules: HashMap::new(),
-            base_dir: None,
-            type_aliases: HashMap::new(),
-            cli_args: Vec::new(),
-            async_fns: HashSet::new(),
-            derived_traits: HashMap::new(),
-        }
+        Self::new_internal(env, None)
     }
 
     /// Set the base directory for file-based module resolution.
@@ -721,11 +696,7 @@ impl Interpreter {
             Expr::Ident(name, span) => {
                 // Built-in constants
                 if name == "None" {
-                    return Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    });
+                    return Ok(Value::none());
                 }
                 env.borrow().get(name).map_err(|_| FerriError::Runtime {
                     message: format!("undefined variable '{name}'"),
@@ -770,11 +741,7 @@ impl Interpreter {
                                 });
                             }
                             let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::EnumVariant {
-                                enum_name: "Option".to_string(),
-                                variant: "Some".to_string(),
-                                data: vec![val],
-                            });
+                            return Ok(Value::some(val));
                         }
                         "Ok" => {
                             if args.len() != 1 {
@@ -788,11 +755,7 @@ impl Interpreter {
                                 });
                             }
                             let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::EnumVariant {
-                                enum_name: "Result".to_string(),
-                                variant: "Ok".to_string(),
-                                data: vec![val],
-                            });
+                            return Ok(Value::ok(val));
                         }
                         "Err" => {
                             if args.len() != 1 {
@@ -806,11 +769,7 @@ impl Interpreter {
                                 });
                             }
                             let val = self.eval_expr(&args[0], env)?;
-                            return Ok(Value::EnumVariant {
-                                enum_name: "Result".to_string(),
-                                variant: "Err".to_string(),
-                                data: vec![val],
-                            });
+                            return Ok(Value::err(val));
                         }
                         "spawn" => {
                             if args.len() != 1 {
@@ -2000,16 +1959,8 @@ impl Interpreter {
                         crate::json::serialize_pretty(&receiver)
                     };
                     return match result {
-                        Ok(json) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![Value::String(json)],
-                        }),
-                        Err(e) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![Value::String(e)],
-                        }),
+                        Ok(json) => Ok(Value::ok(Value::String(json))),
+                        Err(e) => Ok(Value::err(Value::String(e))),
                     };
                 }
                 Err(FerriError::Runtime {
@@ -2064,46 +2015,22 @@ impl Interpreter {
                 let popped = new_v.pop();
                 self.mutate_variable(receiver_expr, Value::Vec(new_v), env, span)?;
                 match popped {
-                    Some(val) => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: vec![val],
-                    }),
-                    None => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "first" => {
                 let result = v.first().cloned();
                 match result {
-                    Some(val) => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: vec![val],
-                    }),
-                    None => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "last" => {
                 let result = v.last().cloned();
                 match result {
-                    Some(val) => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: vec![val],
-                    }),
-                    None => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "reverse" => {
@@ -2249,18 +2176,10 @@ impl Interpreter {
                     let result =
                         self.call_function(func, &[item.clone()], span.line, span.column)?;
                     if result.is_truthy() {
-                        return Ok(Value::EnumVariant {
-                            enum_name: "Option".to_string(),
-                            variant: "Some".to_string(),
-                            data: vec![item.clone()],
-                        });
+                        return Ok(Value::some(item.clone()));
                     }
                 }
-                Ok(Value::EnumVariant {
-                    enum_name: "Option".to_string(),
-                    variant: "None".to_string(),
-                    data: vec![],
-                })
+                Ok(Value::none())
             }
             // enumerate() — returns Vec of (index, element) tuples
             "enumerate" => {
@@ -2308,18 +2227,10 @@ impl Interpreter {
                     let result =
                         self.call_function(func, &[item.clone()], span.line, span.column)?;
                     if result.is_truthy() {
-                        return Ok(Value::EnumVariant {
-                            enum_name: "Option".to_string(),
-                            variant: "Some".to_string(),
-                            data: vec![Value::Integer(i as i64)],
-                        });
+                        return Ok(Value::some(Value::Integer(i as i64)));
                     }
                 }
-                Ok(Value::EnumVariant {
-                    enum_name: "Option".to_string(),
-                    variant: "None".to_string(),
-                    data: vec![],
-                })
+                Ok(Value::none())
             }
             _ => self.try_to_json_method(Value::Vec(v), method, span, "Vec"),
         }
@@ -2558,16 +2469,8 @@ impl Interpreter {
                 }
                 let key = format!("{}", args[0]);
                 match m.get(&key) {
-                    Some(val) => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: vec![val.clone()],
-                    }),
-                    None => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }),
+                    Some(val) => Ok(Value::some(val.clone())),
+                    None => Ok(Value::none()),
                 }
             }
             "remove" => {
@@ -2583,16 +2486,8 @@ impl Interpreter {
                 let removed = new_m.remove(&key);
                 self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
                 match removed {
-                    Some(val) => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: vec![val],
-                    }),
-                    None => Ok(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "contains_key" => {
@@ -2696,11 +2591,7 @@ impl Interpreter {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
-                        Ok(Some(Value::EnumVariant {
-                            enum_name: "Option".to_string(),
-                            variant: "Some".to_string(),
-                            data: vec![result],
-                        }))
+                        Ok(Some(Value::some(result)))
                     } else {
                         Ok(Some(receiver.clone()))
                     }
@@ -2791,11 +2682,7 @@ impl Interpreter {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
-                        Ok(Some(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![result],
-                        }))
+                        Ok(Some(Value::ok(result)))
                     } else {
                         Ok(Some(receiver.clone()))
                     }
@@ -2809,11 +2696,7 @@ impl Interpreter {
                     if let Some(func) = args.first() {
                         let inner = data.first().cloned().unwrap_or(Value::Unit);
                         let result = self.call_function(func, &[inner], span.line, span.column)?;
-                        Ok(Some(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![result],
-                        }))
+                        Ok(Some(Value::err(result)))
                     } else {
                         Ok(Some(receiver.clone()))
                     }
@@ -2836,32 +2719,16 @@ impl Interpreter {
             }
             ("Result", "ok") => {
                 if variant == "Ok" {
-                    Ok(Some(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: data.clone(),
-                    }))
+                    Ok(Some(Value::some(data[0].clone())))
                 } else {
-                    Ok(Some(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }))
+                    Ok(Some(Value::none()))
                 }
             }
             ("Result", "err") => {
                 if variant == "Err" {
-                    Ok(Some(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "Some".to_string(),
-                        data: data.clone(),
-                    }))
+                    Ok(Some(Value::some(data[0].clone())))
                 } else {
-                    Ok(Some(Value::EnumVariant {
-                        enum_name: "Option".to_string(),
-                        variant: "None".to_string(),
-                        data: vec![],
-                    }))
+                    Ok(Some(Value::none()))
                 }
             }
 
@@ -2960,7 +2827,10 @@ impl Interpreter {
             }
 
             // Check for associated functions in trait impls
-            for ((tn, _), methods) in &self.trait_impls.clone() {
+            let trait_impl_keys: Vec<_> = self.trait_impls.keys().cloned().collect();
+            for key in &trait_impl_keys {
+                let (tn, _) = key;
+                let methods = self.trait_impls[key].clone();
                 if tn == type_name {
                     for method_def in methods {
                         if method_def.name == *method_name {
@@ -3104,16 +2974,8 @@ impl Interpreter {
                     }
                     let path_str = format!("{}", args[0]);
                     return match std::fs::read_to_string(&path_str) {
-                        Ok(content) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![Value::String(content)],
-                        }),
-                        Err(e) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![Value::String(e.to_string())],
-                        }),
+                        Ok(content) => Ok(Value::ok(Value::String(content))),
+                        Err(e) => Ok(Value::err(Value::String(e.to_string()))),
                     };
                 }
                 ("fs", "write") => {
@@ -3127,16 +2989,8 @@ impl Interpreter {
                     let path_str = format!("{}", args[0]);
                     let content = format!("{}", args[1]);
                     return match std::fs::write(&path_str, &content) {
-                        Ok(()) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![Value::Unit],
-                        }),
-                        Err(e) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![Value::String(e.to_string())],
-                        }),
+                        Ok(()) => Ok(Value::ok(Value::Unit)),
+                        Err(e) => Ok(Value::err(Value::String(e.to_string()))),
                     };
                 }
                 ("env", "args") => {
@@ -3315,16 +3169,8 @@ impl Interpreter {
                 crate::json::serialize_pretty(&receiver)
             };
             return match result {
-                Ok(json) => Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Ok".to_string(),
-                    data: vec![Value::String(json)],
-                }),
-                Err(e) => Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Err".to_string(),
-                    data: vec![Value::String(e)],
-                }),
+                Ok(json) => Ok(Value::ok(Value::String(json))),
+                Err(e) => Ok(Value::err(Value::String(e))),
             };
         }
         Err(FerriError::Runtime {
@@ -3392,6 +3238,43 @@ impl Interpreter {
         }
     }
 
+    /// Helper for unary math functions (1 argument, f64 -> f64).
+    fn unary_math_op(
+        name: &str,
+        args: &[Value],
+        op: fn(f64) -> f64,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        if args.len() != 1 {
+            return Err(FerriError::Runtime {
+                message: format!("math::{}() takes 1 argument", name),
+                line: span.line,
+                column: span.column,
+            });
+        }
+        let x = Self::value_to_f64(&args[0], span)?;
+        Ok(Self::float_to_value(op(x)))
+    }
+
+    /// Helper for binary math functions (2 arguments, (f64, f64) -> f64).
+    fn binary_math_op(
+        name: &str,
+        args: &[Value],
+        op: fn(f64, f64) -> f64,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        if args.len() != 2 {
+            return Err(FerriError::Runtime {
+                message: format!("math::{}() takes 2 arguments", name),
+                line: span.line,
+                column: span.column,
+            });
+        }
+        let a = Self::value_to_f64(&args[0], span)?;
+        let b = Self::value_to_f64(&args[1], span)?;
+        Ok(Self::float_to_value(op(a, b)))
+    }
+
     /// Built-in math:: module functions.
     fn call_math_function(
         &self,
@@ -3400,17 +3283,7 @@ impl Interpreter {
         span: &Span,
     ) -> Result<Value, FerriError> {
         match func_name {
-            "sqrt" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::sqrt() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.sqrt()))
-            }
+            "sqrt" => Self::unary_math_op("sqrt", args, f64::sqrt, span),
             "abs" => {
                 if args.len() != 1 {
                     return Err(FerriError::Runtime {
@@ -3432,117 +3305,16 @@ impl Interpreter {
                     }),
                 }
             }
-            "pow" => {
-                if args.len() != 2 {
-                    return Err(FerriError::Runtime {
-                        message: "math::pow() takes 2 arguments".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let base = Self::value_to_f64(&args[0], span)?;
-                let exp = Self::value_to_f64(&args[1], span)?;
-                Ok(Self::float_to_value(base.powf(exp)))
-            }
-            "sin" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::sin() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.sin()))
-            }
-            "cos" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::cos() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.cos()))
-            }
-            "tan" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::tan() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.tan()))
-            }
-            "asin" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::asin() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.asin()))
-            }
-            "acos" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::acos() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.acos()))
-            }
-            "atan" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::atan() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.atan()))
-            }
-            "floor" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::floor() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.floor()))
-            }
-            "ceil" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::ceil() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.ceil()))
-            }
-            "round" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::round() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.round()))
-            }
+            "pow" => Self::binary_math_op("pow", args, f64::powf, span),
+            "sin" => Self::unary_math_op("sin", args, f64::sin, span),
+            "cos" => Self::unary_math_op("cos", args, f64::cos, span),
+            "tan" => Self::unary_math_op("tan", args, f64::tan, span),
+            "asin" => Self::unary_math_op("asin", args, f64::asin, span),
+            "acos" => Self::unary_math_op("acos", args, f64::acos, span),
+            "atan" => Self::unary_math_op("atan", args, f64::atan, span),
+            "floor" => Self::unary_math_op("floor", args, f64::floor, span),
+            "ceil" => Self::unary_math_op("ceil", args, f64::ceil, span),
+            "round" => Self::unary_math_op("round", args, f64::round, span),
             "min" => {
                 if args.len() != 2 {
                     return Err(FerriError::Runtime {
@@ -3577,39 +3349,9 @@ impl Interpreter {
                     }
                 }
             }
-            "log" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::log() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.ln()))
-            }
-            "log2" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::log2() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.log2()))
-            }
-            "log10" => {
-                if args.len() != 1 {
-                    return Err(FerriError::Runtime {
-                        message: "math::log10() takes 1 argument".into(),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-                let x = Self::value_to_f64(&args[0], span)?;
-                Ok(Self::float_to_value(x.log10()))
-            }
+            "log" => Self::unary_math_op("log", args, f64::ln, span),
+            "log2" => Self::unary_math_op("log2", args, f64::log2, span),
+            "log10" => Self::unary_math_op("log10", args, f64::log10, span),
             _ => Err(FerriError::Runtime {
                 message: format!("unknown math function `math::{func_name}`"),
                 line: span.line,
@@ -3857,16 +3599,8 @@ impl Interpreter {
                         crate::json::serialize_pretty(&receiver)
                     };
                     return match result {
-                        Ok(json) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![Value::String(json)],
-                        }),
-                        Err(e) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![Value::String(e)],
-                        }),
+                        Ok(json) => Ok(Value::ok(Value::String(json))),
+                        Err(e) => Ok(Value::err(Value::String(e))),
                     };
                 }
                 Err(FerriError::Runtime {
@@ -3894,16 +3628,8 @@ impl Interpreter {
                     });
                 }
                 match crate::json::serialize(&args[0]) {
-                    Ok(json) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Ok".to_string(),
-                        data: vec![Value::String(json)],
-                    }),
-                    Err(e) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Err".to_string(),
-                        data: vec![Value::String(e)],
-                    }),
+                    Ok(json) => Ok(Value::ok(Value::String(json))),
+                    Err(e) => Ok(Value::err(Value::String(e))),
                 }
             }
             "to_string_pretty" => {
@@ -3915,16 +3641,8 @@ impl Interpreter {
                     });
                 }
                 match crate::json::serialize_pretty(&args[0]) {
-                    Ok(json) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Ok".to_string(),
-                        data: vec![Value::String(json)],
-                    }),
-                    Err(e) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Err".to_string(),
-                        data: vec![Value::String(e)],
-                    }),
+                    Ok(json) => Ok(Value::ok(Value::String(json))),
+                    Err(e) => Ok(Value::err(Value::String(e))),
                 }
             }
             "deserialize" | "parse" | "from_str" => {
@@ -3949,16 +3667,8 @@ impl Interpreter {
                     }
                 };
                 match crate::json::deserialize(&s) {
-                    Ok(val) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Ok".to_string(),
-                        data: vec![val],
-                    }),
-                    Err(e) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Err".to_string(),
-                        data: vec![Value::String(e)],
-                    }),
+                    Ok(val) => Ok(Value::ok(val)),
+                    Err(e) => Ok(Value::err(Value::String(e))),
                 }
             }
             "from_struct" => {
@@ -4015,23 +3725,15 @@ impl Interpreter {
     ) -> Result<Value, FerriError> {
         let parsed = match crate::json::deserialize(json_str) {
             Ok(val) => val,
-            Err(e) => {
-                return Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Err".to_string(),
-                    data: vec![Value::String(e)],
-                })
-            }
+            Err(e) => return Ok(Value::err(Value::String(e))),
         };
 
         let map = match parsed {
             Value::HashMap(m) => m,
             _ => {
-                return Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Err".to_string(),
-                    data: vec![Value::String("JSON value is not an object".to_string())],
-                })
+                return Ok(Value::err(Value::String(
+                    "JSON value is not an object".to_string(),
+                )))
             }
         };
 
@@ -4057,22 +3759,14 @@ impl Interpreter {
                         result_fields.insert(field.name.clone(), Value::Unit);
                     }
                 }
-                Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Ok".to_string(),
-                    data: vec![Value::Struct {
-                        name: struct_name.to_string(),
-                        fields: result_fields,
-                    }],
-                })
+                Ok(Value::ok(Value::Struct {
+                    name: struct_name.to_string(),
+                    fields: result_fields,
+                }))
             }
-            _ => Ok(Value::EnumVariant {
-                enum_name: "Result".to_string(),
-                variant: "Err".to_string(),
-                data: vec![Value::String(format!(
-                    "json::from_struct only supports named-field structs, not {struct_name}"
-                ))],
-            }),
+            _ => Ok(Value::err(Value::String(format!(
+                "json::from_struct only supports named-field structs, not {struct_name}"
+            )))),
         }
     }
 
@@ -4140,22 +3834,10 @@ impl Interpreter {
                 let url = format!("{}", args[0]);
                 match crate::http::request("GET", &url, &[], None) {
                     Ok((_, body, _)) => match crate::json::deserialize(&body) {
-                        Ok(val) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Ok".to_string(),
-                            data: vec![val],
-                        }),
-                        Err(e) => Ok(Value::EnumVariant {
-                            enum_name: "Result".to_string(),
-                            variant: "Err".to_string(),
-                            data: vec![Value::String(format!("JSON parse error: {e}"))],
-                        }),
+                        Ok(val) => Ok(Value::ok(val)),
+                        Err(e) => Ok(Value::err(Value::String(format!("JSON parse error: {e}")))),
                     },
-                    Err(e) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Err".to_string(),
-                        data: vec![Value::String(e)],
-                    }),
+                    Err(e) => Ok(Value::err(Value::String(e))),
                 }
             }
             "post_json" => self.http_json_body("POST", args, span),
@@ -4206,20 +3888,12 @@ impl Interpreter {
                 fields.insert("status".to_string(), Value::Integer(status));
                 fields.insert("body".to_string(), Value::String(body));
                 fields.insert("headers".to_string(), Value::HashMap(headers_map));
-                Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Ok".to_string(),
-                    data: vec![Value::Struct {
-                        name: "HttpResponse".to_string(),
-                        fields,
-                    }],
-                })
+                Ok(Value::ok(Value::Struct {
+                    name: "HttpResponse".to_string(),
+                    fields,
+                }))
             }
-            Err(e) => Ok(Value::EnumVariant {
-                enum_name: "Result".to_string(),
-                variant: "Err".to_string(),
-                data: vec![Value::String(e)],
-            }),
+            Err(e) => Ok(Value::err(Value::String(e))),
         }
     }
 
@@ -4243,11 +3917,9 @@ impl Interpreter {
         let json_body = match crate::json::serialize(&args[1]) {
             Ok(j) => j,
             Err(e) => {
-                return Ok(Value::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Err".to_string(),
-                    data: vec![Value::String(format!("JSON serialize error: {e}"))],
-                })
+                return Ok(Value::err(Value::String(format!(
+                    "JSON serialize error: {e}"
+                ))))
             }
         };
         let headers = vec![("Content-Type".to_string(), "application/json".to_string())];
@@ -4267,16 +3939,8 @@ impl Interpreter {
                     _ => String::new(),
                 };
                 match crate::json::deserialize(&body) {
-                    Ok(val) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Ok".to_string(),
-                        data: vec![val],
-                    }),
-                    Err(e) => Ok(Value::EnumVariant {
-                        enum_name: "Result".to_string(),
-                        variant: "Err".to_string(),
-                        data: vec![Value::String(e)],
-                    }),
+                    Ok(val) => Ok(Value::ok(val)),
+                    Err(e) => Ok(Value::err(Value::String(e))),
                 }
             }
             "text" => {

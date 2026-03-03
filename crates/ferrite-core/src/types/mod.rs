@@ -74,29 +74,76 @@ pub struct FunctionData {
 
 impl Value {
     /// Returns the type name of this value for error messages.
-    pub fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> String {
         match self {
-            Value::Integer(_) => "i64",
-            Value::Float(_) => "f64",
-            Value::Bool(_) => "bool",
-            Value::String(_) => "String",
-            Value::Char(_) => "char",
-            Value::Unit => "()",
-            Value::Function(_) => "fn",
-            Value::Range(_, _) => "Range",
-            Value::Vec(_) => "Vec",
-            Value::Tuple(_) => "tuple",
-            Value::Struct { name, .. } => {
-                // Return a static str for common names, else fallback
-                // We leak the string since type_name returns &'static str
-                // This is fine — struct names live for the program lifetime
-                Box::leak(name.clone().into_boxed_str())
-            }
-            Value::EnumVariant { enum_name, .. } => Box::leak(enum_name.clone().into_boxed_str()),
-            Value::HashMap(_) => "HashMap",
-            Value::Future(_) => "Future",
-            Value::JoinHandle(_) => "JoinHandle",
+            Value::Integer(_) => "i64".into(),
+            Value::Float(_) => "f64".into(),
+            Value::Bool(_) => "bool".into(),
+            Value::String(_) => "String".into(),
+            Value::Char(_) => "char".into(),
+            Value::Unit => "()".into(),
+            Value::Function(_) => "fn".into(),
+            Value::Range(_, _) => "Range".into(),
+            Value::Vec(_) => "Vec".into(),
+            Value::Tuple(_) => "tuple".into(),
+            Value::Struct { name, .. } => name.clone(),
+            Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+            Value::HashMap(_) => "HashMap".into(),
+            Value::Future(_) => "Future".into(),
+            Value::JoinHandle(_) => "JoinHandle".into(),
         }
+    }
+
+    pub fn some(val: Value) -> Value {
+        Value::EnumVariant {
+            enum_name: "Option".to_string(),
+            variant: "Some".to_string(),
+            data: vec![val],
+        }
+    }
+
+    pub fn none() -> Value {
+        Value::EnumVariant {
+            enum_name: "Option".to_string(),
+            variant: "None".to_string(),
+            data: vec![],
+        }
+    }
+
+    pub fn ok(val: Value) -> Value {
+        Value::EnumVariant {
+            enum_name: "Result".to_string(),
+            variant: "Ok".to_string(),
+            data: vec![val],
+        }
+    }
+
+    pub fn err(val: Value) -> Value {
+        Value::EnumVariant {
+            enum_name: "Result".to_string(),
+            variant: "Err".to_string(),
+            data: vec![val],
+        }
+    }
+
+    /// Check if this is a Some variant
+    pub fn is_some_variant(&self) -> bool {
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Option" && variant == "Some")
+    }
+
+    /// Check if this is a None variant
+    pub fn is_none_variant(&self) -> bool {
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Option" && variant == "None")
+    }
+
+    /// Check if this is an Ok variant
+    pub fn is_ok_variant(&self) -> bool {
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Result" && variant == "Ok")
+    }
+
+    /// Check if this is an Err variant
+    pub fn is_err_variant(&self) -> bool {
+        matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == "Result" && variant == "Err")
     }
 
     /// Returns true if this value is truthy (for conditions).
