@@ -4,7 +4,8 @@ FROM rust:1.85-slim AS builder
 WORKDIR /app
 
 # Cache dependencies by building them first
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
+COPY Cargo.lock* ./
 COPY crates/ferrite-core/Cargo.toml crates/ferrite-core/Cargo.toml
 COPY crates/ferrite-cli/Cargo.toml crates/ferrite-cli/Cargo.toml
 
