@@ -50,7 +50,9 @@ impl Precedence {
             TokenKind::Shl | TokenKind::Shr => Precedence::Shift,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
-            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket => Precedence::Call,
+            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket | TokenKind::Question => {
+                Precedence::Call
+            }
             TokenKind::Eq
             | TokenKind::PlusEq
             | TokenKind::MinusEq
@@ -666,6 +668,22 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::While)?;
 
+        // Check for `while let`
+        if self.check(&TokenKind::Let) {
+            self.advance();
+            let pattern = self.parse_pattern()?;
+            self.expect(TokenKind::Eq)?;
+            let expr = self.parse_expr(Precedence::None)?;
+            let body = self.parse_block()?;
+            let end_span = body.span;
+            return Ok(Stmt::WhileLet {
+                pattern: Box::new(pattern),
+                expr: Box::new(expr),
+                body,
+                span: self.merge_spans(start_span, end_span),
+            });
+        }
+
         let condition = self.parse_expr(Precedence::None)?;
         let body = self.parse_block()?;
         let end_span = body.span;
@@ -1196,6 +1214,15 @@ impl Parser {
             });
         }
 
+        // Try operator: `expr?`
+        if op_kind == TokenKind::Question {
+            self.advance();
+            return Ok(Expr::Try {
+                expr: Box::new(left),
+                span: op_span,
+            });
+        }
+
         Err(self.error(format!(
             "unexpected token in expression: {}",
             op_kind.description()
@@ -1205,6 +1232,11 @@ impl Parser {
     fn parse_if_expr(&mut self) -> Result<Expr, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::If)?;
+
+        // Check for `if let` pattern
+        if self.check(&TokenKind::Let) {
+            return self.parse_if_let_expr(start_span);
+        }
 
         let condition = self.parse_expr(Precedence::None)?;
         let then_block = self.parse_block()?;
@@ -1229,6 +1261,38 @@ impl Parser {
 
         Ok(Expr::If {
             condition: Box::new(condition),
+            then_block,
+            else_block,
+            span: self.merge_spans(start_span, end_span),
+        })
+    }
+
+    fn parse_if_let_expr(&mut self, start_span: Span) -> Result<Expr, FerriError> {
+        self.expect(TokenKind::Let)?;
+        let pattern = self.parse_pattern()?;
+        self.expect(TokenKind::Eq)?;
+        let expr = self.parse_expr(Precedence::None)?;
+        let then_block = self.parse_block()?;
+
+        let else_block = if self.match_token(&TokenKind::Else) {
+            if self.check(&TokenKind::If) {
+                Some(Box::new(self.parse_if_expr()?))
+            } else {
+                let block = self.parse_block()?;
+                Some(Box::new(Expr::Block(block)))
+            }
+        } else {
+            None
+        };
+
+        let end_span = else_block
+            .as_ref()
+            .map(|e| e.span())
+            .unwrap_or(then_block.span);
+
+        Ok(Expr::IfLet {
+            pattern: Box::new(pattern),
+            expr: Box::new(expr),
             then_block,
             else_block,
             span: self.merge_spans(start_span, end_span),
@@ -1306,6 +1370,45 @@ impl Parser {
                 } else {
                     self.expect_ident()?
                 };
+
+                // Handle shorthand patterns: Some(x), None, Ok(x), Err(e)
+                match name.as_str() {
+                    "None" => {
+                        return Ok(Pattern::EnumVariant {
+                            enum_name: "Option".to_string(),
+                            variant: "None".to_string(),
+                            fields: vec![],
+                            span,
+                        });
+                    }
+                    "Some" | "Ok" | "Err" => {
+                        let enum_name =
+                            if name == "Some" { "Option" } else { "Result" }.to_string();
+                        let mut fields = Vec::new();
+                        if self.match_token(&TokenKind::LParen) {
+                            if !self.check(&TokenKind::RParen) {
+                                loop {
+                                    fields.push(self.parse_pattern()?);
+                                    if !self.match_token(&TokenKind::Comma) {
+                                        break;
+                                    }
+                                    if self.check(&TokenKind::RParen) {
+                                        break;
+                                    }
+                                }
+                            }
+                            self.expect(TokenKind::RParen)?;
+                        }
+                        let end_span = self.prev_span();
+                        return Ok(Pattern::EnumVariant {
+                            enum_name,
+                            variant: name,
+                            fields,
+                            span: self.merge_spans(span, end_span),
+                        });
+                    }
+                    _ => {}
+                }
 
                 // Check for path pattern: `Name::Variant` or `Name::Variant(x, y)`
                 if self.check(&TokenKind::ColonColon) {
@@ -2441,5 +2544,120 @@ fn main() {}"#,
         };
         assert_eq!(i.trait_name, "Add");
         assert_eq!(i.type_name, "Vec2");
+    }
+
+    // === Phase 9: Error Handling ===
+
+    #[test]
+    fn test_if_let_expr() {
+        let program =
+            parse(r#"fn main() { if let Some(x) = foo() { println!("{}", x); } }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Expr { expr, .. } = &f.body.stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        assert!(matches!(expr, Expr::IfLet { .. }));
+    }
+
+    #[test]
+    fn test_if_let_with_else() {
+        let program = parse(r#"fn main() { if let Some(x) = foo() { x } else { 0 } }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Expr { expr, .. } = &f.body.stmts[0] else {
+            panic!("expected expr stmt");
+        };
+        let Expr::IfLet { else_block, .. } = expr else {
+            panic!("expected if let");
+        };
+        assert!(else_block.is_some());
+    }
+
+    #[test]
+    fn test_while_let_stmt() {
+        let program =
+            parse(r#"fn main() { while let Some(x) = v.pop() { println!("{}", x); } }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        assert!(matches!(&f.body.stmts[0], Stmt::WhileLet { .. }));
+    }
+
+    #[test]
+    fn test_try_operator() {
+        let program = parse(r#"fn main() { let x = foo()?; }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let with value");
+        };
+        assert!(matches!(expr, Expr::Try { .. }));
+    }
+
+    #[test]
+    fn test_some_none_pattern() {
+        let program = parse(r#"fn main() { match x { Some(v) => v, None => 0, } }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Expr { expr, .. } = &f.body.stmts[0] else {
+            panic!("expected expr");
+        };
+        let Expr::Match { arms, .. } = expr else {
+            panic!("expected match");
+        };
+        assert!(matches!(
+            &arms[0].pattern,
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                ..
+            } if enum_name == "Option" && variant == "Some"
+        ));
+        assert!(matches!(
+            &arms[1].pattern,
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                ..
+            } if enum_name == "Option" && variant == "None"
+        ));
+    }
+
+    #[test]
+    fn test_ok_err_pattern() {
+        let program = parse(r#"fn main() { match x { Ok(v) => v, Err(e) => 0, } }"#).unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected function");
+        };
+        let Stmt::Expr { expr, .. } = &f.body.stmts[0] else {
+            panic!("expected expr");
+        };
+        let Expr::Match { arms, .. } = expr else {
+            panic!("expected match");
+        };
+        assert!(matches!(
+            &arms[0].pattern,
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                ..
+            } if enum_name == "Result" && variant == "Ok"
+        ));
+        assert!(matches!(
+            &arms[1].pattern,
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                ..
+            } if enum_name == "Result" && variant == "Err"
+        ));
     }
 }

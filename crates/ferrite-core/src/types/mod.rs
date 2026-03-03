@@ -149,7 +149,12 @@ impl fmt::Display for Value {
                 variant,
                 data,
             } => {
-                write!(f, "{enum_name}::{variant}")?;
+                // Built-in Option/Result: show without enum prefix
+                if enum_name == "Option" || enum_name == "Result" {
+                    write!(f, "{variant}")?;
+                } else {
+                    write!(f, "{enum_name}::{variant}")?;
+                }
                 if !data.is_empty() {
                     write!(f, "(")?;
                     for (i, v) in data.iter().enumerate() {

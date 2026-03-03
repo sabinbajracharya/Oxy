@@ -101,7 +101,7 @@ src/
 
 ## Current Phase
 
-Phase 8: Traits & Generics — COMPLETE. 252 tests passing.
+Phase 9: Error Handling — COMPLETE. 276 tests passing.
 
 ### What Works Now
 - `let` / `let mut` bindings with immutability enforcement
@@ -129,7 +129,7 @@ Phase 8: Traits & Generics — COMPLETE. 252 tests passing.
 - `[1, 2, 3]` array literal syntax (creates Vec)
 - `v[0]` index access for Vec, String, Tuple
 - `v[0] = x` index assignment for Vec
-- Vec methods: `.push()`, `.pop()`, `.len()`, `.is_empty()`, `.contains()`, `.first()`, `.last()`, `.reverse()`, `.join()`
+- Vec methods: `.push()`, `.pop()` (returns Option), `.len()`, `.is_empty()`, `.contains()`, `.first()` (returns Option), `.last()` (returns Option), `.reverse()`, `.join()`
 - String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`, `.clone()`, `.to_string()`
 - `String::from("...")` associated function
 - Tuples: `(a, b, c)`, tuple index `t.0`, empty tuple `()`, single-element `(x,)`
@@ -158,5 +158,16 @@ Phase 8: Traits & Generics — COMPLETE. 252 tests passing.
 - `&` and `&mut` syntax parsed but ignored (no borrow checker)
 - Shadowing: `let x = 1; let x = "hello";`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
+- Option type: `Some(value)`, `None`
+- Option methods: `.unwrap()`, `.expect()`, `.unwrap_or()`, `.unwrap_or_else()`, `.is_some()`, `.is_none()`, `.map()`, `.and_then()`
+- Result type: `Ok(value)`, `Err(error)`
+- Result methods: `.unwrap()`, `.expect()`, `.unwrap_err()`, `.unwrap_or()`, `.unwrap_or_else()`, `.is_ok()`, `.is_err()`, `.map()`, `.map_err()`, `.and_then()`, `.ok()`, `.err()`
+- `?` operator — early return on Err/None
+- `if let Some(x) = expr { ... }` and `if let Ok(x) = expr { ... } else { ... }`
+- `while let Some(x) = expr { ... }` — loop until pattern stops matching
+- `panic!("message")` — runtime panic with message
+- `todo!()` — panics with "not yet implemented"
+- `unimplemented!()` — panics with "not implemented"
+- `dbg!(expr)` — prints debug value and returns it
 - REPL with persistent environment
 - File execution with `ferrite run file.fe`

@@ -201,6 +201,13 @@ pub enum Stmt {
     },
     /// `continue;`
     Continue { span: Span },
+    /// `while let pattern = expr { body }`
+    WhileLet {
+        pattern: Box<Pattern>,
+        expr: Box<Expr>,
+        body: Block,
+        span: Span,
+    },
 }
 
 impl Stmt {
@@ -212,7 +219,8 @@ impl Stmt {
             | Stmt::Loop { span, .. }
             | Stmt::For { span, .. }
             | Stmt::Break { span, .. }
-            | Stmt::Continue { span, .. } => *span,
+            | Stmt::Continue { span, .. }
+            | Stmt::WhileLet { span, .. } => *span,
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -334,6 +342,16 @@ pub enum Expr {
     Path { segments: Vec<String>, span: Span },
     /// `self` keyword in methods
     SelfRef(Span),
+    /// `if let` expression: `if let Some(x) = expr { ... } [else { ... }]`
+    IfLet {
+        pattern: Box<Pattern>,
+        expr: Box<Expr>,
+        then_block: Block,
+        else_block: Option<Box<Expr>>,
+        span: Span,
+    },
+    /// Try operator: `expr?` — unwraps Ok/Some or returns Err/None early
+    Try { expr: Box<Expr>, span: Span },
 }
 
 impl Expr {
@@ -364,7 +382,9 @@ impl Expr {
             | Expr::StructInit { span: s, .. }
             | Expr::PathCall { span: s, .. }
             | Expr::Path { span: s, .. }
-            | Expr::SelfRef(s) => *s,
+            | Expr::SelfRef(s)
+            | Expr::IfLet { span: s, .. }
+            | Expr::Try { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -752,12 +772,28 @@ impl Stmt {
             Stmt::Continue { .. } => {
                 out.push_str(&format!("{pad}continue;\n"));
             }
+            Stmt::WhileLet {
+                pattern,
+                expr,
+                body,
+                ..
+            } => {
+                out.push_str(&format!("{pad}while let "));
+                pattern.pretty_print(out);
+                out.push_str(" = ");
+                expr.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for s in &body.stmts {
+                    s.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}\n"));
+            }
         }
     }
 }
 
 impl Expr {
-    fn pretty_print(&self, out: &mut String, _indent: usize) {
+    fn pretty_print(&self, out: &mut String, indent: usize) {
         match self {
             Expr::IntLiteral(n, _) => out.push_str(&n.to_string()),
             Expr::FloatLiteral(n, _) => out.push_str(&n.to_string()),
@@ -950,6 +986,33 @@ impl Expr {
             }
             Expr::SelfRef(_) => {
                 out.push_str("self");
+            }
+            Expr::IfLet {
+                pattern,
+                expr,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let pad = "  ".repeat(indent);
+                out.push_str(&format!("{pad}if let "));
+                pattern.pretty_print(out);
+                out.push_str(" = ");
+                expr.pretty_print(out, 0);
+                out.push_str(" {\n");
+                for s in &then_block.stmts {
+                    s.pretty_print(out, indent + 1);
+                }
+                out.push_str(&format!("{pad}}}"));
+                if let Some(else_expr) = else_block {
+                    out.push_str(" else ");
+                    else_expr.pretty_print(out, indent);
+                }
+                out.push('\n');
+            }
+            Expr::Try { expr, .. } => {
+                expr.pretty_print(out, indent);
+                out.push('?');
             }
         }
     }

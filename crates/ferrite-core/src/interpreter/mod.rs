@@ -254,6 +254,33 @@ impl Interpreter {
                 Err(FerriError::Break(val))
             }
             Stmt::Continue { .. } => Err(FerriError::Continue),
+
+            Stmt::WhileLet {
+                pattern,
+                expr,
+                body,
+                ..
+            } => {
+                let mut result = Value::Unit;
+                loop {
+                    let val = self.eval_expr(expr, env)?;
+                    if !Self::pattern_matches(pattern, &val) {
+                        break;
+                    }
+                    let iter_env = Environment::child(env);
+                    Self::bind_pattern(pattern, &val, &iter_env);
+                    match self.eval_block(body, &iter_env) {
+                        Ok(v) => result = v,
+                        Err(FerriError::Break(v)) => {
+                            result = v.map(|v| *v).unwrap_or(Value::Unit);
+                            break;
+                        }
+                        Err(FerriError::Continue) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(result)
+            }
         }
     }
 
@@ -295,11 +322,21 @@ impl Interpreter {
             Expr::StringLiteral(s, _) => Ok(Value::String(s.clone())),
             Expr::CharLiteral(c, _) => Ok(Value::Char(*c)),
 
-            Expr::Ident(name, span) => env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                message: format!("undefined variable '{name}'"),
-                line: span.line,
-                column: span.column,
-            }),
+            Expr::Ident(name, span) => {
+                // Built-in constants
+                if name == "None" {
+                    return Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    });
+                }
+                env.borrow().get(name).map_err(|_| FerriError::Runtime {
+                    message: format!("undefined variable '{name}'"),
+                    line: span.line,
+                    column: span.column,
+                })
+            }
 
             Expr::BinaryOp {
                 left,
@@ -322,6 +359,66 @@ impl Interpreter {
             }
 
             Expr::Call { callee, args, span } => {
+                // Handle built-in constructors: Some(x), Ok(x), Err(e)
+                if let Expr::Ident(name, _) = callee.as_ref() {
+                    match name.as_str() {
+                        "Some" => {
+                            if args.len() != 1 {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "Some() takes exactly 1 argument, got {}",
+                                        args.len()
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            let val = self.eval_expr(&args[0], env)?;
+                            return Ok(Value::EnumVariant {
+                                enum_name: "Option".to_string(),
+                                variant: "Some".to_string(),
+                                data: vec![val],
+                            });
+                        }
+                        "Ok" => {
+                            if args.len() != 1 {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "Ok() takes exactly 1 argument, got {}",
+                                        args.len()
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            let val = self.eval_expr(&args[0], env)?;
+                            return Ok(Value::EnumVariant {
+                                enum_name: "Result".to_string(),
+                                variant: "Ok".to_string(),
+                                data: vec![val],
+                            });
+                        }
+                        "Err" => {
+                            if args.len() != 1 {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "Err() takes exactly 1 argument, got {}",
+                                        args.len()
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            let val = self.eval_expr(&args[0], env)?;
+                            return Ok(Value::EnumVariant {
+                                enum_name: "Result".to_string(),
+                                variant: "Err".to_string(),
+                                data: vec![val],
+                            });
+                        }
+                        _ => {}
+                    }
+                }
                 let func = self.eval_expr(callee, env)?;
                 let mut arg_values = Vec::with_capacity(args.len());
                 for arg in args {
@@ -767,6 +864,69 @@ impl Interpreter {
                 line: span.line,
                 column: span.column,
             }),
+
+            Expr::IfLet {
+                pattern,
+                expr,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let val = self.eval_expr(expr, env)?;
+                if Self::pattern_matches(pattern, &val) {
+                    let child_env = Environment::child(env);
+                    Self::bind_pattern(pattern, &val, &child_env);
+                    self.eval_block(then_block, &child_env)
+                } else if let Some(else_expr) = else_block {
+                    self.eval_expr(else_expr, env)
+                } else {
+                    Ok(Value::Unit)
+                }
+            }
+
+            Expr::Try { expr, span } => {
+                let val = self.eval_expr(expr, env)?;
+                match &val {
+                    // Some(x) → unwrap to x
+                    Value::EnumVariant {
+                        enum_name,
+                        variant,
+                        data,
+                        ..
+                    } if enum_name == "Option" && variant == "Some" => {
+                        Ok(data.first().cloned().unwrap_or(Value::Unit))
+                    }
+                    // None → return None early
+                    Value::EnumVariant {
+                        enum_name, variant, ..
+                    } if enum_name == "Option" && variant == "None" => {
+                        Err(FerriError::Return(Box::new(val)))
+                    }
+                    // Ok(x) → unwrap to x
+                    Value::EnumVariant {
+                        enum_name,
+                        variant,
+                        data,
+                        ..
+                    } if enum_name == "Result" && variant == "Ok" => {
+                        Ok(data.first().cloned().unwrap_or(Value::Unit))
+                    }
+                    // Err(e) → return Err(e) early
+                    Value::EnumVariant {
+                        enum_name, variant, ..
+                    } if enum_name == "Result" && variant == "Err" => {
+                        Err(FerriError::Return(Box::new(val)))
+                    }
+                    _ => Err(FerriError::Runtime {
+                        message: format!(
+                            "`?` operator can only be used on Option or Result, got {}",
+                            val.type_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
+            }
         }
     }
 
@@ -1116,6 +1276,42 @@ impl Interpreter {
                 eprintln!("{output}");
                 Ok(Value::Unit)
             }
+            "panic" => {
+                let output = if args.is_empty() {
+                    "explicit panic".to_string()
+                } else {
+                    self.format_macro_args(args, env, line, col)?
+                };
+                Err(FerriError::Runtime {
+                    message: format!("panic: {output}"),
+                    line,
+                    column: col,
+                })
+            }
+            "todo" => Err(FerriError::Runtime {
+                message: "not yet implemented".to_string(),
+                line,
+                column: col,
+            }),
+            "unimplemented" => Err(FerriError::Runtime {
+                message: "not implemented".to_string(),
+                line,
+                column: col,
+            }),
+            "dbg" => {
+                // dbg! prints debug output and returns the value
+                if args.len() != 1 {
+                    return Err(FerriError::Runtime {
+                        message: format!("dbg!() takes 1 argument, got {}", args.len()),
+                        line,
+                        column: col,
+                    });
+                }
+                let val = self.eval_expr(&args[0], env)?;
+                let debug = debug_format(&val);
+                self.write_output(&format!("[dbg] {debug}\n"));
+                Ok(val)
+            }
             _ => Err(FerriError::Runtime {
                 message: format!("unknown macro '{name}!'"),
                 line,
@@ -1235,6 +1431,16 @@ impl Interpreter {
             | Value::EnumVariant {
                 enum_name: name, ..
             } => {
+                // Built-in Option/Result methods
+                if let Value::EnumVariant { enum_name, .. } = &receiver {
+                    if enum_name == "Option" || enum_name == "Result" {
+                        if let Some(result) =
+                            self.call_option_result_method(&receiver, method, &args, span)?
+                        {
+                            return Ok(result);
+                        }
+                    }
+                }
                 let type_name = name.clone();
                 self.call_user_method(receiver, &type_name, method, args, receiver_expr, env, span)
             }
@@ -1289,12 +1495,48 @@ impl Interpreter {
                 let popped = new_v.pop();
                 self.mutate_variable(receiver_expr, Value::Vec(new_v), env, span)?;
                 match popped {
-                    Some(val) => Ok(val),
-                    None => Ok(Value::Unit),
+                    Some(val) => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: vec![val],
+                    }),
+                    None => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }),
                 }
             }
-            "first" => Ok(v.first().cloned().unwrap_or(Value::Unit)),
-            "last" => Ok(v.last().cloned().unwrap_or(Value::Unit)),
+            "first" => {
+                let result = v.first().cloned();
+                match result {
+                    Some(val) => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: vec![val],
+                    }),
+                    None => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }),
+                }
+            }
+            "last" => {
+                let result = v.last().cloned();
+                match result {
+                    Some(val) => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: vec![val],
+                    }),
+                    None => Ok(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }),
+                }
+            }
             "reverse" => {
                 let mut new_v = v;
                 new_v.reverse();
@@ -1518,6 +1760,250 @@ impl Interpreter {
                 line: span.line,
                 column: span.column,
             }),
+        }
+    }
+
+    /// Handle built-in Option/Result methods.
+    /// Returns `Ok(Some(value))` if the method was handled, `Ok(None)` if not found.
+    fn call_option_result_method(
+        &mut self,
+        receiver: &Value,
+        method: &str,
+        args: &[Value],
+        span: &Span,
+    ) -> Result<Option<Value>, FerriError> {
+        let Value::EnumVariant {
+            enum_name,
+            variant,
+            data,
+            ..
+        } = receiver
+        else {
+            return Ok(None);
+        };
+
+        match (enum_name.as_str(), method) {
+            // === Option methods ===
+            ("Option", "is_some") => Ok(Some(Value::Bool(variant == "Some"))),
+            ("Option", "is_none") => Ok(Some(Value::Bool(variant == "None"))),
+            ("Option", "unwrap") => {
+                if variant == "Some" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    Err(FerriError::Runtime {
+                        message: "called `Option::unwrap()` on a `None` value".to_string(),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            ("Option", "expect") => {
+                if variant == "Some" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    let msg = args
+                        .first()
+                        .map(|v| format!("{v}"))
+                        .unwrap_or_else(|| "Option::expect failed".to_string());
+                    Err(FerriError::Runtime {
+                        message: msg,
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            ("Option", "unwrap_or") => {
+                if variant == "Some" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    Ok(Some(args.first().cloned().unwrap_or(Value::Unit)))
+                }
+            }
+            ("Option", "unwrap_or_else") => {
+                if variant == "Some" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else if let Some(Value::Function { .. }) = args.first() {
+                    let result = self.call_function(&args[0], &[], span.line, span.column)?;
+                    Ok(Some(result))
+                } else {
+                    Ok(Some(Value::Unit))
+                }
+            }
+            ("Option", "map") => {
+                if variant == "Some" {
+                    if let Some(func) = args.first() {
+                        let inner = data.first().cloned().unwrap_or(Value::Unit);
+                        let result = self.call_function(func, &[inner], span.line, span.column)?;
+                        Ok(Some(Value::EnumVariant {
+                            enum_name: "Option".to_string(),
+                            variant: "Some".to_string(),
+                            data: vec![result],
+                        }))
+                    } else {
+                        Ok(Some(receiver.clone()))
+                    }
+                } else {
+                    // None.map(f) → None
+                    Ok(Some(receiver.clone()))
+                }
+            }
+            ("Option", "and_then") => {
+                if variant == "Some" {
+                    if let Some(func) = args.first() {
+                        let inner = data.first().cloned().unwrap_or(Value::Unit);
+                        let result = self.call_function(func, &[inner], span.line, span.column)?;
+                        Ok(Some(result))
+                    } else {
+                        Ok(Some(receiver.clone()))
+                    }
+                } else {
+                    Ok(Some(receiver.clone()))
+                }
+            }
+
+            // === Result methods ===
+            ("Result", "is_ok") => Ok(Some(Value::Bool(variant == "Ok"))),
+            ("Result", "is_err") => Ok(Some(Value::Bool(variant == "Err"))),
+            ("Result", "unwrap") => {
+                if variant == "Ok" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    let err_val = data
+                        .first()
+                        .map(|v| format!("{v}"))
+                        .unwrap_or_else(|| "unknown error".to_string());
+                    Err(FerriError::Runtime {
+                        message: format!("called `Result::unwrap()` on an `Err` value: {err_val}"),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            ("Result", "expect") => {
+                if variant == "Ok" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    let msg = args
+                        .first()
+                        .map(|v| format!("{v}"))
+                        .unwrap_or_else(|| "Result::expect failed".to_string());
+                    Err(FerriError::Runtime {
+                        message: msg,
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            ("Result", "unwrap_err") => {
+                if variant == "Err" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    Err(FerriError::Runtime {
+                        message: "called `Result::unwrap_err()` on an `Ok` value".to_string(),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            ("Result", "unwrap_or") => {
+                if variant == "Ok" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else {
+                    Ok(Some(args.first().cloned().unwrap_or(Value::Unit)))
+                }
+            }
+            ("Result", "unwrap_or_else") => {
+                if variant == "Ok" {
+                    Ok(Some(data.first().cloned().unwrap_or(Value::Unit)))
+                } else if let Some(Value::Function { .. }) = args.first() {
+                    let err_val = data.first().cloned().unwrap_or(Value::Unit);
+                    let result =
+                        self.call_function(&args[0], &[err_val], span.line, span.column)?;
+                    Ok(Some(result))
+                } else {
+                    Ok(Some(Value::Unit))
+                }
+            }
+            ("Result", "map") => {
+                if variant == "Ok" {
+                    if let Some(func) = args.first() {
+                        let inner = data.first().cloned().unwrap_or(Value::Unit);
+                        let result = self.call_function(func, &[inner], span.line, span.column)?;
+                        Ok(Some(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Ok".to_string(),
+                            data: vec![result],
+                        }))
+                    } else {
+                        Ok(Some(receiver.clone()))
+                    }
+                } else {
+                    // Err(e).map(f) → Err(e)
+                    Ok(Some(receiver.clone()))
+                }
+            }
+            ("Result", "map_err") => {
+                if variant == "Err" {
+                    if let Some(func) = args.first() {
+                        let inner = data.first().cloned().unwrap_or(Value::Unit);
+                        let result = self.call_function(func, &[inner], span.line, span.column)?;
+                        Ok(Some(Value::EnumVariant {
+                            enum_name: "Result".to_string(),
+                            variant: "Err".to_string(),
+                            data: vec![result],
+                        }))
+                    } else {
+                        Ok(Some(receiver.clone()))
+                    }
+                } else {
+                    Ok(Some(receiver.clone()))
+                }
+            }
+            ("Result", "and_then") => {
+                if variant == "Ok" {
+                    if let Some(func) = args.first() {
+                        let inner = data.first().cloned().unwrap_or(Value::Unit);
+                        let result = self.call_function(func, &[inner], span.line, span.column)?;
+                        Ok(Some(result))
+                    } else {
+                        Ok(Some(receiver.clone()))
+                    }
+                } else {
+                    Ok(Some(receiver.clone()))
+                }
+            }
+            ("Result", "ok") => {
+                if variant == "Ok" {
+                    Ok(Some(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: data.clone(),
+                    }))
+                } else {
+                    Ok(Some(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }))
+                }
+            }
+            ("Result", "err") => {
+                if variant == "Err" {
+                    Ok(Some(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        data: data.clone(),
+                    }))
+                } else {
+                    Ok(Some(Value::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        data: vec![],
+                    }))
+                }
+            }
+
+            _ => Ok(None),
         }
     }
 
@@ -1867,11 +2353,17 @@ fn debug_format(val: &Value) -> String {
             variant,
             data,
         } => {
+            // Built-in Option/Result: show without enum prefix
+            let prefix = if enum_name == "Option" || enum_name == "Result" {
+                String::new()
+            } else {
+                format!("{enum_name}::")
+            };
             if data.is_empty() {
-                format!("{enum_name}::{variant}")
+                format!("{prefix}{variant}")
             } else {
                 let items: Vec<String> = data.iter().map(debug_format).collect();
-                format!("{enum_name}::{variant}({})", items.join(", "))
+                format!("{prefix}{variant}({})", items.join(", "))
             }
         }
         other => format!("{other}"),
@@ -2652,10 +3144,10 @@ println!("{:?}", v);
             r#"fn main() {
 let mut v = vec![1, 2, 3];
 let x = v.pop();
-println!("{} {:?}", x, v);
+println!("{:?} {:?}", x, v);
 }"#,
         );
-        assert_eq!(output, vec!["3 [1, 2]\n"]);
+        assert_eq!(output, vec!["Some(3) [1, 2]\n"]);
     }
 
     #[test]
@@ -2873,10 +3365,10 @@ for c in "abc" {
         let output = run_and_capture(
             r#"fn main() {
 let v = vec![10, 20, 30];
-println!("{} {}", v.first(), v.last());
+println!("{:?} {:?}", v.first(), v.last());
 }"#,
         );
-        assert_eq!(output, vec!["10 30\n"]);
+        assert_eq!(output, vec!["Some(10) Some(30)\n"]);
     }
 
     #[test]
@@ -3567,5 +4059,447 @@ fn main() {
 "#,
         );
         assert_eq!(out, vec!["hello hello\n"]);
+    }
+
+    // === Phase 9: Error Handling ===
+
+    #[test]
+    fn test_option_some_none() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    let y = None;
+    println!("{:?} {:?}", x, y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Some(42) None\n"]);
+    }
+
+    #[test]
+    fn test_option_unwrap() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    println!("{}", x.unwrap());
+}
+"#,
+        );
+        assert_eq!(out, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_option_is_some_is_none() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    let y = None;
+    println!("{} {} {} {}", x.is_some(), x.is_none(), y.is_some(), y.is_none());
+}
+"#,
+        );
+        assert_eq!(out, vec!["true false false true\n"]);
+    }
+
+    #[test]
+    fn test_option_unwrap_or() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    let y = None;
+    println!("{} {}", x.unwrap_or(0), y.unwrap_or(0));
+}
+"#,
+        );
+        assert_eq!(out, vec!["42 0\n"]);
+    }
+
+    #[test]
+    fn test_result_ok_err() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    let y = Err("failed");
+    println!("{:?} {:?}", x, y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Ok(42) Err(\"failed\")\n"]);
+    }
+
+    #[test]
+    fn test_result_unwrap() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    println!("{}", x.unwrap());
+}
+"#,
+        );
+        assert_eq!(out, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_result_is_ok_is_err() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    let y = Err("oops");
+    println!("{} {} {} {}", x.is_ok(), x.is_err(), y.is_ok(), y.is_err());
+}
+"#,
+        );
+        assert_eq!(out, vec!["true false false true\n"]);
+    }
+
+    #[test]
+    fn test_result_unwrap_or() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    let y = Err("oops");
+    println!("{} {}", x.unwrap_or(0), y.unwrap_or(0));
+}
+"#,
+        );
+        assert_eq!(out, vec!["42 0\n"]);
+    }
+
+    #[test]
+    fn test_result_unwrap_err() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let y = Err("oops");
+    println!("{}", y.unwrap_err());
+}
+"#,
+        );
+        assert_eq!(out, vec!["oops\n"]);
+    }
+
+    #[test]
+    fn test_if_let_some() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    if let Some(val) = x {
+        println!("got {}", val);
+    } else {
+        println!("nothing");
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["got 42\n"]);
+    }
+
+    #[test]
+    fn test_if_let_none() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = None;
+    if let Some(val) = x {
+        println!("got {}", val);
+    } else {
+        println!("nothing");
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["nothing\n"]);
+    }
+
+    #[test]
+    fn test_while_let() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let mut v = vec![1, 2, 3];
+    while let Some(val) = v.pop() {
+        println!("{}", val);
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["3\n", "2\n", "1\n"]);
+    }
+
+    #[test]
+    fn test_match_option() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Some(42);
+    match x {
+        Some(val) => println!("value: {}", val),
+        None => println!("nothing"),
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["value: 42\n"]);
+    }
+
+    #[test]
+    fn test_match_result() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Err("problem");
+    match x {
+        Ok(val) => println!("ok: {}", val),
+        Err(e) => println!("err: {}", e),
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["err: problem\n"]);
+    }
+
+    #[test]
+    fn test_try_operator_ok() {
+        let out = run_and_capture(
+            r#"
+fn parse_num(s: &str) -> Result {
+    if s == "42" {
+        Ok(42)
+    } else {
+        Err("parse error")
+    }
+}
+
+fn do_work() -> Result {
+    let n = parse_num("42")?;
+    Ok(n + 1)
+}
+
+fn main() {
+    let result = do_work();
+    println!("{:?}", result);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Ok(43)\n"]);
+    }
+
+    #[test]
+    fn test_try_operator_err() {
+        let out = run_and_capture(
+            r#"
+fn parse_num(s: &str) -> Result {
+    if s == "42" {
+        Ok(42)
+    } else {
+        Err("parse error")
+    }
+}
+
+fn do_work() -> Result {
+    let n = parse_num("bad")?;
+    Ok(n + 1)
+}
+
+fn main() {
+    let result = do_work();
+    println!("{:?}", result);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Err(\"parse error\")\n"]);
+    }
+
+    #[test]
+    fn test_panic_macro() {
+        let src = r#"
+fn main() {
+    panic!("something went wrong");
+}
+"#;
+        let program = crate::parser::parse(src).unwrap();
+        let mut interp = Interpreter::new_with_captured_output();
+        let result = interp.execute_program(&program);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("panic: something went wrong"));
+    }
+
+    #[test]
+    fn test_dbg_macro() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = dbg!(42);
+    println!("{}", x);
+}
+"#,
+        );
+        assert_eq!(out, vec!["[dbg] 42\n", "42\n"]);
+    }
+
+    #[test]
+    fn test_option_map() {
+        let out = run_and_capture(
+            r#"
+fn double(x: i64) -> i64 { x * 2 }
+
+fn main() {
+    let x = Some(21);
+    let y = x.map(double);
+    println!("{:?}", y);
+
+    let z = None;
+    let w = z.map(double);
+    println!("{:?}", w);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Some(42)\n", "None\n"]);
+    }
+
+    #[test]
+    fn test_result_map() {
+        let out = run_and_capture(
+            r#"
+fn double(x: i64) -> i64 { x * 2 }
+
+fn main() {
+    let x = Ok(21);
+    let y = x.map(double);
+    println!("{:?}", y);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Ok(42)\n"]);
+    }
+
+    #[test]
+    fn test_result_ok_to_option() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    let y = Err("bad");
+    println!("{:?} {:?}", x.ok(), y.ok());
+}
+"#,
+        );
+        assert_eq!(out, vec!["Some(42) None\n"]);
+    }
+
+    #[test]
+    fn test_if_let_result() {
+        let out = run_and_capture(
+            r#"
+fn main() {
+    let x = Ok(42);
+    if let Ok(val) = x {
+        println!("ok: {}", val);
+    } else {
+        println!("err");
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["ok: 42\n"]);
+    }
+
+    #[test]
+    fn test_option_function_return() {
+        let out = run_and_capture(
+            r#"
+fn find_item(items: Vec, target: i64) -> Option {
+    for i in 0..items.len() {
+        if items[i] == target {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn main() {
+    let items = vec![10, 20, 30, 40];
+    let result = find_item(items, 30);
+    match result {
+        Some(idx) => println!("found at {}", idx),
+        None => println!("not found"),
+    }
+}
+"#,
+        );
+        assert_eq!(out, vec!["found at 2\n"]);
+    }
+
+    #[test]
+    fn test_try_operator_option() {
+        let out = run_and_capture(
+            r#"
+fn get_first(v: Vec) -> Option {
+    if v.is_empty() {
+        None
+    } else {
+        Some(v[0])
+    }
+}
+
+fn process() -> Option {
+    let v = vec![10, 20, 30];
+    let first = get_first(v)?;
+    Some(first * 2)
+}
+
+fn main() {
+    let result = process();
+    println!("{:?}", result);
+}
+"#,
+        );
+        assert_eq!(out, vec!["Some(20)\n"]);
+    }
+
+    #[test]
+    fn test_option_unwrap_none_panics() {
+        let src = r#"
+fn main() {
+    let x = None;
+    x.unwrap();
+}
+"#;
+        let program = crate::parser::parse(src).unwrap();
+        let mut interp = Interpreter::new_with_captured_output();
+        let result = interp.execute_program(&program);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("called `Option::unwrap()` on a `None` value"));
+    }
+
+    #[test]
+    fn test_result_unwrap_err_panics() {
+        let src = r#"
+fn main() {
+    let x = Err("bad");
+    x.unwrap();
+}
+"#;
+        let program = crate::parser::parse(src).unwrap();
+        let mut interp = Interpreter::new_with_captured_output();
+        let result = interp.execute_program(&program);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("called `Result::unwrap()` on an `Err` value"));
     }
 }
