@@ -1,220 +1,97 @@
-# CLAUDE.md — Project Context for Claude Code
+# CLAUDE.md — Project Context
 
 ## Project: Ferrite
 
-**Ferrite** is an interpreted programming language written in Rust that replicates Rust's syntax without the borrow checker or ownership rules. Values are reference-counted internally. File extension: `.fe`.
+Interpreted programming language written in Rust. Replicates Rust syntax without borrow checker/ownership. File extension: `.fe`.
 
-## Quick Reference
+## Build & Test (Docker — no local Rust)
 
-### Build
 ```bash
-cargo build                    # Debug build
-cargo build --release          # Release build
-```
-
-### Test
-```bash
-cargo test                     # Run all tests
-cargo test -p ferrite-core     # Core library tests only
-cargo test -p ferrite-cli      # CLI integration tests only
-cargo test -p ferrite-lsp      # LSP server tests only
-```
-
-### Lint
-```bash
-cargo fmt --all --check        # Check formatting
-cargo fmt --all                # Auto-format
-cargo clippy --all-targets --all-features -- -D warnings  # Lint
-```
-
-### Run
-```bash
-cargo run -- --version         # Print version
-cargo run -- --help            # Print help
-cargo run -- run file.fe       # Execute a Ferrite file
-cargo run -- repl              # Start interactive REPL
-cargo run -- --dump-tokens f.fe # Dump token stream
-cargo run -- --dump-ast f.fe    # Dump AST
-```
-
-### Docker
-```bash
-docker compose run dev                    # Dev shell with Rust toolchain
-docker compose run dev cargo test         # Run tests in container
-docker compose run test                   # Full CI checks in container
-docker compose build build                # Build release Docker image
+docker compose run --rm dev bash -c "cargo test"                    # All tests
+docker compose run --rm dev bash -c "cargo test -p ferrite-core"    # Core only
+docker compose run --rm dev bash -c "cargo test -p ferrite-lsp"     # LSP only
+docker compose run --rm dev bash -c "cargo fmt --all"               # Format
+docker compose run --rm dev bash -c "cargo clippy -- -D warnings"   # Lint
+docker compose run --rm dev bash -c "cargo run -- run examples/hello.fe"  # Run
+docker compose run --rm test                                        # Full CI check
+docker compose run --rm setup                                       # Install npm deps
+docker compose run --rm build-ext                                   # Package .vsix
 ```
 
 ## Architecture
 
-Cargo workspace with three crates:
-
-- **`ferrite-core`** (library): Language engine — lexer, parser, AST, interpreter, types, environment, stdlib, errors
-- **`ferrite-cli`** (binary): CLI interface — REPL and file execution
-- **`ferrite-lsp`** (binary): Language Server Protocol server for editor integration
-
-### Module Structure (ferrite-core)
 ```
-src/
-├── lib.rs          # Public API
-├── lexer/          # Tokenization
-├── parser/         # Recursive descent parser
-├── ast/            # AST node definitions
-├── interpreter/    # Tree-walking evaluator
-├── types/          # Value system (Rc<RefCell<Value>>)
-├── env/            # Lexical scoping environment
-├── json/           # JSON serialization/deserialization
-├── http/           # HTTP client (ureq)
-└── errors/         # Error types with span info
-```
-
-### VS Code Extension
-```
+crates/
+├── ferrite-core/src/
+│   ├── lib.rs           # Public API exports
+│   ├── lexer/           # Tokenizer → Vec<Token>
+│   │   ├── mod.rs       # Scanner (scan_token, scan_string, scan_fstring, scan_number)
+│   │   └── token.rs     # Token, TokenKind (keywords, operators, literals), Span
+│   ├── ast/mod.rs       # AST nodes: Item, Expr, Stmt, FnDef, StructDef, EnumDef, Attribute, FStringPart
+│   ├── parser/mod.rs    # Pratt parser (~3200 lines). Precedence levels 0-14.
+│   ├── interpreter/mod.rs  # Tree-walking evaluator (~7000+ lines). All runtime logic.
+│   ├── types/mod.rs     # Value enum: Integer, Float, Bool, String, Vec, HashMap, Struct, EnumVariant, Function(Box), Future(Box), etc.
+│   ├── env/mod.rs       # Lexical scope chain (parent pointer)
+│   ├── json/mod.rs      # Hand-written JSON ser/de (no deps)
+│   ├── http/mod.rs      # HTTP client wrapping ureq
+│   └── errors.rs        # FerriError: Lexer/Parser/Runtime with line/column, Return(Box<Value>), Break, Continue
+├── ferrite-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast
+└── ferrite-lsp/src/main.rs  # LSP server (tower-lsp): diagnostics, completion, hover, symbols, goto-def
 editors/vscode/
-├── package.json                    # Extension manifest
-├── extension.js                    # LSP client (launches ferrite-lsp)
-├── language-configuration.json     # Brackets, comments, indentation
-└── syntaxes/
-    └── ferrite.tmLanguage.json     # TextMate grammar for syntax highlighting
+├── extension.js         # LSP client — launches ferrite-lsp via Docker or native binary
+├── package.json         # Extension manifest with ferrite.lsp.mode/path/enabled settings
+├── syntaxes/ferrite.tmLanguage.json  # TextMate grammar
+└── language-configuration.json       # Brackets, comments, indentation
 ```
+
+## Key Patterns (follow these when adding features)
+
+### Adding a built-in macro (e.g. `println!`, `vec!`, `format!`)
+→ Add match arm in `interpreter::eval_macro_call()`
+
+### Adding a path-call module (e.g. `math::sqrt()`, `json::parse()`, `http::get()`)
+→ Add match arm in `interpreter::eval_path_call()` under the module prefix
+
+### Adding a path constant (e.g. `math::PI`)
+→ Handle in `interpreter::eval_expr()` under `Expr::Path`
+
+### Adding methods on built-in types (e.g. `.sqrt()`, `.len()`, `.clone()`)
+→ Add match arm in `interpreter::call_method()` → type-specific dispatcher:
+  - `call_vec_method()`, `call_string_method()`, `call_hashmap_method()`
+  - Numeric methods handled inline in `call_method()`
+
+### Adding a new expression type
+1. Add variant to `Expr` enum in `ast/mod.rs`
+2. Parse it in `parser/mod.rs` (`parse_prefix` or `parse_infix`)
+3. Evaluate it in `interpreter::eval_expr()`
+
+### Adding a new item type (struct/enum feature)
+1. Extend AST node in `ast/mod.rs` (e.g. add field to `StructDef`)
+2. Parse in `parser::parse_item()`
+3. Register in `interpreter::register_item()`
+
+### Adding a new Value type
+1. Add variant to `Value` enum in `types/mod.rs` + Display impl
+2. Handle in `interpreter::call_method()` for methods
+3. Handle in binary/comparison operators if needed
+
+## Critical Implementation Details
+
+- **Value::Function and Value::Future are boxed** — `Function(Box<FunctionData>)`, `Future(Box<FutureData>)` to prevent stack overflow in recursive code
+- **FerriError::Return and Break are boxed** — `Return(Box<Value>)`, `Break(Option<Box<Value>>)` to satisfy clippy result_large_err
+- **Spans are 1-indexed** — line 1, column 1. LSP converts to 0-indexed.
+- **Struct init disambiguation** — `Ident { ... }` is struct init only if name starts with uppercase
+- **Option/Result** — modeled as `Value::EnumVariant` with `enum_name: "Option"/"Result"`
+- **Test pattern** — `run_and_capture(src)` returns `Vec<String>` of output lines (each ending `\n`). Source must wrap in `fn main() { ... }`.
+- **Pratt parser precedence** — None(0) → Assignment(1) → Range(2) → Or(3) → And(4) → Equality(8) → Comparison(9) → Term(11) → Factor(12) → Unary(13) → Call(14)
+- **Method dispatch order** — Vec → String → HashMap → Option/Result → HttpResponse → HttpRequestBuilder → numeric methods → .to_json() → impl blocks → trait impls → trait defaults
+- **Derived traits** tracked in `interpreter.derived_traits: HashMap<String, HashSet<String>>`
+- **Async** — simulated, not real threads. `async fn` returns lazy `Value::Future`, `.await` evaluates it.
 
 ## Conventions
 
-### Code Style
-- Follow `rustfmt.toml` config (max width 100)
-- All public items must have doc comments (`///`)
-- Use `thiserror` for error type derivation
-- Prefer `impl Display` over `ToString`
-- Use `#[must_use]` on pure functions returning values
-- All match arms must be exhaustive (no catch-all `_ =>` unless intentional)
-
-### Error Handling
-- Library functions return `Result<T, FerriError>` (the project's error type)
-- CLI handles errors at the top level and sets exit codes
-- All errors carry source span information for user-facing messages
-
-### Testing
-- Unit tests in `#[cfg(test)]` modules within source files
-- Integration tests in `tests/` directories
-- E2E tests: `.fe` source files paired with `.expected` output files in `tests/e2e/programs/`
-- Use snapshot testing (`insta` crate) for AST and token dumps
-- Test names follow `test_<what>_<scenario>` pattern
-
-### Git
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
-- Keep commits atomic — one logical change per commit
-- Always include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer
-
-### Key Design Decisions
-- **No borrow checker:** All values are `Rc<RefCell<Value>>`. Borrow syntax (`&`, `&mut`) is parsed but ignored at runtime.
-- **No lifetimes:** Lifetime annotations are parsed but ignored.
-- **Dynamic typing internally:** Types are checked at runtime. Type annotations are parsed for syntax fidelity but enforcement is gradual.
-- **`println!` is special:** Parsed as a pseudo-macro (not a real macro system). Same for `vec![]`, `format!()`, etc.
-- **Immutability is enforced:** `let x` creates an immutable binding; `let mut x` creates a mutable one. Assignment to immutable binding is a runtime error.
-
-## Current Phase
-
-Phase 15: Async/Await — COMPLETE. 378 tests passing.
-
-### What Works Now
-- `let` / `let mut` bindings with immutability enforcement
-- Arithmetic: `+`, `-`, `*`, `/`, `%` (integers, floats, mixed)
-- String concatenation with `+`
-- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
-- Logical: `&&`, `||`, `!`
-- Bitwise: `&`, `|`, `^`, `<<`, `>>`
-- `if` / `else if` / `else` expressions (return values)
-- Block expressions: `{ let y = 10; y + 1 }`
-- `while condition { body }` loops
-- `loop { body }` with `break value` support
-- `for x in 0..10 { body }` and `0..=10` inclusive ranges
-- `for x in vec { body }` — iterate over Vec and String
-- `break` and `continue` in all loop types
-- `match expr { pattern => body }` with literal, wildcard (`_`), variable, and enum variant patterns
-- Function definitions and calls with proper scoping
-- Recursion (factorial, fibonacci)
-- `return` statements
-- `println!("{}", x)` with `{}` format placeholders and `{:?}` debug format
-- `print!()` without newline
-- `format!("...", args)` — returns String value
-- `eprintln!()` — prints to stderr
-- `vec![1, 2, 3]` macro for vector creation
-- `[1, 2, 3]` array literal syntax (creates Vec)
-- `v[0]` index access for Vec, String, Tuple
-- `v[0] = x` index assignment for Vec
-- Vec methods: `.push()`, `.pop()` (returns Option), `.len()`, `.is_empty()`, `.contains()`, `.first()` (returns Option), `.last()` (returns Option), `.reverse()`, `.join()`
-- String methods: `.len()`, `.is_empty()`, `.contains()`, `.to_uppercase()`, `.to_lowercase()`, `.trim()`, `.starts_with()`, `.ends_with()`, `.replace()`, `.chars()`, `.split()`, `.repeat()`, `.push_str()`, `.clone()`, `.to_string()`
-- `String::from("...")` associated function
-- Tuples: `(a, b, c)`, tuple index `t.0`, empty tuple `()`, single-element `(x,)`
-- Structs: `struct Point { x: f64, y: f64 }`, unit structs, tuple structs
-- Struct instantiation: `Point { x: 1.0, y: 2.0 }`, shorthand `Point { x, y }`
-- Struct field access: `p.x`, field assignment: `p.x = 3.0`
-- Enums: `enum Shape { Circle(f64), Rectangle(f64, f64), Point }`
-- Enum variant construction: `Shape::Circle(5.0)`, unit variants `Color::Red`
-- Enum pattern matching: `Shape::Circle(r) => ...` with destructuring
-- Impl blocks: `impl Point { fn new(x: f64, y: f64) -> Self { ... } }`
-- Methods: `&self`, `&mut self`, `self` parameters, called via `p.method()`
-- Associated functions: `Point::new(1.0, 2.0)` via `Type::func()` syntax
-- `Self` type resolution in impl blocks
-- `self` keyword for accessing receiver in methods
-- Auto debug format for structs and enums via `{:?}`
-- Trait definitions: `trait Name { fn method(&self) -> Type; }`
-- Trait default methods: `trait Name { fn method(&self) { default_body } }`
-- Trait implementations: `impl Trait for Type { fn method(&self) { ... } }`
-- Method dispatch searches: impl blocks → trait impls → trait defaults
-- Multiple traits per type supported
-- Traits work on both structs and enums
-- Generic function syntax: `fn foo<T>(x: T) -> T { x }` (parsed, dynamically typed)
-- Generic bounds syntax: `fn foo<T: Display>(x: T)` (parsed, not enforced)
-- Multiple generic params: `fn foo<A, B: Clone + Debug>(a: A, b: B)`
-- Operator overloading via `impl Add/Sub/Mul/Div for Type { fn add/sub/mul/div(&self, other) -> Type }`
-- `&` and `&mut` syntax parsed but ignored (no borrow checker)
-- Shadowing: `let x = 1; let x = "hello";`
-- Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
-- Option type: `Some(value)`, `None`
-- Option methods: `.unwrap()`, `.expect()`, `.unwrap_or()`, `.unwrap_or_else()`, `.is_some()`, `.is_none()`, `.map()`, `.and_then()`
-- Result type: `Ok(value)`, `Err(error)`
-- Result methods: `.unwrap()`, `.expect()`, `.unwrap_err()`, `.unwrap_or()`, `.unwrap_or_else()`, `.is_ok()`, `.is_err()`, `.map()`, `.map_err()`, `.and_then()`, `.ok()`, `.err()`
-- `?` operator — early return on Err/None
-- `if let Some(x) = expr { ... }` and `if let Ok(x) = expr { ... } else { ... }`
-- `while let Some(x) = expr { ... }` — loop until pattern stops matching
-- `panic!("message")` — runtime panic with message
-- `todo!()` — panics with "not yet implemented"
-- `unimplemented!()` — panics with "not implemented"
-- `dbg!(expr)` — prints debug value and returns it
-- Closures: `|x| x * 2`, `|x, y| x + y`, `|| 42`, `move |x| x + n`
-- Closure type annotations: `|x: i64| -> i64 { x * 2 }`
-- Variable capture: closures capture enclosing scope via Rc clone
-- Closures as function arguments and return values
-- `move` keyword accepted on closures (semantically same as regular capture)
-- Vec iterator methods: `.iter()`, `.map()`, `.filter()`, `.for_each()`, `.fold()`, `.any()`, `.all()`, `.find()`, `.enumerate()`, `.collect()`, `.flat_map()`, `.position()`
-- Method chaining: `v.map(|x| x * 2).filter(|x| x > 4).collect()`
-- Inline modules: `mod name { ... }` with functions, structs, enums, traits, impl blocks
-- File-based modules: `mod name;` loads from `name.fe` or `name/mod.fe`
-- Use statements: `use module::item;`, `use module::*;`, `use module::{a, b};`
-- Module path calls: `module::function()`, `module::Type::method()`
-- `pub` keyword accepted on modules, functions, structs (not enforced)
-- Type aliases: `type Name = Type;` (parsed and stored, dynamically typed)
-- Constants: `const X: i64 = 42;` and `static X: i64 = 42;`
-- HashMap: `HashMap::new()`, `.insert()`, `.get()` (returns Option), `.remove()`, `.contains_key()`, `.len()`, `.is_empty()`, `.keys()`, `.values()`
-- HashMap iteration: `for (k, v) in map { ... }` with tuple destructuring
-- File I/O: `std::fs::read_to_string(path)`, `std::fs::write(path, content)` (return Result)
-- Command-line args: `std::env::args()` returns Vec of strings
-- Process exit: `std::process::exit(code)`
-- Improved error messages with source line context and caret pointing to error column
-- JSON serialization: `json::serialize(value)`, `json::to_string_pretty(value)` — auto-serializes structs, vecs, hashmaps, enums
-- JSON deserialization: `json::deserialize(string)`, `json::parse(string)` — parses JSON into Ferrite values
-- Typed deserialization: `json::from_struct(string, "TypeName")` — deserializes into known struct type
-- `.to_json()` / `.to_json_pretty()` methods on all value types
-- Round-trip: serialize → deserialize preserves values
-- HTTP client: `http::get(url)`, `http::post(url, body)`, `http::put()`, `http::delete()`, `http::patch()`
-- JSON HTTP: `http::get_json(url)`, `http::post_json(url, value)`, `http::put_json()`, `http::patch_json()`
-- HttpResponse struct: `.status`, `.body`, `.headers`, `.json()`, `.text()`, `.status_ok()`
-- Request builder: `http::request(method, url).header(k, v).body(s).json(val).send()`
-- Async functions: `async fn name() { ... }` returns Future on call
-- `.await` operator: resolves Future/JoinHandle values
-- `spawn(closure)` — eagerly evaluates closure, wraps result in JoinHandle
-- `sleep(ms)` — pauses execution for given milliseconds
-- `pub async fn` supported, async fns work in modules
-- REPL with persistent environment
-- File execution with `ferrite run file.fe`
+- `rustfmt.toml` config (max width 100)
+- `thiserror` for error types
+- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
+- Always add trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+- Tests: `test_<what>_<scenario>` naming, unit tests in `#[cfg(test)]` modules
