@@ -37,7 +37,18 @@
                 "ferrite.lsp.path": {
                     "type": "string",
                     "default": "ferrite-lsp",
-                    "description": "Path to the ferrite-lsp binary. If not absolute, it will be looked up in PATH."
+                    "description": "Path to the ferrite-lsp binary. Only used when mode is 'native'."
+                },
+                "ferrite.lsp.mode": {
+                    "type": "string",
+                    "default": "auto",
+                    "enum": ["auto", "docker", "native"],
+                    "enumDescriptions": [
+                        "Auto-detect: uses Docker if no custom path is set, native binary otherwise",
+                        "Always launch LSP via Docker (no local Rust needed)",
+                        "Use a local ferrite-lsp binary directly"
+                    ],
+                    "description": "How to launch the Ferrite Language Server."
                 },
                 "ferrite.lsp.enabled": {
                     "type": "boolean",

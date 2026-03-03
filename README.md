@@ -322,13 +322,7 @@ Ferrite has a VS Code extension with syntax highlighting and a built-in Language
 
 ### Setup
 
-#### 1. Build the LSP server
-
-```bash
-docker compose run --rm dev bash -c "cargo build --release -p ferrite-lsp"
-```
-
-#### 2. Install the extension
+#### 1. Install the extension
 
 Symlink (or copy) the extension folder into VS Code's extensions directory:
 
@@ -337,7 +331,7 @@ Symlink (or copy) the extension folder into VS Code's extensions directory:
 ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/ferrite-lang
 ```
 
-#### 3. Install extension dependencies
+#### 2. Install extension dependencies
 
 If you haven't run setup already:
 
@@ -345,23 +339,30 @@ If you haven't run setup already:
 docker compose run --rm setup
 ```
 
-#### 4. Configure the LSP binary path
-
-Open VS Code settings (`Cmd+,` or `Ctrl+,`), search for "ferrite", and set the LSP binary path:
-
-```json
-{
-    "ferrite.lsp.path": "/absolute/path/to/project-ferrite/target/release/ferrite-lsp"
-}
-```
-
-> **Tip**: Run `docker compose run --rm dev bash -c "realpath target/release/ferrite-lsp"` to get the absolute path.
-
-#### 5. Reload VS Code
+#### 3. Reload VS Code
 
 Press `Cmd+Shift+P` (or `Ctrl+Shift+P`) → type "Reload Window" → Enter.
 
-Open any `.fe` file and you should see syntax highlighting and LSP features.
+Open any `.fe` file and you should see syntax highlighting and LSP features. The LSP server launches automatically via Docker — no extra configuration needed.
+
+> **How it works**: When you open a `.fe` file, the extension runs `docker compose run --rm -T dev cargo run --release -p ferrite-lsp --quiet` in the background. Docker starts once and the LSP stays running for your entire session.
+
+#### Advanced: Using a native binary
+
+If you have Rust installed locally and want faster LSP startup:
+
+```bash
+cargo build --release -p ferrite-lsp
+```
+
+Then in VS Code settings:
+
+```json
+{
+    "ferrite.lsp.mode": "native",
+    "ferrite.lsp.path": "/absolute/path/to/project-ferrite/target/release/ferrite-lsp"
+}
+```
 
 ---
 

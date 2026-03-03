@@ -56,7 +56,8 @@ Open VS Code settings and set `ferrite.lsp.path` to the absolute path of your `f
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ferrite.lsp.path` | `ferrite-lsp` | Path to the `ferrite-lsp` binary |
+| `ferrite.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
+| `ferrite.lsp.path` | `ferrite-lsp` | Path to local `ferrite-lsp` binary (only used in `native` mode) |
 | `ferrite.lsp.enabled` | `true` | Enable/disable the language server |
 
 ## File Association
