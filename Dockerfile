@@ -1,5 +1,5 @@
 # --- Builder stage ---
-FROM rust:1.85-slim AS builder
+FROM rust:1.93-slim AS builder
 
 WORKDIR /app
 
@@ -34,7 +34,7 @@ COPY --from=builder /app/target/release/ferrite-lsp /usr/local/bin/ferrite-lsp
 ENTRYPOINT ["ferrite"]
 
 # --- Dev stage (for development with full toolchain) ---
-FROM rust:1.85-slim AS dev
+FROM rust:1.93-slim AS dev
 
 RUN rustup component add rustfmt clippy
 
