@@ -1,8 +1,6 @@
-# 🧲 Ferrite
+<img width="2816" height="1536" alt="oxide_2d" src="https://github.com/user-attachments/assets/cf3ba2a3-a25f-411e-9ed4-52d87ff5b568" />
 
-**Rust syntax, scripting freedom.**
-
-Ferrite is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
+Oxide is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
 
 ## Why Ferrite?
 
