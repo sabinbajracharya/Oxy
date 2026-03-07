@@ -6,17 +6,17 @@ WORKDIR /app
 # Cache dependencies by building them first
 COPY Cargo.toml ./
 COPY Cargo.lock* ./
-COPY crates/ferrite-core/Cargo.toml crates/ferrite-core/Cargo.toml
-COPY crates/ferrite-cli/Cargo.toml crates/ferrite-cli/Cargo.toml
-COPY crates/ferrite-lsp/Cargo.toml crates/ferrite-lsp/Cargo.toml
+COPY crates/oxide-core/Cargo.toml crates/oxide-core/Cargo.toml
+COPY crates/oxide-cli/Cargo.toml crates/oxide-cli/Cargo.toml
+COPY crates/oxide-lsp/Cargo.toml crates/oxide-lsp/Cargo.toml
 
 # Create dummy source files to cache dependency compilation
-RUN mkdir -p crates/ferrite-core/src crates/ferrite-cli/src crates/ferrite-lsp/src && \
-    echo "pub const VERSION: &str = \"0.0.0\";" > crates/ferrite-core/src/lib.rs && \
-    echo "fn main() {}" > crates/ferrite-cli/src/main.rs && \
-    echo "fn main() {}" > crates/ferrite-lsp/src/main.rs && \
+RUN mkdir -p crates/oxide-core/src crates/oxide-cli/src crates/oxide-lsp/src && \
+    echo "pub const VERSION: &str = \"0.0.0\";" > crates/oxide-core/src/lib.rs && \
+    echo "fn main() {}" > crates/oxide-cli/src/main.rs && \
+    echo "fn main() {}" > crates/oxide-lsp/src/main.rs && \
     cargo build --release 2>/dev/null || true && \
-    rm -rf crates/ferrite-core/src crates/ferrite-cli/src crates/ferrite-lsp/src
+    rm -rf crates/oxide-core/src crates/oxide-cli/src crates/oxide-lsp/src
 
 # Copy actual source and build
 COPY . .
@@ -28,10 +28,10 @@ FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/ferrite /usr/local/bin/ferrite
-COPY --from=builder /app/target/release/ferrite-lsp /usr/local/bin/ferrite-lsp
+COPY --from=builder /app/target/release/oxide /usr/local/bin/oxide
+COPY --from=builder /app/target/release/oxide-lsp /usr/local/bin/oxide-lsp
 
-ENTRYPOINT ["ferrite"]
+ENTRYPOINT ["oxide"]
 
 # --- Dev stage (for development with full toolchain) ---
 FROM rust:1.93-slim AS dev

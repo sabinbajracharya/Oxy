@@ -1,25 +1,29 @@
 <img width="2816" height="1536" alt="oxide_2d" src="https://github.com/user-attachments/assets/cf3ba2a3-a25f-411e-9ed4-52d87ff5b568" />
 
+# 🧲 Oxide
+
+**Rust syntax, scripting freedom.**
+
 Oxide is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
 
-## Why Ferrite?
+## Why Oxide?
 
 - **Learn Rust syntax** without fighting the borrow checker
 - **Rapid prototyping** with Rust ergonomics in a scripting environment
-- **Gradual migration** — write in Ferrite first, port to Rust when ready
-- **Familiar syntax** — if you know Rust, you already know Ferrite
+- **Gradual migration** — write in Oxide first, port to Rust when ready
+- **Familiar syntax** — if you know Rust, you already know Oxide
 
 ## Hello World
 
 ```rust
-// hello.fe
+// hello.ox
 fn main() {
     let name = "World";
     println!("Hello, {}!", name);
 }
 ```
 
-## What Ferrite Supports
+## What Oxide Supports
 
 | Feature | Status |
 |---|---|
@@ -37,7 +41,7 @@ fn main() {
 | Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`) | ✅ |
 | String operations, f-string interpolation | ✅ |
 | `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
-| `#[test]` + built-in test runner (`ferrite test`) | ✅ |
+| `#[test]` + built-in test runner (`oxide test`) | ✅ |
 | Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | ✅ |
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
@@ -56,7 +60,7 @@ fn main() {
 
 ## What Works Differently from Rust
 
-| Rust Feature | Ferrite Behavior |
+| Rust Feature | Oxide Behavior |
 |---|---|
 | Ownership / Move | Values are reference-counted, freely shared |
 | `&` and `&mut` | Syntax accepted, semantically ignored |
@@ -83,8 +87,8 @@ This is the easiest way. You don't need Rust, Node.js, or anything else installe
 #### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/project-ferrite.git
-cd project-ferrite
+git clone https://github.com/your-org/project-oxide.git
+cd project-oxide
 ```
 
 #### 2. Run first-time setup
@@ -95,7 +99,7 @@ This builds the Docker dev image (with Rust + Node.js) and installs VS Code exte
 docker compose run --rm setup
 ```
 
-#### 3. Build the Ferrite interpreter
+#### 3. Build the Oxide interpreter
 
 ```bash
 docker compose run --rm dev bash -c "cargo build --release"
@@ -103,14 +107,14 @@ docker compose run --rm dev bash -c "cargo build --release"
 
 This creates the binaries inside the Docker volume at `target/release/`.
 
-#### 4. Run a Ferrite program
+#### 4. Run a Oxide program
 
 ```bash
 # Run the hello world example
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.fe"
+docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
 
-# Run any .fe file
-docker compose run --rm dev bash -c "cargo run -- run examples/fibonacci.fe"
+# Run any .ox file
+docker compose run --rm dev bash -c "cargo run -- run examples/fibonacci.ox"
 ```
 
 #### 5. Start the interactive REPL
@@ -119,7 +123,7 @@ docker compose run --rm dev bash -c "cargo run -- run examples/fibonacci.fe"
 docker compose run --rm dev bash -c "cargo run -- repl"
 ```
 
-Type Ferrite code interactively. Press `Ctrl+D` to exit.
+Type Oxide code interactively. Press `Ctrl+D` to exit.
 
 #### 6. Run the test suite
 
@@ -136,14 +140,14 @@ docker compose run --rm test
 If you have Rust installed locally:
 
 ```bash
-git clone https://github.com/your-org/project-ferrite.git
-cd project-ferrite
+git clone https://github.com/your-org/project-oxide.git
+cd project-oxide
 
 # Build
 cargo build --release
 
 # Run a program
-cargo run -- run examples/hello.fe
+cargo run -- run examples/hello.ox
 
 # Start the REPL
 cargo run -- repl
@@ -157,11 +161,11 @@ cargo test
 ## CLI Usage
 
 ```
-ferrite [OPTIONS] <COMMAND>
+oxide [OPTIONS] <COMMAND>
 
 Commands:
-  run <file.fe>          Run a Ferrite source file
-  test <file.fe>         Run #[test] functions in a file
+  run <file.ox>          Run a Oxide source file
+  test <file.ox>         Run #[test] functions in a file
   repl                   Start the interactive REPL
 
 Options:
@@ -175,14 +179,14 @@ Options:
 
 ```bash
 # Via Docker
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.fe"
-docker compose run --rm dev bash -c "cargo run -- test examples/tests.fe"
+docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
+docker compose run --rm dev bash -c "cargo run -- test examples/tests.ox"
 docker compose run --rm dev bash -c "cargo run -- repl"
-docker compose run --rm dev bash -c "cargo run -- --dump-ast examples/hello.fe"
+docker compose run --rm dev bash -c "cargo run -- --dump-ast examples/hello.ox"
 
 # Via Cargo (if Rust is installed)
-cargo run -- run examples/hello.fe
-cargo run -- test examples/tests.fe
+cargo run -- run examples/hello.ox
+cargo run -- test examples/tests.ox
 cargo run -- repl
 ```
 
@@ -292,7 +296,7 @@ fn main() {
 
 ### Iterator Chaining
 
-Ferrite supports Rust-style iterator chaining on `Vec`:
+Oxide supports Rust-style iterator chaining on `Vec`:
 
 ```rust
 fn main() {
@@ -346,10 +350,10 @@ fn main() {
 
 ### Testing
 
-Ferrite has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
+Oxide has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
 
 ```rust
-// math_tests.fe
+// math_tests.ox
 
 fn add(a: i64, b: i64) -> i64 {
     a + b
@@ -382,16 +386,16 @@ Run your tests:
 
 ```bash
 # Via Docker
-docker compose run --rm dev bash -c "cargo run -- test math_tests.fe"
+docker compose run --rm dev bash -c "cargo run -- test math_tests.ox"
 
 # Via Cargo
-cargo run -- test math_tests.fe
+cargo run -- test math_tests.ox
 ```
 
 Output:
 
 ```
-running tests in math_tests.fe
+running tests in math_tests.ox
 
   test_add ... ok
   test_factorial ... ok
@@ -439,7 +443,7 @@ fn main() {
 
 ### Web Server
 
-Ferrite includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
+Oxide includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
 
 ```rust
 fn main() {
@@ -447,7 +451,7 @@ fn main() {
 
     // Simple routes
     app.get("/", |req| {
-        Response::html("<h1>Hello, Ferrite!</h1>")
+        Response::html("<h1>Hello, Oxide!</h1>")
     });
 
     // Path parameters
@@ -488,7 +492,7 @@ fn main() {
 
 ### Database (SQLite)
 
-Ferrite includes a built-in SQLite database with parameterized queries:
+Oxide includes a built-in SQLite database with parameterized queries:
 
 ```rust
 fn main() {
@@ -529,7 +533,7 @@ fn main() {
 
 ## Standard Library
 
-Ferrite includes a comprehensive standard library accessible via `std::` paths:
+Oxide includes a comprehensive standard library accessible via `std::` paths:
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
@@ -550,7 +554,7 @@ Ferrite includes a comprehensive standard library accessible via `std::` paths:
 ```rust
 fn main() {
     // File I/O
-    let _ = std::fs::write("hello.txt", "Hello from Ferrite!");
+    let _ = std::fs::write("hello.txt", "Hello from Oxide!");
     let content = std::fs::read_to_string("hello.txt").unwrap();
     println!("{}", content);
 
@@ -575,7 +579,7 @@ fn main() {
 
 ## VS Code Extension
 
-Ferrite has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
+Oxide has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
 
 ### Features
 
@@ -595,7 +599,7 @@ Best for development — changes to the extension are reflected immediately.
 docker compose run --rm setup
 
 # 2. Symlink into VS Code extensions
-ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/ferrite-lang
+ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/oxide-lang
 
 # 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
 ```
@@ -609,17 +613,17 @@ Best for distribution — produces a standalone installable package.
 docker compose run --rm build-ext
 
 # 2. Install in VS Code
-code --install-extension editors/vscode/ferrite-lang-0.1.0.vsix
+code --install-extension editors/vscode/oxide-lang-0.1.0.vsix
 
 # 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
 ```
 
 ### How the LSP works
 
-When you open a `.fe` file, the extension automatically starts the Ferrite Language Server via Docker:
+When you open a `.ox` file, the extension automatically starts the Oxide Language Server via Docker:
 
 ```
-VS Code ←→ docker compose run --rm -T dev cargo run --release -p ferrite-lsp ←→ stdin/stdout
+VS Code ←→ docker compose run --rm -T dev cargo run --release -p oxide-lsp ←→ stdin/stdout
 ```
 
 - Docker starts **once** and the LSP stays running for your entire VS Code session
@@ -631,15 +635,15 @@ VS Code ←→ docker compose run --rm -T dev cargo run --release -p ferrite-lsp
 If you have Rust installed locally and want instant LSP startup:
 
 ```bash
-cargo build --release -p ferrite-lsp
+cargo build --release -p oxide-lsp
 ```
 
 Then in VS Code settings (`Cmd+,`):
 
 ```json
 {
-    "ferrite.lsp.mode": "native",
-    "ferrite.lsp.path": "/absolute/path/to/project-ferrite/target/release/ferrite-lsp"
+    "oxide.lsp.mode": "native",
+    "oxide.lsp.path": "/absolute/path/to/project-oxide/target/release/oxide-lsp"
 }
 ```
 
@@ -647,23 +651,23 @@ Then in VS Code settings (`Cmd+,`):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ferrite.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
-| `ferrite.lsp.path` | `ferrite-lsp` | Path to local binary (only used in `native` mode) |
-| `ferrite.lsp.enabled` | `true` | Enable/disable the language server |
+| `oxide.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
+| `oxide.lsp.path` | `oxide-lsp` | Path to local binary (only used in `native` mode) |
+| `oxide.lsp.enabled` | `true` | Enable/disable the language server |
 
 ---
 
 ## Project Structure
 
 ```
-project-ferrite/
+project-oxide/
 ├── crates/
-│   ├── ferrite-core/       # Language engine (lexer, parser, AST, interpreter, stdlib)
-│   ├── ferrite-cli/        # CLI binary (run files, REPL)
-│   └── ferrite-lsp/        # Language Server Protocol server
+│   ├── oxide-core/       # Language engine (lexer, parser, AST, interpreter, stdlib)
+│   ├── oxide-cli/        # CLI binary (run files, REPL)
+│   └── oxide-lsp/        # Language Server Protocol server
 ├── editors/
 │   └── vscode/             # VS Code extension (syntax + LSP client)
-├── examples/               # Example .fe programs (15+ examples)
+├── examples/               # Example .ox programs (15+ examples)
 ├── tests/                  # Integration tests
 ├── Dockerfile              # Multi-stage: builder, runtime, dev
 ├── docker-compose.yml      # Dev, test, setup, build services
@@ -697,7 +701,7 @@ docker compose run --rm dev bash -c "cargo fmt --all --check"
 docker compose run --rm dev bash -c "cargo clippy -- -D warnings"
 
 # Run a specific test
-docker compose run --rm dev bash -c "cargo test -p ferrite-core test_name"
+docker compose run --rm dev bash -c "cargo test -p oxide-core test_name"
 ```
 
 ## Contributing

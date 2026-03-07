@@ -1,0 +1,17 @@
+[package]
+name = "oxide-lsp"
+description = "Language Server Protocol implementation for the Oxide programming language"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "oxide-lsp"
+path = "src/main.rs"
+
+[dependencies]
+oxide-core = { workspace = true }
+tower-lsp = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }

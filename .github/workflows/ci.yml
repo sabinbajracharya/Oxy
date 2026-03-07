@@ -67,8 +67,8 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ferrite-linux-x86_64
-          path: target/release/ferrite
+          name: oxide-linux-x86_64
+          path: target/release/oxide
 
   docker:
     name: Docker build
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build --target runtime -t ferrite:latest .
+        run: docker build --target runtime -t oxide:latest .
 
       - name: Verify Docker image
-        run: docker run --rm ferrite:latest --version
+        run: docker run --rm oxide:latest --version

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ferrite-core", "crates/ferrite-cli", "crates/ferrite-lsp"]
+members = ["crates/oxide-core", "crates/oxide-cli", "crates/oxide-lsp"]
 resolver = "2"
 
 [workspace.package]
@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/nickel-lang/project-ferrite"
 
 [workspace.dependencies]
-ferrite-core = { path = "crates/ferrite-core" }
+oxide-core = { path = "crates/oxide-core" }
 thiserror = "2"
 colored = "2"
 regex = "1"

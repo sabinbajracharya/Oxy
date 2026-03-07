@@ -1,6 +1,6 @@
-# Contributing to Ferrite
+# Contributing to Oxide
 
-Thank you for your interest in contributing to Ferrite! 🧲
+Thank you for your interest in contributing to Oxide! 🧲
 
 ## Getting Started
 
@@ -24,12 +24,12 @@ docker compose run --rm dev bash -c "cargo build --release"    # Release build
 
 ## Architecture Overview
 
-Ferrite is a Cargo workspace with three crates:
+Oxide is a Cargo workspace with three crates:
 
 ```
 project-ferrite/
 ├── crates/
-│   ├── ferrite-core/    # Language engine (library crate)
+│   ├── oxide-core/    # Language engine (library crate)
 │   │   └── src/
 │   │       ├── lib.rs          # Crate root — re-exports all modules
 │   │       ├── lexer/          # Tokenizer: source text → Token stream
@@ -66,18 +66,18 @@ project-ferrite/
 │   │       │   ├── regex.rs    # Regular expression matching and replacement
 │   │       │   └── net.rs      # TCP/UDP networking and DNS lookup
 │   │       └── errors/         # FerriError enum, check_arg_count, expect_type helpers
-│   ├── ferrite-cli/     # CLI binary (REPL + file execution)
-│   └── ferrite-lsp/     # Language Server Protocol implementation
+│   ├── oxide-cli/     # CLI binary (REPL + file execution)
+│   └── oxide-lsp/     # Language Server Protocol implementation
 ├── editors/
 │   └── vscode/          # VS Code extension (syntax highlighting + LSP client)
 ├── tests/e2e/           # End-to-end test harness
-└── examples/            # Example .fe programs
+└── examples/            # Example .ox programs
 ```
 
-### How a Ferrite program executes
+### How a Oxide program executes
 
 ```
-Source text (.fe file)
+Source text (.ox file)
     → Lexer (token.rs, mod.rs)     → Vec<Token>
     → Parser (parser/mod.rs)       → Program (AST)
     → Interpreter (interpreter/)   → Result<Value, FerriError>
@@ -163,17 +163,17 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Testing
 
-- **Unit tests:** In `#[cfg(test)]` modules alongside source code (417+ tests in ferrite-core)
-- **Integration tests:** CLI tests in ferrite-cli (8 tests)
-- **LSP tests:** In ferrite-lsp (9 tests)
-- **E2E tests:** `.fe` files with `.expected` output in `tests/e2e/programs/`
+- **Unit tests:** In `#[cfg(test)]` modules alongside source code (417+ tests in oxide-core)
+- **Integration tests:** CLI tests in oxide-cli (8 tests)
+- **LSP tests:** In oxide-lsp (9 tests)
+- **E2E tests:** `.ox` files with `.expected` output in `tests/e2e/programs/`
 
 ### Running specific tests
 
 ```bash
-docker compose run --rm dev bash -c "cargo test -p ferrite-core"       # Core only
-docker compose run --rm dev bash -c "cargo test -p ferrite-cli"        # CLI only
-docker compose run --rm dev bash -c "cargo test -p ferrite-lsp"        # LSP only
+docker compose run --rm dev bash -c "cargo test -p oxide-core"       # Core only
+docker compose run --rm dev bash -c "cargo test -p oxide-cli"        # CLI only
+docker compose run --rm dev bash -c "cargo test -p oxide-lsp"        # LSP only
 docker compose run --rm dev bash -c "cargo test test_closures"         # By name
 ```
 

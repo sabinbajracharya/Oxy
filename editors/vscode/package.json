@@ -1,9 +1,9 @@
 {
-    "name": "ferrite-lang",
-    "displayName": "Ferrite Language",
-    "description": "Syntax highlighting and LSP support for the Ferrite programming language (.fe files)",
+    "name": "oxide-lang",
+    "displayName": "Oxide Language",
+    "description": "Syntax highlighting and LSP support for the Oxide programming language (.ox files)",
     "version": "0.1.0",
-    "publisher": "ferrite-lang",
+    "publisher": "oxide-lang",
     "repository": {
         "type": "git",
         "url": "https://github.com/nickel-lang/project-ferrite"
@@ -15,40 +15,40 @@
         "Programming Languages"
     ],
     "activationEvents": [
-        "onLanguage:ferrite"
+        "onLanguage:oxide"
     ],
     "main": "./extension.js",
     "contributes": {
         "languages": [
             {
-                "id": "ferrite",
+                "id": "oxide",
                 "aliases": [
-                    "Ferrite",
-                    "ferrite"
+                    "Oxide",
+                    "oxide"
                 ],
                 "extensions": [
-                    ".fe"
+                    ".ox"
                 ],
                 "configuration": "./language-configuration.json"
             }
         ],
         "grammars": [
             {
-                "language": "ferrite",
-                "scopeName": "source.ferrite",
-                "path": "./syntaxes/ferrite.tmLanguage.json"
+                "language": "oxide",
+                "scopeName": "source.oxide",
+                "path": "./syntaxes/oxide.tmLanguage.json"
             }
         ],
         "configuration": {
             "type": "object",
-            "title": "Ferrite",
+            "title": "Oxide",
             "properties": {
-                "ferrite.lsp.path": {
+                "oxide.lsp.path": {
                     "type": "string",
-                    "default": "ferrite-lsp",
-                    "description": "Path to the ferrite-lsp binary. Only used when mode is 'native'."
+                    "default": "oxide-lsp",
+                    "description": "Path to the oxide-lsp binary. Only used when mode is 'native'."
                 },
-                "ferrite.lsp.mode": {
+                "oxide.lsp.mode": {
                     "type": "string",
                     "default": "auto",
                     "enum": [
@@ -59,14 +59,14 @@
                     "enumDescriptions": [
                         "Auto-detect: uses Docker if no custom path is set, native binary otherwise",
                         "Always launch LSP via Docker (no local Rust needed)",
-                        "Use a local ferrite-lsp binary directly"
+                        "Use a local oxide-lsp binary directly"
                     ],
-                    "description": "How to launch the Ferrite Language Server."
+                    "description": "How to launch the Oxide Language Server."
                 },
-                "ferrite.lsp.enabled": {
+                "oxide.lsp.enabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Enable the Ferrite Language Server for diagnostics, completion, hover, and go-to-definition."
+                    "description": "Enable the Oxide Language Server for diagnostics, completion, hover, and go-to-definition."
                 }
             }
         }
@@ -79,6 +79,6 @@
     },
     "scripts": {
         "package": "vsce package --no-dependencies",
-        "install-ext": "code --install-extension ferrite-lang-*.vsix"
+        "install-ext": "code --install-extension oxide-lang-*.vsix"
     }
 }

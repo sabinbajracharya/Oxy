@@ -1,5 +1,5 @@
-// Ferrite Language Server extension for VS Code
-// Launches the ferrite-lsp binary (directly or via Docker) and connects via stdio
+// Oxide Language Server extension for VS Code
+// Launches the oxide-lsp binary (directly or via Docker) and connects via stdio
 
 const { LanguageClient, TransportKind } = require("vscode-languageclient/node");
 const vscode = require("vscode");
@@ -31,47 +31,47 @@ function findProjectRoot() {
 }
 
 function activate(context) {
-    outputChannel = vscode.window.createOutputChannel("Ferrite LSP");
+    outputChannel = vscode.window.createOutputChannel("Oxide LSP");
 
-    const config = vscode.workspace.getConfiguration("ferrite.lsp");
+    const config = vscode.workspace.getConfiguration("oxide.lsp");
     const enabled = config.get("enabled", true);
 
     if (!enabled) {
-        outputChannel.appendLine("Ferrite LSP is disabled via settings.");
+        outputChannel.appendLine("Oxide LSP is disabled via settings.");
         return;
     }
 
     const mode = config.get("mode", "auto");
-    const lspPath = config.get("path", "ferrite-lsp");
+    const lspPath = config.get("path", "oxide-lsp");
 
     let serverOptions;
 
-    const useDocker = mode === "docker" || (mode === "auto" && lspPath === "ferrite-lsp");
+    const useDocker = mode === "docker" || (mode === "auto" && lspPath === "oxide-lsp");
 
     if (useDocker) {
         const projectRoot = findProjectRoot();
         if (!projectRoot) {
             vscode.window.showErrorMessage(
-                "Ferrite: Could not find project root (Cargo.toml). Set ferrite.lsp.mode to 'native' and ferrite.lsp.path to your ferrite-lsp binary."
+                "Oxide: Could not find project root (Cargo.toml). Set oxide.lsp.mode to 'native' and oxide.lsp.path to your oxide-lsp binary."
             );
             return;
         }
 
         outputChannel.appendLine(`Project root: ${projectRoot}`);
-        outputChannel.appendLine("Starting Ferrite LSP via Docker...");
+        outputChannel.appendLine("Starting Oxide LSP via Docker...");
 
         serverOptions = {
             command: "docker",
             args: [
                 "compose", "run", "--rm", "-T",
                 "dev",
-                "cargo", "run", "--release", "-p", "ferrite-lsp", "--quiet", "--",
+                "cargo", "run", "--release", "-p", "oxide-lsp", "--quiet", "--",
             ],
             options: { cwd: projectRoot },
             transport: TransportKind.stdio,
         };
     } else {
-        outputChannel.appendLine(`Starting Ferrite LSP native binary: ${lspPath}`);
+        outputChannel.appendLine(`Starting Oxide LSP native binary: ${lspPath}`);
 
         serverOptions = {
             command: lspPath,
@@ -80,24 +80,24 @@ function activate(context) {
     }
 
     const clientOptions = {
-        documentSelector: [{ scheme: "file", language: "ferrite" }],
+        documentSelector: [{ scheme: "file", language: "oxide" }],
         synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher("**/*.fe"),
+            fileEvents: vscode.workspace.createFileSystemWatcher("**/*.ox"),
         },
         outputChannel: outputChannel,
     };
 
     client = new LanguageClient(
-        "ferrite-lsp",
-        "Ferrite Language Server",
+        "oxide-lsp",
+        "Oxide Language Server",
         serverOptions,
         clientOptions
     );
 
     client.start().catch((err) => {
-        outputChannel.appendLine(`Failed to start Ferrite LSP: ${err.message}`);
+        outputChannel.appendLine(`Failed to start Oxide LSP: ${err.message}`);
         vscode.window.showErrorMessage(
-            `Ferrite LSP failed to start: ${err.message}. Check "Ferrite LSP" output channel for details.`
+            `Oxide LSP failed to start: ${err.message}. Check "Oxide LSP" output channel for details.`
         );
     });
 

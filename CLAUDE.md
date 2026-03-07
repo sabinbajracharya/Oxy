@@ -1,18 +1,18 @@
 # CLAUDE.md — Project Context
 
-## Project: Ferrite
+## Project: Oxide
 
-Interpreted programming language written in Rust. Replicates Rust syntax without borrow checker/ownership. File extension: `.fe`.
+Interpreted programming language written in Rust. Replicates Rust syntax without borrow checker/ownership. File extension: `.ox`.
 
 ## Build & Test (Docker — no local Rust)
 
 ```bash
 docker compose run --rm dev bash -c "cargo test"                    # All tests
-docker compose run --rm dev bash -c "cargo test -p ferrite-core"    # Core only
-docker compose run --rm dev bash -c "cargo test -p ferrite-lsp"     # LSP only
+docker compose run --rm dev bash -c "cargo test -p oxide-core"    # Core only
+docker compose run --rm dev bash -c "cargo test -p oxide-lsp"     # LSP only
 docker compose run --rm dev bash -c "cargo fmt --all"               # Format
 docker compose run --rm dev bash -c "cargo clippy -- -D warnings"   # Lint
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.fe"  # Run
+docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"  # Run
 docker compose run --rm test                                        # Full CI check
 docker compose run --rm setup                                       # Install npm deps
 docker compose run --rm build-ext                                   # Package .vsix
@@ -22,7 +22,7 @@ docker compose run --rm build-ext                                   # Package .v
 
 ```
 crates/
-├── ferrite-core/src/
+├── oxide-core/src/
 │   ├── lib.rs           # Public API exports
 │   ├── lexer/           # Tokenizer → Vec<Token>
 │   │   ├── mod.rs       # Scanner (scan_token, scan_string, scan_fstring, scan_number)
@@ -35,12 +35,12 @@ crates/
 │   ├── json/mod.rs      # Hand-written JSON ser/de (no deps)
 │   ├── http/mod.rs      # HTTP client wrapping ureq
 │   └── errors.rs        # FerriError: Lexer/Parser/Runtime with line/column, Return(Box<Value>), Break, Continue
-├── ferrite-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast
-└── ferrite-lsp/src/main.rs  # LSP server (tower-lsp): diagnostics, completion, hover, symbols, goto-def
+├── oxide-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast
+└── oxide-lsp/src/main.rs  # LSP server (tower-lsp): diagnostics, completion, hover, symbols, goto-def
 editors/vscode/
-├── extension.js         # LSP client — launches ferrite-lsp via Docker or native binary
-├── package.json         # Extension manifest with ferrite.lsp.mode/path/enabled settings
-├── syntaxes/ferrite.tmLanguage.json  # TextMate grammar
+├── extension.js         # LSP client — launches oxide-lsp via Docker or native binary
+├── package.json         # Extension manifest with oxide.lsp.mode/path/enabled settings
+├── syntaxes/oxide.tmLanguage.json  # TextMate grammar
 └── language-configuration.json       # Brackets, comments, indentation
 ```
 

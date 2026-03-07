@@ -58,7 +58,7 @@ services:
       bash -c "
         npm install &&
         npx vsce package --no-dependencies &&
-        echo '✅ Extension packaged: editors/vscode/ferrite-lang-*.vsix'
+        echo '✅ Extension packaged: editors/vscode/oxide-lang-*.vsix'
       "
 
   build:

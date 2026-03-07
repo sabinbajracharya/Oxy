@@ -1,0 +1,15 @@
+[package]
+name = "oxide-core"
+description = "Core library for the Oxide programming language — Rust syntax without the borrow checker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+regex = { workspace = true }
+ureq = { workspace = true }
+rusqlite = { workspace = true }
+
+[dev-dependencies]
