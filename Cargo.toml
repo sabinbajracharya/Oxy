@@ -3,11 +3,11 @@ members = ["crates/oxide-core", "crates/oxide-cli", "crates/oxide-lsp"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT"
-repository = "https://github.com/nickel-lang/project-ferrite"
+repository = "https://github.com/sabinbajracharya/Oxide"
 
 [workspace.dependencies]
 oxide-core = { path = "crates/oxide-core" }
