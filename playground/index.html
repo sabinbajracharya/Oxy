@@ -7,13 +7,13 @@
 <style>
   :root {
     --bg: #1e1e2e;
-    --surface: #2a2a3e;
+    --surface: #313244;
     --text: #cdd6f4;
-    --text-dim: #9399b2;
+    --text-dim: #a6adc8;
     --accent: #fab387;
     --green: #a6e3a1;
     --red: #f38ba8;
-    --border: #45475a;
+    --border: #585b70;
     --radius: 8px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -94,17 +94,19 @@
     font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
     font-size: 14px;
   }
+  #editor .cm-editor { background: var(--surface); }
+  #editor .cm-editor .cm-content { color: #e6e9f0; }
   .output-pane {
-    background: #11111b;
+    background: #1a1a2e;
     border-top: 1px solid var(--border);
     padding: 0.8rem 1rem;
     min-height: 80px;
     max-height: 240px;
     overflow-y: auto;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 13px;
+    font-size: 14px;
     white-space: pre-wrap;
-    color: var(--text);
+    color: #e6e9f0;
   }
   .output-pane .error { color: var(--red); }
   .status { padding: 0.4rem 1rem; font-size: 0.8rem; color: var(--text-dim); }
@@ -210,7 +212,7 @@ let wasmReady = false;
 
 async function initWasm() {
   try {
-    const wasm = await import("./oxide_wasm.js");
+    const wasm = await import("./pkg/oxide_wasm.js");
     window.runOxide = (src) => wasm.run_oxide(src);
     wasmReady = true;
     document.getElementById("status").textContent = "Ready — press Run or Ctrl+Enter";
