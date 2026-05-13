@@ -5,6 +5,7 @@
 //! HTTP server, and SQLite database.
 
 /// SQLite database operations (open, query, execute).
+#[cfg(feature = "db")]
 pub mod db;
 /// Environment variable and process argument access.
 pub mod env;
@@ -21,6 +22,7 @@ pub mod rand;
 /// Regular expression matching, searching, and replacement.
 pub mod regex;
 /// HTTP server with routing, path params, query strings, static files.
+#[cfg(feature = "server")]
 pub mod server;
 /// Time and duration utilities.
 pub mod time;

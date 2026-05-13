@@ -8,11 +8,15 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
+#[cfg(any(not(feature = "http"), not(feature = "db"), not(feature = "server")))]
+use crate::lexer::Span;
 use crate::types::{Value, NONE_VARIANT};
 
+#[cfg(feature = "db")]
 mod db_dispatch;
 mod eval;
 mod format;
+#[cfg(feature = "http")]
 mod http;
 mod json;
 mod macros;
@@ -21,6 +25,7 @@ mod operations;
 mod path;
 mod pattern;
 mod register;
+#[cfg(feature = "server")]
 mod server_dispatch;
 
 /// The Oxide interpreter.
@@ -58,14 +63,19 @@ pub struct Interpreter {
     /// Call stack for runtime error traces.
     call_stack: Vec<crate::errors::CallFrame>,
     /// Routes registered by HTTP servers, keyed by server ID.
+    #[cfg(feature = "server")]
     server_routes: HashMap<String, Vec<crate::stdlib::server::Route>>,
     /// Static file directory per server.
+    #[cfg(feature = "server")]
     server_static_dirs: HashMap<String, String>,
     /// Counter for generating unique server IDs.
+    #[cfg(feature = "server")]
     server_id_counter: u64,
     /// Open SQLite database connections, keyed by internal ID.
+    #[cfg(feature = "db")]
     db_connections: HashMap<String, rusqlite::Connection>,
     /// Counter for generating unique database IDs.
+    #[cfg(feature = "db")]
     db_id_counter: u64,
 }
 
@@ -83,29 +93,10 @@ pub(crate) struct ModuleData {
 impl Interpreter {
     /// Internal constructor with all fields parameterized.
     fn new_internal(env: Env, output: Option<Vec<String>>) -> Self {
-        Self {
-            env,
-            output,
-            struct_defs: HashMap::new(),
-            enum_defs: HashMap::new(),
-            impl_methods: HashMap::new(),
-            trait_defs: HashMap::new(),
-            trait_impls: HashMap::new(),
-            current_self_type: None,
-            modules: HashMap::new(),
-            base_dir: None,
-            type_aliases: HashMap::new(),
-            use_aliases: HashMap::new(),
-            cli_args: Vec::new(),
-            async_fns: HashSet::new(),
-            derived_traits: HashMap::new(),
-            call_stack: Vec::new(),
-            server_routes: HashMap::new(),
-            server_static_dirs: HashMap::new(),
-            server_id_counter: 0,
-            db_connections: HashMap::new(),
-            db_id_counter: 0,
-        }
+        let mut s = Self::default_impl();
+        s.env = env;
+        s.output = output;
+        s
     }
 
     /// Create a new interpreter with a fresh global environment.
@@ -399,11 +390,131 @@ impl Interpreter {
             Expr::FString { parts, .. } => self.eval_fstring_expr(parts, env),
         }
     }
+} // end of main impl Interpreter block
+
+// When features are disabled, provide stub methods that return "not available" errors.
+// Signatures must exactly match the real methods in http.rs, server_dispatch.rs, db_dispatch.rs.
+#[cfg(not(feature = "http"))]
+impl Interpreter {
+    pub(crate) fn call_http_function(
+        &self,
+        _func_name: &str,
+        _args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("http:: not available in this build", span)
+    }
+    pub(crate) fn call_http_response_method(
+        &self,
+        _fields: &std::collections::HashMap<String, Value>,
+        _method: &str,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("HttpResponse methods not available in this build", span)
+    }
+    pub(crate) fn call_http_builder_method(
+        &self,
+        _fields: std::collections::HashMap<String, Value>,
+        _method: &str,
+        _args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime(
+            "HttpRequestBuilder methods not available in this build",
+            span,
+        )
+    }
+}
+
+#[cfg(not(feature = "server"))]
+impl Interpreter {
+    pub(crate) fn call_server_method(
+        &mut self,
+        _receiver: &Value,
+        _method: &str,
+        _args: Vec<Value>,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("Server methods not available in this build", span)
+    }
+    pub(crate) fn call_server_path(
+        &mut self,
+        _type_name: &str,
+        _method_name: &str,
+        _args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("Server:: not available in this build", span)
+    }
+}
+
+#[cfg(not(feature = "db"))]
+impl Interpreter {
+    pub(crate) fn call_db_method(
+        &mut self,
+        _receiver: &Value,
+        _method: &str,
+        _args: Vec<Value>,
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("Db methods not available in this build", span)
+    }
+    pub(crate) fn call_db_path(
+        &mut self,
+        _method_name: &str,
+        _args: &[Value],
+        span: &Span,
+    ) -> Result<Value, FerriError> {
+        err_runtime("Db:: not available in this build", span)
+    }
+}
+
+#[cfg(any(not(feature = "http"), not(feature = "db"), not(feature = "server")))]
+fn err_runtime(msg: &str, span: &Span) -> Result<Value, FerriError> {
+    Err(FerriError::Runtime {
+        message: msg.to_string(),
+        line: span.line,
+        column: span.column,
+    })
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
-        Self::new()
+        Self::default_impl()
+    }
+}
+
+impl Interpreter {
+    #[allow(dead_code)]
+    fn default_impl() -> Self {
+        Interpreter {
+            env: Environment::new(),
+            output: None,
+            struct_defs: HashMap::new(),
+            enum_defs: HashMap::new(),
+            impl_methods: HashMap::new(),
+            trait_defs: HashMap::new(),
+            trait_impls: HashMap::new(),
+            current_self_type: None,
+            modules: HashMap::new(),
+            base_dir: None,
+            type_aliases: HashMap::new(),
+            use_aliases: HashMap::new(),
+            cli_args: Vec::new(),
+            async_fns: HashSet::new(),
+            derived_traits: HashMap::new(),
+            call_stack: Vec::new(),
+            #[cfg(feature = "server")]
+            server_routes: HashMap::new(),
+            #[cfg(feature = "server")]
+            server_static_dirs: HashMap::new(),
+            #[cfg(feature = "server")]
+            server_id_counter: 0,
+            #[cfg(feature = "db")]
+            db_connections: HashMap::new(),
+            #[cfg(feature = "db")]
+            db_id_counter: 0,
+        }
     }
 }
 

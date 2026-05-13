@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/oxide-core", "crates/oxide-cli", "crates/oxide-lsp"]
+members = ["crates/oxide-core", "crates/oxide-cli", "crates/oxide-lsp", "playground/wasm"]
 resolver = "2"
 
 [workspace.package]

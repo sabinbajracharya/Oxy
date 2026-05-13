@@ -6,10 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = ["http", "db", "server"]
+http = ["dep:ureq"]
+db = ["dep:rusqlite"]
+server = []
+
 [dependencies]
 thiserror = { workspace = true }
 regex = { workspace = true }
-ureq = { workspace = true }
-rusqlite = { workspace = true }
+ureq = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]

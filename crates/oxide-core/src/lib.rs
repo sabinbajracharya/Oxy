@@ -12,6 +12,7 @@ pub mod env;
 /// Error types used throughout the interpreter.
 pub mod errors;
 /// HTTP client support for Oxide scripts.
+#[cfg(feature = "http")]
 pub mod http;
 /// Tree-walking interpreter that evaluates the AST.
 pub mod interpreter;
