@@ -32,7 +32,50 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "recursive function calls need frame-local-slot fix"]
+    fn test_compiled_simple_if_no_recursion() {
+        // Non-recursive else branch — should work
+        let source = r#"
+        fn check(n: i64) -> i64 {
+            if n <= 1 { n } else { 99 }
+        }
+        fn main() {
+            println!("{}", check(0));
+            println!("{}", check(5));
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "compiled failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compiled_simple_while() {
+        // Simplest while loop to debug
+        let source = r#"
+        fn main() {
+            let mut x = 0;
+            while x < 3 {
+                println!("{}", x);
+                x = x + 1;
+            }
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "compiled failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compiled_fib_2() {
+        let source = r#"
+        fn fib(n: i64) -> i64 {
+            if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
+        }
+        fn main() { println!("{}", fib(2)); }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "compiled failed: {:?}", result.err());
+    }
+
+    #[test]
     fn test_compiled_fibonacci() {
         let source = r#"
         fn fib(n: i64) -> i64 {
@@ -48,7 +91,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "while loop condition check needs debugging"]
     fn test_compiled_while_loop() {
         let source = r#"
         fn main() {
@@ -81,7 +123,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "uses fib — recursive calls need debugging"]
     fn test_compiled_vs_interpreted_equivalent() {
         let source = r#"
         fn fib(n: i64) -> i64 {

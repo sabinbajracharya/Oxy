@@ -80,6 +80,8 @@ pub struct Chunk {
     pub code: Vec<OpCode>,
     /// Number of local variable slots needed for the top-level scope.
     pub local_count: usize,
+    /// Instruction index where execution starts.
+    pub entry_point: usize,
     /// Entry points: function name → instruction index.
     pub functions: std::collections::HashMap<String, usize>,
 }
@@ -134,8 +136,10 @@ impl Vm {
         self.output.as_deref().unwrap_or(&[])
     }
 
-    /// Execute the chunk, starting at the given instruction index (default: 0).
+    /// Execute the chunk, starting at the entry point.
     pub fn run(&mut self) -> VmResult {
+        self.ip = self.chunk.entry_point;
+
         // Allocate local slots for the top-level scope
         for _ in 0..self.chunk.local_count {
             self.stack.push(Value::Unit);

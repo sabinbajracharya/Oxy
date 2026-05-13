@@ -431,6 +431,22 @@ pub fn run_compiled(source: &str) -> Result<Value, FerriError> {
     }
 }
 
+/// Compile and run with captured output (for testing).
+pub fn run_compiled_capturing(source: &str) -> Result<(Value, Vec<String>), FerriError> {
+    let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
+    let chunk = crate::compiler::Compiler::new().compile(&program)?;
+    let mut vm = crate::vm::Vm::with_captured_output(chunk);
+    match vm.run() {
+        crate::vm::VmResult::Value(v) => Ok((v, vm.captured_output().to_vec())),
+        crate::vm::VmResult::Error(e) => Err(FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        }),
+    }
+}
+
 /// Parse and execute a Oxide program from a file path (enables module resolution).
 pub fn run_file(path: &str, source: &str) -> Result<Value, RuntimeError> {
     run_file_with_args(path, source, vec![])

@@ -51,8 +51,6 @@ pub struct Compiler {
     sym: SymTable,
     /// Function entry points: name → instruction index.
     functions: HashMap<String, usize>,
-    /// Deferred function compilation: (FnDef, slot_count_before_body).
-    deferred_fns: Vec<(FnDef, usize)>,
 }
 
 impl Compiler {
@@ -67,7 +65,6 @@ impl Default for Compiler {
             code: Vec::new(),
             sym: SymTable::new(0),
             functions: HashMap::new(),
-            deferred_fns: Vec::new(),
         }
     }
 }
@@ -75,37 +72,36 @@ impl Default for Compiler {
 impl Compiler {
     /// Compile a full program. Returns a [`Chunk`] ready for the VM.
     pub fn compile(mut self, program: &Program) -> Result<Chunk, FerriError> {
-        // First pass: register function names and their instruction indices
-        for item in &program.items {
-            if let Item::Function(f) = item {
-                if f.name == "main" {
-                    // main gets compiled inline at the start
-                    continue;
-                }
-                // Defer function compilation
-                self.deferred_fns.push((f.clone(), self.sym.slot_count()));
-            }
-        }
+        // Emit entry preamble first: Call(main), Pop, Halt
+        // main's ip is backpatched after main is compiled.
+        let entry_point = 0;
+        let call_site = self.emit(OpCode::Call {
+            target: 0, // placeholder
+            arg_count: 0,
+        });
+        self.emit(OpCode::Pop);
+        self.emit(OpCode::Halt);
 
-        // Compile all non-function items and deferred functions
+        // Compile function bodies
         for item in &program.items {
             self.compile_item(item)?;
         }
 
-        // Find and call main
+        // Backpatch the Call to main
         if let Some(&main_ip) = self.functions.get("main") {
-            self.code.push(OpCode::Call {
-                target: main_ip,
-                arg_count: 0,
-            });
-            self.code.push(OpCode::Pop); // discard main's return value
+            self.patch(
+                call_site,
+                OpCode::Call {
+                    target: main_ip,
+                    arg_count: 0,
+                },
+            );
         }
-
-        self.code.push(OpCode::Halt);
 
         Ok(Chunk {
             code: self.code,
             local_count: self.sym.slot_count(),
+            entry_point,
             functions: self.functions,
         })
     }
