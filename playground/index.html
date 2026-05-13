@@ -145,9 +145,44 @@
 </footer>
 
 <script type="module">
-import { basicSetup } from "https://esm.sh/codemirror@6";
-import { EditorView } from "https://esm.sh/@codemirror/view@6";
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars, drawSelection, rectangularSelection, crosshairCursor, highlightActiveLineGutter } from "https://esm.sh/@codemirror/view@6";
+import { EditorState } from "https://esm.sh/@codemirror/state@6";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://esm.sh/@codemirror/commands@6";
+import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "https://esm.sh/@codemirror/language@6";
+import { defaultHighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6";
+import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
+import { searchKeymap, highlightSelectionMatches } from "https://esm.sh/@codemirror/search@6";
+import { lintKeymap } from "https://esm.sh/@codemirror/lint@6";
 import { rust } from "https://esm.sh/@codemirror/lang-rust@6";
+
+const basicSetup = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter(),
+  drawSelection(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+    indentWithTab,
+  ]),
+];
 
 const defaultCode = `fn fib(n: i64) -> i64 {
     if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
