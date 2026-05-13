@@ -25,6 +25,8 @@ pub mod stdlib;
 pub mod types;
 /// Semantic type checker that validates type annotations before execution.
 pub mod type_checker;
+/// Package manager: install, manifest parsing, registry support.
+pub mod package;
 
 /// The current version of the Oxide language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

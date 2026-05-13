@@ -25,6 +25,13 @@ fn main() {
         Some("repl") => {
             run_repl();
         }
+        Some("install") => {
+            let target = args.get(2).unwrap_or_else(|| {
+                eprintln!("{} 'install' requires a package path or URL", "error:".red().bold());
+                process::exit(2);
+            });
+            install_package(target);
+        }
         Some("test") => {
             let file = args.get(2).unwrap_or_else(|| {
                 eprintln!("{} 'test' requires a file argument", "error:".red().bold());
@@ -269,6 +276,41 @@ fn balanced_braces(s: &str) -> bool {
     depth <= 0
 }
 
+fn install_package(target: &str) {
+    println!("{} installing package from '{}'...", "info:".cyan(), target);
+
+    let result = if target.starts_with("http://")
+        || target.starts_with("https://")
+        || target.starts_with("git@")
+        || target.contains(':')
+    {
+        oxide_core::package::install_from_url(target)
+    } else {
+        let path = std::path::Path::new(target);
+        if path.exists() && path.is_dir() {
+            oxide_core::package::install_from_path(path)
+        } else {
+            Err(format!("package not found: '{target}'"))
+        }
+    };
+
+    match result {
+        Ok(pkg) => {
+            println!(
+                "{} installed {} v{}",
+                "success:".green().bold(),
+                pkg.manifest.name,
+                pkg.manifest.version
+            );
+            println!("  path: {}", pkg.path.display());
+        }
+        Err(e) => {
+            eprintln!("{} {}", "error:".red().bold(), e);
+            process::exit(1);
+        }
+    }
+}
+
 fn run_test_file(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
@@ -388,8 +430,12 @@ fn print_help() {
         "test <file.ox> ".cyan()
     );
     println!(
-        "  {}                 Start the interactive REPL\n",
+        "  {}                 Start the interactive REPL",
         "repl".cyan()
+    );
+    println!(
+        "  {}    Install a package from a path or URL\n",
+        "install <path|url>".cyan()
     );
     println!("{}:", "Options".bold());
     println!(

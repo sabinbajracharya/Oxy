@@ -165,6 +165,11 @@ impl Interpreter {
             return Ok(source);
         }
 
+        // Search installed packages
+        if let Some((source, _pkg_name)) = crate::package::find_module_in_packages(name) {
+            return Ok(source);
+        }
+
         Err(FerriError::Runtime {
             message: format!("could not find module `{name}`: tried '{path1}' and '{path2}'"),
             line: span.line,
