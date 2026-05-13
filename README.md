@@ -165,7 +165,7 @@ cargo test
 oxide [OPTIONS] <COMMAND>
 
 Commands:
-  run <file.ox>          Run a Oxide source file
+  run <file.ox>          Run an Oxide source file (--compiled for 10x faster VM)
   test <file.ox>         Run #[test] functions in a file
   repl                   Start the interactive REPL
   install <path|url>     Install a package from a local path or git URL
