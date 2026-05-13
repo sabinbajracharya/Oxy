@@ -19,6 +19,13 @@ pub enum FerriError {
         line: usize,
         column: usize,
     },
+    /// Type error with source location.
+    #[error("[{line}:{column}] type error: {message}")]
+    TypeError {
+        message: String,
+        line: usize,
+        column: usize,
+    },
     /// Runtime error with source location.
     #[error("[{line}:{column}] runtime error: {message}")]
     Runtime {

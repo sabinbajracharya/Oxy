@@ -413,6 +413,7 @@ impl Default for Interpreter {
 /// Convenience function: parse and execute a Oxide program.
 pub fn run(source: &str) -> Result<Value, FerriError> {
     let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
     let mut interp = Interpreter::new();
     interp.execute_program(&program)
 }
@@ -440,6 +441,10 @@ pub fn run_file_with_args(
         error: e,
         call_stack: vec![],
     })?;
+    crate::type_checker::TypeChecker::new().check_program(&program).map_err(|e| RuntimeError {
+        error: e,
+        call_stack: vec![],
+    })?;
     let mut interp = Interpreter::new();
     if let Some(parent) = std::path::Path::new(path).parent() {
         interp.set_base_dir(parent.to_string_lossy().to_string());
@@ -454,6 +459,7 @@ pub fn run_file_with_args(
 /// Run a program and capture its output (for testing).
 pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), FerriError> {
     let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
     let mut interp = Interpreter::new_with_captured_output();
     let result = interp.execute_program(&program)?;
     Ok((result, interp.captured_output().to_vec()))
@@ -470,6 +476,7 @@ pub struct TestResult {
 /// Returns a list of test results.
 pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, FerriError> {
     let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
 
     // First register all items (structs, enums, functions, impls, etc.)
     let mut interp = Interpreter::new();

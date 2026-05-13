@@ -23,6 +23,8 @@ pub mod parser;
 pub mod stdlib;
 /// Runtime value types and type metadata.
 pub mod types;
+/// Semantic type checker that validates type annotations before execution.
+pub mod type_checker;
 
 /// The current version of the Oxide language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
