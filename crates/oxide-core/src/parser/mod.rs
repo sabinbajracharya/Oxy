@@ -2086,59 +2086,95 @@ impl Parser {
     }
 
     /// Parse turbofish: `::<Type1, Type2, ...>`.  Assumes `::` has just been consumed.
-    /// Skips nested `<...>` (e.g. `Vec<i64>`) since TypeAnnotation has no generics field.
+    /// Uses angle-bracket depth tracking to handle nested types like `Vec<i64>`.
     fn parse_turbofish(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
+        let mut depth: u32 = 1;
+        let mut current_type = String::new();
+        let mut type_start = self.current_span();
+        let mut types: Vec<TypeAnnotation> = Vec::new();
         self.expect(TokenKind::Lt)?;
-        let mut types = Vec::new();
-        if self.check(&TokenKind::Gt) {
-            self.advance();
-            return Ok(types);
-        }
-        loop {
-            let name = self.expect_ident()?;
-            let span = self.prev_span();
-            types.push(TypeAnnotation { name, span });
-            // Skip nested generics: `Vec<i64>` → consume `<i64>`
-            if self.check(&TokenKind::Lt) {
-                self.skip_angle_brackets()?;
-            }
-            if self.check(&TokenKind::Gt) {
-                self.advance();
-                break;
-            }
-            self.expect(TokenKind::Comma)?;
-        }
-        Ok(types)
-    }
 
-    /// Skip a balanced `<...>` pair (for nested generics we don't parse).
-    fn skip_angle_brackets(&mut self) -> Result<(), FerriError> {
-        self.expect(TokenKind::Lt)?;
-        let mut depth = 1u32;
-        while depth > 0 {
-            match self.peek_kind() {
+        loop {
+            match self.peek_kind().clone() {
                 TokenKind::Lt => {
                     self.advance();
                     depth += 1;
+                    current_type.push_str("< ");
                 }
                 TokenKind::Gt => {
                     self.advance();
                     depth -= 1;
+                    if depth == 0 {
+                        if !current_type.trim().is_empty() {
+                            types.push(TypeAnnotation {
+                                name: current_type.trim().to_string(),
+                                span: type_start,
+                            });
+                        }
+                        break;
+                    }
+                    current_type.push_str("> ");
                 }
-                TokenKind::GtEq | TokenKind::Shr => {
+                TokenKind::Shr => {
+                    // `>>` = two `>` tokens. Process the first.
                     self.advance();
                     depth -= 1;
                     if depth == 0 {
+                        if !current_type.trim().is_empty() {
+                            types.push(TypeAnnotation {
+                                name: current_type.trim().to_string(),
+                                span: type_start,
+                            });
+                        }
                         break;
                     }
+                    // There's a second `>` implied by Shr. Process it too.
+                    depth -= 1;
+                    if depth == 0 {
+                        if !current_type.trim().is_empty() {
+                            types.push(TypeAnnotation {
+                                name: current_type.trim().to_string(),
+                                span: type_start,
+                            });
+                        }
+                        break;
+                    }
+                    current_type.push_str(">> ");
                 }
-                TokenKind::Eof => return Err(self.error("unterminated generic arguments".into())),
+                TokenKind::Comma => {
+                    if depth == 1 {
+                        self.advance();
+                        if !current_type.trim().is_empty() {
+                            types.push(TypeAnnotation {
+                                name: current_type.trim().to_string(),
+                                span: type_start,
+                            });
+                            current_type.clear();
+                        }
+                        type_start = self.current_span();
+                    } else {
+                        self.advance();
+                        current_type.push_str(", ");
+                    }
+                }
+                TokenKind::Ident(_) => {
+                    let name = self.expect_ident()?;
+                    if current_type.trim().is_empty() {
+                        type_start = self.prev_span();
+                    }
+                    current_type.push_str(&name);
+                    current_type.push(' ');
+                }
+                TokenKind::Eof => {
+                    return Err(self.error("unterminated generic arguments".into()));
+                }
                 _ => {
+                    current_type.push_str(&format!("{} ", self.peek_kind().description()));
                     self.advance();
                 }
             }
         }
-        Ok(())
+        Ok(types)
     }
 
     // === Helpers ===
@@ -3617,6 +3653,74 @@ fn main() {}"#,
         assert!(matches!(&body[0], Stmt::ForDestructure { .. }));
         if let Stmt::ForDestructure { names, .. } = &body[0] {
             assert_eq!(names, &["k", "v"]);
+        }
+    }
+
+    #[test]
+    fn test_turbofish_method() {
+        let program = parse("fn main() { let x = obj.collect::<i64>(); }").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected fn")
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let")
+        };
+        match expr {
+            Expr::MethodCall {
+                method, turbofish, ..
+            } => {
+                assert_eq!(method, "collect");
+                assert!(turbofish.is_some(), "expected turbofish");
+                assert_eq!(turbofish.as_ref().unwrap().len(), 1);
+                assert_eq!(turbofish.as_ref().unwrap()[0].name, "i64");
+            }
+            other => panic!("expected MethodCall, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_turbofish_nested() {
+        let program = parse("fn main() { let x = obj.collect::<Vec<i64>>(); }").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected fn")
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let")
+        };
+        match expr {
+            Expr::MethodCall { turbofish, .. } => {
+                assert!(
+                    turbofish.is_some(),
+                    "expected turbofish with nested generics"
+                );
+            }
+            other => panic!("expected MethodCall, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_turbofish_call() {
+        let program = parse("fn main() { let x = foo::<i64>(42); }").unwrap();
+        let Item::Function(f) = &program.items[0] else {
+            panic!("expected fn")
+        };
+        let Stmt::Let {
+            value: Some(expr), ..
+        } = &f.body.stmts[0]
+        else {
+            panic!("expected let")
+        };
+        match expr {
+            Expr::Call { turbofish, .. } => {
+                assert!(turbofish.is_some(), "expected turbofish on call");
+            }
+            other => panic!("expected Call, got {:?}", other),
         }
     }
 }
