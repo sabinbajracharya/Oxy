@@ -365,9 +365,10 @@ pub enum Expr {
         expr: Box<Expr>,
         span: Span,
     },
-    /// Function call: `foo(a, b)`
+    /// Function call: `foo(a, b)` or `foo::<T>(a, b)`
     Call {
         callee: Box<Expr>,
+        turbofish: Option<Vec<TypeAnnotation>>,
         args: Vec<Expr>,
         span: Span,
     },
@@ -422,10 +423,11 @@ pub enum Expr {
         index: Box<Expr>,
         span: Span,
     },
-    /// Method call: `expr.method(args)`
+    /// Method call: `expr.method(args)` or `expr.method::<T>(args)`
     MethodCall {
         object: Box<Expr>,
         method: String,
+        turbofish: Option<Vec<TypeAnnotation>>,
         args: Vec<Expr>,
         span: Span,
     },
@@ -443,9 +445,10 @@ pub enum Expr {
         fields: Vec<(String, Expr)>,
         span: Span,
     },
-    /// Path expression: `Type::method(args)` — associated function or enum variant constructor
+    /// Path expression: `Type::method(args)` or `Type::method::<T>(args)`
     PathCall {
         path: Vec<String>,
+        turbofish: Option<Vec<TypeAnnotation>>,
         args: Vec<Expr>,
         span: Span,
     },

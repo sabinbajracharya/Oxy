@@ -339,7 +339,9 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::Call { callee, args, span } => {
+            Expr::Call {
+                callee, args, span, ..
+            } => {
                 // Compile arguments (left to right, so first arg is deepest on stack)
                 for arg in args {
                     self.compile_expr(arg)?;

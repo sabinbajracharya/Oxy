@@ -258,7 +258,9 @@ impl Interpreter {
                 self.eval_unary_op(*op, &val, span.line, span.column)
             }
 
-            Expr::Call { callee, args, span } => self.eval_call_expr(callee, args, span, env),
+            Expr::Call {
+                callee, args, span, ..
+            } => self.eval_call_expr(callee, args, span, env),
 
             Expr::MacroCall { name, args, span } => {
                 self.eval_macro_call(name, args, env, span.line, span.column)
@@ -339,6 +341,7 @@ impl Interpreter {
                 method,
                 args,
                 span,
+                ..
             } => {
                 let obj = self.eval_expr(object, env)?;
                 let arg_vals: Vec<Value> = args
@@ -352,7 +355,9 @@ impl Interpreter {
                 name, fields, span, ..
             } => self.eval_struct_init_expr(name, fields, span, env),
 
-            Expr::PathCall { path, args, span } => {
+            Expr::PathCall {
+                path, args, span, ..
+            } => {
                 let arg_vals: Vec<Value> = args
                     .iter()
                     .map(|a| self.eval_expr(a, env))

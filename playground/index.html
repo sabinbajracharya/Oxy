@@ -194,7 +194,7 @@ fn main() {
     println!("fib(20) = {}", fib(20));
 
     let numbers = vec![1, 2, 3, 4, 5];
-    let doubled = numbers.iter().map(|x| x * 2).collect();
+    let doubled = numbers.iter().map(|x| x * 2).collect::<Vec<i64>>();
     println!("doubled = {:?}", doubled);
 
     let name = "Oxide";

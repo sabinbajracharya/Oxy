@@ -1215,12 +1215,36 @@ impl Parser {
                 // Check for path: `Name::...`
                 if self.check(&TokenKind::ColonColon) {
                     self.advance();
+
+                    // Turbofish on simple call: `foo::<T>(args)`
+                    if self.check(&TokenKind::Lt) {
+                        let turbofish = Some(self.parse_turbofish()?);
+                        if self.check(&TokenKind::LParen) {
+                            self.advance();
+                            let args = self.parse_arg_list()?;
+                            let end_span = self.current_span();
+                            self.expect(TokenKind::RParen)?;
+                            return Ok(Expr::Call {
+                                callee: Box::new(Expr::Ident(name.clone(), span)),
+                                turbofish,
+                                args,
+                                span: self.merge_spans(span, end_span),
+                            });
+                        }
+                        return Err(self.error("expected `(` after turbofish".into()));
+                    }
+
                     let mut segments = vec![name];
                     segments.push(self.expect_ident()?);
 
                     // Continue collecting path segments
                     while self.check(&TokenKind::ColonColon) {
                         self.advance();
+                        // Check for turbofish mid-path: `Vec::<i64>::new()`
+                        if self.check(&TokenKind::Lt) {
+                            let _ = self.parse_turbofish()?;
+                            continue;
+                        }
                         segments.push(self.expect_ident()?);
                     }
 
@@ -1232,6 +1256,7 @@ impl Parser {
                         self.expect(TokenKind::RParen)?;
                         return Ok(Expr::PathCall {
                             path: segments,
+                            turbofish: None,
                             args,
                             span: self.merge_spans(span, end_span),
                         });
@@ -1527,6 +1552,7 @@ impl Parser {
             self.expect(TokenKind::RParen)?;
             return Ok(Expr::Call {
                 callee: Box::new(left),
+                turbofish: None,
                 args,
                 span: self.merge_spans(op_span, end_span),
             });
@@ -1573,6 +1599,19 @@ impl Parser {
 
             let name = self.expect_ident()?;
 
+            // Check for turbofish: `.method::<Type>(args)`
+            let turbofish = if self.check(&TokenKind::ColonColon) {
+                self.advance();
+                if self.check(&TokenKind::Lt) {
+                    Some(self.parse_turbofish()?)
+                } else {
+                    // It's a `::` without `<` — error or path, bail
+                    return Err(self.error("expected identifier after `::` in method chain".into()));
+                }
+            } else {
+                None
+            };
+
             // Check for method call: `.name(...)`
             if self.check(&TokenKind::LParen) {
                 self.advance();
@@ -1582,6 +1621,7 @@ impl Parser {
                 return Ok(Expr::MethodCall {
                     object: Box::new(left),
                     method: name,
+                    turbofish,
                     args,
                     span: self.merge_spans(op_span, end_span),
                 });
@@ -2043,6 +2083,27 @@ impl Parser {
         }
 
         Ok(args)
+    }
+
+    /// Parse turbofish: `::<Type1, Type2, ...>`.  Assumes `::` has just been consumed.
+    fn parse_turbofish(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
+        self.expect(TokenKind::Lt)?;
+        let mut types = Vec::new();
+        if self.check(&TokenKind::Gt) {
+            self.advance();
+            return Ok(types);
+        }
+        loop {
+            let name = self.expect_ident()?;
+            let span = self.prev_span();
+            types.push(TypeAnnotation { name, span });
+            if self.check(&TokenKind::Gt) {
+                self.advance();
+                break;
+            }
+            self.expect(TokenKind::Comma)?;
+        }
+        Ok(types)
     }
 
     // === Helpers ===
