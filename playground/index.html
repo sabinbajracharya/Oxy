@@ -151,7 +151,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialC
 import { EditorState } from "https://esm.sh/@codemirror/state@6";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "https://esm.sh/@codemirror/commands@6";
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "https://esm.sh/@codemirror/language@6";
-import { defaultHighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6";
+import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6";
 import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
 import { searchKeymap, highlightSelectionMatches } from "https://esm.sh/@codemirror/search@6";
 import { lintKeymap } from "https://esm.sh/@codemirror/lint@6";
@@ -166,7 +166,7 @@ const basicSetup = [
   drawSelection(),
   EditorState.allowMultipleSelections.of(true),
   indentOnInput(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  oneDark,
   bracketMatching(),
   closeBrackets(),
   autocompletion(),
@@ -212,14 +212,19 @@ let wasmReady = false;
 
 async function initWasm() {
   try {
-    const wasm = await import("./pkg/oxide_wasm.js");
-    window.runOxide = (src) => wasm.run_oxide(src);
+    const mod = await import("./pkg/oxide_wasm.js");
+    await mod.default();
+    window.runOxide = (src) => mod.run_oxide(src);
     wasmReady = true;
-    document.getElementById("status").textContent = "Ready — press Run or Ctrl+Enter";
+    setStatus("Ready — press Run or Ctrl+Enter");
   } catch (e) {
-    document.getElementById("status").textContent = "WASM not available (build with wasm-pack first)";
-    console.error(e);
+    setStatus("WASM failed to load: " + e.message);
+    console.error("WASM init failed:", e);
   }
+}
+
+function setStatus(msg) {
+  document.getElementById("status").textContent = msg;
 }
 
 initWasm();
