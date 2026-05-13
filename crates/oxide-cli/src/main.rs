@@ -16,11 +16,22 @@ fn main() {
             print_help();
         }
         Some("run") => {
-            let file = args.get(2).unwrap_or_else(|| {
+            let mut compiled = false;
+            let mut file_idx = 2;
+            // Parse flags before the filename
+            while let Some(arg) = args.get(file_idx) {
+                if arg == "--compiled" || arg == "-c" {
+                    compiled = true;
+                    file_idx += 1;
+                } else {
+                    break;
+                }
+            }
+            let file = args.get(file_idx).unwrap_or_else(|| {
                 eprintln!("{} 'run' requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
-            run_file(file);
+            run_file(file, compiled);
         }
         Some("repl") => {
             run_repl();
@@ -70,7 +81,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &str) {
+fn run_file(path: &str, compiled: bool) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -82,6 +93,17 @@ fn run_file(path: &str) {
         }
     };
 
+    if compiled {
+        match oxide_core::interpreter::run_compiled(&source) {
+            Ok(_) => {}
+            Err(e) => {
+                display_error(&e, &source, &[]);
+                process::exit(1);
+            }
+        }
+        return;
+    }
+
     // Collect program args: everything after the file argument
     let all_args: Vec<String> = std::env::args().collect();
     let cli_args: Vec<String> = if all_args.len() > 3 {
@@ -89,7 +111,6 @@ fn run_file(path: &str) {
     } else {
         vec![]
     };
-    // Prepend program name
     let mut program_args = vec![path.to_string()];
     program_args.extend(cli_args);
 
@@ -425,7 +446,7 @@ fn print_help() {
     println!("{} oxide [command] [options]\n", "Usage:".bold());
     println!("{}:", "Commands".bold());
     println!(
-        "  {}        Execute an Oxide source file",
+        "  {}        Execute an Oxide source file (--compiled for VM)",
         "run <file.ox> ".cyan()
     );
     println!(
