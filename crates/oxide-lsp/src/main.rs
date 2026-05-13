@@ -33,7 +33,16 @@ impl OxideLsp {
         }
 
         // Then try parsing
-        if let Err(e) = oxide_core::parser::parse(source) {
+        let program = match oxide_core::parser::parse(source) {
+            Ok(p) => p,
+            Err(e) => {
+                diagnostics.push(error_to_diagnostic(&e));
+                return diagnostics;
+            }
+        };
+
+        // Run type checking
+        if let Err(e) = oxide_core::type_checker::TypeChecker::new().check_program(&program) {
             diagnostics.push(error_to_diagnostic(&e));
         }
 
@@ -428,7 +437,27 @@ impl LanguageServer for OxideLsp {
         });
     }
 
-    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let pos = params.text_document_position.position;
+        let source = match self.get_document(uri) {
+            Some(s) => s,
+            None => {
+                let mut items = Vec::new();
+                items.extend(keyword_completions());
+                items.extend(type_completions());
+                items.extend(builtin_function_completions());
+                items.extend(module_completions());
+                items.extend(snippet_completions());
+                return Ok(Some(CompletionResponse::Array(items)));
+            }
+        };
+
+        // Check if cursor is after a dot — suggest methods
+        if is_after_dot(&source, pos) {
+            return Ok(Some(CompletionResponse::Array(method_completions())));
+        }
+
         let mut items = Vec::new();
         items.extend(keyword_completions());
         items.extend(type_completions());
@@ -554,6 +583,94 @@ impl LanguageServer for OxideLsp {
 // ---------------------------------------------------------------------------
 // Helpers for go-to-definition and hover on user items
 // ---------------------------------------------------------------------------
+
+/// Check if the cursor position is immediately after a dot.
+fn is_after_dot(source: &str, position: Position) -> bool {
+    let line = match source.lines().nth(position.line as usize) {
+        Some(l) => l,
+        None => return false,
+    };
+    let col = position.character as usize;
+    if col == 0 || col > line.len() {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    // Check if the character before cursor is a dot
+    if let Some(&b'.') = bytes.get(col.saturating_sub(1)) {
+        return true;
+    }
+    // Check for method call with two chars before (allow space after dot)
+    false
+}
+
+/// Completions for method calls after a dot.
+fn method_completions() -> Vec<CompletionItem> {
+    let methods: &[(&str, CompletionItemKind, &str)] = &[
+        // Vec methods
+        ("push", CompletionItemKind::METHOD, "Add element to end of Vec"),
+        ("pop", CompletionItemKind::METHOD, "Remove and return last element"),
+        ("len", CompletionItemKind::METHOD, "Return number of elements"),
+        ("first", CompletionItemKind::METHOD, "Return first element as Option"),
+        ("last", CompletionItemKind::METHOD, "Return last element as Option"),
+        ("is_empty", CompletionItemKind::METHOD, "Check if Vec is empty"),
+        ("iter", CompletionItemKind::METHOD, "Return iterator over elements"),
+        ("map", CompletionItemKind::METHOD, "Transform each element"),
+        ("filter", CompletionItemKind::METHOD, "Keep elements passing predicate"),
+        ("fold", CompletionItemKind::METHOD, "Reduce elements to single value"),
+        ("any", CompletionItemKind::METHOD, "Check if any element matches"),
+        ("all", CompletionItemKind::METHOD, "Check if all elements match"),
+        ("find", CompletionItemKind::METHOD, "Find first matching element"),
+        ("enumerate", CompletionItemKind::METHOD, "Iterate with index"),
+        ("for_each", CompletionItemKind::METHOD, "Execute closure on each element"),
+        ("flat_map", CompletionItemKind::METHOD, "Map and flatten"),
+        ("position", CompletionItemKind::METHOD, "Find index of matching element"),
+        ("sort", CompletionItemKind::METHOD, "Sort elements"),
+        ("reverse", CompletionItemKind::METHOD, "Reverse order"),
+        ("join", CompletionItemKind::METHOD, "Join string elements"),
+        // String methods
+        ("to_uppercase", CompletionItemKind::METHOD, "Convert to uppercase"),
+        ("to_lowercase", CompletionItemKind::METHOD, "Convert to lowercase"),
+        ("contains", CompletionItemKind::METHOD, "Check if contains substring"),
+        ("starts_with", CompletionItemKind::METHOD, "Check if starts with prefix"),
+        ("ends_with", CompletionItemKind::METHOD, "Check if ends with suffix"),
+        ("trim", CompletionItemKind::METHOD, "Remove whitespace from ends"),
+        ("split", CompletionItemKind::METHOD, "Split into Vec by delimiter"),
+        ("replace", CompletionItemKind::METHOD, "Replace occurrences"),
+        ("repeat", CompletionItemKind::METHOD, "Repeat string n times"),
+        ("chars", CompletionItemKind::METHOD, "Return iterator over chars"),
+        ("lines", CompletionItemKind::METHOD, "Split into lines"),
+        // HashMap methods
+        ("insert", CompletionItemKind::METHOD, "Insert key-value pair"),
+        ("get", CompletionItemKind::METHOD, "Get value by key"),
+        ("remove", CompletionItemKind::METHOD, "Remove key-value pair"),
+        ("contains_key", CompletionItemKind::METHOD, "Check if key exists"),
+        ("keys", CompletionItemKind::METHOD, "Return iterator over keys"),
+        ("values", CompletionItemKind::METHOD, "Return iterator over values"),
+        // Option/Result methods
+        ("unwrap", CompletionItemKind::METHOD, "Get value or panic"),
+        ("unwrap_or", CompletionItemKind::METHOD, "Get value or default"),
+        ("is_some", CompletionItemKind::METHOD, "Check if Some variant"),
+        ("is_none", CompletionItemKind::METHOD, "Check if None variant"),
+        ("is_ok", CompletionItemKind::METHOD, "Check if Ok variant"),
+        ("is_err", CompletionItemKind::METHOD, "Check if Err variant"),
+        ("ok", CompletionItemKind::METHOD, "Convert Result to Option"),
+        ("err", CompletionItemKind::METHOD, "Convert Result to Option<Err>"),
+        // Generic methods
+        ("clone", CompletionItemKind::METHOD, "Create a shallow copy"),
+        ("to_string", CompletionItemKind::METHOD, "Convert to String"),
+        ("to_json", CompletionItemKind::METHOD, "Serialize to JSON"),
+        ("to_json_pretty", CompletionItemKind::METHOD, "Serialize to pretty JSON"),
+    ];
+    methods
+        .iter()
+        .map(|(name, kind, detail)| CompletionItem {
+            label: name.to_string(),
+            kind: Some(*kind),
+            detail: Some(detail.to_string()),
+            ..Default::default()
+        })
+        .collect()
+}
 
 fn item_name(item: &Item) -> Option<&str> {
     match item {
