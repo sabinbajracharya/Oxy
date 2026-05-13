@@ -5,6 +5,8 @@
 
 /// Abstract syntax tree node definitions.
 pub mod ast;
+/// Bytecode compiler: AST → stack-based VM opcodes.
+pub mod compiler;
 /// Environment and lexical scope management.
 pub mod env;
 /// Error types used throughout the interpreter.
@@ -27,6 +29,8 @@ pub mod stdlib;
 pub mod type_checker;
 /// Runtime value types and type metadata.
 pub mod types;
+/// Stack-based virtual machine for executing compiled bytecode.
+pub mod vm;
 
 /// The current version of the Oxide language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
