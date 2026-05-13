@@ -17,16 +17,16 @@ pub mod interpreter;
 pub mod json;
 /// Lexer (tokenizer) for Oxide source code.
 pub mod lexer;
+/// Package manager: install, manifest parsing, registry support.
+pub mod package;
 /// Parser that transforms tokens into an AST.
 pub mod parser;
 /// Built-in standard library modules.
 pub mod stdlib;
-/// Runtime value types and type metadata.
-pub mod types;
 /// Semantic type checker that validates type annotations before execution.
 pub mod type_checker;
-/// Package manager: install, manifest parsing, registry support.
-pub mod package;
+/// Runtime value types and type metadata.
+pub mod types;
 
 /// The current version of the Oxide language.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

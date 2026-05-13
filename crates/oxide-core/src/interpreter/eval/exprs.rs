@@ -292,7 +292,9 @@ impl Interpreter {
         span: &Span,
         env: &Env,
     ) -> Result<Value, FerriError> {
-        use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
+        use crate::types::{
+            ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT,
+        };
 
         let val = self.eval_expr(expr, env)?;
         match &val {
@@ -372,11 +374,7 @@ impl Interpreter {
         })))
     }
 
-    pub(crate) fn eval_await_expr(
-        &mut self,
-        expr: &Expr,
-        env: &Env,
-    ) -> Result<Value, FerriError> {
+    pub(crate) fn eval_await_expr(&mut self, expr: &Expr, env: &Env) -> Result<Value, FerriError> {
         let val = self.eval_expr(expr, env)?;
         match val {
             Value::Future(future) => {

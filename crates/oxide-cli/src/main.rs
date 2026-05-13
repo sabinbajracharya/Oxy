@@ -27,7 +27,10 @@ fn main() {
         }
         Some("install") => {
             let target = args.get(2).unwrap_or_else(|| {
-                eprintln!("{} 'install' requires a package path or URL", "error:".red().bold());
+                eprintln!(
+                    "{} 'install' requires a package path or URL",
+                    "error:".red().bold()
+                );
                 process::exit(2);
             });
             install_package(target);

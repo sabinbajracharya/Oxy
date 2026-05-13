@@ -4,12 +4,10 @@
 //! evaluating expressions to produce [`Value`]s.
 
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
 use crate::errors::FerriError;
-use crate::lexer::Span;
 use crate::types::{Value, NONE_VARIANT};
 
 mod db_dispatch;
@@ -401,7 +399,6 @@ impl Interpreter {
             Expr::FString { parts, .. } => self.eval_fstring_expr(parts, env),
         }
     }
-
 }
 
 impl Default for Interpreter {
@@ -441,10 +438,12 @@ pub fn run_file_with_args(
         error: e,
         call_stack: vec![],
     })?;
-    crate::type_checker::TypeChecker::new().check_program(&program).map_err(|e| RuntimeError {
-        error: e,
-        call_stack: vec![],
-    })?;
+    crate::type_checker::TypeChecker::new()
+        .check_program(&program)
+        .map_err(|e| RuntimeError {
+            error: e,
+            call_stack: vec![],
+        })?;
     let mut interp = Interpreter::new();
     if let Some(parent) = std::path::Path::new(path).parent() {
         interp.set_base_dir(parent.to_string_lossy().to_string());

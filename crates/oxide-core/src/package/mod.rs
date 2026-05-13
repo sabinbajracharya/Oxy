@@ -82,10 +82,7 @@ pub struct InstalledPackage {
 pub fn install_from_path(source_path: &Path) -> Result<InstalledPackage, String> {
     let manifest_path = source_path.join("package.ox");
     if !manifest_path.exists() {
-        return Err(format!(
-            "no package.ox found in {}",
-            source_path.display()
-        ));
+        return Err(format!("no package.ox found in {}", source_path.display()));
     }
 
     let manifest_source = std::fs::read_to_string(&manifest_path)
@@ -101,8 +98,7 @@ pub fn install_from_path(source_path: &Path) -> Result<InstalledPackage, String>
     }
 
     // Copy all files
-    copy_dir(source_path, &dest_dir)
-        .map_err(|e| format!("failed to copy package: {e}"))?;
+    copy_dir(source_path, &dest_dir).map_err(|e| format!("failed to copy package: {e}"))?;
 
     Ok(InstalledPackage {
         manifest,
@@ -152,8 +148,8 @@ pub fn list_installed() -> Result<Vec<InstalledPackage>, String> {
     }
 
     let mut packages = Vec::new();
-    let entries = std::fs::read_dir(&dir)
-        .map_err(|e| format!("failed to read packages dir: {e}"))?;
+    let entries =
+        std::fs::read_dir(&dir).map_err(|e| format!("failed to read packages dir: {e}"))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
@@ -220,7 +216,7 @@ pub fn find_module_in_packages(module_name: &str) -> Option<(String, String)> {
                         if let Ok(source) = std::fs::read_to_string(&path) {
                             if source.contains(&format!("mod {module_name}"))
                                 || source.contains(&format!("pub mod {module_name}"))
-                                || source.contains(&format!("pub fn"))
+                                || source.contains("pub fn")
                             {
                                 return Some((source, pkg.manifest.name.clone()));
                             }

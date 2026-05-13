@@ -3,13 +3,12 @@
 //! Runs after parsing and before execution. Validates type annotations
 //! on `let` bindings, function params, and return types.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::Span;
 
 /// Internal representation of an Oxide type.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,7 +77,10 @@ impl TypeInfo {
         if self == other {
             return true;
         }
-        matches!((self, other), (TypeInfo::I64, TypeInfo::F64) | (TypeInfo::F64, TypeInfo::I64))
+        matches!(
+            (self, other),
+            (TypeInfo::I64, TypeInfo::F64) | (TypeInfo::F64, TypeInfo::I64)
+        )
     }
 }
 
@@ -91,11 +93,17 @@ struct TypeEnv {
 
 impl TypeEnv {
     fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { bindings: HashMap::new(), parent: None }))
+        Rc::new(RefCell::new(Self {
+            bindings: HashMap::new(),
+            parent: None,
+        }))
     }
 
     fn child(parent: &Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { bindings: HashMap::new(), parent: Some(Rc::clone(parent)) }))
+        Rc::new(RefCell::new(Self {
+            bindings: HashMap::new(),
+            parent: Some(Rc::clone(parent)),
+        }))
     }
 
     fn define(&mut self, name: &str, ty: TypeInfo) {
@@ -130,7 +138,15 @@ impl TypeChecker {
             fn_return_types: HashMap::new(),
         }
     }
+}
 
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TypeChecker {
     /// Resolve a type name through type aliases (e.g. `Meters` → `f64`).
     fn resolve_type(&self, name: &str) -> TypeInfo {
         if let Some(alias) = self.type_aliases.get(name) {
@@ -176,7 +192,13 @@ impl TypeChecker {
     fn check_item(&mut self, item: &Item) -> Result<(), FerriError> {
         match item {
             Item::Function(f) => self.check_function(f),
-            Item::Const { name, value, type_ann, span, .. } => {
+            Item::Const {
+                name,
+                value,
+                type_ann,
+                span,
+                ..
+            } => {
                 let declared = if let Some(ann) = type_ann {
                     self.resolve_type(&ann.name)
                 } else {
@@ -226,7 +248,13 @@ impl TypeChecker {
 
     fn check_stmt(&mut self, stmt: &Stmt, fn_ret: &TypeInfo) -> Result<(), FerriError> {
         match stmt {
-            Stmt::Let { name, type_ann, value, span, .. } => {
+            Stmt::Let {
+                name,
+                type_ann,
+                value,
+                span,
+                ..
+            } => {
                 let declared = if let Some(ann) = type_ann {
                     self.resolve_type(&ann.name)
                 } else {
@@ -247,11 +275,18 @@ impl TypeChecker {
                         column: span.column,
                     });
                 }
-                let stored_ty = if declared != TypeInfo::Unknown { declared } else { inferred };
+                let stored_ty = if declared != TypeInfo::Unknown {
+                    declared
+                } else {
+                    inferred
+                };
                 self.env.borrow_mut().define(name, stored_ty);
                 Ok(())
             }
-            Stmt::Expr { expr, has_semicolon } => {
+            Stmt::Expr {
+                expr,
+                has_semicolon,
+            } => {
                 // Tail expression without semicolon is an implicit return — check type.
                 // Skip check if inferred as Unit (control-flow expressions with explicit
                 // returns, e.g. `if x > 0 { return x; }`).
@@ -270,7 +305,13 @@ impl TypeChecker {
                     }
                 }
                 // Check if the inner expression is an if/if-let (they only exist as Expr)
-                if let Expr::If { condition, then_block, else_block, .. } = expr {
+                if let Expr::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } = expr
+                {
                     self.infer_expr(condition)?;
                     let block_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
@@ -282,7 +323,13 @@ impl TypeChecker {
                     if let Some(else_expr) = else_block {
                         self.infer_expr(else_expr)?;
                     }
-                } else if let Expr::IfLet { expr: inner, then_block, else_block, .. } = expr {
+                } else if let Expr::IfLet {
+                    expr: inner,
+                    then_block,
+                    else_block,
+                    ..
+                } = expr
+                {
                     let _ = self.infer_expr(inner)?;
                     let block_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
@@ -317,7 +364,9 @@ impl TypeChecker {
                 }
                 Ok(())
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While {
+                condition, body, ..
+            } => {
                 self.infer_expr(condition)?;
                 self.check_block(body, fn_ret)?;
                 Ok(())
@@ -326,7 +375,12 @@ impl TypeChecker {
                 self.check_block(body, fn_ret)?;
                 Ok(())
             }
-            Stmt::For { name, iterable, body, .. } => {
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                ..
+            } => {
                 let _ = self.infer_expr(iterable)?;
                 let body_env = TypeEnv::child(&self.env);
                 body_env.borrow_mut().define(name, TypeInfo::Unknown);
@@ -336,12 +390,19 @@ impl TypeChecker {
                 self.env = saved;
                 Ok(())
             }
-            Stmt::WhileLet { expr: inner, body, .. } => {
+            Stmt::WhileLet {
+                expr: inner, body, ..
+            } => {
                 let _ = self.infer_expr(inner)?;
                 self.check_block(body, fn_ret)?;
                 Ok(())
             }
-            Stmt::ForDestructure { names, iterable, body, .. } => {
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                ..
+            } => {
                 let _ = self.infer_expr(iterable)?;
                 let body_env = TypeEnv::child(&self.env);
                 for name in names {
@@ -372,6 +433,7 @@ impl TypeChecker {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn check_expr_type(&mut self, expr: &Expr, expected: &TypeInfo) -> Result<(), FerriError> {
         let inferred = self.infer_expr(expr)?;
         if !expected.accepts(&inferred) {
@@ -379,7 +441,8 @@ impl TypeChecker {
             return Err(FerriError::TypeError {
                 message: format!(
                     "type mismatch: expected `{}`, got `{}`",
-                    expected.name(), inferred.name()
+                    expected.name(),
+                    inferred.name()
                 ),
                 line: span.line,
                 column: span.column,
@@ -443,7 +506,11 @@ impl TypeChecker {
                     let is_last = i == block.stmts.len() - 1;
                     self.check_stmt(stmt, &TypeInfo::Unknown)?;
                     if is_last {
-                        if let Stmt::Expr { expr, has_semicolon } = stmt {
+                        if let Stmt::Expr {
+                            expr,
+                            has_semicolon,
+                        } = stmt
+                        {
                             if !has_semicolon {
                                 last_ty = self.infer_expr(expr)?;
                             }
@@ -453,14 +520,23 @@ impl TypeChecker {
                 Ok(last_ty)
             }
 
-            Expr::If { condition, then_block, else_block, .. } => {
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.infer_expr(condition)?;
                 let block_env = TypeEnv::child(&self.env);
                 let saved = self.env.clone();
                 self.env = block_env;
                 let mut result = TypeInfo::Unit;
                 for stmt in &then_block.stmts {
-                    if let Stmt::Expr { expr, has_semicolon } = stmt {
+                    if let Stmt::Expr {
+                        expr,
+                        has_semicolon,
+                    } = stmt
+                    {
                         if !has_semicolon {
                             result = self.infer_expr(expr)?;
                         }
@@ -469,19 +545,30 @@ impl TypeChecker {
                 self.env = saved;
                 if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;
-                    if result == TypeInfo::Unit { result = else_ty; }
+                    if result == TypeInfo::Unit {
+                        result = else_ty;
+                    }
                 }
                 Ok(result)
             }
 
-            Expr::IfLet { expr: inner, then_block, else_block, .. } => {
+            Expr::IfLet {
+                expr: inner,
+                then_block,
+                else_block,
+                ..
+            } => {
                 let _ = self.infer_expr(inner)?;
                 let block_env = TypeEnv::child(&self.env);
                 let saved = self.env.clone();
                 self.env = block_env;
                 let mut result = TypeInfo::Unit;
                 for stmt in &then_block.stmts {
-                    if let Stmt::Expr { expr, has_semicolon } = stmt {
+                    if let Stmt::Expr {
+                        expr,
+                        has_semicolon,
+                    } = stmt
+                    {
                         if !has_semicolon {
                             result = self.infer_expr(expr)?;
                         }
@@ -490,7 +577,9 @@ impl TypeChecker {
                 self.env = saved;
                 if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;
-                    if result == TypeInfo::Unit { result = else_ty; }
+                    if result == TypeInfo::Unit {
+                        result = else_ty;
+                    }
                 }
                 Ok(result)
             }
@@ -519,7 +608,11 @@ impl TypeChecker {
                 Ok(TypeInfo::Unit)
             }
 
-            Expr::Match { expr: matched, arms, span: _span } => {
+            Expr::Match {
+                expr: matched,
+                arms,
+                span: _span,
+            } => {
                 let _ = self.infer_expr(matched)?;
                 let mut result = TypeInfo::Unit;
                 for arm in arms {
@@ -528,7 +621,9 @@ impl TypeChecker {
                     self.env = arm_env;
                     let arm_ty = self.infer_expr(&arm.body)?;
                     self.env = saved;
-                    if result == TypeInfo::Unit { result = arm_ty; }
+                    if result == TypeInfo::Unit {
+                        result = arm_ty;
+                    }
                 }
                 Ok(result)
             }
@@ -582,7 +677,9 @@ impl TypeChecker {
             Expr::MacroCall { .. } => Ok(TypeInfo::Unknown),
             Expr::Path { .. } => Ok(TypeInfo::Unknown),
             Expr::SelfRef { .. } => Ok(TypeInfo::Unknown),
-            Expr::CompoundAssign { target: _, value, .. } => {
+            Expr::CompoundAssign {
+                target: _, value, ..
+            } => {
                 let _ = self.infer_expr(value)?;
                 Ok(TypeInfo::Unit)
             }
