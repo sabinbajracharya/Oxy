@@ -2086,6 +2086,7 @@ impl Parser {
     }
 
     /// Parse turbofish: `::<Type1, Type2, ...>`.  Assumes `::` has just been consumed.
+    /// Skips nested `<...>` (e.g. `Vec<i64>`) since TypeAnnotation has no generics field.
     fn parse_turbofish(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
         self.expect(TokenKind::Lt)?;
         let mut types = Vec::new();
@@ -2097,6 +2098,10 @@ impl Parser {
             let name = self.expect_ident()?;
             let span = self.prev_span();
             types.push(TypeAnnotation { name, span });
+            // Skip nested generics: `Vec<i64>` → consume `<i64>`
+            if self.check(&TokenKind::Lt) {
+                self.skip_angle_brackets()?;
+            }
             if self.check(&TokenKind::Gt) {
                 self.advance();
                 break;
@@ -2104,6 +2109,36 @@ impl Parser {
             self.expect(TokenKind::Comma)?;
         }
         Ok(types)
+    }
+
+    /// Skip a balanced `<...>` pair (for nested generics we don't parse).
+    fn skip_angle_brackets(&mut self) -> Result<(), FerriError> {
+        self.expect(TokenKind::Lt)?;
+        let mut depth = 1u32;
+        while depth > 0 {
+            match self.peek_kind() {
+                TokenKind::Lt => {
+                    self.advance();
+                    depth += 1;
+                }
+                TokenKind::Gt => {
+                    self.advance();
+                    depth -= 1;
+                }
+                TokenKind::GtEq | TokenKind::Shr => {
+                    self.advance();
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                TokenKind::Eof => return Err(self.error("unterminated generic arguments".into())),
+                _ => {
+                    self.advance();
+                }
+            }
+        }
+        Ok(())
     }
 
     // === Helpers ===
