@@ -39,6 +39,7 @@ fn main() {
 | Collections (`Vec`, `HashMap`, tuples, ranges) | ✅ |
 | Iterator methods (`map`, `filter`, `zip`, `chain`, `sum`, `flatten`, …) | ✅ |
 | Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`) | ✅ |
+| Static type checking (optional `: Type` annotations) | ✅ |
 | String operations, f-string interpolation | ✅ |
 | `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
 | `#[test]` + built-in test runner (`oxide test`) | ✅ |
@@ -67,7 +68,7 @@ fn main() {
 | Lifetimes (`'a`) | Syntax accepted, ignored |
 | `unsafe` | Not supported |
 | Macros (`macro_rules!`) | Not supported (built-in pseudo-macros like `println!` work) |
-| Type inference | Dynamic — types checked at runtime |
+| Type inference | Dynamic with optional static checking — type annotations on `let`, `fn`, and `const` are validated before execution |
 
 ---
 
@@ -87,8 +88,8 @@ This is the easiest way. You don't need Rust, Node.js, or anything else installe
 #### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/project-oxide.git
-cd project-oxide
+git clone https://github.com/sabinbajracharya/Oxide.git
+cd Oxide
 ```
 
 #### 2. Run first-time setup
@@ -140,8 +141,8 @@ docker compose run --rm test
 If you have Rust installed locally:
 
 ```bash
-git clone https://github.com/your-org/project-oxide.git
-cd project-oxide
+git clone https://github.com/sabinbajracharya/Oxide.git
+cd Oxide
 
 # Build
 cargo build --release
@@ -167,6 +168,7 @@ Commands:
   run <file.ox>          Run a Oxide source file
   test <file.ox>         Run #[test] functions in a file
   repl                   Start the interactive REPL
+  install <path|url>     Install a package from a local path or git URL
 
 Options:
   --version              Show version
@@ -183,6 +185,7 @@ docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
 docker compose run --rm dev bash -c "cargo run -- test examples/tests.ox"
 docker compose run --rm dev bash -c "cargo run -- repl"
 docker compose run --rm dev bash -c "cargo run -- --dump-ast examples/hello.ox"
+docker compose run --rm dev bash -c "cargo run -- install ./my-package"
 
 # Via Cargo (if Rust is installed)
 cargo run -- run examples/hello.ox
@@ -527,6 +530,36 @@ fn main() {
 | `db.last_insert_id()` | Get the last auto-increment ID |
 | `db.close()` | Close the database connection |
 
+### Package Manager
+
+Oxide has a built-in package manager. Packages are directories of `.ox` files with a `package.ox` manifest, installed to `~/.oxide/packages/`.
+
+**Package manifest (`package.ox`):**
+```rust
+name = "my-package"
+version = "0.1.0"
+entry = "lib.ox"
+```
+
+**Install and use a package:**
+```bash
+# Install from a local path
+oxide install ./my-package
+
+# Install from a git URL
+oxide install https://github.com/user/my-package
+```
+
+```rust
+// Use the installed package in your code
+mod my_package;
+fn main() {
+    my_package::greet();
+}
+```
+
+Module resolution automatically searches installed packages — no extra configuration needed.
+
 > 📁 See the `examples/` directory for more complete examples covering all features.
 
 ---
@@ -584,9 +617,9 @@ Oxide has a VS Code extension with syntax highlighting and a built-in Language S
 ### Features
 
 - 🎨 **Syntax highlighting** — keywords, types, strings, comments, macros
-- ⚠️ **Real-time diagnostics** — parse errors shown as you type
-- 💡 **Autocompletion** — keywords, types, functions, code snippets
-- 📝 **Hover info** — documentation for keywords and built-in functions
+- ⚠️ **Real-time diagnostics** — parse errors and type errors shown as you type
+- 💡 **Autocompletion** — keywords, types, functions, snippets, and dot-completions (method suggestions after `.`)
+- 📝 **Hover info** — rich signatures with types for functions, structs, enums
 - 🗂️ **Document symbols** — outline view (functions, structs, enums, traits)
 - 🔗 **Go-to definition** — jump to definitions in the same file
 
@@ -660,11 +693,18 @@ Then in VS Code settings (`Cmd+,`):
 ## Project Structure
 
 ```
-project-oxide/
+oxide/
 ├── crates/
-│   ├── oxide-core/       # Language engine (lexer, parser, AST, interpreter, stdlib)
-│   ├── oxide-cli/        # CLI binary (run files, REPL)
-│   └── oxide-lsp/        # Language Server Protocol server
+│   ├── oxide-core/       # Language engine (lexer, parser, AST, interpreter, type checker, stdlib)
+│   │   └── src/
+│   │       ├── interpreter/  # Tree-walking evaluator (~10K lines across 15+ modules)
+│   │       ├── type_checker/ # Static type validation before execution
+│   │       ├── package/      # Package manager (install, manifest parsing)
+│   │       ├── parser/       # Pratt parser (15 precedence levels)
+│   │       ├── lexer/        # Tokenizer (~60 token kinds)
+│   │       └── ast/          # AST nodes (30 expr + 12 stmt + 10 item variants)
+│   ├── oxide-cli/        # CLI binary (run, repl, test, install)
+│   └── oxide-lsp/        # Language Server Protocol server (diagnostics, completions, hover)
 ├── editors/
 │   └── vscode/             # VS Code extension (syntax + LSP client)
 ├── examples/               # Example .ox programs (15+ examples)
@@ -691,7 +731,7 @@ project-oxide/
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (500+ tests)
+# Run all tests (550+ tests)
 docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting
