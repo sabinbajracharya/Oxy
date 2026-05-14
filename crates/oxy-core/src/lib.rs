@@ -3,6 +3,10 @@
 //! Core library for the Oxy programming language interpreter.
 //! Oxy replicates Rust's syntax without the borrow checker or ownership rules.
 
+// Value contains Rc<RefCell<...>> for shared mutable state (no borrow checker).
+// We use Value as HashMap keys intentionally — keys are never mutated while in a map.
+#![allow(clippy::mutable_key_type)]
+
 /// Abstract syntax tree node definitions.
 pub mod ast;
 /// Bytecode compiler: AST → stack-based VM opcodes.

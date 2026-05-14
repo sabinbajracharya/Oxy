@@ -144,12 +144,12 @@ impl Interpreter {
 
             // Built-in int::parse(s)
             if type_name == "int" && method_name == "parse" {
-                return parse_int_builtin(&args, span);
+                return parse_int_builtin(args, span);
             }
 
             // Built-in float::parse(s)
             if type_name == "float" && method_name == "parse" {
-                return parse_float_builtin(&args, span);
+                return parse_float_builtin(args, span);
             }
 
             // Built-in Type::default() for #[derive(Default)]
