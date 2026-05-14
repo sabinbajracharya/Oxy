@@ -130,38 +130,20 @@ impl Interpreter {
 
     /// Convert a value to an iterable list of values (for `for` loops).
     ///
-    /// Supports ranges, vectors, strings (char iteration), and
-    /// HashMaps (yields `(key, value)` tuples sorted by key).
+    /// Delegates to [`Value::into_iterable`].
     pub(crate) fn value_to_iter(
         &self,
         value: &Value,
         span: Span,
     ) -> Result<Vec<Value>, FerriError> {
-        match value {
-            Value::Range(start, end) => Ok((*start..*end).map(Value::Integer).collect()),
-            Value::Vec(v) => Ok(v.clone()),
-            Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
-            Value::HashMap(m) => {
-                // Iterate as (key, value) tuples, sorted by key for determinism
-                let mut pairs: Vec<_> = m
-                    .iter()
-                    .map(|(k, v)| Value::Tuple(vec![Value::String(k.clone()), v.clone()]))
-                    .collect();
-                pairs.sort_by(|a, b| {
-                    if let (Value::Tuple(a), Value::Tuple(b)) = (a, b) {
-                        a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
-                    } else {
-                        std::cmp::Ordering::Equal
-                    }
-                });
-                Ok(pairs)
-            }
-            _ => Err(FerriError::Runtime {
-                message: format!("cannot iterate over {}", value.type_name()),
+        value
+            .clone()
+            .into_iterable()
+            .map_err(|msg| FerriError::Runtime {
+                message: msg,
                 line: span.line,
                 column: span.column,
-            }),
-        }
+            })
     }
 
     /// Bind pattern variables to matched values in the given environment.

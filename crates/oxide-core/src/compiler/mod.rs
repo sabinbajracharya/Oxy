@@ -37,10 +37,16 @@ impl SymTable {
     fn get(&self, name: &str) -> Option<usize> {
         self.locals.get(name).copied()
     }
+}
 
-    fn slot_count(&self) -> usize {
-        self.next_slot
-    }
+/// Tracks loop nesting for break/continue backpatching.
+struct LoopContext {
+    /// Instruction index where `continue` should jump.
+    continue_target: usize,
+    /// Instruction indices of `Jump(0)` emitted for `break` statements.
+    break_patches: Vec<usize>,
+    /// Instruction indices of `Jump(0)` emitted for `continue` statements.
+    continue_patches: Vec<usize>,
 }
 
 /// The Oxide bytecode compiler.
@@ -51,6 +57,8 @@ pub struct Compiler {
     sym: SymTable,
     /// Function entry points: name → instruction index.
     functions: HashMap<String, usize>,
+    /// Stack of enclosing loop contexts (for break/continue).
+    loop_stack: Vec<LoopContext>,
 }
 
 impl Compiler {
@@ -65,6 +73,7 @@ impl Default for Compiler {
             code: Vec::new(),
             sym: SymTable::new(0),
             functions: HashMap::new(),
+            loop_stack: Vec::new(),
         }
     }
 }
@@ -72,35 +81,17 @@ impl Default for Compiler {
 impl Compiler {
     /// Compile a full program. Returns a [`Chunk`] ready for the VM.
     pub fn compile(mut self, program: &Program) -> Result<Chunk, FerriError> {
-        // Emit entry preamble first: Call(main), Pop, Halt
-        // main's ip is backpatched after main is compiled.
-        let entry_point = 0;
-        let call_site = self.emit(OpCode::Call {
-            target: 0, // placeholder
-            arg_count: 0,
-        });
-        self.emit(OpCode::Pop);
-        self.emit(OpCode::Halt);
-
         // Compile function bodies
         for item in &program.items {
             self.compile_item(item)?;
         }
 
-        // Backpatch the Call to main
-        if let Some(&main_ip) = self.functions.get("main") {
-            self.patch(
-                call_site,
-                OpCode::Call {
-                    target: main_ip,
-                    arg_count: 0,
-                },
-            );
-        }
+        // Start execution at main (no preamble needed — main's Return exits the VM)
+        let entry_point = self.functions.get("main").copied().unwrap_or(0);
 
         Ok(Chunk {
             code: self.code,
-            local_count: self.sym.slot_count(),
+            local_count: 0,
             entry_point,
             functions: self.functions,
         })
@@ -207,39 +198,151 @@ impl Compiler {
                 condition, body, ..
             } => {
                 let loop_start = self.code.len();
+                self.loop_stack.push(LoopContext {
+                    continue_target: loop_start,
+                    break_patches: vec![],
+                    continue_patches: vec![],
+                });
                 self.compile_expr(condition)?;
-                let jump_out = self.emit(OpCode::JumpIfFalse(0)); // placeholder
+                let jump_out = self.emit(OpCode::JumpIfFalse(0));
                 self.compile_block(body)?;
                 self.emit(OpCode::Jump(loop_start));
                 let loop_end = self.code.len();
                 self.patch(jump_out, OpCode::JumpIfFalse(loop_end));
+                let ctx = self.loop_stack.pop().unwrap();
+                for idx in &ctx.break_patches {
+                    self.patch(*idx, OpCode::Jump(loop_end));
+                }
+                for idx in &ctx.continue_patches {
+                    self.patch(*idx, OpCode::Jump(loop_start));
+                }
                 Ok(())
             }
 
             Stmt::Loop { body, .. } => {
                 let loop_start = self.code.len();
+                self.loop_stack.push(LoopContext {
+                    continue_target: loop_start,
+                    break_patches: vec![],
+                    continue_patches: vec![],
+                });
                 self.compile_block(body)?;
                 self.emit(OpCode::Jump(loop_start));
+                let loop_end = self.code.len();
+                let ctx = self.loop_stack.pop().unwrap();
+                for idx in &ctx.break_patches {
+                    self.patch(*idx, OpCode::Jump(loop_end));
+                }
+                for idx in &ctx.continue_patches {
+                    self.patch(*idx, OpCode::Jump(ctx.continue_target));
+                }
                 Ok(())
             }
 
-            Stmt::For { span, .. } => Err(FerriError::Runtime {
-                message: "compiled for loops not yet supported".into(),
-                line: span.line,
-                column: span.column,
-            }),
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                ..
+            } => {
+                let saved_sym = self.sym.clone();
+                let vec_slot = self.sym.define("__for_vec");
+                let idx_slot = self.sym.define("__for_idx");
+                let var_slot = self.sym.define(name);
 
-            Stmt::Break { span, .. } => Err(FerriError::Runtime {
-                message: "compiled break not yet supported".into(),
-                line: span.line,
-                column: span.column,
-            }),
+                // Preamble: evaluate iterable, materialize as Vec
+                self.compile_expr(iterable)?;
+                self.emit(OpCode::MakeIter);
+                self.emit(OpCode::StoreLocal(vec_slot));
+                self.emit(OpCode::ConstInt(0));
+                self.emit(OpCode::StoreLocal(idx_slot));
 
-            Stmt::Continue { span } => Err(FerriError::Runtime {
-                message: "compiled continue not yet supported".into(),
-                line: span.line,
-                column: span.column,
-            }),
+                // Jump to condition check on first iteration
+                let jump_to_check = self.emit(OpCode::Jump(0));
+
+                // --- Body: load current element ---
+                let body_start = self.code.len();
+                self.emit(OpCode::LoadLocal(vec_slot));
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::VecIndex);
+                self.emit(OpCode::StoreLocal(var_slot));
+
+                // Push loop context (continue_target is placeholder, set after body)
+                self.loop_stack.push(LoopContext {
+                    continue_target: 0,
+                    break_patches: vec![],
+                    continue_patches: vec![],
+                });
+
+                self.compile_block(body)?;
+
+                let ctx = self.loop_stack.pop().unwrap();
+
+                // --- Advance: increment index (continue jumps here) ---
+                let advance_start = self.code.len();
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::ConstInt(1));
+                self.emit(OpCode::Add);
+                self.emit(OpCode::StoreLocal(idx_slot));
+
+                // --- Condition check ---
+                let check_start = self.code.len();
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::LoadLocal(vec_slot));
+                self.emit(OpCode::IterLen);
+                self.emit(OpCode::Lt);
+                self.emit(OpCode::JumpIfTrue(body_start));
+
+                // --- Exit ---
+                let loop_end = self.code.len();
+                self.patch(jump_to_check, OpCode::Jump(check_start));
+                for idx in &ctx.break_patches {
+                    self.patch(*idx, OpCode::Jump(loop_end));
+                }
+                for idx in &ctx.continue_patches {
+                    self.patch(*idx, OpCode::Jump(advance_start));
+                }
+
+                self.sym = saved_sym;
+                Ok(())
+            }
+
+            Stmt::Break { value, span } => {
+                if self.loop_stack.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "break outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                if let Some(expr) = value {
+                    self.compile_expr(expr)?;
+                }
+                let patch = self.emit(OpCode::Jump(0));
+                self.loop_stack
+                    .last_mut()
+                    .unwrap()
+                    .break_patches
+                    .push(patch);
+                Ok(())
+            }
+
+            Stmt::Continue { span } => {
+                if self.loop_stack.is_empty() {
+                    return Err(FerriError::Runtime {
+                        message: "continue outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                let patch = self.emit(OpCode::Jump(0));
+                self.loop_stack
+                    .last_mut()
+                    .unwrap()
+                    .continue_patches
+                    .push(patch);
+                Ok(())
+            }
 
             // For simplicity, skip other statements
             _ => Ok(()),
@@ -434,13 +537,35 @@ impl Compiler {
 
             Expr::Try { expr: inner, .. } => {
                 self.compile_expr(inner)?;
-                // ? operator: leave value on stack, runtime handles unwrapping
+                Ok(())
+            }
+
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                if let Some(s) = start {
+                    self.compile_expr(s)?;
+                } else {
+                    self.emit(OpCode::ConstInt(i64::MIN));
+                }
+                if let Some(e) = end {
+                    self.compile_expr(e)?;
+                } else {
+                    self.emit(OpCode::ConstInt(i64::MAX));
+                }
+                if *inclusive {
+                    self.emit(OpCode::ConstInt(1));
+                    self.emit(OpCode::Add);
+                }
+                self.emit(OpCode::MakeRange);
                 Ok(())
             }
 
             // Fallback for expressions not yet compiled
             Expr::Match { span, .. }
-            | Expr::Range { span, .. }
             | Expr::Array { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::StructInit { span, .. }
@@ -455,6 +580,18 @@ impl Compiler {
                 line: span.line,
                 column: span.column,
             }),
+
+            Expr::MacroCall { name, args, .. } => {
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                if name == "println" {
+                    self.emit(OpCode::PrintLn);
+                } else if name == "print" {
+                    self.emit(OpCode::Print);
+                }
+                Ok(())
+            }
 
             _ => Ok(()),
         }

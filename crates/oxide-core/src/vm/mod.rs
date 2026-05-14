@@ -72,6 +72,16 @@ pub enum OpCode {
     Dup,
     /// Pop and discard the top of stack.
     Pop,
+
+    // --- Iteration ---
+    /// Pop a Value, convert to Vec<Value> for iteration, push Vec.
+    MakeIter,
+    /// Pop a Vec, push its length as Integer.
+    IterLen,
+    /// Pop index (Integer), pop Vec, push element at Vec[index].
+    VecIndex,
+    /// Pop end (Value), pop start (Value), push Range(start, end).
+    MakeRange,
 }
 
 /// A compiled Oxide program: a flat sequence of opcodes.
@@ -103,8 +113,8 @@ pub struct Vm {
 struct Frame {
     return_ip: usize,
     base: usize,
-    #[allow(dead_code)]
-    local_count: usize,
+    /// Maximum slot index accessed + 1 (protects locals from Pop).
+    max_slot: usize,
 }
 
 /// Result of VM execution.
@@ -140,10 +150,12 @@ impl Vm {
     pub fn run(&mut self) -> VmResult {
         self.ip = self.chunk.entry_point;
 
-        // Allocate local slots for the top-level scope
-        for _ in 0..self.chunk.local_count {
-            self.stack.push(Value::Unit);
-        }
+        // Push a synthetic top-level frame to protect locals from Pop
+        self.call_stack.push(Frame {
+            return_ip: 0,
+            base: 0,
+            max_slot: 0,
+        });
 
         loop {
             let op = match self.chunk.code.get(self.ip) {
@@ -159,17 +171,25 @@ impl Vm {
                 OpCode::ConstUnit => self.stack.push(Value::Unit),
 
                 OpCode::LoadLocal(slot) => {
-                    // Find the correct frame's base
                     let base = self.frame_base();
-                    let val = self.stack.get(base + slot).cloned().unwrap_or(Value::Unit);
+                    let idx = base + slot;
+                    let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
                     self.stack.push(val);
                 }
 
                 OpCode::StoreLocal(slot) => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
                     let base = self.frame_base();
-                    if base + slot < self.stack.len() {
-                        self.stack[base + slot] = val;
+                    let idx = base + slot;
+                    while idx >= self.stack.len() {
+                        self.stack.push(Value::Unit);
+                    }
+                    self.stack[idx] = val;
+                    // Update frame's max_slot to protect this local
+                    if let Some(frame) = self.call_stack.last_mut() {
+                        if slot + 1 > frame.max_slot {
+                            frame.max_slot = slot + 1;
+                        }
                     }
                 }
 
@@ -243,14 +263,11 @@ impl Vm {
                 }
 
                 OpCode::Call { target, arg_count } => {
-                    // Arguments are on the stack in order (last arg on top).
-                    // We leave them on the stack — they become the callee's locals.
                     let args_start = self.stack.len() - arg_count;
-                    // Save frame: return IP, stack base (where the callee's locals start), local count
                     self.call_stack.push(Frame {
                         return_ip: self.ip + 1,
                         base: args_start,
-                        local_count: 0, // callee will allocate its own locals
+                        max_slot: arg_count, // args occupy slots 0..arg_count-1
                     });
                     self.ip = target;
                     continue;
@@ -258,15 +275,15 @@ impl Vm {
 
                 OpCode::Return => {
                     let result = self.stack.pop().unwrap_or(Value::Unit);
-                    if let Some(frame) = self.call_stack.pop() {
-                        // Truncate stack to frame base, push result
-                        self.stack.truncate(frame.base);
-                        self.stack.push(result);
-                        self.ip = frame.return_ip;
-                    } else {
-                        // Top-level return: stop
+                    let frame = self.call_stack.pop().unwrap();
+                    if self.call_stack.is_empty() {
+                        // Top-level return (only synthetic frame remains → popped it)
                         return VmResult::Value(result);
                     }
+                    // Return to caller: truncate to frame base, push result
+                    self.stack.truncate(frame.base);
+                    self.stack.push(result);
+                    self.ip = frame.return_ip;
                     continue;
                 }
 
@@ -292,7 +309,76 @@ impl Vm {
                 }
 
                 OpCode::Pop => {
-                    self.stack.pop();
+                    let protected = self.frame_protected();
+                    if self.stack.len() > protected {
+                        self.stack.pop();
+                    }
+                }
+
+                OpCode::MakeIter => {
+                    let value = self.stack.pop().unwrap_or(Value::Unit);
+                    match value.into_iterable() {
+                        Ok(vec) => self.stack.push(Value::Vec(vec)),
+                        Err(e) => return VmResult::Error(e),
+                    }
+                }
+
+                OpCode::IterLen => {
+                    let v = self.stack.pop().unwrap_or(Value::Unit);
+                    match v {
+                        Value::Vec(vec) => self.stack.push(Value::Integer(vec.len() as i64)),
+                        other => {
+                            return VmResult::Error(format!(
+                                "cannot get length of {}",
+                                other.type_name()
+                            ))
+                        }
+                    }
+                }
+
+                OpCode::VecIndex => {
+                    let idx = match self.stack.pop().unwrap_or(Value::Unit) {
+                        Value::Integer(i) => i as usize,
+                        other => {
+                            return VmResult::Error(format!(
+                                "index must be integer, got {}",
+                                other.type_name()
+                            ))
+                        }
+                    };
+                    match self.stack.pop().unwrap_or(Value::Unit) {
+                        Value::Vec(vec) => {
+                            if idx < vec.len() {
+                                self.stack.push(vec[idx].clone());
+                            } else {
+                                return VmResult::Error(format!(
+                                    "index {} out of bounds for len {}",
+                                    idx,
+                                    vec.len()
+                                ));
+                            }
+                        }
+                        other => {
+                            return VmResult::Error(format!("cannot index {}", other.type_name()))
+                        }
+                    }
+                }
+
+                OpCode::MakeRange => {
+                    let end = self.stack.pop().unwrap_or(Value::Unit);
+                    let start = self.stack.pop().unwrap_or(Value::Unit);
+                    match (start, end) {
+                        (Value::Integer(s), Value::Integer(e)) => {
+                            self.stack.push(Value::Range(s, e));
+                        }
+                        (s, e) => {
+                            return VmResult::Error(format!(
+                                "range bounds must be integers, got {} and {}",
+                                s.type_name(),
+                                e.type_name()
+                            ));
+                        }
+                    }
                 }
             }
 
@@ -316,6 +402,13 @@ impl Vm {
 
     fn frame_base(&self) -> usize {
         self.call_stack.last().map(|f| f.base).unwrap_or(0)
+    }
+
+    fn frame_protected(&self) -> usize {
+        self.call_stack
+            .last()
+            .map(|f| f.base + f.max_slot)
+            .unwrap_or(0)
     }
 
     fn write_output(&mut self, s: &str) {

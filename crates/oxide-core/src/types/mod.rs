@@ -167,6 +167,30 @@ impl Value {
         matches!(self, Value::EnumVariant { enum_name, variant, .. } if enum_name == RESULT_TYPE && variant == ERR_VARIANT)
     }
 
+    /// Convert this value to a flat `Vec<Value>` for iteration in `for` loops.
+    pub fn into_iterable(self) -> Result<Vec<Value>, String> {
+        match self {
+            Value::Range(start, end) => Ok((start..end).map(Value::Integer).collect()),
+            Value::Vec(v) => Ok(v),
+            Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
+            Value::HashMap(m) => {
+                let mut pairs: Vec<_> = m
+                    .into_iter()
+                    .map(|(k, v)| Value::Tuple(vec![Value::String(k), v]))
+                    .collect();
+                pairs.sort_by(|a, b| {
+                    if let (Value::Tuple(a), Value::Tuple(b)) = (a, b) {
+                        a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                });
+                Ok(pairs)
+            }
+            other => Err(format!("cannot iterate over {}", other.type_name())),
+        }
+    }
+
     /// Returns true if this value is truthy (for conditions).
     pub fn is_truthy(&self) -> bool {
         match self {

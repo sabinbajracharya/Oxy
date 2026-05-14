@@ -1,7 +1,233 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use crate::interpreter::{run, run_compiled};
+    use crate::interpreter::{run, run_compiled, run_compiled_capturing};
+
+    #[test]
+    fn test_compiled_for_range_compiles() {
+        let source = r#"
+        fn main() {
+            let mut sum = 0;
+            for i in 0..3 {
+                sum = sum + i;
+            }
+            println!("{}", sum);
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "for range failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compiled_for_range_output() {
+        let source = r#"
+        fn main() {
+            for i in 0..3 {
+                println!(i);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for output failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_compiled_for_range_sum() {
+        let source = r#"
+        fn main() {
+            let mut sum = 0;
+            for i in 0..5 {
+                sum = sum + i;
+            }
+            println!(sum);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for sum failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["10\n"]);
+    }
+
+    #[test]
+    fn test_compiled_for_break() {
+        let source = r#"
+        fn main() {
+            for i in 0..10 {
+                if i == 3 { break; }
+                println!(i);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for break failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_compiled_while_basic() {
+        // Verify while loop works correctly after refactoring (no break)
+        let source = r#"
+        fn main() {
+            let mut i = 0;
+            while i < 3 {
+                println!(i);
+                i = i + 1;
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "while basic failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_compiled_while_break() {
+        let source = r#"
+        fn main() {
+            let mut i = 0;
+            while i < 10 {
+                if i == 3 { break; }
+                println!(i);
+                i = i + 1;
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "while break failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_compiled_loop_break() {
+        let source = r#"
+        fn main() {
+            let mut i = 0;
+            loop {
+                if i >= 3 { break; }
+                println!(i);
+                i = i + 1;
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "loop break failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_compiled_for_continue() {
+        let source = r#"
+        fn main() {
+            for i in 0..5 {
+                if i == 2 { continue; }
+                println!(i);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for continue failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n", "1\n", "3\n", "4\n"]);
+    }
+
+    #[test]
+    fn test_compiled_while_continue() {
+        let source = r#"
+        fn main() {
+            let mut i = 0;
+            while i < 5 {
+                i = i + 1;
+                if i == 3 { continue; }
+                println!(i);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "while continue failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["1\n", "2\n", "4\n", "5\n"]);
+    }
+
+    #[test]
+    fn test_compiled_loop_continue() {
+        let source = r#"
+        fn main() {
+            let mut i = 0;
+            loop {
+                i = i + 1;
+                if i == 2 { continue; }
+                if i > 3 { break; }
+                println!(i);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "loop continue failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["1\n", "3\n"]);
+    }
+
+    #[test]
+    fn test_compiled_for_string() {
+        let source = r#"
+        fn main() {
+            for c in "ab" {
+                println!(c);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for string failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["a\n", "b\n"]);
+    }
+
+    #[test]
+    fn test_compiled_nested_for_break() {
+        let source = r#"
+        fn main() {
+            for i in 0..3 {
+                for j in 0..3 {
+                    if j == 1 { break; }
+                    println!(j);
+                }
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "nested break failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        // Should print 0 three times (once per outer iteration)
+        assert_eq!(output, vec!["0\n", "0\n", "0\n"]);
+    }
+
+    #[test]
+    fn test_compiled_break_outside_loop() {
+        let source = r#"
+        fn main() {
+            break;
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_err(), "break outside loop should fail");
+    }
+
+    #[test]
+    fn test_compiled_continue_outside_loop() {
+        let source = r#"
+        fn main() {
+            continue;
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_err(), "continue outside loop should fail");
+    }
 
     #[test]
     fn test_compiled_arithmetic() {
