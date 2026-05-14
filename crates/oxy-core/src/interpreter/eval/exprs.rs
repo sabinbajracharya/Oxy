@@ -159,13 +159,11 @@ impl Interpreter {
                 let e = (e.min(len)) as usize;
                 Ok(Value::Vec(v[s..e].to_vec()))
             }
-            (Value::HashMap(m), k) => {
-                m.get(k).cloned().ok_or_else(|| FerriError::Runtime {
-                    message: format!("key not found: \"{k}\""),
-                    line: span.line,
-                    column: span.column,
-                })
-            }
+            (Value::HashMap(m), k) => m.get(k).cloned().ok_or_else(|| FerriError::Runtime {
+                message: format!("key not found: \"{k}\""),
+                line: span.line,
+                column: span.column,
+            }),
             (Value::String(s), Value::Range(start, end)) => {
                 let chars: Vec<char> = s.chars().collect();
                 let len = chars.len() as i64;

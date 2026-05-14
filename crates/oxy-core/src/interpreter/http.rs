@@ -246,12 +246,7 @@ impl Interpreter {
                         header_pairs.push((format!("{k}"), format!("{v}")));
                     }
                 }
-                self.http_do_request(
-                    &method_str,
-                    &url,
-                    &header_pairs,
-                    body.as_deref(),
-                )
+                self.http_do_request(&method_str, &url, &header_pairs, body.as_deref())
             }
             _ => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on HttpRequestBuilder"),

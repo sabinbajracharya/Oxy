@@ -167,7 +167,10 @@ impl Interpreter {
                     .nth(i)
                     .map(Value::Char)
                     .ok_or_else(|| FerriError::Runtime {
-                        message: format!("char_at: index {i} out of bounds (len {})", s.chars().count()),
+                        message: format!(
+                            "char_at: index {i} out of bounds (len {})",
+                            s.chars().count()
+                        ),
                         line: span.line,
                         column: span.column,
                     })
@@ -210,16 +213,19 @@ impl Interpreter {
             "parse_int" => {
                 check_arg_count("String::parse_int", 0, &args, span)?;
                 let trimmed = s.trim();
-                let result = if let Some(hex) =
-                    trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X"))
+                let result = if let Some(hex) = trimmed
+                    .strip_prefix("0x")
+                    .or_else(|| trimmed.strip_prefix("0X"))
                 {
                     i64::from_str_radix(hex, 16)
-                } else if let Some(bin) =
-                    trimmed.strip_prefix("0b").or_else(|| trimmed.strip_prefix("0B"))
+                } else if let Some(bin) = trimmed
+                    .strip_prefix("0b")
+                    .or_else(|| trimmed.strip_prefix("0B"))
                 {
                     i64::from_str_radix(bin, 2)
-                } else if let Some(oct) =
-                    trimmed.strip_prefix("0o").or_else(|| trimmed.strip_prefix("0O"))
+                } else if let Some(oct) = trimmed
+                    .strip_prefix("0o")
+                    .or_else(|| trimmed.strip_prefix("0O"))
                 {
                     i64::from_str_radix(oct, 8)
                 } else {
@@ -228,7 +234,8 @@ impl Interpreter {
                 match result {
                     Ok(n) => Ok(Value::ok(Value::Integer(n))),
                     Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{}\" as integer", s
+                        "cannot parse \"{}\" as integer",
+                        s
                     )))),
                 }
             }
@@ -237,7 +244,8 @@ impl Interpreter {
                 match s.trim().parse::<f64>() {
                     Ok(n) => Ok(Value::ok(Value::Float(n))),
                     Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{}\" as float", s
+                        "cannot parse \"{}\" as float",
+                        s
                     )))),
                 }
             }

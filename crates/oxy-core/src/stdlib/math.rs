@@ -144,7 +144,10 @@ fn math_int(val: &Value, name: &str, span: &Span) -> Result<i64, FerriError> {
     match val {
         Value::Integer(n) => Ok(*n),
         _ => Err(FerriError::Runtime {
-            message: format!("math::{name} requires integer arguments, got {}", val.type_name()),
+            message: format!(
+                "math::{name} requires integer arguments, got {}",
+                val.type_name()
+            ),
             line: span.line,
             column: span.column,
         }),
