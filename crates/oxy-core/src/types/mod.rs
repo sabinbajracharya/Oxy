@@ -687,7 +687,9 @@ mod tests {
         assert!(Value::Integer(1) < Value::Integer(2));
         assert!(Value::String("a".into()) < Value::String("b".into()));
         // Cross-type comparisons now use Ord's discriminant-based ordering
-        assert!(Value::Integer(1).partial_cmp(&Value::String("a".into())).is_some());
+        assert!(Value::Integer(1)
+            .partial_cmp(&Value::String("a".into()))
+            .is_some());
     }
 
     // --- Hash, Eq, Ord tests ---
