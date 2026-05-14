@@ -1,6 +1,4 @@
-<img width="2816" height="1536" alt="oxide_2d" src="https://github.com/user-attachments/assets/cf3ba2a3-a25f-411e-9ed4-52d87ff5b568" />
-
-# 🧲 Oxy
+# Oxy
 
 **Rust syntax, scripting freedom.**
 
