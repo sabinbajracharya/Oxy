@@ -85,6 +85,18 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                 }
             }
         }
+        "gcd" => {
+            check_arg_count("math::gcd", 2, args, span)?;
+            let a = math_int(&args[0], "gcd", span)?;
+            let b = math_int(&args[1], "gcd", span)?;
+            Ok(Value::Integer(gcd(a, b)))
+        }
+        "lcm" => {
+            check_arg_count("math::lcm", 2, args, span)?;
+            let a = math_int(&args[0], "lcm", span)?;
+            let b = math_int(&args[1], "lcm", span)?;
+            Ok(Value::Integer(lcm(a, b)))
+        }
         "log" => unary_op("log", args, f64::ln, span),
         "log2" => unary_op("log2", args, f64::log2, span),
         "log10" => unary_op("log10", args, f64::log10, span),
@@ -126,4 +138,32 @@ fn binary_op(
     let a = value_to_f64(&args[0], span)?;
     let b = value_to_f64(&args[1], span)?;
     Ok(float_to_value(op(a, b)))
+}
+
+fn math_int(val: &Value, name: &str, span: &Span) -> Result<i64, FerriError> {
+    match val {
+        Value::Integer(n) => Ok(*n),
+        _ => Err(FerriError::Runtime {
+            message: format!("math::{name} requires integer arguments, got {}", val.type_name()),
+            line: span.line,
+            column: span.column,
+        }),
+    }
+}
+
+fn gcd(mut a: i64, mut b: i64) -> i64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a.abs()
+}
+
+fn lcm(a: i64, b: i64) -> i64 {
+    if a == 0 || b == 0 {
+        0
+    } else {
+        (a / gcd(a, b)).abs() * b.abs()
+    }
 }

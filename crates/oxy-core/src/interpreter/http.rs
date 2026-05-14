@@ -90,9 +90,9 @@ impl Interpreter {
     ) -> Result<Value, FerriError> {
         match crate::http::request(method, url, headers, body) {
             Ok((status, body, resp_headers)) => {
-                let headers_map: HashMap<String, Value> = resp_headers
+                let headers_map: HashMap<Value, Value> = resp_headers
                     .into_iter()
-                    .map(|(k, v)| (k, Value::String(v)))
+                    .map(|(k, v)| (Value::String(k), Value::String(v)))
                     .collect();
                 let mut fields = HashMap::new();
                 fields.insert("status".to_string(), Value::Integer(status));
@@ -187,7 +187,7 @@ impl Interpreter {
                 let key = format!("{}", args[0]);
                 let val = format!("{}", args[1]);
                 if let Some(Value::HashMap(ref mut h)) = fields.get_mut("headers") {
-                    h.insert(key, Value::String(val));
+                    h.insert(Value::String(key), Value::String(val));
                 }
                 Ok(Value::Struct {
                     name: "HttpRequestBuilder".to_string(),
@@ -218,7 +218,7 @@ impl Interpreter {
                 fields.insert("body".to_string(), Value::String(json_body));
                 if let Some(Value::HashMap(ref mut h)) = fields.get_mut("headers") {
                     h.insert(
-                        "Content-Type".to_string(),
+                        Value::String("Content-Type".to_string()),
                         Value::String("application/json".to_string()),
                     );
                 }
@@ -240,13 +240,18 @@ impl Interpreter {
                     Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
                     _ => None,
                 };
-                let mut header_pairs = Vec::new();
+                let mut header_pairs: Vec<(String, String)> = Vec::new();
                 if let Some(Value::HashMap(h)) = fields.get("headers") {
                     for (k, v) in h {
-                        header_pairs.push((k.clone(), format!("{v}")));
+                        header_pairs.push((format!("{k}"), format!("{v}")));
                     }
                 }
-                self.http_do_request(&method_str, &url, &header_pairs, body.as_deref())
+                self.http_do_request(
+                    &method_str,
+                    &url,
+                    &header_pairs,
+                    body.as_deref(),
+                )
             }
             _ => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on HttpRequestBuilder"),

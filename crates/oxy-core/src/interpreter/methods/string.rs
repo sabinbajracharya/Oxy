@@ -151,6 +151,96 @@ impl Interpreter {
                 new_s.push_str(&suffix);
                 Ok(Value::String(new_s))
             }
+            "char_at" => {
+                check_arg_count("String::char_at", 1, &args, span)?;
+                let i = match &args[0] {
+                    Value::Integer(n) => *n as usize,
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected integer, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                s.chars()
+                    .nth(i)
+                    .map(Value::Char)
+                    .ok_or_else(|| FerriError::Runtime {
+                        message: format!("char_at: index {i} out of bounds (len {})", s.chars().count()),
+                        line: span.line,
+                        column: span.column,
+                    })
+            }
+            "substring" => {
+                check_arg_count("String::substring", 2, &args, span)?;
+                let start = match &args[0] {
+                    Value::Integer(n) => *n as usize,
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected integer, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                let end = match &args[1] {
+                    Value::Integer(n) => *n as usize,
+                    other => {
+                        return Err(FerriError::Runtime {
+                            message: format!("expected integer, got {}", other.type_name()),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                };
+                let chars: Vec<char> = s.chars().collect();
+                if start > end || end > chars.len() {
+                    return Err(FerriError::Runtime {
+                        message: format!(
+                            "substring: invalid range {start}..{end} (len {})",
+                            chars.len()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(Value::String(chars[start..end].iter().collect()))
+            }
+            "parse_int" => {
+                check_arg_count("String::parse_int", 0, &args, span)?;
+                let trimmed = s.trim();
+                let result = if let Some(hex) =
+                    trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X"))
+                {
+                    i64::from_str_radix(hex, 16)
+                } else if let Some(bin) =
+                    trimmed.strip_prefix("0b").or_else(|| trimmed.strip_prefix("0B"))
+                {
+                    i64::from_str_radix(bin, 2)
+                } else if let Some(oct) =
+                    trimmed.strip_prefix("0o").or_else(|| trimmed.strip_prefix("0O"))
+                {
+                    i64::from_str_radix(oct, 8)
+                } else {
+                    trimmed.parse::<i64>()
+                };
+                match result {
+                    Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{}\" as integer", s
+                    )))),
+                }
+            }
+            "parse_float" => {
+                check_arg_count("String::parse_float", 0, &args, span)?;
+                match s.trim().parse::<f64>() {
+                    Ok(n) => Ok(Value::ok(Value::Float(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{}\" as float", s
+                    )))),
+                }
+            }
             "clone" => Ok(Value::String(s)),
             "to_string" => Ok(Value::String(s)),
             _ => self.try_to_json_method(Value::String(s), method, span, "String"),

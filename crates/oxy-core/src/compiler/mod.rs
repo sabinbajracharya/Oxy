@@ -1361,9 +1361,15 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["math", "min"]
             | ["math", "max"]
             | ["math", "log"]
+            | ["math", "gcd"]
+            | ["math", "lcm"]
             | ["json", "parse"]
             | ["json", "to_string"]
             | ["String", "from"]
             | ["HashMap", "new"]
+            | ["HashSet", "new"]
+            | ["BinaryHeap", "new"]
+            | ["int", "parse"]
+            | ["float", "parse"]
     )
 }

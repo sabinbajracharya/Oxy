@@ -130,7 +130,7 @@ impl Interpreter {
             StructKind::Named(fields) => {
                 let mut result_fields = HashMap::new();
                 for field in fields {
-                    if let Some(val) = map.get(&field.name) {
+                    if let Some(val) = map.get(&Value::String(field.name.clone())) {
                         result_fields.insert(field.name.clone(), val.clone());
                     } else {
                         result_fields.insert(field.name.clone(), Value::Unit);

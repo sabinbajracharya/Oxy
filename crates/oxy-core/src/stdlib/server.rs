@@ -287,26 +287,26 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
     fields.insert("body".to_string(), Value::String(req.body.clone()));
 
     // Query as HashMap
-    let query_map: HashMap<String, Value> = req
+    let query_map: HashMap<Value, Value> = req
         .query
         .iter()
-        .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+        .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
     fields.insert("query".to_string(), Value::HashMap(query_map));
 
     // Headers as HashMap
-    let header_map: HashMap<String, Value> = req
+    let header_map: HashMap<Value, Value> = req
         .headers
         .iter()
-        .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+        .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
     fields.insert("headers".to_string(), Value::HashMap(header_map));
 
     // Params as HashMap
-    let param_map: HashMap<String, Value> = req
+    let param_map: HashMap<Value, Value> = req
         .params
         .iter()
-        .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+        .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
     fields.insert("params".to_string(), Value::HashMap(param_map));
 
@@ -341,7 +341,7 @@ pub fn value_to_response(val: &Value) -> HttpResponse {
             }
             if let Some(Value::HashMap(hdrs)) = fields.get("headers") {
                 for (k, v) in hdrs {
-                    resp = resp.with_header(k, &format!("{v}"));
+                    resp = resp.with_header(&format!("{k}"), &format!("{v}"));
                 }
             }
             resp

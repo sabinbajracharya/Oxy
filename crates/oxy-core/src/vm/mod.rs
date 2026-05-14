@@ -4,7 +4,7 @@
 //! It uses a value stack and a call stack. Each call frame tracks its own
 //! local variable slots and return address.
 
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::interpreter::Interpreter;
 use crate::types::Value;
@@ -646,7 +646,9 @@ impl Vm {
                         Value::Struct { fields, .. } => {
                             fields.get(&field_name).cloned().unwrap_or(Value::Unit)
                         }
-                        Value::HashMap(m) => m.get(&field_name).cloned().unwrap_or(Value::Unit),
+                        Value::HashMap(m) => {
+                            m.get(&Value::String(field_name.clone())).cloned().unwrap_or(Value::Unit)
+                        }
                         _ => {
                             return VmResult::Error(format!(
                                 "cannot access field '{}' on type {}",
@@ -898,22 +900,143 @@ impl Vm {
                         .collect();
                     Ok(Value::Vec(parts))
                 }
+                "char_at" => {
+                    let i = args.first().and_then(|v| match v {
+                        Value::Integer(n) => Some(*n as usize),
+                        _ => None,
+                    }).unwrap_or(0);
+                    Ok(s.chars().nth(i).map(Value::Char).unwrap_or(Value::Unit))
+                }
+                "substring" => {
+                    let start = args.first().and_then(|v| match v {
+                        Value::Integer(n) => Some(*n as usize),
+                        _ => None,
+                    }).unwrap_or(0);
+                    let end = args.get(1).and_then(|v| match v {
+                        Value::Integer(n) => Some(*n as usize),
+                        _ => None,
+                    }).unwrap_or(0);
+                    let chars: Vec<char> = s.chars().collect();
+                    if start <= end && end <= chars.len() {
+                        Ok(Value::String(chars[start..end].iter().collect()))
+                    } else {
+                        Err(format!("substring: invalid range {}..{}", start, end))
+                    }
+                }
+                "parse_int" => match s.trim().parse::<i64>() {
+                    Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as integer")))),
+                },
+                "parse_float" => match s.trim().parse::<f64>() {
+                    Ok(n) => Ok(Value::ok(Value::Float(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as float")))),
+                },
                 _ => Err(format!("no method '{}' on type String", method_name)),
             },
             Value::HashMap(m) => match method_name {
                 "len" => Ok(Value::Integer(m.len() as i64)),
                 "get" => {
-                    let key = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    let key = args.first().cloned().unwrap_or(Value::Unit);
                     Ok(m.get(&key).cloned().unwrap_or(Value::Unit))
                 }
                 "insert" => {
                     let mut new = m.clone();
-                    let key = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    let key = args.first().cloned().unwrap_or(Value::Unit);
                     let val = args.get(1).cloned().unwrap_or(Value::Unit);
                     new.insert(key, val);
                     Ok(Value::HashMap(new))
                 }
+                "get_or" => {
+                    let key = args.first().cloned().unwrap_or(Value::Unit);
+                    let default = args.get(1).cloned().unwrap_or(Value::Unit);
+                    Ok(m.get(&key).cloned().unwrap_or(default))
+                }
                 _ => Err(format!("no method '{}' on type HashMap", method_name)),
+            },
+            Value::HashSet(s) => match method_name {
+                "len" => Ok(Value::Integer(s.len() as i64)),
+                "is_empty" => Ok(Value::Bool(s.is_empty())),
+                "contains" => {
+                    let val = args.first().cloned().unwrap_or(Value::Unit);
+                    Ok(Value::Bool(s.contains(&val)))
+                }
+                "insert" => {
+                    let mut new = s.clone();
+                    let val = args.first().cloned().unwrap_or(Value::Unit);
+                    let was_new = new.insert(val);
+                    Ok(Value::Tuple(vec![Value::HashSet(new), Value::Bool(was_new)]))
+                }
+                "remove" => {
+                    let mut new = s.clone();
+                    let val = args.first().cloned().unwrap_or(Value::Unit);
+                    let existed = new.remove(&val);
+                    Ok(Value::Tuple(vec![Value::HashSet(new), Value::Bool(existed)]))
+                }
+                "to_vec" => {
+                    let mut v: Vec<Value> = s.iter().cloned().collect();
+                    v.sort();
+                    Ok(Value::Vec(v))
+                }
+                "clone" => Ok(Value::HashSet(s.clone())),
+                _ => Err(format!("no method '{}' on type HashSet", method_name)),
+            },
+            Value::BinaryHeap(h) => match method_name {
+                "len" => Ok(Value::Integer(h.len() as i64)),
+                "is_empty" => Ok(Value::Bool(h.is_empty())),
+                "peek" => match h.peek() {
+                    Some(val) => Ok(Value::some(val.clone())),
+                    None => Ok(Value::none()),
+                },
+                "push" => {
+                    let mut new = h.clone();
+                    let val = args.first().cloned().unwrap_or(Value::Unit);
+                    new.push(val);
+                    Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::Unit]))
+                }
+                "pop" => {
+                    let mut new = h.clone();
+                    let popped = new.pop();
+                    match popped {
+                        Some(val) => Ok(Value::Tuple(vec![
+                            Value::BinaryHeap(new),
+                            Value::some(val),
+                        ])),
+                        None => Ok(Value::Tuple(vec![
+                            Value::BinaryHeap(new),
+                            Value::none(),
+                        ])),
+                    }
+                }
+                "to_vec" => Ok(Value::Vec(h.clone().into_sorted_vec())),
+                "clone" => Ok(Value::BinaryHeap(h.clone())),
+                _ => Err(format!("no method '{}' on type BinaryHeap", method_name)),
+            },
+            Value::Char(c) => match method_name {
+                "is_digit" => Ok(Value::Bool(c.is_ascii_digit())),
+                "is_alphabetic" => Ok(Value::Bool(c.is_alphabetic())),
+                "is_alphanumeric" => Ok(Value::Bool(c.is_alphanumeric())),
+                "is_whitespace" => Ok(Value::Bool(c.is_whitespace())),
+                "is_lowercase" => Ok(Value::Bool(c.is_lowercase())),
+                "is_uppercase" => Ok(Value::Bool(c.is_uppercase())),
+                "is_ascii" => Ok(Value::Bool(c.is_ascii())),
+                "to_lowercase" => {
+                    let lower: String = c.to_lowercase().collect();
+                    if lower.len() == 1 {
+                        Ok(Value::Char(lower.chars().next().unwrap()))
+                    } else {
+                        Ok(Value::String(lower))
+                    }
+                }
+                "to_uppercase" => {
+                    let upper: String = c.to_uppercase().collect();
+                    if upper.len() == 1 {
+                        Ok(Value::Char(upper.chars().next().unwrap()))
+                    } else {
+                        Ok(Value::String(upper))
+                    }
+                }
+                "clone" => Ok(Value::Char(*c)),
+                _ => Err(format!("no method '{}' on type char", method_name)),
             },
             Value::EnumVariant { enum_name, .. } => {
                 // Option/Result builtins
@@ -1014,6 +1137,28 @@ impl Vm {
             ["math", "log"] => Ok(Value::Float(
                 to_f64(args.first().unwrap_or(&Value::Unit)).ln(),
             )),
+            ["math", "gcd"] => {
+                let a = args.first().and_then(|v| match v {
+                    Value::Integer(n) => Some(*n),
+                    _ => None,
+                }).unwrap_or(0);
+                let b = args.get(1).and_then(|v| match v {
+                    Value::Integer(n) => Some(*n),
+                    _ => None,
+                }).unwrap_or(0);
+                Ok(Value::Integer(gcd(a, b)))
+            }
+            ["math", "lcm"] => {
+                let a = args.first().and_then(|v| match v {
+                    Value::Integer(n) => Some(*n),
+                    _ => None,
+                }).unwrap_or(0);
+                let b = args.get(1).and_then(|v| match v {
+                    Value::Integer(n) => Some(*n),
+                    _ => None,
+                }).unwrap_or(0);
+                Ok(Value::Integer(lcm(a, b)))
+            }
             ["json", "parse"] => {
                 let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                 crate::json::deserialize(&s).map_err(|e| format!("json::parse: {}", e))
@@ -1027,6 +1172,22 @@ impl Vm {
                 Ok(Value::String(s))
             }
             ["HashMap", "new"] => Ok(Value::HashMap(HashMap::new())),
+            ["HashSet", "new"] => Ok(Value::HashSet(HashSet::new())),
+            ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(BinaryHeap::new())),
+            ["int", "parse"] => {
+                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
+                match s.trim().parse::<i64>() {
+                    Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as integer")))),
+                }
+            }
+            ["float", "parse"] => {
+                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
+                match s.trim().parse::<f64>() {
+                    Ok(n) => Ok(Value::ok(Value::Float(n))),
+                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as float")))),
+                }
+            }
             _ => Err(format!("unknown built-in path: {}", segments.join("::"))),
         }
     }
@@ -1150,6 +1311,23 @@ fn vm_neg(v: Value) -> Value {
         Value::Integer(n) => Value::Integer(-n),
         Value::Float(n) => Value::Float(-n),
         v => v,
+    }
+}
+
+fn gcd(mut a: i64, mut b: i64) -> i64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a.abs()
+}
+
+fn lcm(a: i64, b: i64) -> i64 {
+    if a == 0 || b == 0 {
+        0
+    } else {
+        (a / gcd(a, b)).abs() * b.abs()
     }
 }
 

@@ -159,7 +159,7 @@ impl Interpreter {
                 let e = (e.min(len)) as usize;
                 Ok(Value::Vec(v[s..e].to_vec()))
             }
-            (Value::HashMap(m), Value::String(k)) => {
+            (Value::HashMap(m), k) => {
                 m.get(k).cloned().ok_or_else(|| FerriError::Runtime {
                     message: format!("key not found: \"{k}\""),
                     line: span.line,

@@ -22,8 +22,8 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         }
         "vars" => {
             check_arg_count("std::env::vars", 0, args, span)?;
-            let map: std::collections::HashMap<String, Value> = std::env::vars()
-                .map(|(k, v)| (k, Value::String(v)))
+            let map: std::collections::HashMap<Value, Value> = std::env::vars()
+                .map(|(k, v)| (Value::String(k), Value::String(v)))
                 .collect();
             Ok(Value::HashMap(map))
         }
