@@ -5,7 +5,7 @@
 //! (math::, rand::, time::, json::, http::), user-defined method dispatch
 //! via impl blocks and trait impls, and `std::` path functions.
 
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
@@ -130,6 +130,26 @@ impl Interpreter {
             // Built-in HashMap::new
             if type_name == "HashMap" && method_name == "new" && args.is_empty() {
                 return Ok(Value::HashMap(HashMap::new()));
+            }
+
+            // Built-in HashSet::new
+            if type_name == "HashSet" && method_name == "new" && args.is_empty() {
+                return Ok(Value::HashSet(HashSet::new()));
+            }
+
+            // Built-in BinaryHeap::new
+            if type_name == "BinaryHeap" && method_name == "new" && args.is_empty() {
+                return Ok(Value::BinaryHeap(BinaryHeap::new()));
+            }
+
+            // Built-in int::parse(s)
+            if type_name == "int" && method_name == "parse" {
+                return parse_int_builtin(&args, span);
+            }
+
+            // Built-in float::parse(s)
+            if type_name == "float" && method_name == "parse" {
+                return parse_float_builtin(&args, span);
             }
 
             // Built-in Type::default() for #[derive(Default)]
@@ -520,5 +540,44 @@ impl Interpreter {
             Err(FerriError::Return(val)) => Ok(*val),
             other => other,
         }
+    }
+}
+
+/// Parse a string to i64: `int::parse(s)`
+pub(crate) fn parse_int_builtin(args: &[Value], _span: &Span) -> Result<Value, FerriError> {
+    let s = args
+        .first()
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let trimmed = s.trim();
+    let result = if let Some(hex) = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")) {
+        i64::from_str_radix(hex, 16)
+    } else if let Some(bin) = trimmed.strip_prefix("0b").or_else(|| trimmed.strip_prefix("0B")) {
+        i64::from_str_radix(bin, 2)
+    } else if let Some(oct) = trimmed.strip_prefix("0o").or_else(|| trimmed.strip_prefix("0O")) {
+        i64::from_str_radix(oct, 8)
+    } else {
+        trimmed.parse::<i64>()
+    };
+    match result {
+        Ok(n) => Ok(Value::ok(Value::Integer(n))),
+        Err(_) => Ok(Value::err(Value::String(format!(
+            "cannot parse \"{s}\" as integer"
+        )))),
+    }
+}
+
+/// Parse a string to f64: `float::parse(s)`
+pub(crate) fn parse_float_builtin(args: &[Value], span: &Span) -> Result<Value, FerriError> {
+    let _ = span;
+    let s = args
+        .first()
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    match s.trim().parse::<f64>() {
+        Ok(n) => Ok(Value::ok(Value::Float(n))),
+        Err(_) => Ok(Value::err(Value::String(format!(
+            "cannot parse \"{s}\" as float"
+        )))),
     }
 }

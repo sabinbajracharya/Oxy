@@ -1,6 +1,6 @@
 //! HashMap method implementations.
 //!
-//! Supports: len, is_empty, insert, get, remove, contains_key, keys, values.
+//! Supports: len, is_empty, insert, get, remove, contains_key, keys, values, get_or.
 
 use crate::ast::Expr;
 use crate::env::Env;
@@ -30,7 +30,7 @@ impl Interpreter {
             "is_empty" => Ok(Value::Bool(m.is_empty())),
             "insert" => {
                 check_arg_count("HashMap::insert", 2, &args, span)?;
-                let key = format!("{}", args[0]);
+                let key = args[0].clone();
                 let value = args[1].clone();
                 let mut new_m = m;
                 new_m.insert(key, value);
@@ -39,17 +39,15 @@ impl Interpreter {
             }
             "get" => {
                 check_arg_count("HashMap::get", 1, &args, span)?;
-                let key = format!("{}", args[0]);
-                match m.get(&key) {
+                match m.get(&args[0]) {
                     Some(val) => Ok(Value::some(val.clone())),
                     None => Ok(Value::none()),
                 }
             }
             "remove" => {
                 check_arg_count("HashMap::remove", 1, &args, span)?;
-                let key = format!("{}", args[0]);
                 let mut new_m = m;
-                let removed = new_m.remove(&key);
+                let removed = new_m.remove(&args[0]);
                 self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
                 match removed {
                     Some(val) => Ok(Value::some(val)),
@@ -58,17 +56,26 @@ impl Interpreter {
             }
             "contains_key" => {
                 check_arg_count("HashMap::contains_key", 1, &args, span)?;
-                let key = format!("{}", args[0]);
-                Ok(Value::Bool(m.contains_key(&key)))
+                Ok(Value::Bool(m.contains_key(&args[0])))
+            }
+            "get_or" => {
+                check_arg_count("HashMap::get_or", 2, &args, span)?;
+                let key = args[0].clone();
+                let default = args[1].clone();
+                if let Some(val) = m.get(&key) {
+                    Ok(val.clone())
+                } else {
+                    Ok(default)
+                }
             }
             "keys" => {
-                let mut keys: Vec<String> = m.keys().cloned().collect();
+                let mut keys: Vec<Value> = m.keys().cloned().collect();
                 keys.sort();
-                Ok(Value::Vec(keys.into_iter().map(Value::String).collect()))
+                Ok(Value::Vec(keys))
             }
             "values" => {
-                let mut pairs: Vec<(&String, &Value)> = m.iter().collect();
-                pairs.sort_by_key(|(k, _)| (*k).clone());
+                let mut pairs: Vec<(&Value, &Value)> = m.iter().collect();
+                pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
                 Ok(Value::Vec(
                     pairs.into_iter().map(|(_, v)| v.clone()).collect(),
                 ))

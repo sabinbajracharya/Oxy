@@ -3,7 +3,10 @@
 //! Routes `.method()` calls on values to the appropriate type-specific
 //! handler (Vec, String, HashMap, Option/Result, numeric, HTTP types).
 
+mod binary_heap;
+mod char;
 mod hashmap;
+mod hashset;
 mod numeric;
 mod option_result;
 mod string;
@@ -36,6 +39,12 @@ impl Interpreter {
             Value::String(_) => self.call_string_method(receiver, method, args, span),
             Value::HashMap(_) => {
                 self.call_hashmap_method(receiver, method, args, receiver_expr, env, span)
+            }
+            Value::HashSet(_) => {
+                self.call_hashset_method(receiver, method, args, receiver_expr, env, span)
+            }
+            Value::BinaryHeap(_) => {
+                self.call_binary_heap_method(receiver, method, args, receiver_expr, env, span)
             }
             Value::Tuple(_) => {
                 if method == "clone" {
@@ -83,6 +92,7 @@ impl Interpreter {
             Value::Integer(_) | Value::Float(_) => {
                 self.call_numeric_method(receiver, method, args, span)
             }
+            Value::Char(_) => self.call_char_method(receiver, method, args, span),
             _ => {
                 // Built-in .to_json() and .to_json_pretty() on all values
                 if method == "to_json" || method == "to_json_pretty" {

@@ -27,7 +27,13 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             let items: Result<Vec<String>, String> = v.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
-        Value::HashMap(m) => serialize_map(m),
+        Value::HashMap(m) => {
+            let string_map: HashMap<String, Value> = m
+                .iter()
+                .map(|(k, v)| (format!("{}", k), v.clone()))
+                .collect();
+            serialize_map(&string_map)
+        }
         Value::Struct { fields, .. } => serialize_map(fields),
         Value::EnumVariant {
             enum_name,
@@ -36,6 +42,15 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         } => serialize_enum(enum_name, variant, data),
         Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
+        Value::HashSet(s) => {
+            let items: Result<Vec<String>, String> = s.iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
+        Value::BinaryHeap(h) => {
+            let sorted = h.clone().into_sorted_vec();
+            let items: Result<Vec<String>, String> = sorted.iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
         Value::Future(_) => Err("cannot serialize future".to_string()),
         Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }
@@ -65,7 +80,13 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
         }
-        Value::HashMap(m) => serialize_map_pretty(m, indent),
+        Value::HashMap(m) => {
+            let string_map: HashMap<String, Value> = m
+                .iter()
+                .map(|(k, v)| (format!("{}", k), v.clone()))
+                .collect();
+            serialize_map_pretty(&string_map, indent)
+        }
         Value::Struct { fields, .. } => serialize_map_pretty(fields, indent),
         Value::EnumVariant {
             enum_name,
@@ -74,6 +95,41 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
         } => serialize_enum_pretty(enum_name, variant, data, indent),
         Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
+        Value::HashSet(s) => {
+            if s.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let mut sorted: Vec<&Value> = s.iter().collect();
+            sorted.sort();
+            let items: Result<Vec<String>, String> = sorted
+                .iter()
+                .map(|item| {
+                    let s = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
+        Value::BinaryHeap(h) => {
+            if h.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let sorted = h.clone().into_sorted_vec();
+            let items: Result<Vec<String>, String> = sorted
+                .iter()
+                .map(|item| {
+                    let s = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
         Value::Future(_) => Err("cannot serialize future".to_string()),
         Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }
@@ -356,7 +412,7 @@ impl JsonParser {
     fn parse_object(&mut self) -> Result<Value, String> {
         self.expect('{')?;
         self.skip_whitespace();
-        let mut map = HashMap::new();
+        let mut map: HashMap<Value, Value> = HashMap::new();
         if self.peek() == Some('}') {
             self.advance();
             return Ok(Value::HashMap(map));
@@ -367,7 +423,7 @@ impl JsonParser {
             self.skip_whitespace();
             self.expect(':')?;
             let value = self.parse_value()?;
-            map.insert(key, value);
+            map.insert(Value::String(key), value);
             self.skip_whitespace();
             match self.peek() {
                 Some(',') => {

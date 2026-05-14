@@ -3,8 +3,10 @@
 //! All values at runtime are represented by the [`Value`] enum.
 //! Oxy uses reference counting internally — no borrow checker.
 
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::ast::{Block, Param, TypeAnnotation};
 use crate::env::Env;
@@ -60,8 +62,12 @@ pub enum Value {
         variant: String,
         data: Vec<Value>,
     },
-    /// A hash map (string keys for simplicity).
-    HashMap(HashMap<String, Value>),
+    /// A hash map.
+    HashMap(HashMap<Value, Value>),
+    /// A hash set.
+    HashSet(HashSet<Value>),
+    /// A binary heap (max-heap by default).
+    BinaryHeap(BinaryHeap<Value>),
     /// A future (lazy thunk wrapping an async function call).
     Future(Box<FutureData>),
     /// A join handle (eagerly evaluated, wraps a result).
@@ -108,6 +114,8 @@ impl Value {
             Value::Struct { name, .. } => name.clone(),
             Value::EnumVariant { enum_name, .. } => enum_name.clone(),
             Value::HashMap(_) => "HashMap".into(),
+            Value::HashSet(_) => "HashSet".into(),
+            Value::BinaryHeap(_) => "BinaryHeap".into(),
             Value::Future(_) => "Future".into(),
             Value::JoinHandle(_) => "JoinHandle".into(),
         }
@@ -178,18 +186,47 @@ impl Value {
             Value::HashMap(m) => {
                 let mut pairs: Vec<_> = m
                     .into_iter()
-                    .map(|(k, v)| Value::Tuple(vec![Value::String(k), v]))
+                    .map(|(k, v)| Value::Tuple(vec![k, v]))
                     .collect();
                 pairs.sort_by(|a, b| {
                     if let (Value::Tuple(a), Value::Tuple(b)) = (a, b) {
-                        a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
+                        a[0].cmp(&b[0])
                     } else {
                         std::cmp::Ordering::Equal
                     }
                 });
                 Ok(pairs)
             }
+            Value::HashSet(s) => {
+                let mut v: Vec<Value> = s.into_iter().collect();
+                v.sort();
+                Ok(v)
+            }
+            Value::BinaryHeap(h) => Ok(h.into_sorted_vec()),
             other => Err(format!("cannot iterate over {}", other.type_name())),
+        }
+    }
+
+    /// Integer discriminant for variant ordering — lower = earlier in sort order.
+    fn variant_discriminant(&self) -> u8 {
+        match self {
+            Value::Unit => 0,
+            Value::Bool(_) => 1,
+            Value::Integer(_) => 2,
+            Value::Float(_) => 3,
+            Value::Char(_) => 4,
+            Value::String(_) => 5,
+            Value::Range(_, _) => 6,
+            Value::Vec(_) => 7,
+            Value::Tuple(_) => 8,
+            Value::HashMap(_) => 9,
+            Value::HashSet(_) => 10,
+            Value::BinaryHeap(_) => 11,
+            Value::Struct { .. } => 12,
+            Value::EnumVariant { .. } => 13,
+            Value::Function(_) => 14,
+            Value::Future(_) => 15,
+            Value::JoinHandle(_) => 16,
         }
     }
 
@@ -205,6 +242,8 @@ impl Value {
             Value::Struct { .. } => true,
             Value::EnumVariant { .. } => true,
             Value::HashMap(m) => !m.is_empty(),
+            Value::HashSet(s) => !s.is_empty(),
+            Value::BinaryHeap(h) => !h.is_empty(),
             Value::Future(_) => true,
             Value::JoinHandle(_) => true,
             _ => true,
@@ -291,7 +330,7 @@ impl fmt::Display for Value {
             Value::HashMap(m) => {
                 write!(f, "{{")?;
                 let mut sorted: Vec<_> = m.iter().collect();
-                sorted.sort_by_key(|(k, _)| (*k).clone());
+                sorted.sort_by(|(a, _), (b, _)| a.cmp(b));
                 for (i, (k, v)) in sorted.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -299,6 +338,29 @@ impl fmt::Display for Value {
                     write!(f, "{k}: {v}")?;
                 }
                 write!(f, "}}")
+            }
+            Value::HashSet(set) => {
+                write!(f, "{{")?;
+                let mut sorted: Vec<&Value> = set.iter().collect();
+                sorted.sort();
+                for (i, elem) in sorted.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::BinaryHeap(heap) => {
+                write!(f, "BinaryHeap([")?;
+                let mut sorted = heap.clone().into_sorted_vec();
+                for (i, elem) in sorted.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "])")
             }
             Value::Future(_) => write!(f, "<future>"),
             Value::JoinHandle(_) => write!(f, "<join_handle>"),
@@ -342,12 +404,19 @@ impl PartialEq for Value {
                 },
             ) => ea == eb && va == vb && da == db,
             (Value::HashMap(a), Value::HashMap(b)) => a == b,
+            (Value::HashSet(a), Value::HashSet(b)) => a == b,
+            (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
+                let mut va = a.clone().into_sorted_vec();
+                let mut vb = b.clone().into_sorted_vec();
+                va == vb
+            }
             _ => false,
         }
     }
 }
 
-/// Ordering for [`Value`]; only defined for scalar and string types.
+/// Ordering for [`Value`]; delegates to [`Ord`] for compound types, returns
+/// `None` for cross-type comparisons (scalars compare naturally, compounds delegate).
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -356,7 +425,236 @@ impl PartialOrd for Value {
             (Value::String(a), Value::String(b)) => a.partial_cmp(b),
             (Value::Char(a), Value::Char(b)) => a.partial_cmp(b),
             (Value::Bool(a), Value::Bool(b)) => a.partial_cmp(b),
+            (Value::Vec(_), Value::Vec(_))
+            | (Value::Tuple(_), Value::Tuple(_))
+            | (Value::Range(_, _), Value::Range(_, _))
+            | (Value::Struct { .. }, Value::Struct { .. })
+            | (Value::EnumVariant { .. }, Value::EnumVariant { .. })
+            | (Value::HashMap(_), Value::HashMap(_))
+            | (Value::HashSet(_), Value::HashSet(_))
+            | (Value::BinaryHeap(_), Value::BinaryHeap(_))
+            | (Value::Function(_), Value::Function(_)) => Some(self.cmp(other)),
             _ => None,
+        }
+    }
+}
+
+/// Total ordering for [`Value`].
+///
+/// Orders by variant discriminant first, then by payload. Uses `f64::total_cmp`
+/// for floats so ordering is total (no NaN surprises).
+impl Ord for Value {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let disc = self.variant_discriminant();
+        let other_disc = other.variant_discriminant();
+        match disc.cmp(&other_disc) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => a.total_cmp(b),
+            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+            (Value::String(a), Value::String(b)) => a.cmp(b),
+            (Value::Char(a), Value::Char(b)) => a.cmp(b),
+            (Value::Unit, Value::Unit) => Ordering::Equal,
+            (Value::Range(a1, a2), Value::Range(b1, b2)) => a1.cmp(b1).then(a2.cmp(b2)),
+            (Value::Vec(a), Value::Vec(b)) => {
+                for (ai, bi) in a.iter().zip(b.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                a.len().cmp(&b.len())
+            }
+            (Value::Tuple(a), Value::Tuple(b)) => {
+                for (ai, bi) in a.iter().zip(b.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                a.len().cmp(&b.len())
+            }
+            (
+                Value::Struct {
+                    name: na,
+                    fields: fa,
+                },
+                Value::Struct {
+                    name: nb,
+                    fields: fb,
+                },
+            ) => na.cmp(nb).then_with(|| {
+                let mut ak: Vec<&String> = fa.keys().collect();
+                ak.sort();
+                let mut bk: Vec<&String> = fb.keys().collect();
+                bk.sort();
+                for (k1, k2) in ak.iter().zip(bk.iter()) {
+                    match k1.cmp(k2) {
+                        Ordering::Equal => {}
+                        non_eq => return non_eq,
+                    }
+                }
+                ak.len().cmp(&bk.len()).then_with(|| {
+                    for k in ak {
+                        let v1 = fa.get(k).unwrap();
+                        let v2 = fb.get(k).unwrap();
+                        match v1.cmp(v2) {
+                            Ordering::Equal => continue,
+                            non_eq => return non_eq,
+                        }
+                    }
+                    Ordering::Equal
+                })
+            }),
+            (
+                Value::EnumVariant {
+                    enum_name: ea,
+                    variant: va,
+                    data: da,
+                },
+                Value::EnumVariant {
+                    enum_name: eb,
+                    variant: vb,
+                    data: db,
+                },
+            ) => ea.cmp(eb).then(va.cmp(vb)).then_with(|| {
+                for (ai, bi) in da.iter().zip(db.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                da.len().cmp(&db.len())
+            }),
+            (Value::HashMap(a), Value::HashMap(b)) => {
+                let mut ae: Vec<(&Value, &Value)> = a.iter().collect();
+                ae.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
+                let mut be: Vec<(&Value, &Value)> = b.iter().collect();
+                be.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
+                for ((ak, av), (bk, bv)) in ae.iter().zip(be.iter()) {
+                    match ak.cmp(bk) {
+                        Ordering::Equal => {}
+                        non_eq => return non_eq,
+                    }
+                    match av.cmp(bv) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                ae.len().cmp(&be.len())
+            }
+            (Value::HashSet(a), Value::HashSet(b)) => {
+                let mut av: Vec<&Value> = a.iter().collect();
+                av.sort();
+                let mut bv: Vec<&Value> = b.iter().collect();
+                bv.sort();
+                for (ai, bi) in av.iter().zip(bv.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                av.len().cmp(&bv.len())
+            }
+            (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
+                let va = a.clone().into_sorted_vec();
+                let vb = b.clone().into_sorted_vec();
+                for (ai, bi) in va.iter().zip(vb.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                va.len().cmp(&vb.len())
+            }
+            (Value::Function(a), Value::Function(b)) => a.name.cmp(&b.name),
+            (Value::Future(_), Value::Future(_)) => Ordering::Equal,
+            (Value::JoinHandle(a), Value::JoinHandle(b)) => a.cmp(b),
+            _ => Ordering::Equal, // unreachable: discriminant matched, types match
+        }
+    }
+}
+
+/// Marker trait — [`PartialEq`] is already reflexive, symmetric, and transitive for all variants.
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Value::Integer(n) => n.hash(state),
+            Value::Float(f) => {
+                let bits = if *f == 0.0 { 0u64 } else { f64::to_bits(*f) };
+                bits.hash(state);
+            }
+            Value::Bool(b) => b.hash(state),
+            Value::String(s) => s.hash(state),
+            Value::Char(c) => c.hash(state),
+            Value::Unit => {}
+            Value::Function(fd) => fd.name.hash(state),
+            Value::Range(start, end) => {
+                start.hash(state);
+                end.hash(state);
+            }
+            Value::Vec(v) => {
+                for elem in v {
+                    elem.hash(state);
+                }
+            }
+            Value::Tuple(t) => {
+                for elem in t {
+                    elem.hash(state);
+                }
+            }
+            Value::Struct { name, fields } => {
+                name.hash(state);
+                let mut keys: Vec<&String> = fields.keys().collect();
+                keys.sort();
+                for k in keys {
+                    k.hash(state);
+                    if let Some(v) = fields.get(k) {
+                        v.hash(state);
+                    }
+                }
+            }
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => {
+                enum_name.hash(state);
+                variant.hash(state);
+                for d in data {
+                    d.hash(state);
+                }
+            }
+            Value::HashMap(m) => {
+                let mut entries: Vec<(&Value, &Value)> = m.iter().collect();
+                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+                for (k, v) in entries {
+                    k.hash(state);
+                    v.hash(state);
+                }
+            }
+            Value::HashSet(s) => {
+                let mut items: Vec<&Value> = s.iter().collect();
+                items.sort();
+                for item in items {
+                    item.hash(state);
+                }
+            }
+            Value::BinaryHeap(h) => {
+                let sorted = h.clone().into_sorted_vec();
+                for item in sorted {
+                    item.hash(state);
+                }
+            }
+            Value::Future(_) => "_future_".hash(state),
+            Value::JoinHandle(v) => v.hash(state),
         }
     }
 }
@@ -409,5 +707,175 @@ mod tests {
             Value::Integer(1).partial_cmp(&Value::String("a".into())),
             None
         );
+    }
+
+    // --- Hash, Eq, Ord tests ---
+
+    #[test]
+    fn test_hash_same_values_same_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        fn hash(v: &Value) -> u64 {
+            let mut h = DefaultHasher::new();
+            v.hash(&mut h);
+            std::hash::Hasher::finish(&h)
+        }
+        assert_eq!(hash(&Value::Integer(42)), hash(&Value::Integer(42)));
+        assert_eq!(hash(&Value::String("hi".into())), hash(&Value::String("hi".into())));
+        assert_eq!(hash(&Value::Bool(true)), hash(&Value::Bool(true)));
+        assert_eq!(hash(&Value::Char('x')), hash(&Value::Char('x')));
+        assert_eq!(hash(&Value::Unit), hash(&Value::Unit));
+        assert_eq!(hash(&Value::Float(1.5)), hash(&Value::Float(1.5)));
+    }
+
+    #[test]
+    fn test_hash_different_values_different_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        fn hash(v: &Value) -> u64 {
+            let mut h = DefaultHasher::new();
+            v.hash(&mut h);
+            std::hash::Hasher::finish(&h)
+        }
+        // Different types should hash differently due to discriminant
+        assert_ne!(hash(&Value::Integer(1)), hash(&Value::String("1".into())));
+        assert_ne!(hash(&Value::Bool(true)), hash(&Value::Integer(1)));
+        // Different values same type
+        assert_ne!(hash(&Value::Integer(1)), hash(&Value::Integer(2)));
+    }
+
+    #[test]
+    fn test_hash_containers() {
+        use std::collections::hash_map::DefaultHasher;
+        fn hash(v: &Value) -> u64 {
+            let mut h = DefaultHasher::new();
+            v.hash(&mut h);
+            std::hash::Hasher::finish(&h)
+        }
+        let v1 = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
+        let v2 = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
+        assert_eq!(hash(&v1), hash(&v2));
+
+        let t1 = Value::Tuple(vec![Value::Integer(1), Value::String("a".into())]);
+        let t2 = Value::Tuple(vec![Value::Integer(1), Value::String("a".into())]);
+        assert_eq!(hash(&t1), hash(&t2));
+    }
+
+    #[test]
+    fn test_ord_total_ordering() {
+        // Total ordering via Ord::cmp: any two values must be comparable
+        assert_eq!(Value::Integer(5).cmp(&Value::Integer(5)), Ordering::Equal);
+        assert_eq!(Value::Integer(1).cmp(&Value::Integer(2)), Ordering::Less);
+        assert_eq!(Value::Integer(3).cmp(&Value::Integer(2)), Ordering::Greater);
+
+        // Cross-type: Unit is discriminant 0, Bool is 1, Integer is 2, etc.
+        assert_eq!(Value::Unit.cmp(&Value::Bool(true)), Ordering::Less);
+        assert_eq!(Value::Bool(true).cmp(&Value::Integer(0)), Ordering::Less);
+        assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
+        assert_eq!(Value::Float(0.0).cmp(&Value::Char('a')), Ordering::Less);
+        assert_eq!(Value::Char('a').cmp(&Value::String("".into())), Ordering::Less);
+    }
+
+    #[test]
+    fn test_ord_vec() {
+        let a = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
+        let b = Value::Vec(vec![Value::Integer(1), Value::Integer(3)]);
+        assert!(a < b); // works via PartialOrd → Ord delegation
+        let c = Value::Vec(vec![Value::Integer(1)]);
+        assert!(c < a); // shorter is less
+        assert_eq!(a.cmp(&a), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_ord_float_total() {
+        // f64::total_cmp handles NaN, -0, etc.
+        assert!(Value::Float(-0.0) == Value::Float(0.0)); // total_cmp: -0 == +0
+        assert!(Value::Float(1.5) < Value::Float(2.0));
+        assert!(Value::Float(f64::INFINITY) > Value::Float(0.0));
+    }
+
+    #[test]
+    fn test_eq_is_reflexive() {
+        let vals = vec![
+            Value::Integer(1),
+            Value::Float(1.0),
+            Value::Bool(true),
+            Value::String("s".into()),
+            Value::Char('c'),
+            Value::Unit,
+            Value::Vec(vec![Value::Integer(1)]),
+            Value::Tuple(vec![Value::Integer(1)]),
+        ];
+        for v in &vals {
+            assert_eq!(v, v, "Eq reflexive failed for {:?}", v);
+        }
+    }
+
+    #[test]
+    fn test_ord_consistency_with_partial_ord() {
+        // Ord must agree with PartialOrd where PartialOrd is defined
+        let pairs = vec![
+            (Value::Integer(1), Value::Integer(2)),
+            (Value::Float(1.0), Value::Float(2.0)),
+            (Value::String("a".into()), Value::String("b".into())),
+            (Value::Char('a'), Value::Char('b')),
+            (Value::Bool(false), Value::Bool(true)),
+        ];
+        for (a, b) in pairs {
+            assert_eq!(
+                a.partial_cmp(&b).unwrap(),
+                a.cmp(&b),
+                "Ord and PartialOrd disagree for {:?} vs {:?}",
+                a,
+                b
+            );
+        }
+    }
+
+    #[test]
+    fn test_hash_f64_uses_bits() {
+        use std::collections::hash_map::DefaultHasher;
+        fn hash(v: &Value) -> u64 {
+            let mut h = DefaultHasher::new();
+            v.hash(&mut h);
+            std::hash::Hasher::finish(&h)
+        }
+        // Same float bits = same hash (even NaN, though NaN bits may differ)
+        assert_eq!(hash(&Value::Float(3.14)), hash(&Value::Float(3.14)));
+        // -0.0 and +0.0 have different bit patterns, so hash will differ
+        // (this is intentional — consistent with Eq which compares f64 directly)
+    }
+
+    #[test]
+    fn test_ord_struct_and_enum() {
+        let s1 = Value::Struct {
+            name: "Point".into(),
+            fields: {
+                let mut m = HashMap::new();
+                m.insert("x".into(), Value::Integer(1));
+                m.insert("y".into(), Value::Integer(2));
+                m
+            },
+        };
+        let s2 = Value::Struct {
+            name: "Point".into(),
+            fields: {
+                let mut m = HashMap::new();
+                m.insert("x".into(), Value::Integer(1));
+                m.insert("y".into(), Value::Integer(3));
+                m
+            },
+        };
+        assert!(s1 < s2);
+
+        let e1 = Value::EnumVariant {
+            enum_name: "Color".into(),
+            variant: "Red".into(),
+            data: vec![],
+        };
+        let e2 = Value::EnumVariant {
+            enum_name: "Color".into(),
+            variant: "Blue".into(),
+            data: vec![],
+        };
+        assert!(e2 < e1); // "Blue" < "Red"
     }
 }

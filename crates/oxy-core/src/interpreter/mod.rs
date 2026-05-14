@@ -3449,6 +3449,571 @@ fn main() {
         assert_eq!(output, vec!["true\n"]);
     }
 
+    // === HashSet tests ===
+
+    #[test]
+    fn test_hashset_new_and_insert() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert(1);
+    s.insert(2);
+    s.insert(1);
+    println!("{}", s.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["2\n"]);
+    }
+
+    #[test]
+    fn test_hashset_contains() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert("a");
+    s.insert("b");
+    println!("{}", s.contains("a"));
+    println!("{}", s.contains("c"));
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_hashset_remove() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert(1);
+    s.insert(2);
+    println!("{}", s.remove(1));
+    println!("{}", s.len());
+    println!("{}", s.remove(3));
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "1\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_hashset_is_empty() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let s = HashSet::new();
+    println!("{}", s.is_empty());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_hashset_union() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut a = HashSet::new();
+    a.insert(1);
+    a.insert(2);
+    let mut b = HashSet::new();
+    b.insert(2);
+    b.insert(3);
+    let c = a.union(b);
+    println!("{}", c.len());
+    println!("{}", c.contains(1));
+    println!("{}", c.contains(3));
+}
+"#,
+        );
+        assert_eq!(output, vec!["3\n", "true\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_hashset_intersection() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut a = HashSet::new();
+    a.insert(1);
+    a.insert(2);
+    let mut b = HashSet::new();
+    b.insert(2);
+    b.insert(3);
+    let c = a.intersection(b);
+    println!("{}", c.len());
+    println!("{}", c.contains(2));
+    println!("{}", c.contains(1));
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_hashset_difference() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut a = HashSet::new();
+    a.insert(1);
+    a.insert(2);
+    let mut b = HashSet::new();
+    b.insert(2);
+    b.insert(3);
+    let c = a.difference(b);
+    println!("{}", c.len());
+    println!("{}", c.contains(1));
+    println!("{}", c.contains(2));
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_hashset_to_vec() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert(3);
+    s.insert(1);
+    s.insert(2);
+    let v = s.to_vec();
+    println!("{}", v.len());
+    // to_vec returns sorted elements
+    println!("{}", v[0]);
+    println!("{}", v[2]);
+}
+"#,
+        );
+        assert_eq!(output, vec!["3\n", "1\n", "3\n"]);
+    }
+
+    #[test]
+    fn test_hashset_clone() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert(1);
+    let c = s.clone();
+    println!("{}", c.len());
+    println!("{}", c.contains(1));
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_hashset_iteration() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert(1);
+    s.insert(2);
+    for x in s {
+        println!("{}", x);
+    }
+}
+"#,
+        );
+        // iteration yields sorted elements
+        assert_eq!(output, vec!["1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_hashset_string_elements() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut s = HashSet::new();
+    s.insert("hello");
+    s.insert("world");
+    println!("{}", s.contains("hello"));
+    println!("{}", s.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "2\n"]);
+    }
+
+    // === Char methods ===
+
+    #[test]
+    fn test_char_is_digit() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", '5'.is_digit());
+    println!("{}", 'a'.is_digit());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_is_alphabetic() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'a'.is_alphabetic());
+    println!("{}", '5'.is_alphabetic());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_is_alphanumeric() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'a'.is_alphanumeric());
+    println!("{}", '5'.is_alphanumeric());
+    println!("{}", ' '.is_alphanumeric());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_is_whitespace() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", ' '.is_whitespace());
+    println!("{}", '\t'.is_whitespace());
+    println!("{}", 'a'.is_whitespace());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_is_lowercase() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'a'.is_lowercase());
+    println!("{}", 'A'.is_lowercase());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_is_uppercase() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'A'.is_uppercase());
+    println!("{}", 'a'.is_uppercase());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    #[test]
+    fn test_char_to_uppercase() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'a'.to_uppercase());
+    println!("{}", 'A'.to_uppercase());
+}
+"#,
+        );
+        assert_eq!(output, vec!["A\n", "A\n"]);
+    }
+
+    #[test]
+    fn test_char_to_lowercase() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", 'A'.to_lowercase());
+    println!("{}", 'a'.to_lowercase());
+}
+"#,
+        );
+        assert_eq!(output, vec!["a\n", "a\n"]);
+    }
+
+    // === String substrings ===
+
+    #[test]
+    fn test_string_char_at() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let s = "hello";
+    println!("{}", s.char_at(0));
+    println!("{}", s.char_at(4));
+}
+"#,
+        );
+        assert_eq!(output, vec!["h\n", "o\n"]);
+    }
+
+    #[test]
+    fn test_string_substring() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let s = "hello world";
+    println!("{}", s.substring(0, 5));
+    println!("{}", s.substring(6, 11));
+}
+"#,
+        );
+        assert_eq!(output, vec!["hello\n", "world\n"]);
+    }
+
+    #[test]
+    fn test_string_index_bracket() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let s = "abc";
+    println!("{}", s[0]);
+    println!("{}", s[2]);
+}
+"#,
+        );
+        assert_eq!(output, vec!["a\n", "c\n"]);
+    }
+
+    // === Integer/Float parsing ===
+
+    #[test]
+    fn test_int_parse() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let r = int::parse("42");
+    println!("{}", r.unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_int_parse_invalid() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let r = int::parse("abc");
+    println!("{}", r.is_err());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_float_parse() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let r = float::parse("3.14");
+    println!("{}", r.unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["3.14\n"]);
+    }
+
+    #[test]
+    fn test_int_parse_hex() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", int::parse("0xFF").unwrap());
+    println!("{}", int::parse("0x10").unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["255\n", "16\n"]);
+    }
+
+    #[test]
+    fn test_string_parse_int_method() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let r = "42".parse_int();
+    println!("{}", r.unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_string_parse_float_method() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let r = "3.14".parse_float();
+    println!("{}", r.unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["3.14\n"]);
+    }
+
+    // === BinaryHeap tests ===
+
+    #[test]
+    fn test_binary_heap_new_and_push() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    h.push(3);
+    h.push(1);
+    h.push(2);
+    println!("{}", h.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_binary_heap_peek() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    h.push(1);
+    h.push(5);
+    h.push(3);
+    // peek returns max
+    println!("{}", h.peek().unwrap());
+}
+"#,
+        );
+        assert_eq!(output, vec!["5\n"]);
+    }
+
+    #[test]
+    fn test_binary_heap_pop_order() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    h.push(1);
+    h.push(3);
+    h.push(2);
+    // pop returns max each time
+    println!("{}", h.pop().unwrap());
+    println!("{}", h.pop().unwrap());
+    println!("{}", h.pop().unwrap());
+    println!("{}", h.pop().is_none());
+}
+"#,
+        );
+        assert_eq!(output, vec!["3\n", "2\n", "1\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_binary_heap_pop_empty() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    println!("{}", h.pop().is_none());
+}
+"#,
+        );
+        assert_eq!(output, vec!["true\n"]);
+    }
+
+    #[test]
+    fn test_binary_heap_min_heap_via_negation() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    h.push(-1);
+    h.push(-3);
+    h.push(-2);
+    // max-heap on negated values = min-heap on original values
+    println!("{}", -(h.pop().unwrap()));
+    println!("{}", -(h.pop().unwrap()));
+    println!("{}", -(h.pop().unwrap()));
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "2\n", "3\n"]);
+    }
+
+    #[test]
+    fn test_binary_heap_to_vec() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut h = BinaryHeap::new();
+    h.push(3);
+    h.push(1);
+    h.push(2);
+    let v = h.to_vec();
+    // into_sorted_vec returns ascending order
+    println!("{}", v[0]);
+    println!("{}", v[2]);
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "3\n"]);
+    }
+
+    // === math::gcd / math::lcm ===
+
+    #[test]
+    fn test_math_gcd() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", math::gcd(12, 8));
+    println!("{}", math::gcd(7, 13));
+    println!("{}", math::gcd(0, 5));
+}
+"#,
+        );
+        assert_eq!(output, vec!["4\n", "1\n", "5\n"]);
+    }
+
+    #[test]
+    fn test_math_lcm() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    println!("{}", math::lcm(4, 6));
+    println!("{}", math::lcm(7, 13));
+    println!("{}", math::lcm(0, 5));
+}
+"#,
+        );
+        assert_eq!(output, vec!["12\n", "91\n", "0\n"]);
+    }
+
     // === Phase 12: For Destructuring ===
 
     #[test]

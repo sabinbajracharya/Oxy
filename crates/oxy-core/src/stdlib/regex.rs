@@ -42,17 +42,24 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let re = compile_regex(pattern, span)?;
             match re.captures(text) {
                 Some(caps) => {
-                    let mut map = std::collections::HashMap::new();
+                    let mut map: std::collections::HashMap<Value, Value> =
+                        std::collections::HashMap::new();
                     // Numeric groups
                     for (i, m) in caps.iter().enumerate() {
                         if let Some(m) = m {
-                            map.insert(i.to_string(), Value::String(m.as_str().to_string()));
+                            map.insert(
+                                Value::String(i.to_string()),
+                                Value::String(m.as_str().to_string()),
+                            );
                         }
                     }
                     // Named groups
                     for name in re.capture_names().flatten() {
                         if let Some(m) = caps.name(name) {
-                            map.insert(name.to_string(), Value::String(m.as_str().to_string()));
+                            map.insert(
+                                Value::String(name.to_string()),
+                                Value::String(m.as_str().to_string()),
+                            );
                         }
                     }
                     Ok(Value::some(Value::HashMap(map)))
