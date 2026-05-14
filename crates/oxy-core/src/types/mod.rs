@@ -87,6 +87,8 @@ pub struct FunctionData {
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
     pub closure_env: Env,
+    /// VM-only: bytecode instruction index where the function body starts.
+    pub target_ip: Option<usize>,
 }
 
 impl Value {

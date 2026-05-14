@@ -210,7 +210,7 @@ impl Interpreter {
 
     // === Expression evaluation ===
 
-    fn eval_expr(&mut self, expr: &Expr, env: &Env) -> Result<Value, FerriError> {
+    pub fn eval_expr(&mut self, expr: &Expr, env: &Env) -> Result<Value, FerriError> {
         match expr {
             Expr::IntLiteral(n, _) => Ok(Value::Integer(*n)),
             Expr::FloatLiteral(n, _) => Ok(Value::Float(*n)),
@@ -535,6 +535,20 @@ pub fn run(source: &str) -> Result<Value, FerriError> {
 pub fn run_compiled(source: &str) -> Result<Value, FerriError> {
     let program = crate::parser::parse(source)?;
     crate::type_checker::TypeChecker::new().check_program(&program)?;
+
+    // Require a fn main() for compiled execution
+    if !program
+        .items
+        .iter()
+        .any(|item| matches!(item, crate::ast::Item::Function(f) if f.name == "main"))
+    {
+        return Err(FerriError::Runtime {
+            message: "no `main` function".into(),
+            line: 0,
+            column: 0,
+        });
+    }
+
     let chunk = crate::compiler::Compiler::new().compile(&program)?;
     let mut vm = crate::vm::Vm::new(chunk);
     match vm.run() {

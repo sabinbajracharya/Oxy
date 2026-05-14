@@ -16,12 +16,12 @@ fn main() {
             print_help();
         }
         Some("run") => {
-            let mut compiled = false;
+            let mut use_interpreter = false;
             let mut file_idx = 2;
             // Parse flags before the filename
             while let Some(arg) = args.get(file_idx) {
-                if arg == "--compiled" || arg == "-c" {
-                    compiled = true;
+                if arg == "--interpreter" || arg == "-i" {
+                    use_interpreter = true;
                     file_idx += 1;
                 } else {
                     break;
@@ -31,7 +31,7 @@ fn main() {
                 eprintln!("{} 'run' requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
-            run_file(file, compiled);
+            run_file(file, use_interpreter);
         }
         Some("repl") => {
             run_repl();
@@ -81,7 +81,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &str, compiled: bool) {
+fn run_file(path: &str, use_interpreter: bool) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -93,31 +93,32 @@ fn run_file(path: &str, compiled: bool) {
         }
     };
 
-    if compiled {
-        match oxy_core::interpreter::run_compiled(&source) {
+    if use_interpreter {
+        // Collect program args: everything after the file argument
+        let all_args: Vec<String> = std::env::args().collect();
+        let cli_args: Vec<String> = if all_args.len() > 3 {
+            all_args[3..].to_vec()
+        } else {
+            vec![]
+        };
+        let mut program_args = vec![path.to_string()];
+        program_args.extend(cli_args);
+
+        match oxy_core::interpreter::run_file_with_args(path, &source, program_args) {
             Ok(_) => {}
-            Err(e) => {
-                display_error(&e, &source, &[]);
+            Err(runtime_err) => {
+                display_error(&runtime_err.error, &source, &runtime_err.call_stack);
                 process::exit(1);
             }
         }
         return;
     }
 
-    // Collect program args: everything after the file argument
-    let all_args: Vec<String> = std::env::args().collect();
-    let cli_args: Vec<String> = if all_args.len() > 3 {
-        all_args[3..].to_vec()
-    } else {
-        vec![]
-    };
-    let mut program_args = vec![path.to_string()];
-    program_args.extend(cli_args);
-
-    match oxy_core::interpreter::run_file_with_args(path, &source, program_args) {
+    // Default: run on the bytecode VM (with interpreter fallback via Eval)
+    match oxy_core::interpreter::run_compiled(&source) {
         Ok(_) => {}
-        Err(runtime_err) => {
-            display_error(&runtime_err.error, &source, &runtime_err.call_stack);
+        Err(e) => {
+            display_error(&e, &source, &[]);
             process::exit(1);
         }
     }
@@ -446,7 +447,7 @@ fn print_help() {
     println!("{} oxy [command] [options]\n", "Usage:".bold());
     println!("{}:", "Commands".bold());
     println!(
-        "  {}        Execute an Oxy source file (--compiled for VM)",
+        "  {}        Execute an Oxy source file (--interpreter for tree-walker)",
         "run <file.ox> ".cyan()
     );
     println!(

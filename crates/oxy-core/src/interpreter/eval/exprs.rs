@@ -371,6 +371,7 @@ impl Interpreter {
             return_type: return_type.clone(),
             body: closure_body,
             closure_env: env.clone(),
+            target_ip: None,
         })))
     }
 
