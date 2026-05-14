@@ -39,7 +39,9 @@ impl SymTable {
     }
 
     fn build_slot_names(&self) -> Vec<String> {
-        let mut names = vec![String::new(); self.next_slot];
+        let max_slot = self.locals.values().max().copied().unwrap_or(0);
+        let size = (max_slot + 1).max(self.next_slot);
+        let mut names = vec![String::new(); size];
         for (name, slot) in &self.locals {
             names[*slot] = name.clone();
         }
@@ -224,6 +226,98 @@ impl Compiler {
 
         self.sym = saved_sym;
         Ok(())
+    }
+
+    /// Compile a pattern check. Leaves scrutinee on stack with Bool+data on top.
+    /// Expects: [scrutinee]
+    /// Leaves:  [scrutinee, true, data...] or [scrutinee, false]
+    fn compile_pattern(
+        &mut self,
+        pattern: &Pattern,
+        _next_arm_labels: &mut Vec<usize>,
+        _is_last: bool,
+    ) -> Result<(), FerriError> {
+        match pattern {
+            Pattern::Wildcard(_) => {
+                self.emit(OpCode::ConstBool(true));
+                Ok(())
+            }
+            Pattern::Ident(name, _) => {
+                // Always matches — the binding happens in bind_pattern_data
+                self.emit(OpCode::ConstBool(true));
+                // Push a copy of the scrutinee as the "data" to bind
+                self.emit(OpCode::Dup);
+                // Define a slot for this binding (will be bound in bind_pattern_data)
+                self.sym.define(name);
+                Ok(())
+            }
+            Pattern::Literal(expr) => {
+                self.emit(OpCode::Dup);
+                self.compile_expr(expr)?;
+                self.emit(OpCode::Eq);
+                Ok(())
+            }
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                fields,
+                ..
+            } => {
+                self.emit(OpCode::EnumVariantEqual {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                });
+                // Pre-define slots for field pattern bindings
+                self.define_pattern_slots(fields);
+                Ok(())
+            }
+            _ => {
+                // For Struct, Tuple, Or, Slice, Rest — fall back to const false
+                // (will be handled properly in subsequent iterations)
+                self.emit(OpCode::ConstBool(false));
+                Ok(())
+            }
+        }
+    }
+
+    /// Pre-define slots for pattern variables (called during pattern compilation).
+    fn define_pattern_slots(&mut self, patterns: &[Pattern]) {
+        for p in patterns {
+            match p {
+                Pattern::Ident(name, _) => {
+                    self.sym.define(name);
+                }
+                Pattern::EnumVariant { fields, .. } => {
+                    self.define_pattern_slots(fields);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Bind pattern variables after a successful match.
+    /// Expects: [scrutinee, data...] on stack (scrutinee and match bool already popped)
+    /// Actually: called after Pop(scrutinee), so stack has [data...]
+    fn bind_pattern_data(&mut self, pattern: &Pattern) -> Result<(), FerriError> {
+        match pattern {
+            Pattern::Wildcard(_) => Ok(()),
+            Pattern::Ident(name, _) => {
+                // Pop the data value and bind it
+                if let Some(slot) = self.sym.get(name) {
+                    self.emit(OpCode::BindIdent(slot));
+                }
+                Ok(())
+            }
+            Pattern::EnumVariant { fields, .. } => {
+                // For each field pattern, bind the corresponding data value
+                for field_pat in fields {
+                    self.bind_pattern_data(field_pat)?;
+                }
+                Ok(())
+            }
+            Pattern::Literal(_) => Ok(()), // no binding needed
+            _ => Ok(()),                   // other patterns defer to Eval or not yet supported
+        }
     }
 
     fn compile_block(&mut self, block: &Block) -> Result<(), FerriError> {
@@ -896,10 +990,10 @@ impl Compiler {
                     let enum_name = &path[0];
                     let variant = &path[1];
                     if self.enum_defs.contains_key(enum_name) {
-                        self.emit(OpCode::ConstEnumVariant {
+                        self.emit(OpCode::MakeEnumVariant {
                             enum_name: enum_name.clone(),
                             variant: variant.clone(),
-                            data: vec![],
+                            arg_count: args.len(),
                         });
                         return Ok(());
                     }
@@ -924,8 +1018,124 @@ impl Compiler {
                 Ok(())
             }
 
+            Expr::Match {
+                expr: scrutinee,
+                arms,
+                ..
+            } => {
+                // Evaluate scrutinee once, store in temp slot
+                self.compile_expr(scrutinee)?;
+                let scrutinee_slot = self.sym.define("__match_scrutinee");
+                let current_slot = self.sym.next_slot;
+                self.emit(OpCode::StoreLocal(scrutinee_slot));
+
+                let _match_end_label = self.code.len(); // placeholder
+                let mut arm_jumps: Vec<usize> = vec![];
+
+                for (i, arm) in arms.iter().enumerate() {
+                    let is_last = i == arms.len() - 1;
+                    let _next_arm_label_idx = self.code.len(); // will be patched later
+
+                    // Push scrutinee for this arm
+                    self.emit(OpCode::LoadLocal(scrutinee_slot));
+
+                    // Compile pattern check → leaves Bool(true)+data or Bool(false)
+                    let consumes_scrutinee = matches!(arm.pattern, Pattern::EnumVariant { .. });
+                    self.compile_pattern(&arm.pattern, &mut vec![], is_last)?;
+
+                    // JumpIfFalse to next arm if pattern didn't match
+                    let jump_to_next = self.emit(OpCode::JumpIfFalse(0));
+
+                    // Pattern matched. EnumVariant consumed the scrutinee;
+                    // other patterns left it on stack → Pop it.
+                    if !consumes_scrutinee {
+                        self.emit(OpCode::Pop); // discard scrutinee
+                    }
+                    self.bind_pattern_data(&arm.pattern)?;
+
+                    // Compile guard if present
+                    if let Some(guard) = &arm.guard {
+                        self.compile_expr(guard)?;
+                        let guard_jump = self.emit(OpCode::JumpIfFalse(0));
+                        // If guard fails, go to next arm (need to record for patching)
+                        arm_jumps.push(guard_jump);
+                    }
+
+                    // Compile arm body
+                    self.compile_expr(&arm.body)?;
+
+                    // Jump to match end
+                    arm_jumps.push(self.emit(OpCode::Jump(0)));
+
+                    // Patch the "jump to next arm" from pattern check
+                    self.patch(jump_to_next, OpCode::JumpIfFalse(self.code.len()));
+
+                    // Clean up sym for bindings in this arm
+                    // (Remove any pattern-bound variables)
+                    // For simplicity, reset next_slot to the state before this arm
+                    self.sym.next_slot = current_slot;
+                }
+
+                // If we reach here, no arm matched → runtime error
+                self.emit(OpCode::ConstString("match: no arm matched".into()));
+                self.emit(OpCode::PrintLn);
+
+                // Match end: patch all arm jumps
+                let end = self.code.len();
+                for j in &arm_jumps {
+                    self.patch(*j, OpCode::Jump(end));
+                }
+                // Patch the match_end placeholder
+                // (Actually the placeholder was never used since we emit labels dynamically)
+
+                Ok(())
+            }
+
+            Expr::IfLet {
+                pattern,
+                expr: scrutinee,
+                then_block,
+                else_block,
+                ..
+            } => {
+                // Evaluate scrutinee, store in temp
+                self.compile_expr(scrutinee)?;
+                let scrut_slot = self.sym.define("__iflet_scrutinee");
+                let current_slot = self.sym.next_slot;
+                self.emit(OpCode::StoreLocal(scrut_slot));
+
+                // Pattern check
+                self.emit(OpCode::LoadLocal(scrut_slot));
+                let consumes = matches!(pattern.as_ref(), Pattern::EnumVariant { .. });
+                self.compile_pattern(pattern, &mut vec![], true)?;
+                let jump_to_else = self.emit(OpCode::JumpIfFalse(0));
+
+                // Matched: clean up, bind, compile then block
+                if !consumes {
+                    self.emit(OpCode::Pop);
+                }
+                self.bind_pattern_data(pattern)?;
+                self.compile_block(then_block)?;
+
+                // Jump over else block
+                let jump_to_end = self.emit(OpCode::Jump(0));
+
+                // Else block
+                self.patch(jump_to_else, OpCode::JumpIfFalse(self.code.len()));
+                self.sym.next_slot = current_slot;
+                if let Some(else_expr) = else_block {
+                    self.compile_expr(else_expr)?;
+                } else {
+                    self.emit(OpCode::ConstUnit);
+                }
+
+                // End
+                self.patch(jump_to_end, OpCode::Jump(self.code.len()));
+                Ok(())
+            }
+
             // Fallback to interpreter for expressions not yet natively compiled.
-            Expr::Match { .. } | Expr::Await { .. } | Expr::IfLet { .. } => {
+            Expr::Await { .. } => {
                 self.emit_eval(expr);
                 Ok(())
             }

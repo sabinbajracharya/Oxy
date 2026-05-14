@@ -130,6 +130,12 @@ pub enum OpCode {
         variant: String,
         data: Vec<Value>,
     },
+    /// Pop `arg_count` values, push an enum variant wrapping them.
+    MakeEnumVariant {
+        enum_name: String,
+        variant: String,
+        arg_count: usize,
+    },
     /// Push a closure value: body starts at `target_ip`, takes `param_count` args.
     Closure {
         target_ip: usize,
@@ -142,6 +148,18 @@ pub enum OpCode {
     /// Await a future: pop Value, if Future run its body, if JoinHandle unwrap,
     /// otherwise pass through.
     Await,
+
+    // --- Pattern matching ---
+    /// Pop a value and store it in the given local slot (for pattern binding).
+    BindIdent(usize),
+    /// Peek the top of stack; if it's EnumVariant{enum_name, variant}, push true
+    /// and push each data field; otherwise push false.
+    EnumVariantEqual {
+        enum_name: String,
+        variant: String,
+    },
+    /// Pop an EnumVariant, push data[index] (index 0 is first tuple field).
+    EnumDataGet(usize),
 
     // --- Interpreter fallback ---
     /// Delegate evaluation of an AST expression to the tree-walking interpreter.
@@ -532,6 +550,20 @@ impl Vm {
                     });
                 }
 
+                OpCode::MakeEnumVariant {
+                    enum_name,
+                    variant,
+                    arg_count,
+                } => {
+                    let start = self.stack.len().saturating_sub(arg_count);
+                    let data: Vec<Value> = self.stack.drain(start..).collect();
+                    self.stack.push(Value::EnumVariant {
+                        enum_name,
+                        variant,
+                        data,
+                    });
+                }
+
                 OpCode::Closure {
                     target_ip,
                     param_count,
@@ -701,6 +733,57 @@ impl Vm {
                         }
                     }
                     self.stack.push(Value::String(result));
+                }
+
+                OpCode::BindIdent(slot) => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let base = self.frame_base();
+                    let idx = base + slot;
+                    while idx >= self.stack.len() {
+                        self.stack.push(Value::Unit);
+                    }
+                    self.stack[idx] = val;
+                    if let Some(frame) = self.call_stack.last_mut() {
+                        if slot + 1 > frame.max_slot {
+                            frame.max_slot = slot + 1;
+                        }
+                    }
+                }
+
+                OpCode::EnumVariantEqual { enum_name, variant } => {
+                    // Pop the scrutinee, check match, push data + bool
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    match &val {
+                        Value::EnumVariant {
+                            enum_name: en,
+                            variant: v,
+                            data,
+                        } if en == &enum_name && v == &variant => {
+                            for d in data.iter() {
+                                self.stack.push(d.clone());
+                            }
+                            self.stack.push(Value::Bool(true));
+                        }
+                        _ => {
+                            self.stack.push(Value::Bool(false));
+                        }
+                    }
+                }
+
+                OpCode::EnumDataGet(index) => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    match val {
+                        Value::EnumVariant { data, .. } => {
+                            let item = data.get(index).cloned().unwrap_or(Value::Unit);
+                            self.stack.push(item);
+                        }
+                        _ => {
+                            return VmResult::Error(format!(
+                                "EnumDataGet: expected enum variant, got {}",
+                                val.type_name()
+                            ));
+                        }
+                    }
                 }
 
                 OpCode::Eval(idx) => {

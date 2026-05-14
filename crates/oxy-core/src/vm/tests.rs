@@ -648,4 +648,128 @@ mod tests {
         let (_, output) = result.unwrap();
         assert_eq!(output, vec!["42\n"]);
     }
+
+    // --- Match tests ---
+
+    #[test]
+    fn test_compiled_match_literal() {
+        let source = r#"
+        fn main() {
+            let x = 1;
+            let r = match x {
+                1 => "one",
+                _ => "other",
+            };
+            println!("{}", r);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "match literal failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["one\n"]);
+    }
+
+    #[test]
+    fn test_compiled_match_wildcard() {
+        let source = r#"
+        fn main() {
+            let x = 99;
+            let r = match x {
+                1 => "one",
+                _ => "other",
+            };
+            println!("{}", r);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "match wildcard failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["other\n"]);
+    }
+
+    #[test]
+    fn test_compiled_match_ident_binding() {
+        let source = r#"
+        fn main() {
+            let x = 42;
+            let r = match x {
+                v => v + 1,
+            };
+            println!("{}", r);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "match ident binding failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["43\n"]);
+    }
+
+    #[test]
+    fn test_compiled_match_enum_variant() {
+        let source = r#"
+        enum Opt { Some(i64), None }
+        fn main() {
+            let x = Opt::Some(10);
+            let r = match x {
+                Opt::Some(v) => v,
+                Opt::None => 0,
+            };
+            println!("{}", r);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "match enum variant failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["10\n"]);
+    }
+
+    // --- IfLet tests ---
+
+    #[test]
+    fn test_compiled_if_let_some() {
+        let source = r#"
+        enum Opt { Some(i64), None }
+        fn main() {
+            let x = Opt::Some(42);
+            if let Opt::Some(v) = x {
+                println!("{}", v);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "if let some failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_compiled_if_let_none_else() {
+        let source = r#"
+        enum Opt { Some(i64), None }
+        fn main() {
+            let x = Opt::None;
+            if let Opt::Some(v) = x {
+                println!("{}", v);
+            } else {
+                println!("nothing");
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "if let none else failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["nothing\n"]);
+    }
 }
