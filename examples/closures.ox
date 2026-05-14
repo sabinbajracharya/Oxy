@@ -1,4 +1,4 @@
-// Oxide Closures & Higher-Order Functions Example
+// Oxy Closures & Higher-Order Functions Example
 // Demonstrates closure syntax, variable capture, and iterator methods
 
 fn apply(f: Fn, x: i64) -> i64 {

@@ -1,4 +1,4 @@
-// Advanced Oxide features demo
+// Advanced Oxy features demo
 
 type Distance = f64;
 type Name = String;

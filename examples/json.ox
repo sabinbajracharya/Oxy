@@ -1,4 +1,4 @@
-// examples/json.ox — JSON serialization & deserialization in Oxide
+// examples/json.ox — JSON serialization & deserialization in Oxy
 
 struct Person {
     name: String,

@@ -1,4 +1,4 @@
-// Example: Structs, Enums, and Impl Blocks in Oxide
+// Example: Structs, Enums, and Impl Blocks in Oxy
 
 struct Point {
     x: f64,

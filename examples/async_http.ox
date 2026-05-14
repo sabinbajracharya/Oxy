@@ -1,4 +1,4 @@
-// Example: Async/Await in Oxide
+// Example: Async/Await in Oxy
 async fn fetch_data(url: String) -> Result<String, String> {
     let resp = http::get(url)?;
     Ok(resp.body)
