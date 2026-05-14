@@ -1,9 +1,9 @@
 {
-    "name": "oxide-lang",
-    "displayName": "Oxide Language",
-    "description": "Syntax highlighting and LSP support for the Oxide programming language (.ox files)",
+    "name": "oxy-lang",
+    "displayName": "Oxy Language",
+    "description": "Syntax highlighting and LSP support for the Oxy programming language (.ox files)",
     "version": "0.1.0",
-    "publisher": "oxide-lang",
+    "publisher": "oxy-lang",
     "repository": {
         "type": "git",
         "url": "https://github.com/nickel-lang/project-ferrite"
@@ -15,16 +15,16 @@
         "Programming Languages"
     ],
     "activationEvents": [
-        "onLanguage:oxide"
+        "onLanguage:oxy"
     ],
     "main": "./extension.js",
     "contributes": {
         "languages": [
             {
-                "id": "oxide",
+                "id": "oxy",
                 "aliases": [
-                    "Oxide",
-                    "oxide"
+                    "Oxy",
+                    "oxy"
                 ],
                 "extensions": [
                     ".ox"
@@ -34,21 +34,21 @@
         ],
         "grammars": [
             {
-                "language": "oxide",
-                "scopeName": "source.oxide",
-                "path": "./syntaxes/oxide.tmLanguage.json"
+                "language": "oxy",
+                "scopeName": "source.oxy",
+                "path": "./syntaxes/oxy.tmLanguage.json"
             }
         ],
         "configuration": {
             "type": "object",
-            "title": "Oxide",
+            "title": "Oxy",
             "properties": {
-                "oxide.lsp.path": {
+                "oxy.lsp.path": {
                     "type": "string",
-                    "default": "oxide-lsp",
-                    "description": "Path to the oxide-lsp binary. Only used when mode is 'native'."
+                    "default": "oxy-lsp",
+                    "description": "Path to the oxy-lsp binary. Only used when mode is 'native'."
                 },
-                "oxide.lsp.mode": {
+                "oxy.lsp.mode": {
                     "type": "string",
                     "default": "auto",
                     "enum": [
@@ -59,11 +59,11 @@
                     "enumDescriptions": [
                         "Auto-detect: uses Docker if no custom path is set, native binary otherwise",
                         "Always launch LSP via Docker (no local Rust needed)",
-                        "Use a local oxide-lsp binary directly"
+                        "Use a local oxy-lsp binary directly"
                     ],
                     "description": "How to launch the Oxide Language Server."
                 },
-                "oxide.lsp.enabled": {
+                "oxy.lsp.enabled": {
                     "type": "boolean",
                     "default": true,
                     "description": "Enable the Oxide Language Server for diagnostics, completion, hover, and go-to-definition."
@@ -79,6 +79,6 @@
     },
     "scripts": {
         "package": "vsce package --no-dependencies",
-        "install-ext": "code --install-extension oxide-lang-*.vsix"
+        "install-ext": "code --install-extension oxy-lang-*.vsix"
     }
 }

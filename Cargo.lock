@@ -639,18 +639,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
-name = "oxide-cli"
+name = "oxy-cli"
 version = "0.2.2"
 dependencies = [
  "assert_cmd",
  "colored",
- "oxide-core",
+ "oxy-core",
  "predicates",
  "rustyline",
 ]
 
 [[package]]
-name = "oxide-core"
+name = "oxy-core"
 version = "0.2.2"
 dependencies = [
  "regex",
@@ -660,20 +660,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxide-lsp"
+name = "oxy-lsp"
 version = "0.2.2"
 dependencies = [
- "oxide-core",
+ "oxy-core",
  "serde_json",
  "tokio",
  "tower-lsp",
 ]
 
 [[package]]
-name = "oxide-wasm"
+name = "oxy-wasm"
 version = "0.1.0"
 dependencies = [
- "oxide-core",
+ "oxy-core",
  "wasm-bindgen",
 ]
 

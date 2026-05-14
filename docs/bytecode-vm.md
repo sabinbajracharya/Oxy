@@ -89,24 +89,24 @@ These fall back to the interpreter by calling `run()` instead of `run_compiled()
 
 | File | Purpose |
 |---|---|
-| `crates/oxide-core/src/vm/mod.rs` | OpCode enum, Chunk struct, Vm executor |
-| `crates/oxide-core/src/vm/tests.rs` | TTD tests (3 passing, 3 skipped) |
-| `crates/oxide-core/src/compiler/mod.rs` | Compiler: AST → Chunk |
+| `crates/oxy-core/src/vm/mod.rs` | OpCode enum, Chunk struct, Vm executor |
+| `crates/oxy-core/src/vm/tests.rs` | TTD tests (3 passing, 3 skipped) |
+| `crates/oxy-core/src/compiler/mod.rs` | Compiler: AST → Chunk |
 
 ## Usage
 
 **CLI:**
 ```bash
 # Interpreted (tree-walking)
-oxide run examples/fibonacci.ox
+oxy run examples/fibonacci.ox
 
 # Compiled (bytecode VM, 10x faster)
-oxide run --compiled examples/fibonacci.ox
-oxide run -c examples/fibonacci.ox
+oxy run --compiled examples/fibonacci.ox
+oxy run -c examples/fibonacci.ox
 ```
 
 **Rust API:**
 ```rust
-use oxide_core::interpreter::run_compiled;
+use oxy_core::interpreter::run_compiled;
 let result = run_compiled("fn main() { println!(\"hi\"); }");
 ```

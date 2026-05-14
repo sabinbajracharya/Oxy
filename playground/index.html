@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oxide Playground</title>
+<title>Oxy Playground</title>
 <style>
   :root {
     --bg: #1e1e2e;
@@ -121,8 +121,8 @@
 <body>
 
 <header>
-  <h1>Oxide Playground</h1>
-  <p>All of Rust's expressiveness, none of its fights. Try Oxide in your browser — no install, no Docker.</p>
+  <h1>Oxy Playground</h1>
+  <p>All of Rust's expressiveness, none of its fights. Try Oxy in your browser — no install, no Docker.</p>
   <div class="links">
     <a href="https://github.com/sabinbajracharya/Oxide">GitHub</a>
     <a href="https://github.com/sabinbajracharya/Oxide/blob/main/README.md">Docs</a>
@@ -143,7 +143,7 @@
 </main>
 
 <footer>
-  Oxide is MIT licensed. Built with Rust + WebAssembly.
+  Oxy is MIT licensed. Built with Rust + WebAssembly.
 </footer>
 
 <script type="module">
@@ -212,9 +212,9 @@ let wasmReady = false;
 
 async function initWasm() {
   try {
-    const mod = await import("./pkg/oxide_wasm.js");
+    const mod = await import("./pkg/oxy_wasm.js");
     await mod.default();
-    window.runOxide = (src) => mod.run_oxide(src);
+    window.runOxy = (src) => mod.run_oxy(src);
     wasmReady = true;
     setStatus("Ready — press Run or Ctrl+Enter");
   } catch (e) {
@@ -244,7 +244,7 @@ window.run = function () {
   const source = view.state.doc.toString();
 
   try {
-    const result = window.runOxide(source);
+    const result = window.runOxy(source);
     const lines = result.split("\n");
     const hasError = result.includes("Error:") || result.includes("error:") || result.includes("runtime error:");
     output.innerHTML = lines.map(l => hasError && (l.includes("Error:") || l.includes("error:"))

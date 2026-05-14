@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'playground/**'
-      - 'crates/oxide-core/**'
+      - 'crates/oxy-core/**'
 
 jobs:
   build-deploy:

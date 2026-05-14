@@ -1,5 +1,5 @@
 // Oxide Language Server extension for VS Code
-// Launches the oxide-lsp binary (directly or via Docker) and connects via stdio
+// Launches the oxy-lsp binary (directly or via Docker) and connects via stdio
 
 const { LanguageClient, TransportKind } = require("vscode-languageclient/node");
 const vscode = require("vscode");
@@ -31,9 +31,9 @@ function findProjectRoot() {
 }
 
 function activate(context) {
-    outputChannel = vscode.window.createOutputChannel("Oxide LSP");
+    outputChannel = vscode.window.createOutputChannel("Oxy LSP");
 
-    const config = vscode.workspace.getConfiguration("oxide.lsp");
+    const config = vscode.workspace.getConfiguration("oxy.lsp");
     const enabled = config.get("enabled", true);
 
     if (!enabled) {
@@ -42,17 +42,17 @@ function activate(context) {
     }
 
     const mode = config.get("mode", "auto");
-    const lspPath = config.get("path", "oxide-lsp");
+    const lspPath = config.get("path", "oxy-lsp");
 
     let serverOptions;
 
-    const useDocker = mode === "docker" || (mode === "auto" && lspPath === "oxide-lsp");
+    const useDocker = mode === "docker" || (mode === "auto" && lspPath === "oxy-lsp");
 
     if (useDocker) {
         const projectRoot = findProjectRoot();
         if (!projectRoot) {
             vscode.window.showErrorMessage(
-                "Oxide: Could not find project root (Cargo.toml). Set oxide.lsp.mode to 'native' and oxide.lsp.path to your oxide-lsp binary."
+                "Oxide: Could not find project root (Cargo.toml). Set oxy.lsp.mode to 'native' and oxy.lsp.path to your oxy-lsp binary."
             );
             return;
         }
@@ -65,7 +65,7 @@ function activate(context) {
             args: [
                 "compose", "run", "--rm", "-T",
                 "dev",
-                "cargo", "run", "--release", "-p", "oxide-lsp", "--quiet", "--",
+                "cargo", "run", "--release", "-p", "oxy-lsp", "--quiet", "--",
             ],
             options: { cwd: projectRoot },
             transport: TransportKind.stdio,
@@ -80,7 +80,7 @@ function activate(context) {
     }
 
     const clientOptions = {
-        documentSelector: [{ scheme: "file", language: "oxide" }],
+        documentSelector: [{ scheme: "file", language: "oxy" }],
         synchronize: {
             fileEvents: vscode.workspace.createFileSystemWatcher("**/*.ox"),
         },
@@ -88,8 +88,8 @@ function activate(context) {
     };
 
     client = new LanguageClient(
-        "oxide-lsp",
-        "Oxide Language Server",
+        "oxy-lsp",
+        "Oxy Language Server",
         serverOptions,
         clientOptions
     );
@@ -97,7 +97,7 @@ function activate(context) {
     client.start().catch((err) => {
         outputChannel.appendLine(`Failed to start Oxide LSP: ${err.message}`);
         vscode.window.showErrorMessage(
-            `Oxide LSP failed to start: ${err.message}. Check "Oxide LSP" output channel for details.`
+            `Oxide LSP failed to start: ${err.message}. Check "Oxy LSP" output channel for details.`
         );
     });
 

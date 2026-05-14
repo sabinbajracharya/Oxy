@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/oxide-core", "crates/oxide-cli", "crates/oxide-lsp", "playground/wasm"]
+members = ["crates/oxy-core", "crates/oxy-cli", "crates/oxy-lsp", "playground/wasm"]
 resolver = "2"
 
 [workspace.package]
@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/sabinbajracharya/Oxide"
 
 [workspace.dependencies]
-oxide-core = { path = "crates/oxide-core" }
+oxy-core = { path = "crates/oxy-core" }
 thiserror = "2"
 colored = "2"
 regex = "1"

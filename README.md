@@ -1,17 +1,17 @@
 <img width="2816" height="1536" alt="oxide_2d" src="https://github.com/user-attachments/assets/cf3ba2a3-a25f-411e-9ed4-52d87ff5b568" />
 
-# 🧲 Oxide
+# 🧲 Oxy
 
 **Rust syntax, scripting freedom.**
 
-Oxide is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
+Oxy is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
 
-## Why Oxide?
+## Why Oxy?
 
 - **Learn Rust syntax** without fighting the borrow checker
 - **Rapid prototyping** with Rust ergonomics in a scripting environment
-- **Gradual migration** — write in Oxide first, port to Rust when ready
-- **Familiar syntax** — if you know Rust, you already know Oxide
+- **Gradual migration** — write in Oxy first, port to Rust when ready
+- **Familiar syntax** — if you know Rust, you already know Oxy
 
 ## Hello World
 
@@ -23,7 +23,7 @@ fn main() {
 }
 ```
 
-## What Oxide Supports
+## What Oxy Supports
 
 | Feature | Status |
 |---|---|
@@ -42,7 +42,7 @@ fn main() {
 | Static type checking (optional `: Type` annotations) | ✅ |
 | String operations, f-string interpolation | ✅ |
 | `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
-| `#[test]` + built-in test runner (`oxide test`) | ✅ |
+| `#[test]` + built-in test runner (`oxy test`) | ✅ |
 | Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | ✅ |
 | JSON serialization/deserialization | ✅ |
 | HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
@@ -61,7 +61,7 @@ fn main() {
 
 ## What Works Differently from Rust
 
-| Rust Feature | Oxide Behavior |
+| Rust Feature | Oxy Behavior |
 |---|---|
 | Ownership / Move | Values are reference-counted, freely shared |
 | `&` and `&mut` | Syntax accepted, semantically ignored |
@@ -88,8 +88,8 @@ This is the easiest way. You don't need Rust, Node.js, or anything else installe
 #### 1. Clone the repository
 
 ```bash
-git clone https://github.com/sabinbajracharya/Oxide.git
-cd Oxide
+git clone https://github.com/sabinbajracharya/Oxy.git
+cd Oxy
 ```
 
 #### 2. Run first-time setup
@@ -100,7 +100,7 @@ This builds the Docker dev image (with Rust + Node.js) and installs VS Code exte
 docker compose run --rm setup
 ```
 
-#### 3. Build the Oxide interpreter
+#### 3. Build the Oxy interpreter
 
 ```bash
 docker compose run --rm dev bash -c "cargo build --release"
@@ -108,7 +108,7 @@ docker compose run --rm dev bash -c "cargo build --release"
 
 This creates the binaries inside the Docker volume at `target/release/`.
 
-#### 4. Run a Oxide program
+#### 4. Run a Oxy program
 
 ```bash
 # Run the hello world example
@@ -124,7 +124,7 @@ docker compose run --rm dev bash -c "cargo run -- run examples/fibonacci.ox"
 docker compose run --rm dev bash -c "cargo run -- repl"
 ```
 
-Type Oxide code interactively. Press `Ctrl+D` to exit.
+Type Oxy code interactively. Press `Ctrl+D` to exit.
 
 #### 6. Run the test suite
 
@@ -141,8 +141,8 @@ docker compose run --rm test
 If you have Rust installed locally:
 
 ```bash
-git clone https://github.com/sabinbajracharya/Oxide.git
-cd Oxide
+git clone https://github.com/sabinbajracharya/Oxy.git
+cd Oxy
 
 # Build
 cargo build --release
@@ -162,10 +162,10 @@ cargo test
 ## CLI Usage
 
 ```
-oxide [OPTIONS] <COMMAND>
+oxy [OPTIONS] <COMMAND>
 
 Commands:
-  run <file.ox>          Run an Oxide source file (--compiled for 10x faster VM)
+  run <file.ox>          Run an Oxy source file (--compiled for 10x faster VM)
   test <file.ox>         Run #[test] functions in a file
   repl                   Start the interactive REPL
   install <path|url>     Install a package from a local path or git URL
@@ -299,7 +299,7 @@ fn main() {
 
 ### Iterator Chaining
 
-Oxide supports Rust-style iterator chaining on `Vec`:
+Oxy supports Rust-style iterator chaining on `Vec`:
 
 ```rust
 fn main() {
@@ -353,7 +353,7 @@ fn main() {
 
 ### Testing
 
-Oxide has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
+Oxy has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
 
 ```rust
 // math_tests.ox
@@ -446,7 +446,7 @@ fn main() {
 
 ### Web Server
 
-Oxide includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
+Oxy includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
 
 ```rust
 fn main() {
@@ -454,7 +454,7 @@ fn main() {
 
     // Simple routes
     app.get("/", |req| {
-        Response::html("<h1>Hello, Oxide!</h1>")
+        Response::html("<h1>Hello, Oxy!</h1>")
     });
 
     // Path parameters
@@ -495,7 +495,7 @@ fn main() {
 
 ### Database (SQLite)
 
-Oxide includes a built-in SQLite database with parameterized queries:
+Oxy includes a built-in SQLite database with parameterized queries:
 
 ```rust
 fn main() {
@@ -532,7 +532,7 @@ fn main() {
 
 ### Package Manager
 
-Oxide has a built-in package manager. Packages are directories of `.ox` files with a `package.ox` manifest, installed to `~/.oxide/packages/`.
+Oxy has a built-in package manager. Packages are directories of `.ox` files with a `package.ox` manifest, installed to `~/.oxy/packages/`.
 
 **Package manifest (`package.ox`):**
 ```rust
@@ -544,10 +544,10 @@ entry = "lib.ox"
 **Install and use a package:**
 ```bash
 # Install from a local path
-oxide install ./my-package
+oxy install ./my-package
 
 # Install from a git URL
-oxide install https://github.com/user/my-package
+oxy install https://github.com/user/my-package
 ```
 
 ```rust
@@ -566,7 +566,7 @@ Module resolution automatically searches installed packages — no extra configu
 
 ## Standard Library
 
-Oxide includes a comprehensive standard library accessible via `std::` paths:
+Oxy includes a comprehensive standard library accessible via `std::` paths:
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
@@ -587,7 +587,7 @@ Oxide includes a comprehensive standard library accessible via `std::` paths:
 ```rust
 fn main() {
     // File I/O
-    let _ = std::fs::write("hello.txt", "Hello from Oxide!");
+    let _ = std::fs::write("hello.txt", "Hello from Oxy!");
     let content = std::fs::read_to_string("hello.txt").unwrap();
     println!("{}", content);
 
@@ -612,7 +612,7 @@ fn main() {
 
 ## VS Code Extension
 
-Oxide has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
+Oxy has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
 
 ### Features
 
@@ -632,7 +632,7 @@ Best for development — changes to the extension are reflected immediately.
 docker compose run --rm setup
 
 # 2. Symlink into VS Code extensions
-ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/oxide-lang
+ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/oxy-lang
 
 # 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
 ```
@@ -646,17 +646,17 @@ Best for distribution — produces a standalone installable package.
 docker compose run --rm build-ext
 
 # 2. Install in VS Code
-code --install-extension editors/vscode/oxide-lang-0.1.0.vsix
+code --install-extension editors/vscode/oxy-lang-0.1.0.vsix
 
 # 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
 ```
 
 ### How the LSP works
 
-When you open a `.ox` file, the extension automatically starts the Oxide Language Server via Docker:
+When you open a `.ox` file, the extension automatically starts the Oxy Language Server via Docker:
 
 ```
-VS Code ←→ docker compose run --rm -T dev cargo run --release -p oxide-lsp ←→ stdin/stdout
+VS Code ←→ docker compose run --rm -T dev cargo run --release -p oxy-lsp ←→ stdin/stdout
 ```
 
 - Docker starts **once** and the LSP stays running for your entire VS Code session
@@ -668,15 +668,15 @@ VS Code ←→ docker compose run --rm -T dev cargo run --release -p oxide-lsp �
 If you have Rust installed locally and want instant LSP startup:
 
 ```bash
-cargo build --release -p oxide-lsp
+cargo build --release -p oxy-lsp
 ```
 
 Then in VS Code settings (`Cmd+,`):
 
 ```json
 {
-    "oxide.lsp.mode": "native",
-    "oxide.lsp.path": "/absolute/path/to/project-oxide/target/release/oxide-lsp"
+    "oxy.lsp.mode": "native",
+    "oxy.lsp.path": "/absolute/path/to/project-oxy/target/release/oxy-lsp"
 }
 ```
 
@@ -684,18 +684,18 @@ Then in VS Code settings (`Cmd+,`):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `oxide.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
-| `oxide.lsp.path` | `oxide-lsp` | Path to local binary (only used in `native` mode) |
-| `oxide.lsp.enabled` | `true` | Enable/disable the language server |
+| `oxy.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
+| `oxy.lsp.path` | `oxy-lsp` | Path to local binary (only used in `native` mode) |
+| `oxy.lsp.enabled` | `true` | Enable/disable the language server |
 
 ---
 
 ## Project Structure
 
 ```
-oxide/
+oxy/
 ├── crates/
-│   ├── oxide-core/       # Language engine (lexer, parser, AST, interpreter, type checker, stdlib)
+│   ├── oxy-core/       # Language engine (lexer, parser, AST, interpreter, type checker, stdlib)
 │   │   └── src/
 │   │       ├── interpreter/  # Tree-walking evaluator (~10K lines across 15+ modules)
 │   │       ├── type_checker/ # Static type validation before execution
@@ -703,8 +703,8 @@ oxide/
 │   │       ├── parser/       # Pratt parser (15 precedence levels)
 │   │       ├── lexer/        # Tokenizer (~60 token kinds)
 │   │       └── ast/          # AST nodes (30 expr + 12 stmt + 10 item variants)
-│   ├── oxide-cli/        # CLI binary (run, repl, test, install)
-│   └── oxide-lsp/        # Language Server Protocol server (diagnostics, completions, hover)
+│   ├── oxy-cli/        # CLI binary (run, repl, test, install)
+│   └── oxy-lsp/        # Language Server Protocol server (diagnostics, completions, hover)
 ├── editors/
 │   └── vscode/             # VS Code extension (syntax + LSP client)
 ├── examples/               # Example .ox programs (15+ examples)
@@ -741,7 +741,7 @@ docker compose run --rm dev bash -c "cargo fmt --all --check"
 docker compose run --rm dev bash -c "cargo clippy -- -D warnings"
 
 # Run a specific test
-docker compose run --rm dev bash -c "cargo test -p oxide-core test_name"
+docker compose run --rm dev bash -c "cargo test -p oxy-core test_name"
 ```
 
 ## Contributing

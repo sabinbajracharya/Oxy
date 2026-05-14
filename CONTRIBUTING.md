@@ -1,6 +1,6 @@
-# Contributing to Oxide
+# Contributing to Oxy
 
-Thank you for your interest in contributing to Oxide! 🧲
+Thank you for your interest in contributing to Oxy! 🧲
 
 ## Getting Started
 
@@ -24,12 +24,12 @@ docker compose run --rm dev bash -c "cargo build --release"    # Release build
 
 ## Architecture Overview
 
-Oxide is a Cargo workspace with three crates:
+Oxy is a Cargo workspace with three crates:
 
 ```
 project-ferrite/
 ├── crates/
-│   ├── oxide-core/    # Language engine (library crate)
+│   ├── oxy-core/    # Language engine (library crate)
 │   │   └── src/
 │   │       ├── lib.rs          # Crate root — re-exports all modules
 │   │       ├── lexer/          # Tokenizer: source text → Token stream
@@ -66,15 +66,15 @@ project-ferrite/
 │   │       │   ├── regex.rs    # Regular expression matching and replacement
 │   │       │   └── net.rs      # TCP/UDP networking and DNS lookup
 │   │       └── errors/         # FerriError enum, check_arg_count, expect_type helpers
-│   ├── oxide-cli/     # CLI binary (REPL + file execution)
-│   └── oxide-lsp/     # Language Server Protocol implementation
+│   ├── oxy-cli/     # CLI binary (REPL + file execution)
+│   └── oxy-lsp/     # Language Server Protocol implementation
 ├── editors/
 │   └── vscode/          # VS Code extension (syntax highlighting + LSP client)
 ├── tests/e2e/           # End-to-end test harness
 └── examples/            # Example .ox programs
 ```
 
-### How a Oxide program executes
+### How a Oxy program executes
 
 ```
 Source text (.ox file)
@@ -163,17 +163,17 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Testing
 
-- **Unit tests:** In `#[cfg(test)]` modules alongside source code (417+ tests in oxide-core)
-- **Integration tests:** CLI tests in oxide-cli (8 tests)
-- **LSP tests:** In oxide-lsp (9 tests)
+- **Unit tests:** In `#[cfg(test)]` modules alongside source code (417+ tests in oxy-core)
+- **Integration tests:** CLI tests in oxy-cli (8 tests)
+- **LSP tests:** In oxy-lsp (9 tests)
 - **E2E tests:** `.ox` files with `.expected` output in `tests/e2e/programs/`
 
 ### Running specific tests
 
 ```bash
-docker compose run --rm dev bash -c "cargo test -p oxide-core"       # Core only
-docker compose run --rm dev bash -c "cargo test -p oxide-cli"        # CLI only
-docker compose run --rm dev bash -c "cargo test -p oxide-lsp"        # LSP only
+docker compose run --rm dev bash -c "cargo test -p oxy-core"       # Core only
+docker compose run --rm dev bash -c "cargo test -p oxy-cli"        # CLI only
+docker compose run --rm dev bash -c "cargo test -p oxy-lsp"        # LSP only
 docker compose run --rm dev bash -c "cargo test test_closures"         # By name
 ```
 

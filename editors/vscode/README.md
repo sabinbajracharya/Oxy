@@ -1,10 +1,10 @@
-# Oxide Language — VS Code Extension
+# Oxy Language — VS Code Extension
 
-Syntax highlighting and Language Server Protocol (LSP) support for [Oxide](../../README.md) (`.ox` files).
+Syntax highlighting and Language Server Protocol (LSP) support for [Oxy](../../README.md) (`.ox` files).
 
 ## Features
 
-- **Syntax highlighting** for all Oxide keywords, types, operators, strings, numbers, comments
+- **Syntax highlighting** for all Oxy keywords, types, operators, strings, numbers, comments
 - **Real-time diagnostics** — parse errors shown as you type
 - **Autocompletion** — keywords, built-in types, functions, modules, and code snippets
 - **Hover information** — documentation for keywords, types, and built-in functions
@@ -19,9 +19,9 @@ Syntax highlighting and Language Server Protocol (LSP) support for [Oxide](../..
 
 ```bash
 # From the project root
-docker compose run --rm dev bash -c "cargo build --release -p oxide-lsp"
+docker compose run --rm dev bash -c "cargo build --release -p oxy-lsp"
 
-# The binary will be at target/release/oxide-lsp
+# The binary will be at target/release/oxy-lsp
 ```
 
 ### 2. Install the extension
@@ -32,19 +32,19 @@ cd editors/vscode
 docker compose run --rm dev bash -c "apt-get update -qq && apt-get install -y -qq nodejs npm > /dev/null && cd editors/vscode && npm install --omit=dev"
 
 # Symlink into VS Code extensions
-ln -s $(pwd) ~/.vscode/extensions/oxide-lang
+ln -s $(pwd) ~/.vscode/extensions/oxy-lang
 
 # Or copy
-cp -r . ~/.vscode/extensions/oxide-lang
+cp -r . ~/.vscode/extensions/oxy-lang
 ```
 
 ### 3. Configure the LSP binary path
 
-Open VS Code settings and set `oxide.lsp.path` to the absolute path of your `oxide-lsp` binary:
+Open VS Code settings and set `oxy.lsp.path` to the absolute path of your `oxy-lsp` binary:
 
 ```json
 {
-    "oxide.lsp.path": "/path/to/project-oxide/target/release/oxide-lsp"
+    "oxy.lsp.path": "/path/to/project-oxy/target/release/oxy-lsp"
 }
 ```
 
@@ -56,10 +56,10 @@ Open VS Code settings and set `oxide.lsp.path` to the absolute path of your `oxi
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `oxide.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
-| `oxide.lsp.path` | `oxide-lsp` | Path to local `oxide-lsp` binary (only used in `native` mode) |
-| `oxide.lsp.enabled` | `true` | Enable/disable the language server |
+| `oxy.lsp.mode` | `auto` | `auto` = Docker if no custom path, `docker` = always Docker, `native` = local binary |
+| `oxy.lsp.path` | `oxy-lsp` | Path to local `oxy-lsp` binary (only used in `native` mode) |
+| `oxy.lsp.enabled` | `true` | Enable/disable the language server |
 
 ## File Association
 
-Files with the `.ox` extension are automatically associated with the Oxide language.
+Files with the `.ox` extension are automatically associated with the Oxy language.

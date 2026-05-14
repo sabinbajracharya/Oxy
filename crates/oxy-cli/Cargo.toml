@@ -1,0 +1,20 @@
+[package]
+name = "oxy-cli"
+description = "CLI for the Oxy programming language — REPL and file execution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "oxy"
+path = "src/main.rs"
+
+[dependencies]
+oxy-core = { workspace = true }
+colored = { workspace = true }
+rustyline = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
