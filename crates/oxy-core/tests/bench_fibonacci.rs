@@ -13,6 +13,7 @@ fn main() {
 "#;
 
 #[test]
+#[ignore = "performance benchmark — run manually with: cargo test -- --ignored"]
 fn bench_fibonacci_30() {
     // Warmup
     run(FIB_SOURCE).unwrap();
