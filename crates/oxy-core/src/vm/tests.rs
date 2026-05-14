@@ -469,4 +469,183 @@ mod tests {
         assert!(compiled.is_ok());
         assert!(interpreted.is_ok());
     }
+
+    // --- CompoundAssign tests ---
+
+    #[test]
+    fn test_compiled_compound_assign_add() {
+        let source = r#"
+        fn main() {
+            let mut x = 10;
+            x += 5;
+            println!("{}", x);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "compound add failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["15\n"]);
+    }
+
+    #[test]
+    fn test_compiled_compound_assign_sub() {
+        let source = r#"
+        fn main() {
+            let mut x = 10;
+            x -= 3;
+            println!("{}", x);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "compound sub failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["7\n"]);
+    }
+
+    #[test]
+    fn test_compiled_compound_assign_mul() {
+        let source = r#"
+        fn main() {
+            let mut x = 7;
+            x *= 3;
+            println!("{}", x);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "compound mul failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["21\n"]);
+    }
+
+    #[test]
+    fn test_compiled_compound_assign_div() {
+        let source = r#"
+        fn main() {
+            let mut x = 20;
+            x /= 4;
+            println!("{}", x);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "compound div failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["5\n"]);
+    }
+
+    // --- FString tests ---
+
+    #[test]
+    fn test_compiled_fstring_literal_only() {
+        let source = r#"
+        fn main() {
+            let msg = f"hello world";
+            println!("{}", msg);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "fstring literal failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["hello world\n"]);
+    }
+
+    #[test]
+    fn test_compiled_fstring_interpolated() {
+        let source = r#"
+        fn main() {
+            let name = "Oxy";
+            let msg = f"Hello, {name}!";
+            println!("{}", msg);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "fstring interpolated failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["Hello, Oxy!\n"]);
+    }
+
+    #[test]
+    fn test_compiled_fstring_multiple_exprs() {
+        let source = r#"
+        fn main() {
+            let x = 10;
+            let y = 20;
+            let msg = f"{x} + {y} = {x + y}";
+            println!("{}", msg);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "fstring multiple failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["10 + 20 = 30\n"]);
+    }
+
+    // --- Struct/Enum/Impl compilation tests ---
+
+    #[test]
+    fn test_compiled_struct_and_enum_define() {
+        let source = r#"
+        struct Point { x: i64, y: i64 }
+        enum Shape { Circle, Square(i64) }
+        fn main() {
+            println!("ok");
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "struct/enum define failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["ok\n"]);
+    }
+
+    #[test]
+    fn test_compiled_impl_method() {
+        let source = r#"
+        struct Counter { n: i64 }
+        impl Counter {
+            fn inc(self) -> Counter {
+                Counter { n: self.n + 1 }
+            }
+        }
+        fn main() {
+            let c = Counter { n: 0 };
+            let c2 = c.inc();
+            println!("{}", c2.n);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "impl method failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["1\n"]);
+    }
+
+    #[test]
+    fn test_compiled_self_ref() {
+        let source = r#"
+        struct Value { x: i64 }
+        impl Value {
+            fn get(self) -> i64 {
+                self.x
+            }
+        }
+        fn main() {
+            let v = Value { x: 42 };
+            println!("{}", v.get());
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "self ref failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["42\n"]);
+    }
 }

@@ -37,6 +37,14 @@ impl SymTable {
     fn get(&self, name: &str) -> Option<usize> {
         self.locals.get(name).copied()
     }
+
+    fn build_slot_names(&self) -> Vec<String> {
+        let mut names = vec![String::new(); self.next_slot];
+        for (name, slot) in &self.locals {
+            names[*slot] = name.clone();
+        }
+        names
+    }
 }
 
 /// Tracks loop nesting for break/continue backpatching.
@@ -59,6 +67,18 @@ pub struct Compiler {
     functions: HashMap<String, usize>,
     /// Stack of enclosing loop contexts (for break/continue).
     loop_stack: Vec<LoopContext>,
+    /// AST expressions stored for Eval opcode fallback.
+    ast_nodes: Vec<crate::ast::Expr>,
+    /// Snapshot of main's local variable names (for Eval env reconstruction).
+    main_local_names: Vec<String>,
+    /// Registered struct definitions.
+    struct_defs: HashMap<String, StructDef>,
+    /// Registered enum definitions.
+    enum_defs: HashMap<String, EnumDef>,
+    /// Impl methods: type_name → method definitions.
+    impl_methods: HashMap<String, Vec<FnDef>>,
+    /// Compiled method entry points: (type_name, method_name) → instruction index.
+    method_ips: HashMap<(String, String), usize>,
 }
 
 impl Compiler {
@@ -74,6 +94,12 @@ impl Default for Compiler {
             sym: SymTable::new(0),
             functions: HashMap::new(),
             loop_stack: Vec::new(),
+            ast_nodes: Vec::new(),
+            main_local_names: Vec::new(),
+            struct_defs: HashMap::new(),
+            enum_defs: HashMap::new(),
+            impl_methods: HashMap::new(),
+            method_ips: HashMap::new(),
         }
     }
 }
@@ -94,6 +120,12 @@ impl Compiler {
             local_count: 0,
             entry_point,
             functions: self.functions,
+            ast_nodes: self.ast_nodes,
+            local_names: self.main_local_names,
+            struct_defs: self.struct_defs,
+            enum_defs: self.enum_defs,
+            impl_methods: self.impl_methods,
+            method_ips: self.method_ips,
         })
     }
 
@@ -101,6 +133,13 @@ impl Compiler {
         let idx = self.code.len();
         self.code.push(op);
         idx
+    }
+
+    /// Store an AST expression and emit an Eval opcode for interpreter fallback.
+    fn emit_eval(&mut self, expr: &crate::ast::Expr) -> usize {
+        let idx = self.ast_nodes.len();
+        self.ast_nodes.push(expr.clone());
+        self.emit(OpCode::Eval(idx))
     }
 
     /// Patch a previously emitted instruction at `idx` with a new opcode.
@@ -111,24 +150,45 @@ impl Compiler {
     fn compile_item(&mut self, item: &Item) -> Result<(), FerriError> {
         match item {
             Item::Function(f) => {
-                // Register the entry point
-                let ip = self.code.len();
-                self.functions.insert(f.name.clone(), ip);
-
-                // Allocate slots for parameters
-                let saved_sym = self.sym.clone();
-                for param in &f.params {
-                    self.sym.define(&param.name);
-                }
-
-                // Compile the body — the last expression (tail) is the return value.
-                // compile_block leaves the tail value on the stack.
-                self.compile_block(&f.body)?;
-                self.emit(OpCode::Return);
-
-                self.sym = saved_sym;
+                self.compile_fn_item(f, None)?;
                 Ok(())
             }
+            Item::Struct(s) => {
+                self.struct_defs.insert(s.name.clone(), s.clone());
+                Ok(())
+            }
+            Item::Enum(e) => {
+                self.enum_defs.insert(e.name.clone(), e.clone());
+                Ok(())
+            }
+            Item::Impl(i) => {
+                // Register method definitions
+                self.impl_methods
+                    .entry(i.type_name.clone())
+                    .or_default()
+                    .extend(i.methods.clone());
+                // Compile each method body
+                for method in &i.methods {
+                    let type_name = i.type_name.clone();
+                    self.compile_fn_item(method, Some(&type_name))?;
+                }
+                Ok(())
+            }
+            Item::ImplTrait(i) => {
+                self.impl_methods
+                    .entry(i.type_name.clone())
+                    .or_default()
+                    .extend(i.methods.clone());
+                for method in &i.methods {
+                    let type_name = i.type_name.clone();
+                    self.compile_fn_item(method, Some(&type_name))?;
+                }
+                Ok(())
+            }
+            Item::Trait(_) => Ok(()),
+            Item::Module(_) => Ok(()),
+            Item::Use(_) => Ok(()),
+            Item::TypeAlias { .. } => Ok(()),
             Item::Const {
                 name, value, span, ..
             } => {
@@ -138,9 +198,32 @@ impl Compiler {
                 let _ = span;
                 Ok(())
             }
-            // Skip other items — they don't produce executable code
-            _ => Ok(()),
         }
+    }
+
+    /// Compile a function or method body.
+    fn compile_fn_item(&mut self, f: &FnDef, type_name: Option<&str>) -> Result<(), FerriError> {
+        let ip = self.code.len();
+        // Register as a plain function and as a method if applicable
+        self.functions.insert(f.name.clone(), ip);
+        if let Some(tn) = type_name {
+            self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
+        }
+
+        let saved_sym = self.sym.clone();
+        for param in &f.params {
+            self.sym.define(&param.name);
+        }
+
+        self.compile_block(&f.body)?;
+        self.emit(OpCode::Return);
+
+        if f.name == "main" {
+            self.main_local_names = self.sym.build_slot_names();
+        }
+
+        self.sym = saved_sym;
+        Ok(())
     }
 
     fn compile_block(&mut self, block: &Block) -> Result<(), FerriError> {
@@ -602,6 +685,53 @@ impl Compiler {
                 }
             }
 
+            Expr::CompoundAssign {
+                target,
+                op,
+                value,
+                span,
+            } => {
+                if let Expr::Ident(name, _) = target.as_ref() {
+                    if let Some(slot) = self.sym.get(name) {
+                        self.emit(OpCode::LoadLocal(slot));
+                        self.compile_expr(value)?;
+                        let opcode = match op {
+                            BinOp::Add => OpCode::Add,
+                            BinOp::Sub => OpCode::Sub,
+                            BinOp::Mul => OpCode::Mul,
+                            BinOp::Div => OpCode::Div,
+                            BinOp::Mod => OpCode::Mod,
+                            _ => {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "unsupported compound op in compiler: {:?}",
+                                        op
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                })
+                            }
+                        };
+                        self.emit(opcode);
+                        self.emit(OpCode::StoreLocal(slot));
+                        Ok(())
+                    } else {
+                        Err(FerriError::Runtime {
+                            message: format!("compiled: undefined variable '{}'", name),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                } else {
+                    Err(FerriError::Runtime {
+                        message: "compiled: only simple variable compound assignment supported"
+                            .into(),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+
             Expr::Try { expr: inner, .. } => {
                 self.compile_expr(inner)?;
                 Ok(())
@@ -656,52 +786,168 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::FieldAccess {
-                object,
-                field,
-                span,
-                ..
-            } => {
+            Expr::FieldAccess { object, field, .. } => {
                 self.compile_expr(object)?;
                 if let Ok(idx) = field.parse::<i64>() {
                     self.emit(OpCode::ConstInt(idx));
                     self.emit(OpCode::VecIndex);
-                    Ok(())
                 } else {
-                    Err(FerriError::Runtime {
-                        message: format!("compiled: field access '{}' not yet supported", field),
-                        line: span.line,
-                        column: span.column,
-                    })
+                    self.emit(OpCode::FieldAccess {
+                        field_name: field.clone(),
+                    });
                 }
+                Ok(())
             }
 
-            // Fallback for expressions not yet compiled
-            Expr::Match { span, .. }
-            | Expr::StructInit { span, .. }
-            | Expr::MethodCall { span, .. }
-            | Expr::PathCall { span, .. }
-            | Expr::Closure { span, .. }
-            | Expr::Await { span, .. }
-            | Expr::FString { span, .. } => Err(FerriError::Runtime {
-                message: "this expression type is not yet supported in compiled mode".into(),
-                line: span.line,
-                column: span.column,
-            }),
+            Expr::FString { parts, .. } => {
+                let mut count = 0usize;
+                for part in parts {
+                    match part {
+                        FStringPart::Literal(s) => {
+                            self.emit(OpCode::ConstString(s.clone()));
+                            count += 1;
+                        }
+                        FStringPart::Expr(expr) => {
+                            self.compile_expr(expr)?;
+                            self.emit(OpCode::ToString);
+                            count += 1;
+                        }
+                    }
+                }
+                self.emit(OpCode::FStringConcat { count });
+                Ok(())
+            }
+
+            Expr::SelfRef(_) => {
+                // `self` is always the first parameter → slot 0.
+                self.emit(OpCode::LoadLocal(0));
+                Ok(())
+            }
+
+            Expr::StructInit { name, fields, .. } => {
+                let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+                for (_, expr) in fields {
+                    self.compile_expr(expr)?;
+                }
+                self.emit(OpCode::StructInit {
+                    name: name.clone(),
+                    field_count: fields.len(),
+                    field_names,
+                });
+                Ok(())
+            }
+
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                ..
+            } => {
+                self.compile_expr(object)?;
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                self.emit(OpCode::MethodCall {
+                    method_name: method.clone(),
+                    arg_count: args.len(),
+                });
+                Ok(())
+            }
+
+            Expr::Path { segments, .. } => {
+                if segments.len() == 2 {
+                    let enum_name = &segments[0];
+                    let variant = &segments[1];
+                    if let Some(ed) = self.enum_defs.get(enum_name) {
+                        for v in &ed.variants {
+                            if &v.name == variant {
+                                self.emit(OpCode::ConstEnumVariant {
+                                    enum_name: enum_name.clone(),
+                                    variant: variant.clone(),
+                                    data: vec![],
+                                });
+                                return Ok(());
+                            }
+                        }
+                    }
+                    if enum_name == "math" {
+                        match variant.as_str() {
+                            "PI" => {
+                                self.emit(OpCode::ConstFloat(std::f64::consts::PI));
+                                return Ok(());
+                            }
+                            "E" => {
+                                self.emit(OpCode::ConstFloat(std::f64::consts::E));
+                                return Ok(());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                self.emit_eval(expr);
+                Ok(())
+            }
+
+            Expr::PathCall { path, args, .. } => {
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                if path.len() == 2 {
+                    let enum_name = &path[0];
+                    let variant = &path[1];
+                    if self.enum_defs.contains_key(enum_name) {
+                        self.emit(OpCode::ConstEnumVariant {
+                            enum_name: enum_name.clone(),
+                            variant: variant.clone(),
+                            data: vec![],
+                        });
+                        return Ok(());
+                    }
+                }
+                self.emit_eval(expr);
+                Ok(())
+            }
+
+            Expr::Closure { params, body, .. } => {
+                let target_ip = self.code.len();
+                let saved_sym = self.sym.clone();
+                for param in params {
+                    self.sym.define(&param.name);
+                }
+                self.compile_expr(body)?;
+                self.emit(OpCode::Return);
+                self.sym = saved_sym;
+                self.emit(OpCode::Closure {
+                    target_ip,
+                    param_count: params.len(),
+                });
+                Ok(())
+            }
+
+            // Fallback to interpreter for expressions not yet natively compiled.
+            Expr::Match { .. } | Expr::Await { .. } | Expr::IfLet { .. } => {
+                self.emit_eval(expr);
+                Ok(())
+            }
 
             Expr::MacroCall { name, args, .. } => {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
-                if name == "println" {
-                    self.emit(OpCode::PrintLn);
-                } else if name == "print" {
-                    self.emit(OpCode::Print);
+                if name == "println" || name == "print" {
+                    if args.len() > 1 {
+                        self.emit(OpCode::Format {
+                            arg_count: args.len(),
+                        });
+                    }
+                    if name == "println" {
+                        self.emit(OpCode::PrintLn);
+                    } else {
+                        self.emit(OpCode::Print);
+                    }
                 }
                 Ok(())
             }
-
-            _ => Ok(()),
         }
     }
 }

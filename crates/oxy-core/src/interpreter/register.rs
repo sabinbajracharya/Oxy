@@ -20,6 +20,7 @@ impl Interpreter {
                     return_type: f.return_type.clone(),
                     body: f.body.clone(),
                     closure_env: Rc::clone(&self.env),
+                    target_ip: None,
                 }));
                 self.env.borrow_mut().define(f.name.clone(), value, false);
                 if f.is_async {
@@ -101,6 +102,7 @@ impl Interpreter {
                         return_type: f.return_type.clone(),
                         body: f.body.clone(),
                         closure_env: Rc::clone(&mod_env),
+                        target_ip: None,
                     }));
                     mod_env.borrow_mut().define(f.name.clone(), value, false);
                     if f.is_async {

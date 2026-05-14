@@ -4,6 +4,9 @@
 //! It uses a value stack and a call stack. Each call frame tracks its own
 //! local variable slots and return address.
 
+use std::collections::HashMap;
+
+use crate::interpreter::Interpreter;
 use crate::types::Value;
 
 /// Bytecode instructions for the Oxy VM.
@@ -92,6 +95,58 @@ pub enum OpCode {
     MakeTuple {
         count: usize,
     },
+
+    // --- String operations ---
+    /// Pop a Value, convert to its string representation, push String.
+    ToString,
+    /// Pop `count` values, convert each to string, concatenate, push result.
+    FStringConcat {
+        count: usize,
+    },
+    /// Pop `arg_count` values, use first as format string, substitute subsequent
+    /// values for `{}` placeholders, push the formatted result.
+    Format {
+        arg_count: usize,
+    },
+    /// Pop `field_count` values, build Value::Struct.
+    /// Field values are on the stack in field_names order.
+    StructInit {
+        name: String,
+        field_count: usize,
+        field_names: Vec<String>,
+    },
+    /// Pop `arg_count` args + receiver, dispatch method by name on the receiver.
+    MethodCall {
+        method_name: String,
+        arg_count: usize,
+    },
+    /// Pop object, push the value of its named field.
+    FieldAccess {
+        field_name: String,
+    },
+    /// Push an enum variant value (for `Type::Variant` paths).
+    ConstEnumVariant {
+        enum_name: String,
+        variant: String,
+        data: Vec<Value>,
+    },
+    /// Push a closure value: body starts at `target_ip`, takes `param_count` args.
+    Closure {
+        target_ip: usize,
+        param_count: usize,
+    },
+    /// Pop a Value::Function, extract its target IP, call with `arg_count` args.
+    CallClosure {
+        arg_count: usize,
+    },
+    /// Await a future: pop Value, if Future run its body, if JoinHandle unwrap,
+    /// otherwise pass through.
+    Await,
+
+    // --- Interpreter fallback ---
+    /// Delegate evaluation of an AST expression to the tree-walking interpreter.
+    /// The index references `Chunk::ast_nodes`.
+    Eval(usize),
 }
 
 /// A compiled Oxy program: a flat sequence of opcodes.
@@ -104,6 +159,18 @@ pub struct Chunk {
     pub entry_point: usize,
     /// Entry points: function name → instruction index.
     pub functions: std::collections::HashMap<String, usize>,
+    /// AST expression nodes for interpreter fallback (indexed by Eval opcode arg).
+    pub ast_nodes: Vec<crate::ast::Expr>,
+    /// Local variable names: slot_index → name (for Eval env reconstruction).
+    pub local_names: Vec<String>,
+    /// Registered struct definitions (for StructInit and method dispatch).
+    pub struct_defs: std::collections::HashMap<String, crate::ast::StructDef>,
+    /// Registered enum definitions (for Path enum variant lookup).
+    pub enum_defs: std::collections::HashMap<String, crate::ast::EnumDef>,
+    /// Impl methods: type_name → method definitions.
+    pub impl_methods: std::collections::HashMap<String, Vec<crate::ast::FnDef>>,
+    /// Compiled method entry points: (type_name, method_name) → instruction index.
+    pub method_ips: std::collections::HashMap<(String, String), usize>,
 }
 
 /// The stack-based VM executor.
@@ -118,6 +185,8 @@ pub struct Vm {
     call_stack: Vec<Frame>,
     /// Captured output (for testing).
     output: Option<Vec<String>>,
+    /// Tree-walking interpreter for Eval opcode fallback.
+    interpreter: Interpreter,
 }
 
 struct Frame {
@@ -141,6 +210,7 @@ impl Vm {
             ip: 0,
             call_stack: Vec::new(),
             output: None,
+            interpreter: Interpreter::new(),
         }
     }
 
@@ -424,6 +494,240 @@ impl Vm {
                     let elements: Vec<Value> = self.stack.drain(start..).collect();
                     self.stack.push(Value::Tuple(elements));
                 }
+
+                OpCode::StructInit {
+                    name,
+                    field_count,
+                    field_names,
+                } => {
+                    let start = self.stack.len().saturating_sub(field_count);
+                    let values: Vec<Value> = self.stack.drain(start..).collect();
+                    let fields: HashMap<String, Value> =
+                        field_names.into_iter().zip(values).collect();
+                    // Validate required fields against struct definition
+                    if let Some(struct_def) = self.chunk.struct_defs.get(&name) {
+                        if let crate::ast::StructKind::Named(named_fields) = &struct_def.kind {
+                            for required in named_fields {
+                                if !fields.contains_key(&required.name) {
+                                    return VmResult::Error(format!(
+                                        "struct '{}' missing required field '{}'",
+                                        name, required.name
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    self.stack.push(Value::Struct { name, fields });
+                }
+
+                OpCode::ConstEnumVariant {
+                    enum_name,
+                    variant,
+                    data,
+                } => {
+                    self.stack.push(Value::EnumVariant {
+                        enum_name,
+                        variant,
+                        data,
+                    });
+                }
+
+                OpCode::Closure {
+                    target_ip,
+                    param_count,
+                } => {
+                    let blank_span = crate::lexer::Span {
+                        start: 0,
+                        end: 0,
+                        line: 0,
+                        column: 0,
+                    };
+                    let params: Vec<crate::ast::Param> = (0..param_count)
+                        .map(|i| crate::ast::Param {
+                            name: format!("_{}", i),
+                            type_ann: crate::ast::TypeAnnotation {
+                                name: "_".into(),
+                                span: blank_span,
+                            },
+                            span: blank_span,
+                        })
+                        .collect();
+                    self.stack
+                        .push(Value::Function(Box::new(crate::types::FunctionData {
+                            name: "<closure>".into(),
+                            params,
+                            return_type: None,
+                            body: crate::ast::Block {
+                                stmts: vec![],
+                                span: blank_span,
+                            },
+                            closure_env: crate::env::Environment::new(),
+                            target_ip: Some(target_ip),
+                        })));
+                }
+
+                OpCode::CallClosure { arg_count } => {
+                    let fn_val = self
+                        .stack
+                        .get(self.stack.len().saturating_sub(arg_count + 1))
+                        .cloned();
+                    if let Some(Value::Function(f)) = fn_val {
+                        if let Some(target) = f.target_ip {
+                            let args_start = self.stack.len() - arg_count;
+                            self.call_stack.push(Frame {
+                                return_ip: self.ip + 1,
+                                base: args_start,
+                                max_slot: arg_count,
+                            });
+                            self.ip = target;
+                            continue;
+                        }
+                    }
+                    return VmResult::Error("CallClosure: value is not a callable closure".into());
+                }
+
+                OpCode::Await => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    match val {
+                        Value::Future(_) => {
+                            return VmResult::Error(
+                                "Await on Future not yet supported in VM".into(),
+                            );
+                        }
+                        Value::JoinHandle(inner) => {
+                            self.stack.push(*inner);
+                        }
+                        other => {
+                            self.stack.push(other);
+                        }
+                    }
+                }
+
+                OpCode::FieldAccess { field_name } => {
+                    let obj = self.stack.pop().unwrap_or(Value::Unit);
+                    let result = match &obj {
+                        Value::Struct { fields, .. } => {
+                            fields.get(&field_name).cloned().unwrap_or(Value::Unit)
+                        }
+                        Value::HashMap(m) => m.get(&field_name).cloned().unwrap_or(Value::Unit),
+                        _ => {
+                            return VmResult::Error(format!(
+                                "cannot access field '{}' on type {}",
+                                field_name,
+                                obj.type_name()
+                            ));
+                        }
+                    };
+                    self.stack.push(result);
+                }
+
+                OpCode::MethodCall {
+                    method_name,
+                    arg_count,
+                } => {
+                    let args_start = self.stack.len() - arg_count;
+                    let args: Vec<Value> = self.stack.drain(args_start..).collect();
+                    let receiver = self.stack.pop().unwrap_or(Value::Unit);
+                    let type_name = receiver.type_name().to_string();
+                    let is_struct = matches!(receiver, Value::Struct { .. });
+                    let is_enum = matches!(receiver, Value::EnumVariant { .. });
+
+                    // Look up method IP: first check user methods, then built-ins
+                    let method_ip = if is_struct || is_enum {
+                        // Check user-defined methods
+                        let struct_name = match &receiver {
+                            Value::Struct { name, .. } => name.clone(),
+                            Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+                            _ => type_name.clone(),
+                        };
+                        self.chunk
+                            .method_ips
+                            .get(&(struct_name.clone(), method_name.clone()))
+                            .copied()
+                            .or_else(|| {
+                                // Fallback: check all impl_methods for trait methods
+                                self.chunk
+                                    .method_ips
+                                    .get(&(struct_name, method_name.clone()))
+                                    .copied()
+                            })
+                    } else {
+                        None
+                    };
+
+                    match method_ip {
+                        Some(target) => {
+                            // Push receiver back (as self), then args
+                            self.stack.push(receiver);
+                            self.stack.extend(args);
+                            self.call_stack.push(Frame {
+                                return_ip: self.ip + 1,
+                                base: self.stack.len() - arg_count - 1,
+                                max_slot: arg_count + 1,
+                            });
+                            self.ip = target;
+                            continue;
+                        }
+                        None => {
+                            // Handle built-in methods (Vec, String, HashMap, etc.)
+                            match self.builtin_method(receiver, &method_name, args) {
+                                Ok(val) => self.stack.push(val),
+                                Err(e) => return VmResult::Error(e),
+                            }
+                        }
+                    }
+                }
+
+                OpCode::ToString => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    self.stack.push(Value::String(val.to_string()));
+                }
+
+                OpCode::FStringConcat { count } => {
+                    let start = self.stack.len().saturating_sub(count);
+                    let parts: Vec<String> =
+                        self.stack.drain(start..).map(|v| v.to_string()).collect();
+                    self.stack.push(Value::String(parts.concat()));
+                }
+
+                OpCode::Format { arg_count } => {
+                    let start = self.stack.len().saturating_sub(arg_count);
+                    let args: Vec<String> =
+                        self.stack.drain(start..).map(|v| v.to_string()).collect();
+                    let mut result = args.first().cloned().unwrap_or_default();
+                    for arg in &args[1..] {
+                        if let Some(pos) = result.find("{}") {
+                            result.replace_range(pos..pos + 2, arg);
+                        }
+                    }
+                    self.stack.push(Value::String(result));
+                }
+
+                OpCode::Eval(idx) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!(
+                        "warning: Eval fallback used for ast_node {} — add native VM support",
+                        idx
+                    );
+                    let expr = self.chunk.ast_nodes.get(idx).cloned();
+                    match expr {
+                        Some(expr) => {
+                            let env = self.build_env_for_eval();
+                            match self.interpreter.eval_expr(&expr, &env) {
+                                Ok(val) => self.stack.push(val),
+                                Err(e) => {
+                                    return VmResult::Error(format!("eval fallback failed: {}", e));
+                                }
+                            }
+                        }
+                        None => {
+                            return VmResult::Error(format!(
+                                "Eval: invalid ast_node index {}",
+                                idx
+                            ));
+                        }
+                    }
+                }
             }
 
             self.ip += 1;
@@ -435,6 +739,128 @@ impl Vm {
         match f(a, b) {
             Ok(v) => self.stack.push(v),
             Err(_e) => self.stack.push(Value::Unit),
+        }
+    }
+
+    /// Reconstruct an interpreter Env from the current VM stack frame.
+    fn build_env_for_eval(&self) -> crate::env::Env {
+        let env = crate::env::Environment::new();
+        let base = self.frame_base();
+        let max_slot = self.call_stack.last().map(|f| f.max_slot).unwrap_or(0);
+        for slot in 0..max_slot {
+            if let Some(name) = self.chunk.local_names.get(slot) {
+                if !name.is_empty() {
+                    let val = self.stack.get(base + slot).cloned().unwrap_or(Value::Unit);
+                    env.borrow_mut().define(name.clone(), val, true);
+                }
+            }
+        }
+        env
+    }
+
+    /// Built-in method dispatch (Vec, String, HashMap, Option, Result, etc.).
+    fn builtin_method(
+        &mut self,
+        receiver: Value,
+        method_name: &str,
+        args: Vec<Value>,
+    ) -> Result<Value, String> {
+        match &receiver {
+            Value::Vec(v) => match method_name {
+                "len" => Ok(Value::Integer(v.len() as i64)),
+                "push" => {
+                    let mut new = v.clone();
+                    new.push(args.into_iter().next().unwrap_or(Value::Unit));
+                    Ok(Value::Vec(new))
+                }
+                "pop" => {
+                    let mut new = v.clone();
+                    let popped = new.pop().unwrap_or(Value::Unit);
+                    Ok(Value::Tuple(vec![Value::Vec(new), popped]))
+                }
+                _ => Err(format!("no method '{}' on type Vec", method_name)),
+            },
+            Value::String(s) => match method_name {
+                "len" => Ok(Value::Integer(s.len() as i64)),
+                "to_uppercase" => Ok(Value::String(s.to_uppercase())),
+                "to_lowercase" => Ok(Value::String(s.to_lowercase())),
+                "trim" => Ok(Value::String(s.trim().to_string())),
+                "contains" => {
+                    let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    Ok(Value::Bool(s.contains(&pat)))
+                }
+                "split" => {
+                    let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    let parts: Vec<Value> = s
+                        .split(&pat)
+                        .map(|p| Value::String(p.to_string()))
+                        .collect();
+                    Ok(Value::Vec(parts))
+                }
+                _ => Err(format!("no method '{}' on type String", method_name)),
+            },
+            Value::HashMap(m) => match method_name {
+                "len" => Ok(Value::Integer(m.len() as i64)),
+                "get" => {
+                    let key = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    Ok(m.get(&key).cloned().unwrap_or(Value::Unit))
+                }
+                "insert" => {
+                    let mut new = m.clone();
+                    let key = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    let val = args.get(1).cloned().unwrap_or(Value::Unit);
+                    new.insert(key, val);
+                    Ok(Value::HashMap(new))
+                }
+                _ => Err(format!("no method '{}' on type HashMap", method_name)),
+            },
+            Value::EnumVariant { enum_name, .. } => {
+                // Option/Result builtins
+                match enum_name.as_str() {
+                    "Option" => match method_name {
+                        "is_some" => Ok(Value::Bool(!matches!(receiver,
+                            Value::EnumVariant { variant, .. } if variant == "None"))),
+                        "is_none" => Ok(Value::Bool(matches!(receiver,
+                            Value::EnumVariant { variant, .. } if variant == "None"))),
+                        "unwrap" => match &receiver {
+                            Value::EnumVariant { variant, data, .. } if variant == "Some" => {
+                                Ok(data.first().cloned().unwrap_or(Value::Unit))
+                            }
+                            _ => Err("called `unwrap` on a `None` value".into()),
+                        },
+                        _ => Err(format!("no method '{}' on Option", method_name)),
+                    },
+                    "Result" => match method_name {
+                        "is_ok" => Ok(Value::Bool(!matches!(receiver,
+                            Value::EnumVariant { variant, .. } if variant == "Err"))),
+                        "is_err" => Ok(Value::Bool(matches!(receiver,
+                            Value::EnumVariant { variant, .. } if variant == "Err"))),
+                        "unwrap" => match &receiver {
+                            Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
+                                Ok(data.first().cloned().unwrap_or(Value::Unit))
+                            }
+                            _ => Err("called `unwrap` on an `Err` value".into()),
+                        },
+                        _ => Err(format!("no method '{}' on Result", method_name)),
+                    },
+                    _ => {
+                        // Other enum: check for user methods? Already handled above.
+                        Err(format!(
+                            "no method '{}' on enum '{}'",
+                            method_name, enum_name
+                        ))
+                    }
+                }
+            }
+            Value::Struct { name, .. } => match method_name {
+                "clone" => Ok(receiver.clone()),
+                _ => Err(format!("no method '{}' on struct '{}'", method_name, name)),
+            },
+            _ => Err(format!(
+                "no method '{}' on type {}",
+                method_name,
+                receiver.type_name()
+            )),
         }
     }
 
