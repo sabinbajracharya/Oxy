@@ -772,4 +772,144 @@ mod tests {
         let (_, output) = result.unwrap();
         assert_eq!(output, vec!["nothing\n"]);
     }
+
+    // --- PathCall built-in tests ---
+
+    #[test]
+    fn test_compiled_pathcall_math_sqrt() {
+        let source = r#"
+        fn main() {
+            println!("{}", math::sqrt(16.0));
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "pathcall sqrt failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["4.0\n"]);
+    }
+
+    #[test]
+    fn test_compiled_pathcall_math_abs() {
+        let source = r#"
+        fn main() {
+            println!("{}", math::abs(-42));
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "pathcall abs failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_compiled_pathcall_string_from() {
+        let source = r#"
+        fn main() {
+            let s = String::from("hello");
+            println!("{}", s);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "pathcall String::from failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["hello\n"]);
+    }
+
+    #[test]
+    fn test_compiled_pathcall_hashmap_new() {
+        let source = r#"
+        fn main() {
+            let m = HashMap::new();
+            println!("{}", m.len());
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "pathcall HashMap::new failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["0\n"]);
+    }
+
+    // --- Module compilation tests ---
+
+    #[test]
+    fn test_compiled_inline_module_call() {
+        let source = r#"
+        mod math {
+            pub fn double(x: i64) -> i64 { x * 2 }
+        }
+        fn main() {
+            println!("{}", math::double(21));
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "inline module call failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_compiled_nested_module() {
+        let source = r#"
+        mod outer {
+            pub mod inner {
+                pub fn val() -> i64 { 99 }
+            }
+        }
+        fn main() {
+            println!("{}", outer::inner::val());
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "nested module failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["99\n"]);
+    }
+
+    #[test]
+    fn test_compiled_module_with_use() {
+        let source = r#"
+        mod calc {
+            pub fn triple(x: i64) -> i64 { x * 3 }
+        }
+        use calc::triple;
+        fn main() {
+            println!("{}", triple(7));
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "module with use failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["21\n"]);
+    }
+
+    #[test]
+    fn test_compiled_module_chain() {
+        let source = r#"
+        mod a {
+            pub fn one() -> i64 { 1 }
+        }
+        mod b {
+            pub fn two() -> i64 { a::one() + a::one() }
+        }
+        fn main() {
+            println!("{}", b::two());
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "module chain failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["2\n"]);
+    }
 }

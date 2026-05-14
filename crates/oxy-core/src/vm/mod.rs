@@ -160,6 +160,11 @@ pub enum OpCode {
     },
     /// Pop an EnumVariant, push data[index] (index 0 is first tuple field).
     EnumDataGet(usize),
+    /// Pop `arg_count` values, dispatch to native built-in by path segments.
+    PathCallBuiltin {
+        segments: Vec<String>,
+        arg_count: usize,
+    },
 
     // --- Interpreter fallback ---
     /// Delegate evaluation of an AST expression to the tree-walking interpreter.
@@ -786,6 +791,19 @@ impl Vm {
                     }
                 }
 
+                OpCode::PathCallBuiltin {
+                    segments,
+                    arg_count,
+                } => {
+                    let args_start = self.stack.len().saturating_sub(arg_count);
+                    let args: Vec<Value> = self.stack.drain(args_start..).collect();
+                    let result = self.dispatch_pathcall(&segments, &args);
+                    match result {
+                        Ok(val) => self.stack.push(val),
+                        Err(e) => return VmResult::Error(e),
+                    }
+                }
+
                 OpCode::Eval(idx) => {
                     #[cfg(debug_assertions)]
                     eprintln!(
@@ -944,6 +962,72 @@ impl Vm {
                 method_name,
                 receiver.type_name()
             )),
+        }
+    }
+
+    fn dispatch_pathcall(&self, segments: &[String], args: &[Value]) -> Result<Value, String> {
+        let segs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+        let to_f64 = |v: &Value| match v {
+            Value::Integer(n) => *n as f64,
+            Value::Float(x) => *x,
+            _ => 0.0,
+        };
+        match segs.as_slice() {
+            ["math", "sqrt"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).sqrt(),
+            )),
+            ["math", "abs"] => match args.first().unwrap_or(&Value::Unit) {
+                Value::Integer(n) => Ok(Value::Integer(n.abs())),
+                Value::Float(x) => Ok(Value::Float(x.abs())),
+                _ => Ok(Value::Integer(0)),
+            },
+            ["math", "sin"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).sin(),
+            )),
+            ["math", "cos"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).cos(),
+            )),
+            ["math", "pow"] => {
+                let base = to_f64(args.first().unwrap_or(&Value::Unit));
+                let exp = to_f64(args.get(1).unwrap_or(&Value::Unit));
+                Ok(Value::Float(base.powf(exp)))
+            }
+            ["math", "floor"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).floor(),
+            )),
+            ["math", "ceil"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).ceil(),
+            )),
+            ["math", "round"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).round(),
+            )),
+            ["math", "min"] => {
+                let a = to_f64(args.first().unwrap_or(&Value::Unit));
+                let b = to_f64(args.get(1).unwrap_or(&Value::Unit));
+                Ok(Value::Float(a.min(b)))
+            }
+            ["math", "max"] => {
+                let a = to_f64(args.first().unwrap_or(&Value::Unit));
+                let b = to_f64(args.get(1).unwrap_or(&Value::Unit));
+                Ok(Value::Float(a.max(b)))
+            }
+            ["math", "log"] => Ok(Value::Float(
+                to_f64(args.first().unwrap_or(&Value::Unit)).ln(),
+            )),
+            ["json", "parse"] => {
+                let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                crate::json::deserialize(&s).map_err(|e| format!("json::parse: {}", e))
+            }
+            ["json", "to_string"] => {
+                let val = args.first().cloned().unwrap_or(Value::Unit);
+                Ok(Value::String(format!("{}", val)))
+            }
+            ["String", "from"] => {
+                let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                Ok(Value::String(s))
+            }
+            ["HashMap", "new"] => Ok(Value::HashMap(HashMap::new())),
+            _ => Err(format!("unknown built-in path: {}", segments.join("::"))),
         }
     }
 

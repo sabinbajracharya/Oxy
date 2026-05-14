@@ -81,11 +81,25 @@ pub struct Compiler {
     impl_methods: HashMap<String, Vec<FnDef>>,
     /// Compiled method entry points: (type_name, method_name) → instruction index.
     method_ips: HashMap<(String, String), usize>,
+    /// Directory of the source file (for resolving file-based modules).
+    source_dir: Option<std::path::PathBuf>,
+    /// Use aliases: alias_name → qualified_name (e.g., "add" → "math::add").
+    use_aliases: HashMap<String, String>,
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a compiler that can resolve file-based modules relative to `source_path`.
+    pub fn new_with_source_dir(source_path: Option<&str>) -> Self {
+        let source_dir =
+            source_path.and_then(|p| std::path::Path::new(p).parent().map(|d| d.to_path_buf()));
+        Self {
+            source_dir,
+            ..Self::default()
+        }
     }
 }
 
@@ -102,6 +116,8 @@ impl Default for Compiler {
             enum_defs: HashMap::new(),
             impl_methods: HashMap::new(),
             method_ips: HashMap::new(),
+            source_dir: None,
+            use_aliases: HashMap::new(),
         }
     }
 }
@@ -188,8 +204,14 @@ impl Compiler {
                 Ok(())
             }
             Item::Trait(_) => Ok(()),
-            Item::Module(_) => Ok(()),
-            Item::Use(_) => Ok(()),
+            Item::Module(m) => {
+                self.compile_module(m)?;
+                Ok(())
+            }
+            Item::Use(u) => {
+                self.compile_use(u)?;
+                Ok(())
+            }
             Item::TypeAlias { .. } => Ok(()),
             Item::Const {
                 name, value, span, ..
@@ -226,6 +248,126 @@ impl Compiler {
 
         self.sym = saved_sym;
         Ok(())
+    }
+
+    /// Compile an inline or file-based module recursively.
+    fn compile_module(&mut self, module: &ModuleDef) -> Result<(), FerriError> {
+        let items = if let Some(body) = &module.body {
+            body.clone()
+        } else {
+            let source = self.load_module_file(&module.name, module.span)?;
+            let program = crate::parser::parse(&source)?;
+            program.items
+        };
+        let prefix = module.name.clone();
+        self.compile_module_items(&items, &prefix)
+    }
+
+    /// Process a `use` declaration.
+    fn compile_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
+        let base_path = use_def.path.join("::");
+        match &use_def.tree {
+            UseTree::Simple => {
+                let name = use_def.path.last().cloned().unwrap_or_default();
+                self.use_aliases.insert(name, base_path);
+            }
+            UseTree::Group(names) => {
+                for name in names {
+                    let qualified = format!("{}::{}", base_path, name);
+                    self.use_aliases.insert(name.clone(), qualified);
+                }
+            }
+            UseTree::Glob => {}
+        }
+        Ok(())
+    }
+
+    /// Compile items with a module prefix (qualified names).
+    fn compile_module_items(&mut self, items: &[Item], prefix: &str) -> Result<(), FerriError> {
+        for item in items {
+            match item {
+                Item::Function(f) => {
+                    let qualified = format!("{}::{}", prefix, f.name);
+                    let ip = self.code.len();
+                    self.functions.insert(qualified, ip);
+                    let saved_sym = self.sym.clone();
+                    for param in &f.params {
+                        self.sym.define(&param.name);
+                    }
+                    self.compile_block(&f.body)?;
+                    self.emit(OpCode::Return);
+                    self.sym = saved_sym;
+                }
+                Item::Struct(s) => {
+                    let qualified = format!("{}::{}", prefix, s.name);
+                    self.struct_defs.insert(qualified, s.clone());
+                }
+                Item::Enum(e) => {
+                    let qualified = format!("{}::{}", prefix, e.name);
+                    self.enum_defs.insert(qualified, e.clone());
+                }
+                Item::Impl(i) => {
+                    let qualified_type = format!("{}::{}", prefix, i.type_name);
+                    self.impl_methods
+                        .entry(qualified_type.clone())
+                        .or_default()
+                        .extend(i.methods.clone());
+                    for method in &i.methods {
+                        let mname = format!("{}::{}", prefix, method.name);
+                        let ip = self.code.len();
+                        self.functions.insert(mname.clone(), ip);
+                        self.method_ips
+                            .insert((qualified_type.clone(), method.name.clone()), ip);
+                        let saved_sym = self.sym.clone();
+                        for param in &method.params {
+                            self.sym.define(&param.name);
+                        }
+                        self.compile_block(&method.body)?;
+                        self.emit(OpCode::Return);
+                        self.sym = saved_sym;
+                    }
+                }
+                Item::Module(m) => {
+                    let nested_prefix = format!("{}::{}", prefix, m.name);
+                    if let Some(body) = &m.body {
+                        self.compile_module_items(body, &nested_prefix)?;
+                    } else {
+                        let source = self.load_module_file(&m.name, m.span)?;
+                        let program = crate::parser::parse(&source)?;
+                        self.compile_module_items(&program.items, &nested_prefix)?;
+                    }
+                }
+                _ => {} // skip use, trait, type alias inside modules
+            }
+        }
+        Ok(())
+    }
+
+    /// Load a file-based module's source code.
+    fn load_module_file(&self, name: &str, span: crate::lexer::Span) -> Result<String, FerriError> {
+        let base_ref = self
+            .source_dir
+            .as_ref()
+            .map(|b| b.to_string_lossy().to_string())
+            .unwrap_or_else(|| ".".to_string());
+
+        let path1 = format!("{base_ref}/{name}.ox");
+        let path2 = format!("{base_ref}/{name}/mod.ox");
+
+        if let Ok(source) = std::fs::read_to_string(&path1) {
+            return Ok(source);
+        }
+        if let Ok(source) = std::fs::read_to_string(&path2) {
+            return Ok(source);
+        }
+        if let Some((source, _pkg_name)) = crate::package::find_module_in_packages(name) {
+            return Ok(source);
+        }
+        Err(FerriError::Runtime {
+            message: format!("could not find module `{name}`: tried '{path1}' and '{path2}'"),
+            line: span.line,
+            column: span.column,
+        })
     }
 
     /// Compile a pattern check. Leaves scrutinee on stack with Bool+data on top.
@@ -708,12 +850,28 @@ impl Compiler {
                         return Ok(());
                     }
 
-                    if let Some(&target) = self.functions.get(name) {
+                    // Try use alias first
+                    let resolved = self
+                        .use_aliases
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| name.clone());
+                    if let Some(&target) = self.functions.get(&resolved) {
                         self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
                         });
                         return Ok(());
+                    }
+                    // Also try original name
+                    if resolved != *name {
+                        if let Some(&target) = self.functions.get(name) {
+                            self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
+                        }
                     }
                 }
 
@@ -997,6 +1155,31 @@ impl Compiler {
                         });
                         return Ok(());
                     }
+                    let qualified = format!("{}::{}", &path[0], &path[1]);
+                    if let Some(&target) = self.functions.get(&qualified) {
+                        self.emit(OpCode::Call {
+                            target,
+                            arg_count: args.len(),
+                        });
+                        return Ok(());
+                    }
+                    if is_builtin_path(path) {
+                        self.emit(OpCode::PathCallBuiltin {
+                            segments: path.clone(),
+                            arg_count: args.len(),
+                        });
+                        return Ok(());
+                    }
+                }
+                if path.len() == 3 {
+                    let qualified = format!("{}::{}::{}", &path[0], &path[1], &path[2]);
+                    if let Some(&target) = self.functions.get(&qualified) {
+                        self.emit(OpCode::Call {
+                            target,
+                            arg_count: args.len(),
+                        });
+                        return Ok(());
+                    }
                 }
                 self.emit_eval(expr);
                 Ok(())
@@ -1160,4 +1343,27 @@ impl Compiler {
             }
         }
     }
+}
+
+/// Known built-in paths that the VM can dispatch natively.
+fn is_builtin_path(path: &[String]) -> bool {
+    let segs: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
+    matches!(
+        segs.as_slice(),
+        ["math", "sqrt"]
+            | ["math", "abs"]
+            | ["math", "sin"]
+            | ["math", "cos"]
+            | ["math", "pow"]
+            | ["math", "floor"]
+            | ["math", "ceil"]
+            | ["math", "round"]
+            | ["math", "min"]
+            | ["math", "max"]
+            | ["math", "log"]
+            | ["json", "parse"]
+            | ["json", "to_string"]
+            | ["String", "from"]
+            | ["HashMap", "new"]
+    )
 }
