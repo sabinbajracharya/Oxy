@@ -34,7 +34,7 @@ fn main() {
 | Error handling (`Result`, `Option`, `?` operator) | ✅ |
 | Type aliases (`type Pos = Point`) | ✅ |
 | Modules (`mod`, `use`) | ✅ |
-| Collections (`Vec`, `HashMap`, tuples, ranges) | ✅ |
+| Collections (`Vec`, `HashMap`, `HashSet`, `BinaryHeap`, tuples, ranges) | ✅ |
 | Iterator methods (`map`, `filter`, `zip`, `chain`, `sum`, `flatten`, …) | ✅ |
 | Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`) | ✅ |
 | Static type checking (optional `: Type` annotations) | ✅ |
@@ -163,7 +163,7 @@ cargo test
 oxy [OPTIONS] <COMMAND>
 
 Commands:
-  run <file.ox>          Run an Oxy source file (--compiled for 10x faster VM)
+  run <file.ox>          Run an Oxy source file
   test <file.ox>         Run #[test] functions in a file
   repl                   Start the interactive REPL
   install <path|url>     Install a package from a local path or git URL
@@ -568,7 +568,7 @@ Oxy includes a comprehensive standard library accessible via `std::` paths:
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
-| `math` | `sqrt`, `sin`, `cos`, `tan`, `abs`, `pow`, `floor`, `ceil`, `round`, `log`, `min`, `max`, `PI`, `E` | Math functions and constants |
+| `math` | `sqrt`, `sin`, `cos`, `tan`, `abs`, `pow`, `floor`, `ceil`, `round`, `log`, `min`, `max`, `gcd`, `lcm`, `PI`, `E` | Math functions and constants |
 | `rand` | `random`, `range`, `bool` | Pseudo-random number generation |
 | `time` | `now`, `millis`, `elapsed` | Wall-clock time and duration |
 | `std::fs` | `read_to_string`, `write`, `append`, `exists`, `is_file`, `is_dir`, `create_dir`, `create_dir_all`, `read_dir`, `remove_file`, `remove_dir`, `rename`, `copy`, `canonicalize`, `metadata` | File system operations |
@@ -695,7 +695,9 @@ oxy/
 ├── crates/
 │   ├── oxy-core/       # Language engine (lexer, parser, AST, interpreter, type checker, stdlib)
 │   │   └── src/
-│   │       ├── interpreter/  # Tree-walking evaluator (~10K lines across 15+ modules)
+│   │       ├── compiler/     # Bytecode compiler (single-pass, 40+ opcodes)
+│   │       ├── vm/           # Stack-based bytecode VM (default execution engine)
+│   │       ├── interpreter/  # Tree-walking evaluator (fallback for dynamic paths)
 │   │       ├── type_checker/ # Static type validation before execution
 │   │       ├── package/      # Package manager (install, manifest parsing)
 │   │       ├── parser/       # Pratt parser (15 precedence levels)
@@ -729,7 +731,7 @@ oxy/
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (550+ tests)
+# Run all tests (640+ tests)
 docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting
