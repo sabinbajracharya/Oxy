@@ -646,9 +646,10 @@ impl Vm {
                         Value::Struct { fields, .. } => {
                             fields.get(&field_name).cloned().unwrap_or(Value::Unit)
                         }
-                        Value::HashMap(m) => {
-                            m.get(&Value::String(field_name.clone())).cloned().unwrap_or(Value::Unit)
-                        }
+                        Value::HashMap(m) => m
+                            .get(&Value::String(field_name.clone()))
+                            .cloned()
+                            .unwrap_or(Value::Unit),
                         _ => {
                             return VmResult::Error(format!(
                                 "cannot access field '{}' on type {}",
@@ -901,21 +902,30 @@ impl Vm {
                     Ok(Value::Vec(parts))
                 }
                 "char_at" => {
-                    let i = args.first().and_then(|v| match v {
-                        Value::Integer(n) => Some(*n as usize),
-                        _ => None,
-                    }).unwrap_or(0);
+                    let i = args
+                        .first()
+                        .and_then(|v| match v {
+                            Value::Integer(n) => Some(*n as usize),
+                            _ => None,
+                        })
+                        .unwrap_or(0);
                     Ok(s.chars().nth(i).map(Value::Char).unwrap_or(Value::Unit))
                 }
                 "substring" => {
-                    let start = args.first().and_then(|v| match v {
-                        Value::Integer(n) => Some(*n as usize),
-                        _ => None,
-                    }).unwrap_or(0);
-                    let end = args.get(1).and_then(|v| match v {
-                        Value::Integer(n) => Some(*n as usize),
-                        _ => None,
-                    }).unwrap_or(0);
+                    let start = args
+                        .first()
+                        .and_then(|v| match v {
+                            Value::Integer(n) => Some(*n as usize),
+                            _ => None,
+                        })
+                        .unwrap_or(0);
+                    let end = args
+                        .get(1)
+                        .and_then(|v| match v {
+                            Value::Integer(n) => Some(*n as usize),
+                            _ => None,
+                        })
+                        .unwrap_or(0);
                     let chars: Vec<char> = s.chars().collect();
                     if start <= end && end <= chars.len() {
                         Ok(Value::String(chars[start..end].iter().collect()))
@@ -925,11 +935,15 @@ impl Vm {
                 }
                 "parse_int" => match s.trim().parse::<i64>() {
                     Ok(n) => Ok(Value::ok(Value::Integer(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as integer")))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{s}\" as integer"
+                    )))),
                 },
                 "parse_float" => match s.trim().parse::<f64>() {
                     Ok(n) => Ok(Value::ok(Value::Float(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as float")))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{s}\" as float"
+                    )))),
                 },
                 _ => Err(format!("no method '{}' on type String", method_name)),
             },
@@ -964,13 +978,19 @@ impl Vm {
                     let mut new = s.clone();
                     let val = args.first().cloned().unwrap_or(Value::Unit);
                     let was_new = new.insert(val);
-                    Ok(Value::Tuple(vec![Value::HashSet(new), Value::Bool(was_new)]))
+                    Ok(Value::Tuple(vec![
+                        Value::HashSet(new),
+                        Value::Bool(was_new),
+                    ]))
                 }
                 "remove" => {
                     let mut new = s.clone();
                     let val = args.first().cloned().unwrap_or(Value::Unit);
                     let existed = new.remove(&val);
-                    Ok(Value::Tuple(vec![Value::HashSet(new), Value::Bool(existed)]))
+                    Ok(Value::Tuple(vec![
+                        Value::HashSet(new),
+                        Value::Bool(existed),
+                    ]))
                 }
                 "to_vec" => {
                     let mut v: Vec<Value> = s.iter().cloned().collect();
@@ -997,14 +1017,10 @@ impl Vm {
                     let mut new = h.clone();
                     let popped = new.pop();
                     match popped {
-                        Some(val) => Ok(Value::Tuple(vec![
-                            Value::BinaryHeap(new),
-                            Value::some(val),
-                        ])),
-                        None => Ok(Value::Tuple(vec![
-                            Value::BinaryHeap(new),
-                            Value::none(),
-                        ])),
+                        Some(val) => {
+                            Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::some(val)]))
+                        }
+                        None => Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::none()])),
                     }
                 }
                 "to_vec" => Ok(Value::Vec(h.clone().into_sorted_vec())),
@@ -1138,25 +1154,37 @@ impl Vm {
                 to_f64(args.first().unwrap_or(&Value::Unit)).ln(),
             )),
             ["math", "gcd"] => {
-                let a = args.first().and_then(|v| match v {
-                    Value::Integer(n) => Some(*n),
-                    _ => None,
-                }).unwrap_or(0);
-                let b = args.get(1).and_then(|v| match v {
-                    Value::Integer(n) => Some(*n),
-                    _ => None,
-                }).unwrap_or(0);
+                let a = args
+                    .first()
+                    .and_then(|v| match v {
+                        Value::Integer(n) => Some(*n),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                let b = args
+                    .get(1)
+                    .and_then(|v| match v {
+                        Value::Integer(n) => Some(*n),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
                 Ok(Value::Integer(gcd(a, b)))
             }
             ["math", "lcm"] => {
-                let a = args.first().and_then(|v| match v {
-                    Value::Integer(n) => Some(*n),
-                    _ => None,
-                }).unwrap_or(0);
-                let b = args.get(1).and_then(|v| match v {
-                    Value::Integer(n) => Some(*n),
-                    _ => None,
-                }).unwrap_or(0);
+                let a = args
+                    .first()
+                    .and_then(|v| match v {
+                        Value::Integer(n) => Some(*n),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                let b = args
+                    .get(1)
+                    .and_then(|v| match v {
+                        Value::Integer(n) => Some(*n),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
                 Ok(Value::Integer(lcm(a, b)))
             }
             ["json", "parse"] => {
@@ -1178,14 +1206,18 @@ impl Vm {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
                 match s.trim().parse::<i64>() {
                     Ok(n) => Ok(Value::ok(Value::Integer(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as integer")))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{s}\" as integer"
+                    )))),
                 }
             }
             ["float", "parse"] => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
                 match s.trim().parse::<f64>() {
                     Ok(n) => Ok(Value::ok(Value::Float(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!("cannot parse \"{s}\" as float")))),
+                    Err(_) => Ok(Value::err(Value::String(format!(
+                        "cannot parse \"{s}\" as float"
+                    )))),
                 }
             }
             _ => Err(format!("unknown built-in path: {}", segments.join("::"))),

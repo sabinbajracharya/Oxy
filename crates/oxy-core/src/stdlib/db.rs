@@ -208,8 +208,14 @@ mod tests {
         if let Value::Vec(rows) = result {
             assert_eq!(rows.len(), 2);
             if let Value::HashMap(row) = &rows[0] {
-                assert_eq!(row.get(&Value::String("name".to_string())), Some(&Value::String("Bob".to_string())));
-                assert_eq!(row.get(&Value::String("age".to_string())), Some(&Value::Integer(25)));
+                assert_eq!(
+                    row.get(&Value::String("name".to_string())),
+                    Some(&Value::String("Bob".to_string()))
+                );
+                assert_eq!(
+                    row.get(&Value::String("age".to_string())),
+                    Some(&Value::Integer(25))
+                );
             }
         } else {
             panic!("expected Vec");

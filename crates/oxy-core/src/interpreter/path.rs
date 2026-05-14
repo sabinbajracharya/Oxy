@@ -545,16 +545,22 @@ impl Interpreter {
 
 /// Parse a string to i64: `int::parse(s)`
 pub(crate) fn parse_int_builtin(args: &[Value], _span: &Span) -> Result<Value, FerriError> {
-    let s = args
-        .first()
-        .map(|v| v.to_string())
-        .unwrap_or_default();
+    let s = args.first().map(|v| v.to_string()).unwrap_or_default();
     let trimmed = s.trim();
-    let result = if let Some(hex) = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")) {
+    let result = if let Some(hex) = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+    {
         i64::from_str_radix(hex, 16)
-    } else if let Some(bin) = trimmed.strip_prefix("0b").or_else(|| trimmed.strip_prefix("0B")) {
+    } else if let Some(bin) = trimmed
+        .strip_prefix("0b")
+        .or_else(|| trimmed.strip_prefix("0B"))
+    {
         i64::from_str_radix(bin, 2)
-    } else if let Some(oct) = trimmed.strip_prefix("0o").or_else(|| trimmed.strip_prefix("0O")) {
+    } else if let Some(oct) = trimmed
+        .strip_prefix("0o")
+        .or_else(|| trimmed.strip_prefix("0O"))
+    {
         i64::from_str_radix(oct, 8)
     } else {
         trimmed.parse::<i64>()
@@ -570,10 +576,7 @@ pub(crate) fn parse_int_builtin(args: &[Value], _span: &Span) -> Result<Value, F
 /// Parse a string to f64: `float::parse(s)`
 pub(crate) fn parse_float_builtin(args: &[Value], span: &Span) -> Result<Value, FerriError> {
     let _ = span;
-    let s = args
-        .first()
-        .map(|v| v.to_string())
-        .unwrap_or_default();
+    let s = args.first().map(|v| v.to_string()).unwrap_or_default();
     match s.trim().parse::<f64>() {
         Ok(n) => Ok(Value::ok(Value::Float(n))),
         Err(_) => Ok(Value::err(Value::String(format!(

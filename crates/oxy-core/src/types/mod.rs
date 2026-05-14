@@ -720,7 +720,10 @@ mod tests {
             std::hash::Hasher::finish(&h)
         }
         assert_eq!(hash(&Value::Integer(42)), hash(&Value::Integer(42)));
-        assert_eq!(hash(&Value::String("hi".into())), hash(&Value::String("hi".into())));
+        assert_eq!(
+            hash(&Value::String("hi".into())),
+            hash(&Value::String("hi".into()))
+        );
         assert_eq!(hash(&Value::Bool(true)), hash(&Value::Bool(true)));
         assert_eq!(hash(&Value::Char('x')), hash(&Value::Char('x')));
         assert_eq!(hash(&Value::Unit), hash(&Value::Unit));
@@ -771,7 +774,10 @@ mod tests {
         assert_eq!(Value::Bool(true).cmp(&Value::Integer(0)), Ordering::Less);
         assert_eq!(Value::Integer(0).cmp(&Value::Float(0.0)), Ordering::Less);
         assert_eq!(Value::Float(0.0).cmp(&Value::Char('a')), Ordering::Less);
-        assert_eq!(Value::Char('a').cmp(&Value::String("".into())), Ordering::Less);
+        assert_eq!(
+            Value::Char('a').cmp(&Value::String("".into())),
+            Ordering::Less
+        );
     }
 
     #[test]
