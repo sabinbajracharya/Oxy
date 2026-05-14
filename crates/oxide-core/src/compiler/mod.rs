@@ -344,6 +344,73 @@ impl Compiler {
                 Ok(())
             }
 
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                ..
+            } => {
+                let saved_sym = self.sym.clone();
+                let vec_slot = self.sym.define("__for_vec");
+                let idx_slot = self.sym.define("__for_idx");
+                let tmp_slot = self.sym.define("__for_tmp");
+                let name_slots: Vec<usize> = names.iter().map(|n| self.sym.define(n)).collect();
+
+                // Preamble
+                self.compile_expr(iterable)?;
+                self.emit(OpCode::MakeIter);
+                self.emit(OpCode::StoreLocal(vec_slot));
+                self.emit(OpCode::ConstInt(0));
+                self.emit(OpCode::StoreLocal(idx_slot));
+                let jump_to_check = self.emit(OpCode::Jump(0));
+
+                // Body: load current tuple, destructure by index
+                let body_start = self.code.len();
+                self.emit(OpCode::LoadLocal(vec_slot));
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::VecIndex);
+                self.emit(OpCode::StoreLocal(tmp_slot));
+                for (i, &slot) in name_slots.iter().enumerate() {
+                    self.emit(OpCode::LoadLocal(tmp_slot));
+                    self.emit(OpCode::ConstInt(i as i64));
+                    self.emit(OpCode::VecIndex);
+                    self.emit(OpCode::StoreLocal(slot));
+                }
+
+                self.loop_stack.push(LoopContext {
+                    continue_target: 0,
+                    break_patches: vec![],
+                    continue_patches: vec![],
+                });
+                self.compile_block(body)?;
+                let ctx = self.loop_stack.pop().unwrap();
+
+                let advance_start = self.code.len();
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::ConstInt(1));
+                self.emit(OpCode::Add);
+                self.emit(OpCode::StoreLocal(idx_slot));
+
+                let check_start = self.code.len();
+                self.emit(OpCode::LoadLocal(idx_slot));
+                self.emit(OpCode::LoadLocal(vec_slot));
+                self.emit(OpCode::IterLen);
+                self.emit(OpCode::Lt);
+                self.emit(OpCode::JumpIfTrue(body_start));
+
+                let loop_end = self.code.len();
+                self.patch(jump_to_check, OpCode::Jump(check_start));
+                for idx in &ctx.break_patches {
+                    self.patch(*idx, OpCode::Jump(loop_end));
+                }
+                for idx in &ctx.continue_patches {
+                    self.patch(*idx, OpCode::Jump(advance_start));
+                }
+
+                self.sym = saved_sym;
+                Ok(())
+            }
+
             // For simplicity, skip other statements
             _ => Ok(()),
         }
@@ -564,14 +631,55 @@ impl Compiler {
                 Ok(())
             }
 
+            Expr::Array { elements, .. } => {
+                let count = elements.len();
+                for elem in elements {
+                    self.compile_expr(elem)?;
+                }
+                self.emit(OpCode::MakeArray { count });
+                Ok(())
+            }
+
+            Expr::Tuple { elements, .. } => {
+                let count = elements.len();
+                for elem in elements {
+                    self.compile_expr(elem)?;
+                }
+                self.emit(OpCode::MakeTuple { count });
+                Ok(())
+            }
+
+            Expr::Index { object, index, .. } => {
+                self.compile_expr(object)?;
+                self.compile_expr(index)?;
+                self.emit(OpCode::VecIndex);
+                Ok(())
+            }
+
+            Expr::FieldAccess {
+                object,
+                field,
+                span,
+                ..
+            } => {
+                self.compile_expr(object)?;
+                if let Ok(idx) = field.parse::<i64>() {
+                    self.emit(OpCode::ConstInt(idx));
+                    self.emit(OpCode::VecIndex);
+                    Ok(())
+                } else {
+                    Err(FerriError::Runtime {
+                        message: format!("compiled: field access '{}' not yet supported", field),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+
             // Fallback for expressions not yet compiled
             Expr::Match { span, .. }
-            | Expr::Array { span, .. }
-            | Expr::Tuple { span, .. }
             | Expr::StructInit { span, .. }
             | Expr::MethodCall { span, .. }
-            | Expr::FieldAccess { span, .. }
-            | Expr::Index { span, .. }
             | Expr::PathCall { span, .. }
             | Expr::Closure { span, .. }
             | Expr::Await { span, .. }

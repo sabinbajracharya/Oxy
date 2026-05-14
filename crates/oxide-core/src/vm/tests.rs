@@ -3,6 +3,110 @@
 mod tests {
     use crate::interpreter::{run, run_compiled, run_compiled_capturing};
 
+    // --- Array tests ---
+
+    #[test]
+    fn test_compiled_array_literal() {
+        let source = r#"
+        fn main() {
+            let arr = [1, 2, 3];
+            println!(arr);
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "array literal failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compiled_array_empty() {
+        let source = r#"
+        fn main() {
+            let arr = [];
+            println!(arr);
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "empty array failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_compiled_array_nested() {
+        let source = r#"
+        fn main() {
+            let arr = [[1, 2], [3, 4]];
+            println!(arr);
+        }
+        "#;
+        let result = run_compiled(source);
+        assert!(result.is_ok(), "nested array failed: {:?}", result.err());
+    }
+
+    // --- Index tests ---
+
+    #[test]
+    fn test_compiled_index_vec() {
+        let source = r#"
+        fn main() {
+            let arr = [10, 20, 30];
+            println!(arr[0]);
+            println!(arr[2]);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "index vec failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["10\n", "30\n"]);
+    }
+
+    #[test]
+    fn test_compiled_index_string() {
+        let source = r#"
+        fn main() {
+            let s = "ab";
+            println!(s[0]);
+            println!(s[1]);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "index string failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["a\n", "b\n"]);
+    }
+
+    #[test]
+    fn test_compiled_index_tuple() {
+        let source = r#"
+        fn main() {
+            let t = (10, 20);
+            println!(t.0);
+            println!(t.1);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "index tuple failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["10\n", "20\n"]);
+    }
+
+    // --- ForDestructure tests ---
+
+    #[test]
+    fn test_compiled_for_destructure() {
+        let source = r#"
+        fn main() {
+            for (a, b) in [(1, 10), (2, 20)] {
+                println!(a + b);
+            }
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "for destructure failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["11\n", "22\n"]);
+    }
+
+    // --- For loop tests ---
+
     #[test]
     fn test_compiled_for_range_compiles() {
         let source = r#"

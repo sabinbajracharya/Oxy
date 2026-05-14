@@ -82,6 +82,16 @@ pub enum OpCode {
     VecIndex,
     /// Pop end (Value), pop start (Value), push Range(start, end).
     MakeRange,
+
+    // --- Collections ---
+    /// Pop `count` elements, push them as Value::Vec.
+    MakeArray {
+        count: usize,
+    },
+    /// Pop `count` elements, push them as Value::Tuple.
+    MakeTuple {
+        count: usize,
+    },
 }
 
 /// A compiled Oxide program: a flat sequence of opcodes.
@@ -358,6 +368,28 @@ impl Vm {
                                 ));
                             }
                         }
+                        Value::String(s) => {
+                            if let Some(c) = s.chars().nth(idx) {
+                                self.stack.push(Value::Char(c));
+                            } else {
+                                return VmResult::Error(format!(
+                                    "index {} out of bounds for len {}",
+                                    idx,
+                                    s.chars().count()
+                                ));
+                            }
+                        }
+                        Value::Tuple(t) => {
+                            if idx < t.len() {
+                                self.stack.push(t[idx].clone());
+                            } else {
+                                return VmResult::Error(format!(
+                                    "index {} out of bounds for len {}",
+                                    idx,
+                                    t.len()
+                                ));
+                            }
+                        }
                         other => {
                             return VmResult::Error(format!("cannot index {}", other.type_name()))
                         }
@@ -379,6 +411,18 @@ impl Vm {
                             ));
                         }
                     }
+                }
+
+                OpCode::MakeArray { count } => {
+                    let start = self.stack.len().saturating_sub(count);
+                    let elements: Vec<Value> = self.stack.drain(start..).collect();
+                    self.stack.push(Value::Vec(elements));
+                }
+
+                OpCode::MakeTuple { count } => {
+                    let start = self.stack.len().saturating_sub(count);
+                    let elements: Vec<Value> = self.stack.drain(start..).collect();
+                    self.stack.push(Value::Tuple(elements));
                 }
             }
 
