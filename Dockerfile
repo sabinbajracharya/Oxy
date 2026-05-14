@@ -6,17 +6,17 @@ WORKDIR /app
 # Cache dependencies by building them first
 COPY Cargo.toml ./
 COPY Cargo.lock* ./
-COPY crates/oxide-core/Cargo.toml crates/oxide-core/Cargo.toml
-COPY crates/oxide-cli/Cargo.toml crates/oxide-cli/Cargo.toml
-COPY crates/oxide-lsp/Cargo.toml crates/oxide-lsp/Cargo.toml
+COPY crates/oxy-core/Cargo.toml crates/oxy-core/Cargo.toml
+COPY crates/oxy-cli/Cargo.toml crates/oxy-cli/Cargo.toml
+COPY crates/oxy-lsp/Cargo.toml crates/oxy-lsp/Cargo.toml
 
 # Create dummy source files to cache dependency compilation
-RUN mkdir -p crates/oxide-core/src crates/oxide-cli/src crates/oxide-lsp/src && \
-    echo "pub const VERSION: &str = \"0.0.0\";" > crates/oxide-core/src/lib.rs && \
-    echo "fn main() {}" > crates/oxide-cli/src/main.rs && \
-    echo "fn main() {}" > crates/oxide-lsp/src/main.rs && \
+RUN mkdir -p crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src && \
+    echo "pub const VERSION: &str = \"0.0.0\";" > crates/oxy-core/src/lib.rs && \
+    echo "fn main() {}" > crates/oxy-cli/src/main.rs && \
+    echo "fn main() {}" > crates/oxy-lsp/src/main.rs && \
     cargo build --release 2>/dev/null || true && \
-    rm -rf crates/oxide-core/src crates/oxide-cli/src crates/oxide-lsp/src
+    rm -rf crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src
 
 # Copy actual source and build
 COPY . .
@@ -28,10 +28,10 @@ FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/oxide /usr/local/bin/oxide
-COPY --from=builder /app/target/release/oxide-lsp /usr/local/bin/oxide-lsp
+COPY --from=builder /app/target/release/oxy /usr/local/bin/oxy
+COPY --from=builder /app/target/release/oxy-lsp /usr/local/bin/oxy-lsp
 
-ENTRYPOINT ["oxide"]
+ENTRYPOINT ["oxy"]
 
 # --- Dev stage (for development with full toolchain) ---
 FROM rust:1.93-slim AS dev

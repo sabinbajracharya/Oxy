@@ -40,7 +40,7 @@ jobs:
       - name: Rename binary
         shell: bash
         run: |
-          src="target/${{ matrix.target }}/release/oxide${{ matrix.os == 'windows-latest' && '.exe' || '' }}"
+          src="target/${{ matrix.target }}/release/oxy${{ matrix.os == 'windows-latest' && '.exe' || '' }}"
           cp "$src" "${{ matrix.artifact }}"
 
       - name: Upload artifact
