@@ -1,4 +1,4 @@
-// Traits & Generics example for Oxide
+// Traits & Generics example for Oxy
 
 trait Greet {
     fn greet(&self) -> String;
@@ -101,6 +101,6 @@ fn main() {
     println!("mul: ({}, {})", f.x, f.y);
 
     // String::from
-    let greeting = String::from("Hello, Oxide!");
+    let greeting = String::from("Hello, Oxy!");
     println!("{}", greeting);
 }

@@ -1,4 +1,4 @@
-// fibonacci.ox — Recursive Fibonacci in Oxide
+// fibonacci.ox — Recursive Fibonacci in Oxy
 fn fib(n: i64) -> i64 {
     if n <= 1 {
         n

@@ -1,4 +1,4 @@
-// Example: HTTP API calls in Oxide
+// Example: HTTP API calls in Oxy
 fn main() {
     // Simple GET request
     let resp = http::get("https://jsonplaceholder.typicode.com/todos/1");

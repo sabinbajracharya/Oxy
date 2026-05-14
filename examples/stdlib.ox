@@ -1,4 +1,4 @@
-// Oxide Standard Library Examples
+// Oxy Standard Library Examples
 // Demonstrates: std::fs, std::env, std::process, std::regex
 
 fn main() {
@@ -6,7 +6,7 @@ fn main() {
     println!("=== File System ===");
     
     // Write and read a file
-    let result = std::fs::write("test_stdlib.txt", "Hello from Oxide!");
+    let result = std::fs::write("test_stdlib.txt", "Hello from Oxy!");
     match result {
         Ok(_) => println!("File written successfully"),
         Err(e) => println!("Write error: {}", e),

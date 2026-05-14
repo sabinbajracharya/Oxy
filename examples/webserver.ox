@@ -1,4 +1,4 @@
-// Example: Simple web server in Oxide
+// Example: Simple web server in Oxy
 //
 // Run with: oxide run examples/webserver.ox
 // Then visit http://127.0.0.1:8080 in your browser
@@ -8,7 +8,7 @@ fn main() {
 
     // Home page
     app.get("/", |req| {
-        Response::html("<h1>Welcome to Oxide!</h1><p>A web server written in Oxide.</p>")
+        Response::html("<h1>Welcome to Oxy!</h1><p>A web server written in Oxy.</p>")
     });
 
     // Plain text endpoint

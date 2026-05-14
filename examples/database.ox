@@ -1,4 +1,4 @@
-// Example: SQLite database in Oxide
+// Example: SQLite database in Oxy
 //
 // Run with: oxide run examples/database.ox
 

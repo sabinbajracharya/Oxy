@@ -1,4 +1,4 @@
-// Oxide Error Handling Example
+// Oxy Error Handling Example
 // Demonstrates Option, Result, ? operator, if let, while let, and panic!
 
 fn divide(a: f64, b: f64) -> Result<f64, String> {

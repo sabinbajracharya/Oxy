@@ -1,4 +1,4 @@
-// Collections & Strings example for Oxide
+// Collections & Strings example for Oxy
 
 fn main() {
     // === Vectors ===
@@ -42,11 +42,11 @@ fn main() {
     println!("Mixed tuple: {:?}", mixed);
 
     // === Strings ===
-    let greeting = "Hello, Oxide!";
+    let greeting = "Hello, Oxy!";
     println!("Greeting: {}", greeting);
     println!("Length: {}", greeting.len());
     println!("Uppercase: {}", greeting.to_uppercase());
-    println!("Contains 'Oxide': {}", greeting.contains("Oxide"));
+    println!("Contains 'Oxy': {}", greeting.contains("Oxy"));
     println!("Starts with 'Hello': {}", greeting.starts_with("Hello"));
 
     let csv = "apple,banana,cherry";
@@ -65,7 +65,7 @@ fn main() {
 
     // String iteration
     print!("Chars: ");
-    for c in "Oxide" {
+    for c in "Oxy" {
         print!("{} ", c);
     }
     println!("");
