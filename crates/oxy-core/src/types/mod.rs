@@ -353,7 +353,7 @@ impl fmt::Display for Value {
             }
             Value::BinaryHeap(heap) => {
                 write!(f, "BinaryHeap([")?;
-                let mut sorted = heap.clone().into_sorted_vec();
+                let sorted = heap.clone().into_sorted_vec();
                 for (i, elem) in sorted.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -406,8 +406,8 @@ impl PartialEq for Value {
             (Value::HashMap(a), Value::HashMap(b)) => a == b,
             (Value::HashSet(a), Value::HashSet(b)) => a == b,
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
-                let mut va = a.clone().into_sorted_vec();
-                let mut vb = b.clone().into_sorted_vec();
+                let va = a.clone().into_sorted_vec();
+                let vb = b.clone().into_sorted_vec();
                 va == vb
             }
             _ => false,
@@ -415,27 +415,10 @@ impl PartialEq for Value {
     }
 }
 
-/// Ordering for [`Value`]; delegates to [`Ord`] for compound types, returns
-/// `None` for cross-type comparisons (scalars compare naturally, compounds delegate).
+/// Ordering for [`Value`]; delegates to [`Ord`] for all comparisons.
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (Value::Integer(a), Value::Integer(b)) => a.partial_cmp(b),
-            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
-            (Value::String(a), Value::String(b)) => a.partial_cmp(b),
-            (Value::Char(a), Value::Char(b)) => a.partial_cmp(b),
-            (Value::Bool(a), Value::Bool(b)) => a.partial_cmp(b),
-            (Value::Vec(_), Value::Vec(_))
-            | (Value::Tuple(_), Value::Tuple(_))
-            | (Value::Range(_, _), Value::Range(_, _))
-            | (Value::Struct { .. }, Value::Struct { .. })
-            | (Value::EnumVariant { .. }, Value::EnumVariant { .. })
-            | (Value::HashMap(_), Value::HashMap(_))
-            | (Value::HashSet(_), Value::HashSet(_))
-            | (Value::BinaryHeap(_), Value::BinaryHeap(_))
-            | (Value::Function(_), Value::Function(_)) => Some(self.cmp(other)),
-            _ => None,
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -703,10 +686,8 @@ mod tests {
     fn test_ordering() {
         assert!(Value::Integer(1) < Value::Integer(2));
         assert!(Value::String("a".into()) < Value::String("b".into()));
-        assert_eq!(
-            Value::Integer(1).partial_cmp(&Value::String("a".into())),
-            None
-        );
+        // Cross-type comparisons now use Ord's discriminant-based ordering
+        assert!(Value::Integer(1).partial_cmp(&Value::String("a".into())).is_some());
     }
 
     // --- Hash, Eq, Ord tests ---
@@ -845,7 +826,7 @@ mod tests {
             std::hash::Hasher::finish(&h)
         }
         // Same float bits = same hash (even NaN, though NaN bits may differ)
-        assert_eq!(hash(&Value::Float(3.14)), hash(&Value::Float(3.14)));
+        assert_eq!(hash(&Value::Float(2.71)), hash(&Value::Float(2.71)));
         // -0.0 and +0.0 have different bit patterns, so hash will differ
         // (this is intentional — consistent with Eq which compares f64 directly)
     }

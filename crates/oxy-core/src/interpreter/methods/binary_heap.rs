@@ -2,8 +2,6 @@
 //!
 //! Supports: push, pop, peek, len, is_empty, clone, to_vec.
 
-use std::collections::BinaryHeap;
-
 use crate::ast::Expr;
 use crate::env::Env;
 use crate::errors::check_arg_count;
