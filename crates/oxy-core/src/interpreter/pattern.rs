@@ -130,20 +130,23 @@ impl Interpreter {
 
     /// Convert a value to an iterable list of values (for `for` loops).
     ///
-    /// Delegates to [`Value::into_iterable`].
+    /// Delegates to [`Value::into_iterable`]; for Iterator values, drains remaining elements.
     pub(crate) fn value_to_iter(
-        &self,
+        &mut self,
         value: &Value,
         span: Span,
     ) -> Result<Vec<Value>, FerriError> {
-        value
-            .clone()
-            .into_iterable()
-            .map_err(|msg| FerriError::Runtime {
-                message: msg,
-                line: span.line,
-                column: span.column,
-            })
+        match value {
+            Value::Iterator(iter) => Ok(self.collect_remaining((**iter).clone())),
+            other => other
+                .clone()
+                .into_iterable()
+                .map_err(|msg| FerriError::Runtime {
+                    message: msg,
+                    line: span.line,
+                    column: span.column,
+                }),
+        }
     }
 
     /// Bind pattern variables to matched values in the given environment.

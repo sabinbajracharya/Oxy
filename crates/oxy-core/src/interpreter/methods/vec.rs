@@ -80,39 +80,35 @@ impl Interpreter {
                 let s: Vec<String> = v.iter().map(|e| format!("{e}")).collect();
                 Ok(Value::String(s.join(&sep)))
             }
-            // iter() returns the Vec itself (we don't have a separate Iterator type)
-            "iter" | "into_iter" | "iter_mut" => Ok(Value::Vec(v)),
+            // iter() returns a lazy iterator over the Vec
+            "iter" | "into_iter" | "iter_mut" => Ok(Value::Iterator(Box::new(
+                crate::types::IteratorState::VecSource { data: v, index: 0 },
+            ))),
             "map" => {
                 check_arg_count("Vec::map", 1, &args, span)?;
-                let func = &args[0];
-                let mut result = Vec::new();
-                for item in &v {
-                    let mapped = self.call_function(
-                        func,
-                        std::slice::from_ref(item),
-                        span.line,
-                        span.column,
-                    )?;
-                    result.push(mapped);
-                }
-                Ok(Value::Vec(result))
+                let closure = args[0].clone();
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Map {
+                        source: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        closure,
+                    },
+                )))
             }
             "filter" => {
                 check_arg_count("Vec::filter", 1, &args, span)?;
-                let func = &args[0];
-                let mut result = Vec::new();
-                for item in &v {
-                    let keep = self.call_function(
-                        func,
-                        std::slice::from_ref(item),
-                        span.line,
-                        span.column,
-                    )?;
-                    if keep.is_truthy() {
-                        result.push(item.clone());
-                    }
-                }
-                Ok(Value::Vec(result))
+                let closure = args[0].clone();
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Filter {
+                        source: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        closure,
+                    },
+                )))
             }
             "for_each" => {
                 check_arg_count("Vec::for_each", 1, &args, span)?;
@@ -179,34 +175,34 @@ impl Interpreter {
                 }
                 Ok(Value::none())
             }
-            "enumerate" => {
-                let result: Vec<Value> = v
-                    .iter()
-                    .enumerate()
-                    .map(|(i, item)| Value::Tuple(vec![Value::Integer(i as i64), item.clone()]))
-                    .collect();
-                Ok(Value::Vec(result))
-            }
+            "enumerate" => Ok(Value::Iterator(Box::new(
+                crate::types::IteratorState::Enumerate {
+                    source: Box::new(crate::types::IteratorState::VecSource { data: v, index: 0 }),
+                    index: 0,
+                },
+            ))),
             // collect() — identity on Vec (already collected)
             "collect" => Ok(Value::Vec(v)),
             "flat_map" => {
                 check_arg_count("Vec::flat_map", 1, &args, span)?;
-                let func = &args[0];
-                let mut result = Vec::new();
-                for item in &v {
-                    let mapped = self.call_function(
-                        func,
-                        std::slice::from_ref(item),
-                        span.line,
-                        span.column,
-                    )?;
-                    match mapped {
-                        Value::Vec(inner) => result.extend(inner),
-                        other => result.push(other),
-                    }
-                }
-                Ok(Value::Vec(result))
+                let closure = args[0].clone();
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::FlatMap {
+                        source: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        closure,
+                        current: None,
+                    },
+                )))
             }
+            "flatten" => Ok(Value::Iterator(Box::new(
+                crate::types::IteratorState::Flatten {
+                    source: Box::new(crate::types::IteratorState::VecSource { data: v, index: 0 }),
+                    current: None,
+                },
+            ))),
             "position" => {
                 check_arg_count("Vec::position", 1, &args, span)?;
                 let func = &args[0];
@@ -225,53 +221,81 @@ impl Interpreter {
             }
             "zip" => {
                 check_arg_count("zip", 1, &args, span)?;
-                if let Value::Vec(other) = &args[0] {
-                    let zipped: Vec<Value> = v
-                        .iter()
-                        .zip(other.iter())
-                        .map(|(a, b)| Value::Tuple(vec![a.clone(), b.clone()]))
-                        .collect();
-                    Ok(Value::Vec(zipped))
-                } else {
-                    Err(crate::errors::runtime_error(
-                        "zip() argument must be a Vec",
-                        span,
-                    ))
-                }
+                let right = match &args[0] {
+                    Value::Vec(other) => Box::new(crate::types::IteratorState::VecSource {
+                        data: other.clone(),
+                        index: 0,
+                    }),
+                    Value::Iterator(_) => match args[0].clone() {
+                        Value::Iterator(iter) => iter,
+                        _ => unreachable!(),
+                    },
+                    other => Box::new(crate::types::IteratorState::VecSource {
+                        data: vec![other.clone()],
+                        index: 0,
+                    }),
+                };
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Zip {
+                        left: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        right,
+                    },
+                )))
             }
             "take" => {
                 check_arg_count("take", 1, &args, span)?;
                 let n = crate::errors::expect_integer(&args[0], "take()", span)? as usize;
-                Ok(Value::Vec(v.into_iter().take(n).collect()))
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Take {
+                        source: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        remaining: n,
+                    },
+                )))
             }
             "skip" => {
                 check_arg_count("skip", 1, &args, span)?;
                 let n = crate::errors::expect_integer(&args[0], "skip()", span)? as usize;
-                Ok(Value::Vec(v.into_iter().skip(n).collect()))
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Skip {
+                        source: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        remaining: n,
+                    },
+                )))
             }
             "chain" => {
                 check_arg_count("chain", 1, &args, span)?;
-                if let Value::Vec(other) = &args[0] {
-                    let mut result = v;
-                    result.extend(other.iter().cloned());
-                    Ok(Value::Vec(result))
-                } else {
-                    Err(crate::errors::runtime_error(
-                        "chain() argument must be a Vec",
-                        span,
-                    ))
-                }
-            }
-            "flatten" => {
-                check_arg_count("flatten", 0, &args, span)?;
-                let mut result = Vec::new();
-                for item in v {
-                    match item {
-                        Value::Vec(inner) => result.extend(inner),
-                        other => result.push(other),
-                    }
-                }
-                Ok(Value::Vec(result))
+                let right = match &args[0] {
+                    Value::Vec(other) => Box::new(crate::types::IteratorState::VecSource {
+                        data: other.clone(),
+                        index: 0,
+                    }),
+                    Value::Iterator(_) => match args[0].clone() {
+                        Value::Iterator(iter) => iter,
+                        _ => unreachable!(),
+                    },
+                    other => Box::new(crate::types::IteratorState::VecSource {
+                        data: vec![other.clone()],
+                        index: 0,
+                    }),
+                };
+                Ok(Value::Iterator(Box::new(
+                    crate::types::IteratorState::Chain {
+                        first: Box::new(crate::types::IteratorState::VecSource {
+                            data: v,
+                            index: 0,
+                        }),
+                        second: right,
+                    },
+                )))
             }
             "sum" => {
                 check_arg_count("sum", 0, &args, span)?;
@@ -314,6 +338,42 @@ impl Interpreter {
                 let mut sorted = v;
                 sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 Ok(Value::Vec(sorted))
+            }
+            "sort_by" => {
+                check_arg_count("Vec::sort_by", 1, &args, span)?;
+                let func = &args[0];
+                let mut sorted = v;
+                sorted.sort_by(|a, b| {
+                    match self.call_function(func, &[a.clone(), b.clone()], span.line, span.column)
+                    {
+                        Ok(Value::Integer(n)) => n.cmp(&0),
+                        Ok(_) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+                        Err(_) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+                    }
+                });
+                Ok(Value::Vec(sorted))
+            }
+            "sort_by_key" => {
+                check_arg_count("Vec::sort_by_key", 1, &args, span)?;
+                let func = &args[0];
+                let mut pairs: Vec<(Value, Value)> = v
+                    .into_iter()
+                    .map(|elem| {
+                        let key = self
+                            .call_function(
+                                func,
+                                std::slice::from_ref(&elem),
+                                span.line,
+                                span.column,
+                            )
+                            .unwrap_or_else(|_| elem.clone());
+                        (key, elem)
+                    })
+                    .collect();
+                pairs.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
+                Ok(Value::Vec(
+                    pairs.into_iter().map(|(_, elem)| elem).collect(),
+                ))
             }
             "dedup" => {
                 check_arg_count("dedup", 0, &args, span)?;

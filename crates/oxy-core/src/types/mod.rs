@@ -4,7 +4,7 @@
 //! Oxy uses reference counting internally — no borrow checker.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -68,6 +68,10 @@ pub enum Value {
     HashSet(HashSet<Value>),
     /// A binary heap (max-heap by default).
     BinaryHeap(BinaryHeap<Value>),
+    /// A double-ended queue.
+    VecDeque(VecDeque<Value>),
+    /// A lazy iterator (adapter chain).
+    Iterator(Box<IteratorState>),
     /// A future (lazy thunk wrapping an async function call).
     Future(Box<FutureData>),
     /// A join handle (eagerly evaluated, wraps a result).
@@ -83,6 +87,56 @@ pub struct FutureData {
     pub body: Block,
     pub closure_env: Env,
     pub args: Vec<Value>,
+}
+
+/// Lazy iterator state — each variant represents one stage in an adapter chain.
+#[derive(Debug, Clone)]
+pub enum IteratorState {
+    VecSource {
+        data: Vec<Value>,
+        index: usize,
+    },
+    RangeSource {
+        current: i64,
+        end: i64,
+    },
+    Map {
+        source: Box<IteratorState>,
+        closure: Value,
+    },
+    Filter {
+        source: Box<IteratorState>,
+        closure: Value,
+    },
+    Take {
+        source: Box<IteratorState>,
+        remaining: usize,
+    },
+    Skip {
+        source: Box<IteratorState>,
+        remaining: usize,
+    },
+    Chain {
+        first: Box<IteratorState>,
+        second: Box<IteratorState>,
+    },
+    Zip {
+        left: Box<IteratorState>,
+        right: Box<IteratorState>,
+    },
+    Enumerate {
+        source: Box<IteratorState>,
+        index: usize,
+    },
+    FlatMap {
+        source: Box<IteratorState>,
+        closure: Value,
+        current: Option<Box<IteratorState>>,
+    },
+    Flatten {
+        source: Box<IteratorState>,
+        current: Option<Box<IteratorState>>,
+    },
 }
 
 /// Data for a function value (boxed to keep Value enum small).
@@ -116,6 +170,8 @@ impl Value {
             Value::HashMap(_) => "HashMap".into(),
             Value::HashSet(_) => "HashSet".into(),
             Value::BinaryHeap(_) => "BinaryHeap".into(),
+            Value::VecDeque(_) => "VecDeque".into(),
+            Value::Iterator(_) => "Iterator".into(),
             Value::Future(_) => "Future".into(),
             Value::JoinHandle(_) => "JoinHandle".into(),
         }
@@ -203,6 +259,10 @@ impl Value {
                 Ok(v)
             }
             Value::BinaryHeap(h) => Ok(h.into_sorted_vec()),
+            Value::VecDeque(d) => Ok(d.into_iter().collect()),
+            Value::Iterator(_) => Err(
+                "Iterators must be consumed with .collect() or another consumer method, not iterated directly".into(),
+            ),
             other => Err(format!("cannot iterate over {}", other.type_name())),
         }
     }
@@ -222,11 +282,13 @@ impl Value {
             Value::HashMap(_) => 9,
             Value::HashSet(_) => 10,
             Value::BinaryHeap(_) => 11,
-            Value::Struct { .. } => 12,
-            Value::EnumVariant { .. } => 13,
-            Value::Function(_) => 14,
-            Value::Future(_) => 15,
-            Value::JoinHandle(_) => 16,
+            Value::VecDeque(_) => 12,
+            Value::Iterator(_) => 13,
+            Value::Struct { .. } => 14,
+            Value::EnumVariant { .. } => 15,
+            Value::Function(_) => 16,
+            Value::Future(_) => 17,
+            Value::JoinHandle(_) => 18,
         }
     }
 
@@ -244,6 +306,8 @@ impl Value {
             Value::HashMap(m) => !m.is_empty(),
             Value::HashSet(s) => !s.is_empty(),
             Value::BinaryHeap(h) => !h.is_empty(),
+            Value::VecDeque(d) => !d.is_empty(),
+            Value::Iterator(_) => true,
             Value::Future(_) => true,
             Value::JoinHandle(_) => true,
             _ => true,
@@ -362,6 +426,17 @@ impl fmt::Display for Value {
                 }
                 write!(f, "])")
             }
+            Value::VecDeque(d) => {
+                write!(f, "VecDeque([")?;
+                for (i, elem) in d.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "])")
+            }
+            Value::Iterator(_) => write!(f, "<iterator>"),
             Value::Future(_) => write!(f, "<future>"),
             Value::JoinHandle(_) => write!(f, "<join_handle>"),
         }
@@ -410,6 +485,12 @@ impl PartialEq for Value {
                 let vb = b.clone().into_sorted_vec();
                 va == vb
             }
+            (Value::VecDeque(a), Value::VecDeque(b)) => {
+                let va: Vec<&Value> = a.iter().collect();
+                let vb: Vec<&Value> = b.iter().collect();
+                va == vb
+            }
+            (Value::Iterator(_), Value::Iterator(_)) => false,
             _ => false,
         }
     }
@@ -554,7 +635,17 @@ impl Ord for Value {
                 }
                 va.len().cmp(&vb.len())
             }
+            (Value::VecDeque(a), Value::VecDeque(b)) => {
+                for (ai, bi) in a.iter().zip(b.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                a.len().cmp(&b.len())
+            }
             (Value::Function(a), Value::Function(b)) => a.name.cmp(&b.name),
+            (Value::Iterator(_), Value::Iterator(_)) => Ordering::Equal,
             (Value::Future(_), Value::Future(_)) => Ordering::Equal,
             (Value::JoinHandle(a), Value::JoinHandle(b)) => a.cmp(b),
             _ => Ordering::Equal, // unreachable: discriminant matched, types match
@@ -636,6 +727,12 @@ impl Hash for Value {
                     item.hash(state);
                 }
             }
+            Value::VecDeque(d) => {
+                for elem in d {
+                    elem.hash(state);
+                }
+            }
+            Value::Iterator(_) => "_iterator_".hash(state),
             Value::Future(_) => "_future_".hash(state),
             Value::JoinHandle(v) => v.hash(state),
         }

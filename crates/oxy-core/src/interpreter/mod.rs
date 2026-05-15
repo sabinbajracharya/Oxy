@@ -2907,7 +2907,7 @@ println!("{}", greet());
         let output = run_and_capture(
             r#"fn main() {
 let v = vec![1, 2, 3];
-let doubled = v.map(|x| x * 2);
+let doubled = v.map(|x| x * 2).collect();
 println!("{:?}", doubled);
 }"#,
         );
@@ -2919,7 +2919,7 @@ println!("{:?}", doubled);
         let output = run_and_capture(
             r#"fn main() {
 let v = vec![1, 2, 3, 4, 5];
-let evens = v.filter(|x| x % 2 == 0);
+let evens = v.filter(|x| x % 2 == 0).collect();
 println!("{:?}", evens);
 }"#,
         );
@@ -2981,7 +2981,7 @@ println!("{:?}", not_found);
         let output = run_and_capture(
             r#"fn main() {
 let v = vec!["a", "b", "c"];
-let pairs = v.enumerate();
+let pairs = v.enumerate().collect();
 println!("{:?}", pairs);
 }"#,
         );
@@ -2993,7 +2993,7 @@ println!("{:?}", pairs);
         let output = run_and_capture(
             r#"fn main() {
 let v = vec![1, 2, 3, 4, 5];
-let result = v.map(|x| x * 2).filter(|x| x > 4);
+let result = v.map(|x| x * 2).filter(|x| x > 4).collect();
 println!("{:?}", result);
 }"#,
         );
@@ -3005,7 +3005,7 @@ println!("{:?}", result);
         let output = run_and_capture(
             r#"fn main() {
 let v = vec![1, 2, 3];
-let result = v.flat_map(|x| vec![x, x * 10]);
+let result = v.flat_map(|x| vec![x, x * 10]).collect();
 println!("{:?}", result);
 }"#,
         );
@@ -3982,6 +3982,93 @@ fn main() {
 "#,
         );
         assert_eq!(output, vec!["1\n", "3\n"]);
+    }
+
+    // === VecDeque tests ===
+
+    #[test]
+    fn test_vec_deque_new_and_push() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut d = VecDeque::new();
+    d.push_back(1);
+    d.push_back(2);
+    d.push_front(0);
+    println!("{}", d.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_vec_deque_front_back() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut d = VecDeque::new();
+    d.push_back(1);
+    d.push_back(3);
+    println!("{}", d.front());
+    println!("{}", d.back());
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "3\n"]);
+    }
+
+    #[test]
+    fn test_vec_deque_pop() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut d = VecDeque::new();
+    d.push_back(1);
+    d.push_back(2);
+    d.push_back(3);
+    println!("{}", d.pop_front());
+    println!("{}", d.pop_back());
+    println!("{}", d.len());
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "3\n", "1\n"]);
+    }
+
+    #[test]
+    fn test_vec_deque_to_vec() {
+        let output = run_and_capture(
+            r#"
+fn main() {
+    let mut d = VecDeque::new();
+    d.push_back(1);
+    d.push_back(2);
+    d.push_back(3);
+    let v = d.to_vec();
+    println!("{}", v[0]);
+    println!("{}", v[2]);
+}
+"#,
+        );
+        assert_eq!(output, vec!["1\n", "3\n"]);
+    }
+
+    // === Recursion limit test ===
+
+    #[test]
+    fn test_recursion_limit() {
+        let output = run_and_capture(
+            r#"
+fn recurse(n: i64) -> i64 {
+    if n == 0 { 0 } else { 1 + recurse(n - 1) }
+}
+fn main() {
+    println!("{}", recurse(10));
+}
+"#,
+        );
+        assert_eq!(output, vec!["10\n"]);
     }
 
     // === math::gcd / math::lcm ===
@@ -5275,7 +5362,7 @@ fn main() {
             r#"fn main() {
             let a = vec![1, 2, 3];
             let b = vec!["a", "b", "c"];
-            let zipped = a.zip(b);
+            let zipped = a.zip(b).collect();
             println!("{:?}", zipped);
             }"#,
         );
@@ -5287,8 +5374,8 @@ fn main() {
         let output = run_and_capture(
             r#"fn main() {
             let v = vec![1, 2, 3, 4, 5];
-            let first = v.take(3);
-            let rest = v.skip(2);
+            let first = v.take(3).collect();
+            let rest = v.skip(2).collect();
             println!("{:?} {:?}", first, rest);
             }"#,
         );
@@ -5301,7 +5388,7 @@ fn main() {
             r#"fn main() {
             let a = vec![1, 2];
             let b = vec![3, 4];
-            let c = a.chain(b);
+            let c = a.chain(b).collect();
             println!("{:?}", c);
             }"#,
         );
@@ -5313,7 +5400,7 @@ fn main() {
         let output = run_and_capture(
             r#"fn main() {
             let nested = vec![vec![1, 2], vec![3, 4]];
-            let flat = nested.flatten();
+            let flat = nested.flatten().collect();
             println!("{:?}", flat);
             }"#,
         );
@@ -5351,6 +5438,30 @@ fn main() {
             }"#,
         );
         assert_eq!(output, vec!["[1, 1, 3, 4, 5]\n"]);
+    }
+
+    #[test]
+    fn test_vec_sort_by() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec![3, 1, 4, 1, 5];
+            let sorted = v.sort_by(|a, b| b - a);
+            println!("{:?}", sorted);
+            }"#,
+        );
+        assert_eq!(output, vec!["[5, 4, 3, 1, 1]\n"]);
+    }
+
+    #[test]
+    fn test_vec_sort_by_key() {
+        let output = run_and_capture(
+            r#"fn main() {
+            let v = vec!["aa", "b", "ccc"];
+            let sorted = v.sort_by_key(|s| s.len());
+            println!("{:?}", sorted);
+            }"#,
+        );
+        assert_eq!(output, vec!["[\"b\", \"aa\", \"ccc\"]\n"]);
     }
 
     #[test]
@@ -5404,7 +5515,7 @@ fn main() {
         let output = run_and_capture(
             r#"fn main() {
             let v = vec![1, 2, 3, 4, 5, 6];
-            let result = v.filter(|x| x % 2 == 0).map(|x| x * 10).sum();
+            let result = v.filter(|x| x % 2 == 0).collect().map(|x| x * 10).sum();
             println!("{}", result);
             }"#,
         );
