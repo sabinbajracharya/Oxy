@@ -41,6 +41,7 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             data,
         } => serialize_enum(enum_name, variant, data),
         Value::Function(_) => Err("cannot serialize function".to_string()),
+        Value::Iterator(_) => Err("cannot serialize iterator".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
         Value::HashSet(s) => {
             let items: Result<Vec<String>, String> = s.iter().map(serialize_value).collect();
@@ -49,6 +50,10 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         Value::BinaryHeap(h) => {
             let sorted = h.clone().into_sorted_vec();
             let items: Result<Vec<String>, String> = sorted.iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
+        Value::VecDeque(d) => {
+            let items: Result<Vec<String>, String> = d.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
         Value::Future(_) => Err("cannot serialize future".to_string()),
@@ -94,6 +99,7 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
             data,
         } => serialize_enum_pretty(enum_name, variant, data, indent),
         Value::Function(_) => Err("cannot serialize function".to_string()),
+        Value::Iterator(_) => Err("cannot serialize iterator".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
         Value::HashSet(s) => {
             if s.is_empty() {
@@ -122,6 +128,22 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
             let close_pad = " ".repeat(indent);
             let sorted = h.clone().into_sorted_vec();
             let items: Result<Vec<String>, String> = sorted
+                .iter()
+                .map(|item| {
+                    let s = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
+        Value::VecDeque(d) => {
+            if d.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let items: Result<Vec<String>, String> = d
                 .iter()
                 .map(|item| {
                     let s = serialize_value_pretty(item, inner_indent)?;

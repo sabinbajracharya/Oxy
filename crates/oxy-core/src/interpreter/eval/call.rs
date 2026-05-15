@@ -148,6 +148,14 @@ impl Interpreter {
             });
         }
 
+        if self.call_stack.len() >= 1024 {
+            return Err(FerriError::Runtime {
+                message: "recursion limit exceeded (max depth 1024)".into(),
+                line,
+                column: col,
+            });
+        }
+
         self.call_stack.push(crate::errors::CallFrame {
             name: func_data.name.clone(),
             line,

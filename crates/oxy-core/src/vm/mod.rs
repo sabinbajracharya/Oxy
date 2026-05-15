@@ -4,7 +4,7 @@
 //! It uses a value stack and a call stack. Each call frame tracks its own
 //! local variable slots and return address.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 use crate::interpreter::Interpreter;
 use crate::types::Value;
@@ -366,6 +366,9 @@ impl Vm {
                 }
 
                 OpCode::Call { target, arg_count } => {
+                    if self.call_stack.len() >= 1024 {
+                        return VmResult::Error("recursion limit exceeded (max depth 1024)".into());
+                    }
                     let args_start = self.stack.len() - arg_count;
                     self.call_stack.push(Frame {
                         return_ip: self.ip + 1,
@@ -610,6 +613,11 @@ impl Vm {
                         .cloned();
                     if let Some(Value::Function(f)) = fn_val {
                         if let Some(target) = f.target_ip {
+                            if self.call_stack.len() >= 1024 {
+                                return VmResult::Error(
+                                    "recursion limit exceeded (max depth 1024)".into(),
+                                );
+                            }
                             let args_start = self.stack.len() - arg_count;
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
@@ -700,6 +708,11 @@ impl Vm {
                             // Push receiver back (as self), then args
                             self.stack.push(receiver);
                             self.stack.extend(args);
+                            if self.call_stack.len() >= 1024 {
+                                return VmResult::Error(
+                                    "recursion limit exceeded (max depth 1024)".into(),
+                                );
+                            }
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
                                 base: self.stack.len() - arg_count - 1,
@@ -1000,6 +1013,41 @@ impl Vm {
                 "clone" => Ok(Value::HashSet(s.clone())),
                 _ => Err(format!("no method '{}' on type HashSet", method_name)),
             },
+            Value::VecDeque(d) => match method_name {
+                "len" => Ok(Value::Integer(d.len() as i64)),
+                "is_empty" => Ok(Value::Bool(d.is_empty())),
+                "front" => d
+                    .front()
+                    .cloned()
+                    .ok_or_else(|| "VecDeque::front on empty deque".to_string()),
+                "back" => d
+                    .back()
+                    .cloned()
+                    .ok_or_else(|| "VecDeque::back on empty deque".to_string()),
+                "push_front" => {
+                    let mut new = d.clone();
+                    new.push_front(args.first().cloned().unwrap_or(Value::Unit));
+                    Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
+                }
+                "push_back" => {
+                    let mut new = d.clone();
+                    new.push_back(args.first().cloned().unwrap_or(Value::Unit));
+                    Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
+                }
+                "pop_front" => {
+                    let mut new = d.clone();
+                    let popped = new.pop_front().unwrap_or(Value::Unit);
+                    Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
+                }
+                "pop_back" => {
+                    let mut new = d.clone();
+                    let popped = new.pop_back().unwrap_or(Value::Unit);
+                    Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
+                }
+                "to_vec" => Ok(Value::Vec(d.iter().cloned().collect())),
+                "clone" => Ok(Value::VecDeque(d.clone())),
+                _ => Err(format!("no method '{}' on type VecDeque", method_name)),
+            },
             Value::BinaryHeap(h) => match method_name {
                 "len" => Ok(Value::Integer(h.len() as i64)),
                 "is_empty" => Ok(Value::Bool(h.is_empty())),
@@ -1202,6 +1250,7 @@ impl Vm {
             ["HashMap", "new"] => Ok(Value::HashMap(HashMap::new())),
             ["HashSet", "new"] => Ok(Value::HashSet(HashSet::new())),
             ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(BinaryHeap::new())),
+            ["VecDeque", "new"] => Ok(Value::VecDeque(VecDeque::new())),
             ["int", "parse"] => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
                 match s.trim().parse::<i64>() {

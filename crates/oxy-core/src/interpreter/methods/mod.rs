@@ -7,10 +7,12 @@ mod binary_heap;
 mod char;
 mod hashmap;
 mod hashset;
+mod iterator;
 mod numeric;
 mod option_result;
 mod string;
 mod vec;
+mod vec_deque;
 
 use crate::ast::Expr;
 use crate::env::Env;
@@ -46,6 +48,10 @@ impl Interpreter {
             Value::BinaryHeap(_) => {
                 self.call_binary_heap_method(receiver, method, args, receiver_expr, env, span)
             }
+            Value::VecDeque(_) => {
+                self.call_vec_deque_method(receiver, method, args, receiver_expr, env, span)
+            }
+            Value::Iterator(_) => self.call_iter_method(receiver, method, args, span),
             Value::Tuple(_) => {
                 if method == "clone" {
                     Ok(receiver)

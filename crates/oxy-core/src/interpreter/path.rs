@@ -5,7 +5,7 @@
 //! (math::, rand::, time::, json::, http::), user-defined method dispatch
 //! via impl blocks and trait impls, and `std::` path functions.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
@@ -140,6 +140,11 @@ impl Interpreter {
             // Built-in BinaryHeap::new
             if type_name == "BinaryHeap" && method_name == "new" && args.is_empty() {
                 return Ok(Value::BinaryHeap(BinaryHeap::new()));
+            }
+
+            // Built-in VecDeque::new
+            if type_name == "VecDeque" && method_name == "new" && args.is_empty() {
+                return Ok(Value::VecDeque(VecDeque::new()));
             }
 
             // Built-in int::parse(s)
