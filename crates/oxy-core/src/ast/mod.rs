@@ -264,37 +264,46 @@ pub enum Stmt {
     Expr { expr: Expr, has_semicolon: bool },
     /// `return [expr];`
     Return { value: Option<Expr>, span: Span },
-    /// `while cond { body }`
+    /// `[label:] while cond { body }`
     While {
+        label: Option<String>,
         condition: Box<Expr>,
         body: Block,
         span: Span,
     },
-    /// `loop { body }`
-    Loop { body: Block, span: Span },
-    /// `for name in iterable { body }`
+    /// `[label:] loop { body }`
+    Loop {
+        label: Option<String>,
+        body: Block,
+        span: Span,
+    },
+    /// `[label:] for name in iterable { body }`
     For {
+        label: Option<String>,
         name: String,
         iterable: Box<Expr>,
         body: Block,
         span: Span,
     },
-    /// `break [expr];`
+    /// `break [label] [expr];`
     Break {
+        label: Option<String>,
         value: Option<Box<Expr>>,
         span: Span,
     },
-    /// `continue;`
-    Continue { span: Span },
-    /// `while let pattern = expr { body }`
+    /// `continue [label];`
+    Continue { label: Option<String>, span: Span },
+    /// `[label:] while let pattern = expr { body }`
     WhileLet {
+        label: Option<String>,
         pattern: Box<Pattern>,
         expr: Box<Expr>,
         body: Block,
         span: Span,
     },
-    /// `for (a, b) in iterable { body }` — tuple destructuring
+    /// `[label:] for (a, b) in iterable { body }` — tuple destructuring
     ForDestructure {
+        label: Option<String>,
         names: Vec<String>,
         iterable: Box<Expr>,
         body: Block,
@@ -465,7 +474,11 @@ pub enum Expr {
         span: Span,
     },
     /// Type cast: `expr as Type`
-    As { expr: Box<Expr>, type_name: String, span: Span },
+    As {
+        expr: Box<Expr>,
+        type_name: String,
+        span: Span,
+    },
     /// Try operator: `expr?` — unwraps Ok/Some or returns Err/None early
     Try { expr: Box<Expr>, span: Span },
     /// Closure expression: `|params| expr` or `|params| { body }`
@@ -668,7 +681,10 @@ impl Pattern {
             Pattern::Literal(e) => e.pretty_print(out, 0),
             Pattern::Wildcard(_) => out.push('_'),
             Pattern::Range {
-                start, end, inclusive, ..
+                start,
+                end,
+                inclusive,
+                ..
             } => {
                 if let Some(s) = start {
                     out.push_str(&s.to_string());
@@ -1005,8 +1021,14 @@ impl Stmt {
                 out.push_str(";\n");
             }
             Stmt::While {
-                condition, body, ..
+                label,
+                condition,
+                body,
+                ..
             } => {
+                if let Some(l) = label {
+                    out.push_str(&format!("{pad}'{l}: "));
+                }
                 out.push_str(&format!("{pad}while "));
                 condition.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -1015,7 +1037,10 @@ impl Stmt {
                 }
                 out.push_str(&format!("{pad}}}\n"));
             }
-            Stmt::Loop { body, .. } => {
+            Stmt::Loop { label, body, .. } => {
+                if let Some(l) = label {
+                    out.push_str(&format!("{pad}'{l}: "));
+                }
                 out.push_str(&format!("{pad}loop {{\n"));
                 for stmt in &body.stmts {
                     stmt.pretty_print(out, indent + 1);
@@ -1023,11 +1048,15 @@ impl Stmt {
                 out.push_str(&format!("{pad}}}\n"));
             }
             Stmt::For {
+                label,
                 name,
                 iterable,
                 body,
                 ..
             } => {
+                if let Some(l) = label {
+                    out.push_str(&format!("{pad}'{l}: "));
+                }
                 out.push_str(&format!("{pad}for {name} in "));
                 iterable.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -1036,23 +1065,34 @@ impl Stmt {
                 }
                 out.push_str(&format!("{pad}}}\n"));
             }
-            Stmt::Break { value, .. } => {
+            Stmt::Break { label, value, .. } => {
                 out.push_str(&format!("{pad}break"));
+                if let Some(l) = label {
+                    out.push_str(&format!(" '{l}"));
+                }
                 if let Some(v) = value {
                     out.push(' ');
                     v.pretty_print(out, 0);
                 }
                 out.push_str(";\n");
             }
-            Stmt::Continue { .. } => {
-                out.push_str(&format!("{pad}continue;\n"));
+            Stmt::Continue { label, .. } => {
+                out.push_str(&format!("{pad}continue"));
+                if let Some(l) = label {
+                    out.push_str(&format!(" '{l}"));
+                }
+                out.push_str(";\n");
             }
             Stmt::WhileLet {
+                label,
                 pattern,
                 expr,
                 body,
                 ..
             } => {
+                if let Some(l) = label {
+                    out.push_str(&format!("{pad}'{l}: "));
+                }
                 out.push_str(&format!("{pad}while let "));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
@@ -1064,11 +1104,15 @@ impl Stmt {
                 out.push_str(&format!("{pad}}}\n"));
             }
             Stmt::ForDestructure {
+                label,
                 names,
                 iterable,
                 body,
                 ..
             } => {
+                if let Some(l) = label {
+                    out.push_str(&format!("{pad}'{l}: "));
+                }
                 out.push_str(&format!("{pad}for ({}) in ", names.join(", ")));
                 iterable.pretty_print(out, 0);
                 out.push_str(" {\n");
@@ -1360,7 +1404,9 @@ impl Expr {
                 }
                 out.push('"');
             }
-            Expr::As { expr, type_name, .. } => {
+            Expr::As {
+                expr, type_name, ..
+            } => {
                 expr.pretty_print(out, indent);
                 out.push_str(" as ");
                 out.push_str(type_name);

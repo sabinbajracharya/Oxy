@@ -51,9 +51,11 @@ impl Precedence {
             TokenKind::Shl | TokenKind::Shr => Precedence::Shift,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
-            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket | TokenKind::Question | TokenKind::As => {
-                Precedence::Call
-            }
+            TokenKind::LParen
+            | TokenKind::Dot
+            | TokenKind::LBracket
+            | TokenKind::Question
+            | TokenKind::As => Precedence::Call,
             TokenKind::Eq
             | TokenKind::PlusEq
             | TokenKind::MinusEq
@@ -849,16 +851,45 @@ impl Parser {
     // === Statement parsing ===
 
     fn parse_stmt(&mut self) -> Result<Stmt, FerriError> {
+        // Check for 'label: while/loop/for
+        if let Some(label) = self.try_parse_loop_label() {
+            let label = Some(label);
+            return match self.peek_kind() {
+                TokenKind::While => self.parse_while_stmt(label.clone()),
+                TokenKind::Loop => self.parse_loop_stmt(label.clone()),
+                TokenKind::For => self.parse_for_stmt(label),
+                _ => Err(self.error(format!(
+                    "expected `while`, `loop`, or `for` after label, found {}",
+                    self.peek_kind().description()
+                ))),
+            };
+        }
+
         match self.peek_kind() {
             TokenKind::Let => self.parse_let_stmt(),
             TokenKind::Return => self.parse_return_stmt(),
-            TokenKind::While => self.parse_while_stmt(),
-            TokenKind::Loop => self.parse_loop_stmt(),
-            TokenKind::For => self.parse_for_stmt(),
+            TokenKind::While => self.parse_while_stmt(None),
+            TokenKind::Loop => self.parse_loop_stmt(None),
+            TokenKind::For => self.parse_for_stmt(None),
             TokenKind::Break => self.parse_break_stmt(),
             TokenKind::Continue => self.parse_continue_stmt(),
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    /// If current token is `Label(name)` followed by `:`, consume both and return `Some(name)`.
+    fn try_parse_loop_label(&mut self) -> Option<String> {
+        if let TokenKind::Label(name) = self.peek_kind() {
+            let label = name.clone();
+            if self.pos + 1 < self.tokens.len()
+                && self.tokens[self.pos + 1].kind == TokenKind::Colon
+            {
+                self.advance(); // label
+                self.advance(); // ':'
+                return Some(label);
+            }
+        }
+        None
     }
 
     fn parse_let_stmt(&mut self) -> Result<Stmt, FerriError> {
@@ -952,7 +983,7 @@ impl Parser {
         })
     }
 
-    fn parse_while_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_while_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::While)?;
 
@@ -965,6 +996,7 @@ impl Parser {
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::WhileLet {
+                label,
                 pattern: Box::new(pattern),
                 expr: Box::new(expr),
                 body,
@@ -977,13 +1009,14 @@ impl Parser {
         let end_span = body.span;
 
         Ok(Stmt::While {
+            label,
             condition: Box::new(condition),
             body,
             span: self.merge_spans(start_span, end_span),
         })
     }
 
-    fn parse_loop_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_loop_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Loop)?;
 
@@ -991,12 +1024,13 @@ impl Parser {
         let end_span = body.span;
 
         Ok(Stmt::Loop {
+            label,
             body,
             span: self.merge_spans(start_span, end_span),
         })
     }
 
-    fn parse_for_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_for_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::For)?;
 
@@ -1024,6 +1058,7 @@ impl Parser {
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::ForDestructure {
+                label,
                 names,
                 iterable: Box::new(iterable),
                 body,
@@ -1039,6 +1074,7 @@ impl Parser {
         let end_span = body.span;
 
         Ok(Stmt::For {
+            label,
             name,
             iterable: Box::new(iterable),
             body,
@@ -1049,6 +1085,15 @@ impl Parser {
     fn parse_break_stmt(&mut self) -> Result<Stmt, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Break)?;
+
+        // Check for labeled break: `break 'label`
+        let label = if let TokenKind::Label(name) = self.peek_kind() {
+            let n = name.clone();
+            self.advance();
+            Some(n)
+        } else {
+            None
+        };
 
         let value = if !self.check(&TokenKind::Semicolon) && !self.check(&TokenKind::RBrace) {
             Some(Box::new(self.parse_expr(Precedence::None)?))
@@ -1062,6 +1107,7 @@ impl Parser {
         }
 
         Ok(Stmt::Break {
+            label,
             value,
             span: self.merge_spans(start_span, end_span),
         })
@@ -1071,12 +1117,22 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::Continue)?;
 
+        // Check for labeled continue: `continue 'label`
+        let label = if let TokenKind::Label(name) = self.peek_kind() {
+            let n = name.clone();
+            self.advance();
+            Some(n)
+        } else {
+            None
+        };
+
         let end_span = self.current_span();
         if self.check(&TokenKind::Semicolon) {
             self.advance();
         }
 
         Ok(Stmt::Continue {
+            label,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -1374,6 +1430,7 @@ impl Parser {
                 // Wrap as a block expression containing a Loop statement
                 Ok(Expr::Block(Block {
                     stmts: vec![Stmt::Loop {
+                        label: None,
                         body,
                         span: self.merge_spans(start_span, end_span),
                     }],
@@ -1990,7 +2047,7 @@ impl Parser {
                 Ok(Pattern::Rest(span))
             }
             TokenKind::IntLiteral(n) => {
-                let val = n.clone();
+                let val = n;
                 let start_span = self.current_span();
                 self.advance(); // consume the int literal
                 if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {

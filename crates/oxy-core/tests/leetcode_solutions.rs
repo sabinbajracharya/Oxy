@@ -26,9 +26,9 @@ fn visit_ox_files(dir: &Path, files: &mut Vec<String>) {
 #[test]
 fn leetcode_solutions() {
     let leetcode_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()    // crates
+        .parent() // crates
         .unwrap()
-        .parent()    // repo root
+        .parent() // repo root
         .unwrap()
         .join("examples")
         .join("leetcode");

@@ -404,7 +404,11 @@ impl Interpreter {
                 ..
             } => self.eval_if_let_expr(pattern, expr, then_block, else_block, env),
 
-            Expr::As { expr, type_name, span } => self.eval_as_expr(expr, type_name, span, env),
+            Expr::As {
+                expr,
+                type_name,
+                span,
+            } => self.eval_as_expr(expr, type_name, span, env),
 
             Expr::Try { expr, span } => self.eval_try_expr(expr, span, env),
 
@@ -6289,6 +6293,29 @@ fn main() {
         assert_eq!(output, vec!["12\n"]);
     }
 
+    #[test]
+    fn test_labeled_continue_outer() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut result = 0;
+                'outer: for x in 0..5 {
+                    for y in 0..5 {
+                        if y == 2 {
+                            continue 'outer;
+                        }
+                        result = result + 1;
+                    }
+                }
+                println!("{}", result);
+            }
+            "#,
+        );
+        // Each outer iteration skips inner loop after y=2 check,
+        // so only y=0,1 contribute per outer iteration: 5 * 2 = 10
+        assert_eq!(output, vec!["10\n"]);
+    }
+
     // === turbofish collect ===
 
     #[test]
@@ -6346,33 +6373,25 @@ fn main() {
 
     #[test]
     fn test_as_cast_int_to_float() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 42 as f64; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 42 as f64; println!("{}", x); }"#);
         assert_eq!(output, vec!["42.0\n"]);
     }
 
     #[test]
     fn test_as_cast_float_to_int() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 3.9 as i64; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 3.9 as i64; println!("{}", x); }"#);
         assert_eq!(output, vec!["3\n"]);
     }
 
     #[test]
     fn test_as_cast_char_to_int() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 'a' as i64; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 'a' as i64; println!("{}", x); }"#);
         assert_eq!(output, vec!["97\n"]);
     }
 
     #[test]
     fn test_as_cast_int_to_char() {
-        let output = run_and_capture(
-            r#"fn main() { let x = 65 as char; println!("{}", x); }"#,
-        );
+        let output = run_and_capture(r#"fn main() { let x = 65 as char; println!("{}", x); }"#);
         assert_eq!(output, vec!["A\n"]);
     }
 
