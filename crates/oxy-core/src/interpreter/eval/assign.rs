@@ -104,49 +104,33 @@ impl Interpreter {
                 });
             };
             let i = i as usize;
-            if let Expr::Ident(name, _) = object.as_ref() {
-                let mut current = env.borrow().get(name).map_err(|_| FerriError::Runtime {
-                    message: format!("undefined variable '{name}'"),
-                    line: span.line,
-                    column: span.column,
-                })?;
-                match &mut current {
-                    Value::Vec(v) => {
-                        if i >= v.len() {
-                            return Err(FerriError::Runtime {
-                                message: format!(
-                                    "index out of bounds: len is {}, but index is {i}",
-                                    v.len()
-                                ),
-                                line: span.line,
-                                column: span.column,
-                            });
-                        }
-                        v[i] = val;
-                    }
-                    _ => {
+            // Evaluate the indexed collection (handles both `v[i]` and `v[i][j]`)
+            let mut collection = self.eval_expr(object, env)?;
+            match &mut collection {
+                Value::Vec(v) => {
+                    if i >= v.len() {
                         return Err(FerriError::Runtime {
-                            message: format!("cannot index-assign into {}", current.type_name()),
+                            message: format!(
+                                "index out of bounds: len is {}, but index is {i}",
+                                v.len()
+                            ),
                             line: span.line,
                             column: span.column,
                         });
                     }
+                    v[i] = val;
                 }
-                env.borrow_mut()
-                    .set(name, current)
-                    .map_err(|e| FerriError::Runtime {
-                        message: e.to_string(),
+                _ => {
+                    return Err(FerriError::Runtime {
+                        message: format!("cannot index-assign into {}", collection.type_name()),
                         line: span.line,
                         column: span.column,
-                    })?;
-                Ok(Value::Unit)
-            } else {
-                Err(FerriError::Runtime {
-                    message: "invalid index assignment target".into(),
-                    line: span.line,
-                    column: span.column,
-                })
+                    });
+                }
             }
+            // Write the modified collection back
+            self.mutate_variable(object, collection, env, span)?;
+            Ok(Value::Unit)
         } else {
             Err(FerriError::Runtime {
                 message: "invalid assignment target".into(),

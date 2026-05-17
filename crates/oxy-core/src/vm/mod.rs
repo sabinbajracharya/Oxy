@@ -1100,6 +1100,7 @@ impl Vm {
                     }
                 }
                 "clone" => Ok(Value::Char(*c)),
+                "code" => Ok(Value::Integer(*c as i64)),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
             Value::EnumVariant { enum_name, .. } => {
@@ -1251,6 +1252,27 @@ impl Vm {
             ["HashSet", "new"] => Ok(Value::HashSet(HashSet::new())),
             ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(BinaryHeap::new())),
             ["VecDeque", "new"] => Ok(Value::VecDeque(VecDeque::new())),
+            ["ListNode", "new"] => {
+                let val = args.first().cloned().unwrap_or(Value::Unit);
+                let mut fields = HashMap::new();
+                fields.insert("val".to_string(), val);
+                fields.insert("next".to_string(), Value::none());
+                Ok(Value::Struct {
+                    name: "ListNode".to_string(),
+                    fields,
+                })
+            }
+            ["TreeNode", "new"] => {
+                let val = args.first().cloned().unwrap_or(Value::Unit);
+                let mut fields = HashMap::new();
+                fields.insert("val".to_string(), val);
+                fields.insert("left".to_string(), Value::none());
+                fields.insert("right".to_string(), Value::none());
+                Ok(Value::Struct {
+                    name: "TreeNode".to_string(),
+                    fields,
+                })
+            }
             ["int", "parse"] => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
                 match s.trim().parse::<i64>() {
@@ -1258,6 +1280,16 @@ impl Vm {
                     Err(_) => Ok(Value::err(Value::String(format!(
                         "cannot parse \"{s}\" as integer"
                     )))),
+                }
+            }
+            ["char", "from_code"] => {
+                let n = args.first().and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as u32),
+                    _ => None,
+                }).unwrap_or(0);
+                match char::from_u32(n) {
+                    Some(c) => Ok(Value::Char(c)),
+                    None => Err(format!("char::from_code: invalid code point {n}")),
                 }
             }
             ["float", "parse"] => {

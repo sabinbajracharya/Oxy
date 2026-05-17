@@ -1370,6 +1370,9 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["HashSet", "new"]
             | ["BinaryHeap", "new"]
             | ["VecDeque", "new"]
+            | ["ListNode", "new"]
+            | ["TreeNode", "new"]
+            | ["char", "from_code"]
             | ["int", "parse"]
             | ["float", "parse"]
     )

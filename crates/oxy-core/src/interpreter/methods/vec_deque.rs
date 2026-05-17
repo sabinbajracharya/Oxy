@@ -65,12 +65,8 @@ impl Interpreter {
                 let popped = new_d.pop_front();
                 self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
                 match popped {
-                    Some(val) => Ok(val),
-                    None => Err(FerriError::Runtime {
-                        message: "VecDeque::pop_front called on empty deque".into(),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "pop_back" => {
@@ -78,12 +74,8 @@ impl Interpreter {
                 let popped = new_d.pop_back();
                 self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
                 match popped {
-                    Some(val) => Ok(val),
-                    None => Err(FerriError::Runtime {
-                        message: "VecDeque::pop_back called on empty deque".into(),
-                        line: span.line,
-                        column: span.column,
-                    }),
+                    Some(val) => Ok(Value::some(val)),
+                    None => Ok(Value::none()),
                 }
             }
             "clone" => Ok(Value::VecDeque(d)),

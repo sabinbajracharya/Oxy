@@ -331,13 +331,15 @@ impl Interpreter {
                 check_arg_count("rev", 0, &args, span)?;
                 let mut reversed = v;
                 reversed.reverse();
-                Ok(Value::Vec(reversed))
+                self.mutate_variable(receiver_expr, Value::Vec(reversed), env, span)?;
+                Ok(Value::Unit)
             }
             "sort" => {
                 check_arg_count("sort", 0, &args, span)?;
                 let mut sorted = v;
                 sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                Ok(Value::Vec(sorted))
+                self.mutate_variable(receiver_expr, Value::Vec(sorted), env, span)?;
+                Ok(Value::Unit)
             }
             "sort_by" => {
                 check_arg_count("Vec::sort_by", 1, &args, span)?;
@@ -351,7 +353,8 @@ impl Interpreter {
                         Err(_) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
                     }
                 });
-                Ok(Value::Vec(sorted))
+                self.mutate_variable(receiver_expr, Value::Vec(sorted), env, span)?;
+                Ok(Value::Unit)
             }
             "sort_by_key" => {
                 check_arg_count("Vec::sort_by_key", 1, &args, span)?;
@@ -371,15 +374,16 @@ impl Interpreter {
                     })
                     .collect();
                 pairs.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
-                Ok(Value::Vec(
-                    pairs.into_iter().map(|(_, elem)| elem).collect(),
-                ))
+                let sorted: Vec<Value> = pairs.into_iter().map(|(_, elem)| elem).collect();
+                self.mutate_variable(receiver_expr, Value::Vec(sorted), env, span)?;
+                Ok(Value::Unit)
             }
             "dedup" => {
                 check_arg_count("dedup", 0, &args, span)?;
                 let mut deduped = v;
                 deduped.dedup();
-                Ok(Value::Vec(deduped))
+                self.mutate_variable(receiver_expr, Value::Vec(deduped), env, span)?;
+                Ok(Value::Unit)
             }
             "windows" => {
                 check_arg_count("windows", 1, &args, span)?;
