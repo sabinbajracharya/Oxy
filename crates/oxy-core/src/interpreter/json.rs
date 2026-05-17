@@ -107,7 +107,7 @@ impl Interpreter {
         };
 
         let map = match parsed {
-            Value::HashMap(m) => m,
+            Value::HashMap(rc) => rc.borrow().clone(),
             _ => {
                 return Ok(Value::err(Value::String(
                     "JSON value is not an object".to_string(),

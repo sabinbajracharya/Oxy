@@ -33,7 +33,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let text = expect_string(&args[1], "std::regex::find_all(text)", span)?;
             let re = compile_regex(pattern, span)?;
             let matches: Vec<Value> = re.find_iter(text).map(match_to_value).collect();
-            Ok(Value::Vec(matches))
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(matches))))
         }
         "captures" => {
             check_arg_count("std::regex::captures", 2, args, span)?;
@@ -62,7 +62,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                             );
                         }
                     }
-                    Ok(Value::some(Value::HashMap(map)))
+                    Ok(Value::some(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(map)))))
                 }
                 None => Ok(Value::none()),
             }
@@ -95,7 +95,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                 .split(text)
                 .map(|s| Value::String(s.to_string()))
                 .collect();
-            Ok(Value::Vec(parts))
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
         }
         _ => Err(runtime_error(
             format!("unknown regex function `std::regex::{func_name}`"),

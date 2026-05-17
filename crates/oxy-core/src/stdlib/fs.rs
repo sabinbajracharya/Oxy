@@ -74,7 +74,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                             entry.file_name().to_string_lossy().into_owned(),
                         ));
                     }
-                    Ok(Value::ok(Value::Vec(names)))
+                    Ok(Value::ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(names)))))
                 }
                 Err(e) => Ok(Value::err(Value::String(e.to_string()))),
             }

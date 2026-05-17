@@ -100,7 +100,7 @@ impl Interpreter {
             }
             "chars" => {
                 let chars: Vec<Value> = s.chars().map(Value::Char).collect();
-                Ok(Value::Vec(chars))
+                Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(chars))))
             }
             "split" => {
                 check_arg_count("String::split", 1, &args, span)?;
@@ -118,7 +118,7 @@ impl Interpreter {
                     .split(&delim)
                     .map(|p| Value::String(p.to_string()))
                     .collect();
-                Ok(Value::Vec(parts))
+                Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
             }
             "repeat" => {
                 check_arg_count("String::repeat", 1, &args, span)?;

@@ -65,7 +65,7 @@ impl Interpreter {
                 let mut fields = HashMap::new();
                 fields.insert("method".to_string(), Value::String(method));
                 fields.insert("url".to_string(), Value::String(url));
-                fields.insert("headers".to_string(), Value::HashMap(HashMap::new()));
+                fields.insert("headers".to_string(), Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(HashMap::new()))));
                 fields.insert("body".to_string(), Value::String(String::new()));
                 Ok(Value::Struct {
                     name: "HttpRequestBuilder".to_string(),
@@ -97,7 +97,7 @@ impl Interpreter {
                 let mut fields = HashMap::new();
                 fields.insert("status".to_string(), Value::Integer(status));
                 fields.insert("body".to_string(), Value::String(body));
-                fields.insert("headers".to_string(), Value::HashMap(headers_map));
+                fields.insert("headers".to_string(), Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(headers_map))));
                 Ok(Value::ok(Value::Struct {
                     name: "HttpResponse".to_string(),
                     fields,
@@ -186,8 +186,8 @@ impl Interpreter {
                 check_arg_count("HttpRequestBuilder::header", 2, args, span)?;
                 let key = format!("{}", args[0]);
                 let val = format!("{}", args[1]);
-                if let Some(Value::HashMap(ref mut h)) = fields.get_mut("headers") {
-                    h.insert(Value::String(key), Value::String(val));
+                if let Some(Value::HashMap(rc)) = fields.get("headers") {
+                    rc.borrow_mut().insert(Value::String(key), Value::String(val));
                 }
                 Ok(Value::Struct {
                     name: "HttpRequestBuilder".to_string(),
@@ -216,8 +216,8 @@ impl Interpreter {
                     }
                 };
                 fields.insert("body".to_string(), Value::String(json_body));
-                if let Some(Value::HashMap(ref mut h)) = fields.get_mut("headers") {
-                    h.insert(
+                if let Some(Value::HashMap(rc)) = fields.get("headers") {
+                    rc.borrow_mut().insert(
                         Value::String("Content-Type".to_string()),
                         Value::String("application/json".to_string()),
                     );
@@ -241,8 +241,9 @@ impl Interpreter {
                     _ => None,
                 };
                 let mut header_pairs: Vec<(String, String)> = Vec::new();
-                if let Some(Value::HashMap(h)) = fields.get("headers") {
-                    for (k, v) in h {
+                if let Some(Value::HashMap(rc)) = fields.get("headers") {
+                    let h = rc.borrow();
+                    for (k, v) in h.iter() {
                         header_pairs.push((format!("{k}"), format!("{v}")));
                     }
                 }

@@ -86,8 +86,8 @@ impl Interpreter {
                 }
             }
             Pattern::Slice(pats, _) => {
-                if let Value::Vec(vals) = value {
-                    Self::match_with_rest(pats, vals)
+                if let Value::Vec(rc) = value {
+                    Self::match_with_rest(pats, &rc.borrow())
                 } else {
                     false
                 }
@@ -220,8 +220,8 @@ impl Interpreter {
                 }
             }
             Pattern::Slice(pats, _) => {
-                if let Value::Vec(vals) = value {
-                    Self::bind_with_rest(pats, vals, env, mutable);
+                if let Value::Vec(rc) = value {
+                    Self::bind_with_rest(pats, &rc.borrow(), env, mutable);
                 }
             }
             Pattern::Or(alternatives, _) => {

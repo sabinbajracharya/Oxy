@@ -3,6 +3,9 @@
 //! Adapters: map, filter, take, skip, chain, zip, enumerate, flat_map, flatten.
 //! Consumers: next, collect, sum, count, nth, find, any, all, position, fold, for_each.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::{IteratorState, Value};
@@ -94,10 +97,10 @@ impl Interpreter {
                         Value::Iterator(inner_iter) => {
                             *current = Some(inner_iter);
                         }
-                        Value::Vec(items) => {
-                            if !items.is_empty() {
+                        Value::Vec(rc) => {
+                            if !rc.borrow().is_empty() {
                                 *current = Some(Box::new(IteratorState::VecSource {
-                                    data: items,
+                                    data: rc.borrow().clone(),
                                     index: 0,
                                 }));
                             }
@@ -119,10 +122,10 @@ impl Interpreter {
                     Value::Iterator(inner_iter) => {
                         *current = Some(inner_iter);
                     }
-                    Value::Vec(items) => {
-                        if !items.is_empty() {
+                    Value::Vec(rc) => {
+                        if !rc.borrow().is_empty() {
                             *current = Some(Box::new(IteratorState::VecSource {
-                                data: items,
+                                data: rc.borrow().clone(),
                                 index: 0,
                             }));
                         }
@@ -199,8 +202,8 @@ impl Interpreter {
                 let other = args.first().cloned().unwrap_or(Value::Unit);
                 let right = match other {
                     Value::Iterator(other_iter) => other_iter,
-                    Value::Vec(items) => Box::new(IteratorState::VecSource {
-                        data: items,
+                    Value::Vec(rc) => Box::new(IteratorState::VecSource {
+                        data: rc.borrow().clone(),
                         index: 0,
                     }),
                     _ => Box::new(IteratorState::VecSource {
@@ -217,8 +220,8 @@ impl Interpreter {
                 let other = args.first().cloned().unwrap_or(Value::Unit);
                 let right = match other {
                     Value::Iterator(other_iter) => other_iter,
-                    Value::Vec(items) => Box::new(IteratorState::VecSource {
-                        data: items,
+                    Value::Vec(rc) => Box::new(IteratorState::VecSource {
+                        data: rc.borrow().clone(),
                         index: 0,
                     }),
                     _ => Box::new(IteratorState::VecSource {
@@ -251,7 +254,7 @@ impl Interpreter {
             // --- Consumers (drain iterator) ---
             "collect" => {
                 let _ = args; // ignore args
-                Ok(Value::Vec(self.collect_remaining(*iter)))
+                Ok(Value::Vec(Rc::new(RefCell::new(self.collect_remaining(*iter)))))
             }
             "sum" => {
                 let collected = self.collect_remaining(*iter);

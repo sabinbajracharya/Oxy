@@ -79,7 +79,7 @@ impl Interpreter {
                 }
             }
             "clone" => Ok(Value::VecDeque(d)),
-            "to_vec" => Ok(Value::Vec(d.into_iter().collect())),
+            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(d.into_iter().collect())))),
             _ => self.try_to_json_method(Value::VecDeque(d), method, span, "VecDeque"),
         }
     }

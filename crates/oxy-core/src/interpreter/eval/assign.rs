@@ -105,9 +105,10 @@ impl Interpreter {
             };
             let i = i as usize;
             // Evaluate the indexed collection (handles both `v[i]` and `v[i][j]`)
-            let mut collection = self.eval_expr(object, env)?;
-            match &mut collection {
-                Value::Vec(v) => {
+            let collection = self.eval_expr(object, env)?;
+            match collection {
+                Value::Vec(rc) => {
+                    let v = rc.borrow();
                     if i >= v.len() {
                         return Err(FerriError::Runtime {
                             message: format!(
@@ -118,7 +119,8 @@ impl Interpreter {
                             column: span.column,
                         });
                     }
-                    v[i] = val;
+                    drop(v);
+                    rc.borrow_mut()[i] = val;
                 }
                 _ => {
                     return Err(FerriError::Runtime {
@@ -128,8 +130,6 @@ impl Interpreter {
                     });
                 }
             }
-            // Write the modified collection back
-            self.mutate_variable(object, collection, env, span)?;
             Ok(Value::Unit)
         } else {
             Err(FerriError::Runtime {

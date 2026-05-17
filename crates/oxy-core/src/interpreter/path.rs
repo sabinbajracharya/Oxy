@@ -129,12 +129,12 @@ impl Interpreter {
 
             // Built-in HashMap::new
             if type_name == "HashMap" && method_name == "new" && args.is_empty() {
-                return Ok(Value::HashMap(HashMap::new()));
+                return Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(HashMap::new()))));
             }
 
             // Built-in HashSet::new
             if type_name == "HashSet" && method_name == "new" && args.is_empty() {
-                return Ok(Value::HashSet(HashSet::new()));
+                return Ok(Value::HashSet(std::rc::Rc::new(std::cell::RefCell::new(HashSet::new()))));
             }
 
             // Built-in BinaryHeap::new
@@ -294,7 +294,7 @@ impl Interpreter {
                         .iter()
                         .map(|a| Value::String(a.clone()))
                         .collect();
-                    Ok(Value::Vec(args_vec))
+                    Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(args_vec))))
                 }
                 "env" => crate::stdlib::env::call(func, args, span),
                 "process" => crate::stdlib::process::call(func, args, span),

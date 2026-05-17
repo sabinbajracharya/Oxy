@@ -7,8 +7,10 @@
 //! Designed as a self-contained module with minimal coupling to the
 //! interpreter — only takes/returns `Value` and `FerriError`.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
+use std::rc::Rc;
 
 use crate::errors::FerriError;
 use crate::lexer::Span;
@@ -292,7 +294,7 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("query".to_string(), Value::HashMap(query_map));
+    fields.insert("query".to_string(), Value::HashMap(Rc::new(RefCell::new(query_map))));
 
     // Headers as HashMap
     let header_map: HashMap<Value, Value> = req
@@ -300,7 +302,7 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("headers".to_string(), Value::HashMap(header_map));
+    fields.insert("headers".to_string(), Value::HashMap(Rc::new(RefCell::new(header_map))));
 
     // Params as HashMap
     let param_map: HashMap<Value, Value> = req
@@ -308,7 +310,7 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("params".to_string(), Value::HashMap(param_map));
+    fields.insert("params".to_string(), Value::HashMap(Rc::new(RefCell::new(param_map))));
 
     Value::Struct {
         name: "Request".to_string(),
@@ -339,8 +341,8 @@ pub fn value_to_response(val: &Value) -> HttpResponse {
             if let Some(Value::String(ct)) = fields.get("content_type") {
                 resp = resp.with_header("Content-Type", ct);
             }
-            if let Some(Value::HashMap(hdrs)) = fields.get("headers") {
-                for (k, v) in hdrs {
+            if let Some(Value::HashMap(rc)) = fields.get("headers") {
+                for (k, v) in rc.borrow().iter() {
                     resp = resp.with_header(&format!("{k}"), &format!("{v}"));
                 }
             }

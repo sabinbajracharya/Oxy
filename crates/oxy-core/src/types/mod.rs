@@ -3,10 +3,12 @@
 //! All values at runtime are represented by the [`Value`] enum.
 //! Oxy uses reference counting internally — no borrow checker.
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 use crate::ast::{Block, Param, TypeAnnotation};
 use crate::env::Env;
@@ -25,11 +27,10 @@ pub const OK_VARIANT: &str = "Ok";
 pub const ERR_VARIANT: &str = "Err";
 
 /// A runtime value in Oxy.
-// WHY: All values are Clone (backed by Rc where needed) because Oxy has no borrow checker—
-// the interpreter cannot statically track ownership or lifetimes. Reference counting gives us
-// safe, automatic memory management (GC-like semantics) at the cost of cloning Rc pointers
-// when values are shared across scopes and closures.
-#[derive(Debug, Clone)]
+// WHY: Collection types use Rc<RefCell<>> for shared mutable semantics — cloning
+// a collection creates another reference to the same data (like Python objects).
+// Primitives are cheap to copy. The interpreter cannot statically track ownership.
+#[derive(Debug)]
 pub enum Value {
     /// 64-bit signed integer.
     Integer(i64),
@@ -47,8 +48,8 @@ pub enum Value {
     Function(Box<FunctionData>),
     /// A range value: `start..end` (end-exclusive, stored as actual end).
     Range(i64, i64),
-    /// A vector (dynamic array).
-    Vec(Vec<Value>),
+    /// A vector (dynamic array) — shared mutable via Rc<RefCell<>>.
+    Vec(Rc<RefCell<Vec<Value>>>),
     /// A tuple.
     Tuple(Vec<Value>),
     /// A struct instance: `Point { x: 1.0, y: 2.0 }`
@@ -62,10 +63,10 @@ pub enum Value {
         variant: String,
         data: Vec<Value>,
     },
-    /// A hash map.
-    HashMap(HashMap<Value, Value>),
-    /// A hash set.
-    HashSet(HashSet<Value>),
+    /// A hash map — shared mutable via Rc<RefCell<>>.
+    HashMap(Rc<RefCell<HashMap<Value, Value>>>),
+    /// A hash set — shared mutable via Rc<RefCell<>>.
+    HashSet(Rc<RefCell<HashSet<Value>>>),
     /// A binary heap (max-heap by default).
     BinaryHeap(BinaryHeap<Value>),
     /// A double-ended queue.
@@ -76,6 +77,43 @@ pub enum Value {
     Future(Box<FutureData>),
     /// A join handle (eagerly evaluated, wraps a result).
     JoinHandle(Box<Value>),
+}
+
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        match self {
+            Value::Integer(n) => Value::Integer(*n),
+            Value::Float(f) => Value::Float(*f),
+            Value::Bool(b) => Value::Bool(*b),
+            Value::String(s) => Value::String(s.clone()),
+            Value::Char(c) => Value::Char(*c),
+            Value::Unit => Value::Unit,
+            Value::Function(f) => Value::Function(f.clone()),
+            Value::Range(a, b) => Value::Range(*a, *b),
+            Value::Vec(rc) => Value::Vec(Rc::clone(rc)),
+            Value::Tuple(t) => Value::Tuple(t.clone()),
+            Value::Struct { name, fields } => Value::Struct {
+                name: name.clone(),
+                fields: fields.clone(),
+            },
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => Value::EnumVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+                data: data.clone(),
+            },
+            Value::HashMap(rc) => Value::HashMap(Rc::clone(rc)),
+            Value::HashSet(rc) => Value::HashSet(Rc::clone(rc)),
+            Value::BinaryHeap(h) => Value::BinaryHeap(h.clone()),
+            Value::VecDeque(d) => Value::VecDeque(d.clone()),
+            Value::Iterator(it) => Value::Iterator(it.clone()),
+            Value::Future(f) => Value::Future(f.clone()),
+            Value::JoinHandle(h) => Value::JoinHandle(h.clone()),
+        }
+    }
 }
 
 /// Data for an async future (boxed to keep Value enum small).
@@ -237,12 +275,13 @@ impl Value {
     pub fn into_iterable(self) -> Result<Vec<Value>, String> {
         match self {
             Value::Range(start, end) => Ok((start..end).map(Value::Integer).collect()),
-            Value::Vec(v) => Ok(v),
+            Value::Vec(rc) => Ok(rc.borrow().clone()),
             Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
-            Value::HashMap(m) => {
+            Value::HashMap(rc) => {
+                let m = rc.borrow();
                 let mut pairs: Vec<_> = m
-                    .into_iter()
-                    .map(|(k, v)| Value::Tuple(vec![k, v]))
+                    .iter()
+                    .map(|(k, v)| Value::Tuple(vec![k.clone(), v.clone()]))
                     .collect();
                 pairs.sort_by(|a, b| {
                     if let (Value::Tuple(a), Value::Tuple(b)) = (a, b) {
@@ -253,8 +292,9 @@ impl Value {
                 });
                 Ok(pairs)
             }
-            Value::HashSet(s) => {
-                let mut v: Vec<Value> = s.into_iter().collect();
+            Value::HashSet(rc) => {
+                let s = rc.borrow();
+                let mut v: Vec<Value> = s.iter().cloned().collect();
                 v.sort();
                 Ok(v)
             }
@@ -299,12 +339,12 @@ impl Value {
             Value::Integer(n) => *n != 0,
             Value::Unit => false,
             Value::Range(_, _) => true,
-            Value::Vec(v) => !v.is_empty(),
+            Value::Vec(rc) => !rc.borrow().is_empty(),
             Value::Tuple(t) => !t.is_empty(),
             Value::Struct { .. } => true,
             Value::EnumVariant { .. } => true,
-            Value::HashMap(m) => !m.is_empty(),
-            Value::HashSet(s) => !s.is_empty(),
+            Value::HashMap(rc) => !rc.borrow().is_empty(),
+            Value::HashSet(rc) => !rc.borrow().is_empty(),
             Value::BinaryHeap(h) => !h.is_empty(),
             Value::VecDeque(d) => !d.is_empty(),
             Value::Iterator(_) => true,
@@ -333,7 +373,8 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::Range(start, end) => write!(f, "{start}..{end}"),
-            Value::Vec(v) => {
+            Value::Vec(rc) => {
+                let v = rc.borrow();
                 write!(f, "[")?;
                 for (i, elem) in v.iter().enumerate() {
                     if i > 0 {
@@ -391,7 +432,8 @@ impl fmt::Display for Value {
                 }
                 Ok(())
             }
-            Value::HashMap(m) => {
+            Value::HashMap(rc) => {
+                let m = rc.borrow();
                 write!(f, "{{")?;
                 let mut sorted: Vec<_> = m.iter().collect();
                 sorted.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -403,9 +445,10 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
-            Value::HashSet(set) => {
+            Value::HashSet(rc) => {
+                let s = rc.borrow();
                 write!(f, "{{")?;
-                let mut sorted: Vec<&Value> = set.iter().collect();
+                let mut sorted: Vec<&Value> = s.iter().collect();
                 sorted.sort();
                 for (i, elem) in sorted.iter().enumerate() {
                     if i > 0 {
@@ -454,7 +497,7 @@ impl PartialEq for Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Unit, Value::Unit) => true,
             (Value::Range(a1, a2), Value::Range(b1, b2)) => a1 == b1 && a2 == b2,
-            (Value::Vec(a), Value::Vec(b)) => a == b,
+            (Value::Vec(a), Value::Vec(b)) => *a.borrow() == *b.borrow(),
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
             (
                 Value::Struct {
@@ -478,8 +521,8 @@ impl PartialEq for Value {
                     data: db,
                 },
             ) => ea == eb && va == vb && da == db,
-            (Value::HashMap(a), Value::HashMap(b)) => a == b,
-            (Value::HashSet(a), Value::HashSet(b)) => a == b,
+            (Value::HashMap(a), Value::HashMap(b)) => *a.borrow() == *b.borrow(),
+            (Value::HashSet(a), Value::HashSet(b)) => *a.borrow() == *b.borrow(),
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
                 let va = a.clone().into_sorted_vec();
                 let vb = b.clone().into_sorted_vec();
@@ -525,13 +568,15 @@ impl Ord for Value {
             (Value::Unit, Value::Unit) => Ordering::Equal,
             (Value::Range(a1, a2), Value::Range(b1, b2)) => a1.cmp(b1).then(a2.cmp(b2)),
             (Value::Vec(a), Value::Vec(b)) => {
-                for (ai, bi) in a.iter().zip(b.iter()) {
+                let va = a.borrow();
+                let vb = b.borrow();
+                for (ai, bi) in va.iter().zip(vb.iter()) {
                     match ai.cmp(bi) {
                         Ordering::Equal => continue,
                         non_eq => return non_eq,
                     }
                 }
-                a.len().cmp(&b.len())
+                va.len().cmp(&vb.len())
             }
             (Value::Tuple(a), Value::Tuple(b)) => {
                 for (ai, bi) in a.iter().zip(b.iter()) {
@@ -595,9 +640,11 @@ impl Ord for Value {
                 da.len().cmp(&db.len())
             }),
             (Value::HashMap(a), Value::HashMap(b)) => {
-                let mut ae: Vec<(&Value, &Value)> = a.iter().collect();
+                let ma = a.borrow();
+                let mb = b.borrow();
+                let mut ae: Vec<(&Value, &Value)> = ma.iter().collect();
                 ae.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
-                let mut be: Vec<(&Value, &Value)> = b.iter().collect();
+                let mut be: Vec<(&Value, &Value)> = mb.iter().collect();
                 be.sort_by(|(ak, _), (bk, _)| ak.cmp(bk));
                 for ((ak, av), (bk, bv)) in ae.iter().zip(be.iter()) {
                     match ak.cmp(bk) {
@@ -612,9 +659,11 @@ impl Ord for Value {
                 ae.len().cmp(&be.len())
             }
             (Value::HashSet(a), Value::HashSet(b)) => {
-                let mut av: Vec<&Value> = a.iter().collect();
+                let sa = a.borrow();
+                let sb = b.borrow();
+                let mut av: Vec<&Value> = sa.iter().collect();
                 av.sort();
-                let mut bv: Vec<&Value> = b.iter().collect();
+                let mut bv: Vec<&Value> = sb.iter().collect();
                 bv.sort();
                 for (ai, bi) in av.iter().zip(bv.iter()) {
                     match ai.cmp(bi) {
@@ -674,8 +723,8 @@ impl Hash for Value {
                 start.hash(state);
                 end.hash(state);
             }
-            Value::Vec(v) => {
-                for elem in v {
+            Value::Vec(rc) => {
+                for elem in rc.borrow().iter() {
                     elem.hash(state);
                 }
             }
@@ -706,7 +755,8 @@ impl Hash for Value {
                     d.hash(state);
                 }
             }
-            Value::HashMap(m) => {
+            Value::HashMap(rc) => {
+                let m = rc.borrow();
                 let mut entries: Vec<(&Value, &Value)> = m.iter().collect();
                 entries.sort_by(|(a, _), (b, _)| a.cmp(b));
                 for (k, v) in entries {
@@ -714,7 +764,8 @@ impl Hash for Value {
                     v.hash(state);
                 }
             }
-            Value::HashSet(s) => {
+            Value::HashSet(rc) => {
+                let s = rc.borrow();
                 let mut items: Vec<&Value> = s.iter().collect();
                 items.sort();
                 for item in items {
@@ -833,8 +884,8 @@ mod tests {
             v.hash(&mut h);
             std::hash::Hasher::finish(&h)
         }
-        let v1 = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
-        let v2 = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
+        let v1 = Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1), Value::Integer(2)])));
+        let v2 = Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1), Value::Integer(2)])));
         assert_eq!(hash(&v1), hash(&v2));
 
         let t1 = Value::Tuple(vec![Value::Integer(1), Value::String("a".into())]);
@@ -862,10 +913,10 @@ mod tests {
 
     #[test]
     fn test_ord_vec() {
-        let a = Value::Vec(vec![Value::Integer(1), Value::Integer(2)]);
-        let b = Value::Vec(vec![Value::Integer(1), Value::Integer(3)]);
+        let a = Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1), Value::Integer(2)])));
+        let b = Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1), Value::Integer(3)])));
         assert!(a < b); // works via PartialOrd → Ord delegation
-        let c = Value::Vec(vec![Value::Integer(1)]);
+        let c = Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1)])));
         assert!(c < a); // shorter is less
         assert_eq!(a.cmp(&a), Ordering::Equal);
     }
@@ -887,7 +938,7 @@ mod tests {
             Value::String("s".into()),
             Value::Char('c'),
             Value::Unit,
-            Value::Vec(vec![Value::Integer(1)]),
+            Value::Vec(Rc::new(RefCell::new(vec![Value::Integer(1)]))),
             Value::Tuple(vec![Value::Integer(1)]),
         ];
         for v in &vals {

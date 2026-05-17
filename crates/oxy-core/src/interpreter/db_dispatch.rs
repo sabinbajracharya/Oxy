@@ -106,7 +106,8 @@ impl Interpreter {
                 let conn = self.get_db_connection(&db_id, span)?;
                 let result = db::query(conn, sql, &params, span)?;
                 // Return first row or None
-                if let Value::Vec(rows) = result {
+                if let Value::Vec(rc) = result {
+                    let rows = rc.borrow().clone();
                     if let Some(row) = rows.into_iter().next() {
                         Ok(Value::some(row))
                     } else {
@@ -176,7 +177,7 @@ impl Interpreter {
 /// Extract a Vec of params from a Value::Vec argument.
 fn extract_vec_params(value: &Value, span: &Span) -> Result<Vec<Value>, FerriError> {
     match value {
-        Value::Vec(v) => Ok(v.clone()),
+        Value::Vec(rc) => Ok(rc.borrow().clone()),
         _ => Err(FerriError::Runtime {
             message: format!("expected Vec for SQL parameters, got {}", value.type_name()),
             line: span.line,

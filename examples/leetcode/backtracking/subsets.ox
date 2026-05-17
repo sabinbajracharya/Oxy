@@ -1,18 +1,19 @@
 // === Problem: Subsets (LeetCode #78) ===
-// Given an array of distinct integers, return all possible subsets (the power set).
+// Given an array of unique integers, return all possible subsets (the power set).
 //
 // === Pattern: Backtracking ===
-// For each element, choose to include or exclude it. Use functional
-// recursion: for each position, combine results from both branches.
+// For each element, branch: include it or skip. With shared mutable collections,
+// we use classic push/pop/recurse/undo to explore the decision tree.
 //
 // === Intuition ===
-// subsets([1,2,3]) = subsets_from(0) = combos with and without nums[0].
-// Base case: i == len → return [[]].
-// For each i: exclude = subsets_from(i+1), include = each of exclude + nums[i].
+// Start with empty current. At each index i:
+//   - Skip: recurse to i+1 without changing current
+//   - Include: push nums[i], recurse to i+1, pop (backtrack)
+// Snapshot current with .clone() when adding to result.
 //
 // === Pattern Recognition ===
-// - "All subsets" → include/exclude backtracking
-// - Power set = 2^n combinations
+// - "All subsets" / "power set" → include/exclude backtracking
+// - Shared mutable state for classic push/pop/recurse/undo
 
 fn main() {
     let nums = vec![1, 2, 3];
@@ -22,23 +23,22 @@ fn main() {
     }
 }
 
-fn subsets_from(nums: Vec, start: i64) -> Vec {
-    if start == nums.len() {
-        return vec![vec![]];
+fn backtrack(nums: Vec, start: i64, current: Vec, result: Vec) {
+    result.push(current.clone());
+    let mut i = start;
+    while i < nums.len() {
+        current.push(nums[i]);
+        backtrack(nums, i + 1, current, result);
+        current.pop();
+        i = i + 1;
     }
-    let without = subsets_from(nums, start + 1);
-    let mut result = vec![];
-    for sub in without {
-        result.push(sub);
-        let mut with = sub;
-        with.push(nums[start]);
-        result.push(with);
-    }
-    result
 }
 
 fn subsets(nums: Vec) -> Vec {
-    subsets_from(nums, 0)
+    let result = vec![];
+    let current = vec![];
+    backtrack(nums, 0, current, result);
+    result
 }
 
 #[test]
@@ -51,4 +51,5 @@ fn test_example() {
 fn test_empty() {
     let result = subsets(vec![]);
     assert_eq!(result.len(), 1);
+    assert_eq!(result[0], vec![]);
 }
