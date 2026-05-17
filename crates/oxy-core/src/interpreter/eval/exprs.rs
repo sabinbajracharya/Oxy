@@ -284,6 +284,72 @@ impl Interpreter {
         }
     }
 
+    /// Evaluate a type cast expression: `expr as Type`.
+    pub(crate) fn eval_as_expr(
+        &mut self,
+        expr: &Expr,
+        type_name: &str,
+        span: &Span,
+        env: &Env,
+    ) -> Result<Value, FerriError> {
+        let val = self.eval_expr(expr, env)?;
+        match type_name {
+            "i64" | "usize" => match &val {
+                Value::Integer(_) => Ok(val),
+                Value::Float(f) => Ok(Value::Integer(*f as i64)),
+                Value::Char(c) => Ok(Value::Integer(*c as i64)),
+                Value::Bool(b) => Ok(Value::Integer(*b as i64)),
+                other => Err(FerriError::Runtime {
+                    message: format!("cannot cast {} to i64", other.type_name()),
+                    line: span.line,
+                    column: span.column,
+                }),
+            },
+            "f64" => match &val {
+                Value::Integer(n) => Ok(Value::Float(*n as f64)),
+                Value::Float(_) => Ok(val),
+                other => Err(FerriError::Runtime {
+                    message: format!("cannot cast {} to f64", other.type_name()),
+                    line: span.line,
+                    column: span.column,
+                }),
+            },
+            "char" => match &val {
+                Value::Integer(n) => {
+                    if let Some(c) = char::from_u32(*n as u32) {
+                        Ok(Value::Char(c))
+                    } else {
+                        Err(FerriError::Runtime {
+                            message: format!("invalid char code {n}"),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
+                }
+                Value::Char(_) => Ok(val),
+                other => Err(FerriError::Runtime {
+                    message: format!("cannot cast {} to char", other.type_name()),
+                    line: span.line,
+                    column: span.column,
+                }),
+            },
+            "bool" => match &val {
+                Value::Bool(_) => Ok(val),
+                Value::Integer(n) => Ok(Value::Bool(*n != 0)),
+                other => Err(FerriError::Runtime {
+                    message: format!("cannot cast {} to bool", other.type_name()),
+                    line: span.line,
+                    column: span.column,
+                }),
+            },
+            _ => Err(FerriError::Runtime {
+                message: format!("unknown type for cast: `{type_name}`"),
+                line: span.line,
+                column: span.column,
+            }),
+        }
+    }
+
     pub(crate) fn eval_try_expr(
         &mut self,
         expr: &Expr,

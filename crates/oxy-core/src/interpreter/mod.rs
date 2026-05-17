@@ -404,6 +404,8 @@ impl Interpreter {
                 ..
             } => self.eval_if_let_expr(pattern, expr, then_block, else_block, env),
 
+            Expr::As { expr, type_name, span } => self.eval_as_expr(expr, type_name, span, env),
+
             Expr::Try { expr, span } => self.eval_try_expr(expr, span, env),
 
             Expr::Closure {
@@ -6243,6 +6245,135 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["2\n", "10\n"]);
+    }
+
+    // === labeled break/continue ===
+
+    #[test]
+    fn test_labeled_break_outer() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut i = 0;
+                'outer: loop {
+                    i = i + 1;
+                    if i > 10 {
+                        break 'outer;
+                    }
+                }
+                println!("{}", i);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["11\n"]);
+    }
+
+    #[test]
+    fn test_labeled_break_nested() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut count = 0;
+                'outer: for x in 0..5 {
+                    for y in 0..5 {
+                        if x == 2 && y == 2 {
+                            break 'outer;
+                        }
+                        count = count + 1;
+                    }
+                }
+                println!("{}", count);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["12\n"]);
+    }
+
+    // === turbofish collect ===
+
+    #[test]
+    fn test_turbofish_collect_vec() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let doubled = v.iter().map(|x| x * 2).collect::<Vec>();
+                println!("{:?}", doubled);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["[2, 4, 6]\n"]);
+    }
+
+    // === range patterns in match ===
+
+    #[test]
+    fn test_match_range_inclusive() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let x = 5;
+                let result = match x {
+                    1..=3 => "low",
+                    4..=7 => "mid",
+                    _ => "other",
+                };
+                println!("{}", result);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["mid\n"]);
+    }
+
+    #[test]
+    fn test_match_range_exclusive() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let x = 3;
+                let result = match x {
+                    1..5 => "yes",
+                    _ => "no",
+                };
+                println!("{}", result);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["yes\n"]);
+    }
+
+    // === `as` type casts ===
+
+    #[test]
+    fn test_as_cast_int_to_float() {
+        let output = run_and_capture(
+            r#"fn main() { let x = 42 as f64; println!("{}", x); }"#,
+        );
+        assert_eq!(output, vec!["42.0\n"]);
+    }
+
+    #[test]
+    fn test_as_cast_float_to_int() {
+        let output = run_and_capture(
+            r#"fn main() { let x = 3.9 as i64; println!("{}", x); }"#,
+        );
+        assert_eq!(output, vec!["3\n"]);
+    }
+
+    #[test]
+    fn test_as_cast_char_to_int() {
+        let output = run_and_capture(
+            r#"fn main() { let x = 'a' as i64; println!("{}", x); }"#,
+        );
+        assert_eq!(output, vec!["97\n"]);
+    }
+
+    #[test]
+    fn test_as_cast_int_to_char() {
+        let output = run_and_capture(
+            r#"fn main() { let x = 65 as char; println!("{}", x); }"#,
+        );
+        assert_eq!(output, vec!["A\n"]);
     }
 
     // === ListNode and TreeNode built-in types ===

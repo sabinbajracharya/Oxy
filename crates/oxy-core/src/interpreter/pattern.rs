@@ -92,6 +92,31 @@ impl Interpreter {
                     false
                 }
             }
+            Pattern::Range {
+                start, end, inclusive, ..
+            } => match value {
+                Value::Integer(n) => {
+                    let n = *n;
+                    let below_start = if let Some(s) = start { n < *s } else { false };
+                    let above_end = if let Some(e) = end {
+                        if *inclusive { n > *e } else { n >= *e }
+                    } else {
+                        false
+                    };
+                    !below_start && !above_end
+                }
+                Value::Char(c) => {
+                    let c = *c as i64;
+                    let below_start = if let Some(s) = start { c < *s } else { false };
+                    let above_end = if let Some(e) = end {
+                        if *inclusive { c > *e } else { c >= *e }
+                    } else {
+                        false
+                    };
+                    !below_start && !above_end
+                }
+                _ => false,
+            },
             Pattern::Or(alternatives, _) => {
                 alternatives.iter().any(|p| Self::pattern_matches(p, value))
             }
@@ -197,7 +222,7 @@ impl Interpreter {
                     }
                 }
             }
-            Pattern::Wildcard(_) | Pattern::Literal(_) | Pattern::Rest(_) => {}
+            Pattern::Wildcard(_) | Pattern::Literal(_) | Pattern::Rest(_) | Pattern::Range { .. } => {}
         }
     }
 

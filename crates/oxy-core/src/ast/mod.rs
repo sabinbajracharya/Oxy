@@ -464,6 +464,8 @@ pub enum Expr {
         else_block: Option<Box<Expr>>,
         span: Span,
     },
+    /// Type cast: `expr as Type`
+    As { expr: Box<Expr>, type_name: String, span: Span },
     /// Try operator: `expr?` — unwraps Ok/Some or returns Err/None early
     Try { expr: Box<Expr>, span: Span },
     /// Closure expression: `|params| expr` or `|params| { body }`
@@ -508,6 +510,7 @@ impl Expr {
             | Expr::PathCall { span: s, .. }
             | Expr::Path { span: s, .. }
             | Expr::SelfRef(s)
+            | Expr::As { span: s, .. }
             | Expr::IfLet { span: s, .. }
             | Expr::Try { span: s, .. }
             | Expr::Closure { span: s, .. }
@@ -636,6 +639,13 @@ pub enum Pattern {
     Slice(Vec<Pattern>, Span),
     /// Rest pattern: `..` (used inside slice/tuple patterns)
     Rest(Span),
+    /// Range pattern: `start..end`, `start..=end`, `..end`, `start..`
+    Range {
+        start: Option<i64>,
+        end: Option<i64>,
+        inclusive: bool,
+        span: Span,
+    },
 }
 
 impl Pattern {
@@ -648,7 +658,8 @@ impl Pattern {
             | Pattern::Struct { span, .. }
             | Pattern::Tuple(_, span)
             | Pattern::Or(_, span)
-            | Pattern::Slice(_, span) => *span,
+            | Pattern::Slice(_, span)
+            | Pattern::Range { span, .. } => *span,
         }
     }
 
@@ -656,6 +667,20 @@ impl Pattern {
         match self {
             Pattern::Literal(e) => e.pretty_print(out, 0),
             Pattern::Wildcard(_) => out.push('_'),
+            Pattern::Range {
+                start, end, inclusive, ..
+            } => {
+                if let Some(s) = start {
+                    out.push_str(&s.to_string());
+                }
+                out.push_str("..");
+                if *inclusive {
+                    out.push('=');
+                }
+                if let Some(e) = end {
+                    out.push_str(&e.to_string());
+                }
+            }
             Pattern::Ident(name, _) => out.push_str(name),
             Pattern::EnumVariant {
                 enum_name,
@@ -1334,6 +1359,11 @@ impl Expr {
                     }
                 }
                 out.push('"');
+            }
+            Expr::As { expr, type_name, .. } => {
+                expr.pretty_print(out, indent);
+                out.push_str(" as ");
+                out.push_str(type_name);
             }
         }
     }

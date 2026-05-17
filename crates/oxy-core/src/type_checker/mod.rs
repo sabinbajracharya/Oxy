@@ -677,6 +677,17 @@ impl TypeChecker {
             Expr::MacroCall { .. } => Ok(TypeInfo::Unknown),
             Expr::Path { .. } => Ok(TypeInfo::Unknown),
             Expr::SelfRef { .. } => Ok(TypeInfo::Unknown),
+            Expr::As { expr, type_name, .. } => {
+                let _ = self.infer_expr(expr)?;
+                match type_name.as_str() {
+                    "i64" | "usize" => Ok(TypeInfo::I64),
+                    "f64" => Ok(TypeInfo::F64),
+                    "char" => Ok(TypeInfo::Char),
+                    "bool" => Ok(TypeInfo::Bool),
+                    "String" => Ok(TypeInfo::String),
+                    _ => Ok(TypeInfo::Unknown),
+                }
+            }
             Expr::CompoundAssign {
                 target: _, value, ..
             } => {
