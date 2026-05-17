@@ -244,9 +244,32 @@ impl Interpreter {
                 right,
                 span,
             } => {
-                let lval = self.eval_expr(left, env)?;
-                let rval = self.eval_expr(right, env)?;
-                self.eval_binary_op(&lval, *op, &rval, span.line, span.column)
+                // Short-circuit evaluation for logical operators
+                match op {
+                    BinOp::And => {
+                        let lval = self.eval_expr(left, env)?;
+                        if !lval.is_truthy() {
+                            Ok(Value::Bool(false))
+                        } else {
+                            let rval = self.eval_expr(right, env)?;
+                            Ok(Value::Bool(rval.is_truthy()))
+                        }
+                    }
+                    BinOp::Or => {
+                        let lval = self.eval_expr(left, env)?;
+                        if lval.is_truthy() {
+                            Ok(Value::Bool(true))
+                        } else {
+                            let rval = self.eval_expr(right, env)?;
+                            Ok(Value::Bool(rval.is_truthy()))
+                        }
+                    }
+                    _ => {
+                        let lval = self.eval_expr(left, env)?;
+                        let rval = self.eval_expr(right, env)?;
+                        self.eval_binary_op(&lval, *op, &rval, span.line, span.column)
+                    }
+                }
             }
 
             Expr::UnaryOp {
@@ -4027,13 +4050,13 @@ fn main() {
     d.push_back(1);
     d.push_back(2);
     d.push_back(3);
-    println!("{}", d.pop_front());
-    println!("{}", d.pop_back());
+    println!("{:?}", d.pop_front());
+    println!("{:?}", d.pop_back());
     println!("{}", d.len());
 }
 "#,
         );
-        assert_eq!(output, vec!["1\n", "3\n", "1\n"]);
+        assert_eq!(output, vec!["Some(1)\n", "Some(3)\n", "1\n"]);
     }
 
     #[test]
@@ -5422,8 +5445,9 @@ fn main() {
     fn test_vec_rev() {
         let output = run_and_capture(
             r#"fn main() {
-            let v = vec![1, 2, 3];
-            println!("{:?}", v.rev());
+            let mut v = vec![1, 2, 3];
+            v.rev();
+            println!("{:?}", v);
             }"#,
         );
         assert_eq!(output, vec!["[3, 2, 1]\n"]);
@@ -5433,8 +5457,9 @@ fn main() {
     fn test_vec_sort() {
         let output = run_and_capture(
             r#"fn main() {
-            let v = vec![3, 1, 4, 1, 5];
-            println!("{:?}", v.sort());
+            let mut v = vec![3, 1, 4, 1, 5];
+            v.sort();
+            println!("{:?}", v);
             }"#,
         );
         assert_eq!(output, vec!["[1, 1, 3, 4, 5]\n"]);
@@ -5444,9 +5469,9 @@ fn main() {
     fn test_vec_sort_by() {
         let output = run_and_capture(
             r#"fn main() {
-            let v = vec![3, 1, 4, 1, 5];
-            let sorted = v.sort_by(|a, b| b - a);
-            println!("{:?}", sorted);
+            let mut v = vec![3, 1, 4, 1, 5];
+            v.sort_by(|a, b| b - a);
+            println!("{:?}", v);
             }"#,
         );
         assert_eq!(output, vec!["[5, 4, 3, 1, 1]\n"]);
@@ -5456,9 +5481,9 @@ fn main() {
     fn test_vec_sort_by_key() {
         let output = run_and_capture(
             r#"fn main() {
-            let v = vec!["aa", "b", "ccc"];
-            let sorted = v.sort_by_key(|s| s.len());
-            println!("{:?}", sorted);
+            let mut v = vec!["aa", "b", "ccc"];
+            v.sort_by_key(|s| s.len());
+            println!("{:?}", v);
             }"#,
         );
         assert_eq!(output, vec!["[\"b\", \"aa\", \"ccc\"]\n"]);
@@ -5468,8 +5493,9 @@ fn main() {
     fn test_vec_dedup() {
         let output = run_and_capture(
             r#"fn main() {
-            let v = vec![1, 1, 2, 2, 3];
-            println!("{:?}", v.dedup());
+            let mut v = vec![1, 1, 2, 2, 3];
+            v.dedup();
+            println!("{:?}", v);
             }"#,
         );
         assert_eq!(output, vec!["[1, 2, 3]\n"]);
@@ -6156,5 +6182,132 @@ fn main() {
             "#,
         );
         assert_eq!(output, vec!["true\n", "false\n"]);
+    }
+
+    // === Struct field mutation ===
+
+    #[test]
+    fn test_struct_field_mutation_via_method() {
+        let output = run_and_capture(
+            r#"
+            struct Counter {
+                count: i64,
+            }
+
+            impl Counter {
+                fn new() -> Self {
+                    Counter { count: 0 }
+                }
+
+                fn inc(&mut self) {
+                    self.count = self.count + 1;
+                }
+            }
+
+            fn main() {
+                let mut c = Counter::new();
+                c.inc();
+                c.inc();
+                println!("{}", c.count);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["2\n"]);
+    }
+
+    #[test]
+    fn test_struct_field_mutation_via_self_push() {
+        let output = run_and_capture(
+            r#"
+            struct Stack {
+                items: Vec,
+            }
+
+            impl Stack {
+                fn new() -> Self {
+                    Stack { items: vec![] }
+                }
+
+                fn push(&mut self, val: i64) {
+                    self.items.push(val);
+                }
+            }
+
+            fn main() {
+                let mut s = Stack::new();
+                s.push(10);
+                s.push(20);
+                println!("{}", s.items.len());
+                println!("{}", s.items[0]);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["2\n", "10\n"]);
+    }
+
+    // === ListNode and TreeNode built-in types ===
+
+    #[test]
+    fn test_listnode_new() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let n = ListNode::new(5);
+                println!("{}", n.val);
+                println!("{}", n.next.is_none());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["5\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_treenode_new() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let t = TreeNode::new(10);
+                println!("{}", t.val);
+                println!("{}", t.left.is_none());
+                println!("{}", t.right.is_none());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["10\n", "true\n", "true\n"]);
+    }
+
+    #[test]
+    fn test_listnode_linking() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut head = ListNode::new(1);
+                let second = ListNode::new(2);
+                head.next = Some(second);
+                println!("{}", head.val);
+                println!("{}", head.next.unwrap().val);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["1\n", "2\n"]);
+    }
+
+    #[test]
+    fn test_treenode_linking() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let mut root = TreeNode::new(5);
+                let left = TreeNode::new(3);
+                let right = TreeNode::new(7);
+                root.left = Some(left);
+                root.right = Some(right);
+                println!("{}", root.val);
+                println!("{}", root.left.unwrap().val);
+                println!("{}", root.right.unwrap().val);
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["5\n", "3\n", "7\n"]);
     }
 }

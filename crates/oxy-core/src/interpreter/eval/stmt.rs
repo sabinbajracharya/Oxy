@@ -129,11 +129,16 @@ impl Interpreter {
                 let values = self.value_to_iter(&iter_val, iterable.span())?;
                 let for_env = Environment::child(env);
                 for name in names {
-                    for_env.borrow_mut().define(name.clone(), Value::Unit, true);
+                    if name != "_" {
+                        for_env.borrow_mut().define(name.clone(), Value::Unit, true);
+                    }
                 }
                 for val in values {
                     if let Value::Tuple(ref elems) = val {
                         for (i, name) in names.iter().enumerate() {
+                            if name == "_" {
+                                continue;
+                            }
                             let v = elems.get(i).cloned().unwrap_or(Value::Unit);
                             for_env.borrow_mut().set(name, v).ok();
                         }

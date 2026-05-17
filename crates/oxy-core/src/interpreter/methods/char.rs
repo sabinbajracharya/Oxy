@@ -1,7 +1,8 @@
 //! Char method implementations.
 //!
 //! Supports: is_digit, is_alphabetic, is_alphanumeric, is_whitespace,
-//!           is_lowercase, is_uppercase, is_ascii, to_uppercase, to_lowercase, clone.
+//!           is_lowercase, is_uppercase, is_ascii, to_uppercase, to_lowercase,
+//!           code, from_code, clone.
 
 use crate::errors::check_arg_count;
 use crate::errors::FerriError;
@@ -70,6 +71,10 @@ impl Interpreter {
                 }
             }
             "clone" => Ok(Value::Char(c)),
+            "code" => {
+                check_arg_count("char::code", 0, &args, span)?;
+                Ok(Value::Integer(c as i64))
+            }
             _ => Err(FerriError::Runtime {
                 message: format!("no method `{method}` on type char"),
                 line: span.line,

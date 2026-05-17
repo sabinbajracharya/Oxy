@@ -212,6 +212,70 @@ impl Interpreter {
                 },
                 other => other,
             }),
+            Expr::SelfRef(_) => env.borrow_mut().set("self", new_val).map_err(|e| match e {
+                FerriError::Runtime { message, .. } => FerriError::Runtime {
+                    message,
+                    line: span.line,
+                    column: span.column,
+                },
+                other => other,
+            }),
+            Expr::FieldAccess { object, field, .. } => {
+                let obj = self.eval_expr(object, env)?;
+                if let Value::Struct {
+                    name,
+                    mut fields,
+                } = obj
+                {
+                    fields.insert(field.clone(), new_val);
+                    self.mutate_variable(
+                        object,
+                        Value::Struct { name, fields },
+                        env,
+                        span,
+                    )
+                } else {
+                    Err(FerriError::Runtime {
+                        message: format!(
+                            "cannot mutate field `{field}` on non-struct type {}",
+                            obj.type_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    })
+                }
+            }
+            Expr::Index { object, index, .. } => {
+                let obj = self.eval_expr(object, env)?;
+                let idx = self.eval_expr(index, env)?;
+                match obj {
+                    Value::Vec(mut v) => {
+                        if let Value::Integer(i) = idx {
+                            if i >= 0 && i < v.len() as i64 {
+                                v[i as usize] = new_val;
+                                self.mutate_variable(object, Value::Vec(v), env, span)
+                            } else {
+                                Err(FerriError::Runtime {
+                                    message: format!("index {i} out of bounds"),
+                                    line: span.line,
+                                    column: span.column,
+                                })
+                            }
+                        } else {
+                            Err(FerriError::Runtime {
+                                message: "index must be an integer".into(),
+                                line: span.line,
+                                column: span.column,
+                            })
+                        }
+                    }
+                    _ => Err(FerriError::Runtime {
+                        message: "cannot index-assign non-array type".into(),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
+            }
             _ => Err(FerriError::Runtime {
                 message: "cannot mutate non-variable receiver".into(),
                 line: span.line,

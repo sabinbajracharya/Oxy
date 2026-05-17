@@ -1005,7 +1005,12 @@ impl Parser {
             self.advance();
             let mut names = Vec::new();
             loop {
-                names.push(self.expect_ident()?);
+                if self.check(&TokenKind::Underscore) {
+                    self.advance();
+                    names.push("_".to_string());
+                } else {
+                    names.push(self.expect_ident()?);
+                }
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }

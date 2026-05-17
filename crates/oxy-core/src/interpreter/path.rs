@@ -147,9 +147,46 @@ impl Interpreter {
                 return Ok(Value::VecDeque(VecDeque::new()));
             }
 
+            // Built-in ListNode::new(val)
+            if type_name == "ListNode" && method_name == "new" && args.len() == 1 {
+                let mut fields = HashMap::new();
+                fields.insert("val".to_string(), args[0].clone());
+                fields.insert("next".to_string(), Value::none());
+                return Ok(Value::Struct {
+                    name: "ListNode".to_string(),
+                    fields,
+                });
+            }
+
+            // Built-in TreeNode::new(val)
+            if type_name == "TreeNode" && method_name == "new" && args.len() == 1 {
+                let mut fields = HashMap::new();
+                fields.insert("val".to_string(), args[0].clone());
+                fields.insert("left".to_string(), Value::none());
+                fields.insert("right".to_string(), Value::none());
+                return Ok(Value::Struct {
+                    name: "TreeNode".to_string(),
+                    fields,
+                });
+            }
+
             // Built-in int::parse(s)
             if type_name == "int" && method_name == "parse" {
                 return parse_int_builtin(args, span);
+            }
+
+            // Built-in char::from_code(n)
+            if type_name == "char" && method_name == "from_code" && args.len() == 1 {
+                if let Value::Integer(n) = &args[0] {
+                    if let Some(c) = char::from_u32(*n as u32) {
+                        return Ok(Value::Char(c));
+                    }
+                }
+                return Err(FerriError::Runtime {
+                    message: format!("char::from_code: invalid code point {}", args[0]),
+                    line: span.line,
+                    column: span.column,
+                });
             }
 
             // Built-in float::parse(s)
