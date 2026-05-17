@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::ast::*;
 use crate::env::{Env, Environment};
@@ -121,8 +123,9 @@ impl Interpreter {
         let obj = self.eval_expr(object, env)?;
         let idx = self.eval_expr(index, env)?;
         match (&obj, &idx) {
-            (Value::Vec(v), Value::Integer(i)) => {
+            (Value::Vec(rc), Value::Integer(i)) => {
                 let i = *i as usize;
+                let v = rc.borrow();
                 v.get(i).cloned().ok_or_else(|| FerriError::Runtime {
                     message: format!("index out of bounds: len is {}, but index is {i}", v.len()),
                     line: span.line,
@@ -151,15 +154,16 @@ impl Interpreter {
                     column: span.column,
                 })
             }
-            (Value::Vec(v), Value::Range(start, end)) => {
+            (Value::Vec(rc), Value::Range(start, end)) => {
+                let v = rc.borrow();
                 let len = v.len() as i64;
                 let s = if *start == i64::MIN { 0 } else { *start };
                 let e = if *end == i64::MAX { len } else { *end };
                 let s = s.max(0) as usize;
                 let e = (e.min(len)) as usize;
-                Ok(Value::Vec(v[s..e].to_vec()))
+                Ok(Value::Vec(Rc::new(RefCell::new(v[s..e].to_vec()))))
             }
-            (Value::HashMap(m), k) => m.get(k).cloned().ok_or_else(|| FerriError::Runtime {
+            (Value::HashMap(rc), k) => rc.borrow().get(k).cloned().ok_or_else(|| FerriError::Runtime {
                 message: format!("key not found: \"{k}\""),
                 line: span.line,
                 column: span.column,

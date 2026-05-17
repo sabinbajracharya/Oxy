@@ -240,11 +240,12 @@ impl Interpreter {
                 let obj = self.eval_expr(object, env)?;
                 let idx = self.eval_expr(index, env)?;
                 match obj {
-                    Value::Vec(mut v) => {
+                    Value::Vec(rc) => {
                         if let Value::Integer(i) = idx {
+                            let mut v = rc.borrow_mut();
                             if i >= 0 && i < v.len() as i64 {
                                 v[i as usize] = new_val;
-                                self.mutate_variable(object, Value::Vec(v), env, span)
+                                Ok(())
                             } else {
                                 Err(FerriError::Runtime {
                                     message: format!("index {i} out of bounds"),

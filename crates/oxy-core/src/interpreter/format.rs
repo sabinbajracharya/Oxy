@@ -13,7 +13,8 @@ pub(crate) fn debug_format(val: &Value) -> String {
     match val {
         Value::String(s) => format!("\"{s}\""),
         Value::Char(c) => format!("'{c}'"),
-        Value::Vec(v) => {
+        Value::Vec(rc) => {
+            let v = rc.borrow();
             let items: Vec<String> = v.iter().map(debug_format).collect();
             format!("[{}]", items.join(", "))
         }
@@ -52,7 +53,8 @@ pub(crate) fn debug_format(val: &Value) -> String {
                 format!("{prefix}{variant}({})", items.join(", "))
             }
         }
-        Value::HashMap(m) => {
+        Value::HashMap(rc) => {
+            let m = rc.borrow();
             let mut sorted: Vec<_> = m.iter().collect();
             sorted.sort_by_key(|(k, _)| (*k).clone());
             let items: Vec<String> = sorted

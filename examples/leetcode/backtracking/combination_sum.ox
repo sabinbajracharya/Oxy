@@ -3,18 +3,18 @@
 // that sum to target. Each number can be used unlimited times.
 //
 // === Pattern: Backtracking ===
-// For each index i, either skip nums[i] or use it (stay at same index
-// for unlimited reuse). Return accumulated results.
+// For each index i, either use nums[i] (stay at same index for unlimited
+// reuse) or skip to next. With shared mutable collections, we use
+// push/pop/recurse/undo for classic backtracking.
 //
 // === Intuition ===
-// At index i: skip branch returns combinations without nums[i].
-// Use branch: take nums[i], recurse with reduced target. Prefix each
-// from the use branch with nums[i]. Combine both branches.
+// At each state, we track remaining target. If target == 0, snapshot current.
+// For each index from start: if candidate <= target, push, recurse, pop.
 //
 // === Pattern Recognition ===
-// - "Combinations that sum to target" → backtracking with index
-// - "Unlimited use" → stay at same index
-// - Return-based for value semantics
+// - "Combinations that sum to target" → backtracking with remaining target
+// - "Unlimited use" → recurse at same index
+// - Classic push/pop with shared mutable state
 
 fn main() {
     let candidates = vec![2, 3, 6, 7];
@@ -24,32 +24,28 @@ fn main() {
     }
 }
 
-fn backtrack(candidates: Vec, start: i64, target: i64) -> Vec {
+fn backtrack(candidates: Vec, start: i64, target: i64, current: Vec, result: Vec) {
     if target == 0 {
-        return vec![vec![]];
+        result.push(current.clone());
+        return;
     }
-    if start >= candidates.len() || target < 0 {
-        return vec![];
+    let mut i = start;
+    while i < candidates.len() {
+        let val = candidates[i];
+        if val <= target {
+            current.push(val);
+            backtrack(candidates, i, target - val, current, result);
+            current.pop();
+        }
+        i = i + 1;
     }
-    let val = candidates[start];
-    let mut result = vec![];
-    // Skip this candidate
-    let skip = backtrack(candidates, start + 1, target);
-    for s in skip {
-        result.push(s);
-    }
-    // Use this candidate
-    let use_results = backtrack(candidates, start, target - val);
-    for u in use_results {
-        let mut combo = u;
-        combo.push(val);
-        result.push(combo);
-    }
-    result
 }
 
 fn combination_sum(candidates: Vec, target: i64) -> Vec {
-    backtrack(candidates, 0, target)
+    let result = vec![];
+    let current = vec![];
+    backtrack(candidates, 0, target, current, result);
+    result
 }
 
 #[test]

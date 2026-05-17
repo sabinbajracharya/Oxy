@@ -39,7 +39,7 @@ impl Interpreter {
                     .iter()
                     .map(|a| self.eval_expr(a, env))
                     .collect::<Result<_, _>>()?;
-                Ok(Value::Vec(vals))
+                Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vals))))
             }
             "format" => {
                 let output = self.format_macro_args(args, env, line, col)?;

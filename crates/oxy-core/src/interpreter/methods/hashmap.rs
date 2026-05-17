@@ -8,6 +8,8 @@ use crate::errors::check_arg_count;
 use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::Value;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use super::super::Interpreter;
 
@@ -22,33 +24,30 @@ impl Interpreter {
         env: &Env,
         span: &Span,
     ) -> Result<Value, FerriError> {
-        let Value::HashMap(m) = receiver else {
+        let Value::HashMap(rc) = &receiver else {
             unreachable!()
         };
+        let rc = rc.clone();
         match method {
-            "len" => Ok(Value::Integer(m.len() as i64)),
-            "is_empty" => Ok(Value::Bool(m.is_empty())),
+            "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
+            "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
             "insert" => {
                 check_arg_count("HashMap::insert", 2, &args, span)?;
                 let key = args[0].clone();
                 let value = args[1].clone();
-                let mut new_m = m;
-                new_m.insert(key, value);
-                self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
+                rc.borrow_mut().insert(key, value);
                 Ok(Value::Unit)
             }
             "get" => {
                 check_arg_count("HashMap::get", 1, &args, span)?;
-                match m.get(&args[0]) {
+                match rc.borrow().get(&args[0]) {
                     Some(val) => Ok(Value::some(val.clone())),
                     None => Ok(Value::none()),
                 }
             }
             "remove" => {
                 check_arg_count("HashMap::remove", 1, &args, span)?;
-                let mut new_m = m;
-                let removed = new_m.remove(&args[0]);
-                self.mutate_variable(receiver_expr, Value::HashMap(new_m), env, span)?;
+                let removed = rc.borrow_mut().remove(&args[0]);
                 match removed {
                     Some(val) => Ok(Value::some(val)),
                     None => Ok(Value::none()),
@@ -56,12 +55,13 @@ impl Interpreter {
             }
             "contains_key" => {
                 check_arg_count("HashMap::contains_key", 1, &args, span)?;
-                Ok(Value::Bool(m.contains_key(&args[0])))
+                Ok(Value::Bool(rc.borrow().contains_key(&args[0])))
             }
             "get_or" => {
                 check_arg_count("HashMap::get_or", 2, &args, span)?;
                 let key = args[0].clone();
                 let default = args[1].clone();
+                let m = rc.borrow();
                 if let Some(val) = m.get(&key) {
                     Ok(val.clone())
                 } else {
@@ -69,19 +69,21 @@ impl Interpreter {
                 }
             }
             "keys" => {
+                let m = rc.borrow();
                 let mut keys: Vec<Value> = m.keys().cloned().collect();
                 keys.sort();
-                Ok(Value::Vec(keys))
+                Ok(Value::Vec(Rc::new(RefCell::new(keys))))
             }
             "values" => {
+                let m = rc.borrow();
                 let mut pairs: Vec<(&Value, &Value)> = m.iter().collect();
                 pairs.sort_by(|(a, _), (b, _)| a.cmp(b));
-                Ok(Value::Vec(
+                Ok(Value::Vec(Rc::new(RefCell::new(
                     pairs.into_iter().map(|(_, v)| v.clone()).collect(),
-                ))
+                ))))
             }
-            "clone" => Ok(Value::HashMap(m)),
-            _ => self.try_to_json_method(Value::HashMap(m), method, span, "HashMap"),
+            "clone" => Ok(Value::HashMap(Rc::new(RefCell::new(rc.borrow().clone())))),
+            _ => self.try_to_json_method(Value::HashMap(rc), method, span, "HashMap"),
         }
     }
 }

@@ -3,7 +3,9 @@
 //! Provides a simple interface to SQLite databases with parameterized
 //! queries, returning results as Oxy `Value` types.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use rusqlite::{params_from_iter, types::Value as SqlValue, Connection};
 
@@ -86,15 +88,15 @@ pub fn query(
             line: span.line,
             column: span.column,
         })?;
-        result.push(Value::HashMap(
+        result.push(Value::HashMap(Rc::new(RefCell::new(
             fields
                 .into_iter()
                 .map(|(k, v)| (Value::String(k), v))
                 .collect(),
-        ));
+        ))));
     }
 
-    Ok(Value::Vec(result))
+    Ok(Value::Vec(Rc::new(RefCell::new(result))))
 }
 
 /// Get the last inserted row ID.
@@ -205,9 +207,11 @@ mod tests {
             &span,
         )
         .unwrap();
-        if let Value::Vec(rows) = result {
+        if let Value::Vec(rc) = result {
+            let rows = rc.borrow();
             assert_eq!(rows.len(), 2);
-            if let Value::HashMap(row) = &rows[0] {
+            if let Value::HashMap(row_rc) = &rows[0] {
+                let row = row_rc.borrow();
                 assert_eq!(
                     row.get(&Value::String("name".to_string())),
                     Some(&Value::String("Bob".to_string()))
@@ -248,8 +252,8 @@ mod tests {
             &span,
         )
         .unwrap();
-        if let Value::Vec(rows) = result {
-            assert_eq!(rows.len(), 1);
+        if let Value::Vec(rc) = result {
+            assert_eq!(rc.borrow().len(), 1);
         } else {
             panic!("expected Vec");
         }
@@ -291,8 +295,10 @@ mod tests {
         execute(&conn, "INSERT INTO t (v) VALUES (NULL)", &[], &span).unwrap();
 
         let result = query(&conn, "SELECT v FROM t", &[], &span).unwrap();
-        if let Value::Vec(rows) = result {
-            if let Value::HashMap(row) = &rows[0] {
+        if let Value::Vec(rc) = result {
+            let rows = rc.borrow();
+            if let Value::HashMap(row_rc) = &rows[0] {
+                let row = row_rc.borrow();
                 assert_eq!(row.get(&Value::String("v".to_string())), Some(&Value::Unit));
             }
         }
@@ -301,7 +307,7 @@ mod tests {
     #[test]
     fn test_convert_params_invalid() {
         let span = test_span();
-        let result = convert_params(&[Value::Vec(vec![])], &span);
+        let result = convert_params(&[Value::Vec(Rc::new(RefCell::new(vec![])))], &span);
         assert!(result.is_err());
     }
 }

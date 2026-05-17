@@ -50,7 +50,7 @@ impl Interpreter {
                 }
             }
             "clone" => Ok(Value::BinaryHeap(h)),
-            "to_vec" => Ok(Value::Vec(h.into_sorted_vec())),
+            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(h.into_sorted_vec())))),
             _ => self.try_to_json_method(Value::BinaryHeap(h), method, span, "BinaryHeap"),
         }
     }

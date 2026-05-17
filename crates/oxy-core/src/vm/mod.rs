@@ -4,7 +4,9 @@
 //! It uses a value stack and a call stack. Each call frame tracks its own
 //! local variable slots and return address.
 
+use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::rc::Rc;
 
 use crate::interpreter::Interpreter;
 use crate::types::Value;
@@ -424,7 +426,7 @@ impl Vm {
                 OpCode::MakeIter => {
                     let value = self.stack.pop().unwrap_or(Value::Unit);
                     match value.into_iterable() {
-                        Ok(vec) => self.stack.push(Value::Vec(vec)),
+                        Ok(vec) => self.stack.push(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec)))),
                         Err(e) => return VmResult::Error(e),
                     }
                 }
@@ -432,7 +434,7 @@ impl Vm {
                 OpCode::IterLen => {
                     let v = self.stack.pop().unwrap_or(Value::Unit);
                     match v {
-                        Value::Vec(vec) => self.stack.push(Value::Integer(vec.len() as i64)),
+                        Value::Vec(rc) => self.stack.push(Value::Integer(rc.borrow().len() as i64)),
                         other => {
                             return VmResult::Error(format!(
                                 "cannot get length of {}",
@@ -453,7 +455,8 @@ impl Vm {
                         }
                     };
                     match self.stack.pop().unwrap_or(Value::Unit) {
-                        Value::Vec(vec) => {
+                        Value::Vec(rc) => {
+                            let vec = rc.borrow();
                             if idx < vec.len() {
                                 self.stack.push(vec[idx].clone());
                             } else {
@@ -512,7 +515,7 @@ impl Vm {
                 OpCode::MakeArray { count } => {
                     let start = self.stack.len().saturating_sub(count);
                     let elements: Vec<Value> = self.stack.drain(start..).collect();
-                    self.stack.push(Value::Vec(elements));
+                    self.stack.push(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements))));
                 }
 
                 OpCode::MakeTuple { count } => {
@@ -654,7 +657,8 @@ impl Vm {
                         Value::Struct { fields, .. } => {
                             fields.get(&field_name).cloned().unwrap_or(Value::Unit)
                         }
-                        Value::HashMap(m) => m
+                        Value::HashMap(rc) => rc
+                            .borrow()
                             .get(&Value::String(field_name.clone()))
                             .cloned()
                             .unwrap_or(Value::Unit),
@@ -883,17 +887,18 @@ impl Vm {
         args: Vec<Value>,
     ) -> Result<Value, String> {
         match &receiver {
-            Value::Vec(v) => match method_name {
-                "len" => Ok(Value::Integer(v.len() as i64)),
+            Value::Vec(rc) => match method_name {
+                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
                 "push" => {
-                    let mut new = v.clone();
-                    new.push(args.into_iter().next().unwrap_or(Value::Unit));
-                    Ok(Value::Vec(new))
+                    rc.borrow_mut().push(args.into_iter().next().unwrap_or(Value::Unit));
+                    Ok(Value::Unit)
                 }
                 "pop" => {
-                    let mut new = v.clone();
-                    let popped = new.pop().unwrap_or(Value::Unit);
-                    Ok(Value::Tuple(vec![Value::Vec(new), popped]))
+                    let popped = rc.borrow_mut().pop();
+                    match popped {
+                        Some(val) => Ok(Value::some(val)),
+                        None => Ok(Value::none()),
+                    }
                 }
                 _ => Err(format!("no method '{}' on type Vec", method_name)),
             },
@@ -912,7 +917,7 @@ impl Vm {
                         .split(&pat)
                         .map(|p| Value::String(p.to_string()))
                         .collect();
-                    Ok(Value::Vec(parts))
+                    Ok(Value::Vec(Rc::new(RefCell::new(parts))))
                 }
                 "char_at" => {
                     let i = args
@@ -960,57 +965,49 @@ impl Vm {
                 },
                 _ => Err(format!("no method '{}' on type String", method_name)),
             },
-            Value::HashMap(m) => match method_name {
-                "len" => Ok(Value::Integer(m.len() as i64)),
+            Value::HashMap(rc) => match method_name {
+                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
                 "get" => {
                     let key = args.first().cloned().unwrap_or(Value::Unit);
-                    Ok(m.get(&key).cloned().unwrap_or(Value::Unit))
+                    Ok(rc.borrow().get(&key).cloned().unwrap_or(Value::Unit))
                 }
                 "insert" => {
-                    let mut new = m.clone();
                     let key = args.first().cloned().unwrap_or(Value::Unit);
                     let val = args.get(1).cloned().unwrap_or(Value::Unit);
-                    new.insert(key, val);
-                    Ok(Value::HashMap(new))
+                    rc.borrow_mut().insert(key, val);
+                    Ok(Value::Unit)
                 }
                 "get_or" => {
                     let key = args.first().cloned().unwrap_or(Value::Unit);
                     let default = args.get(1).cloned().unwrap_or(Value::Unit);
-                    Ok(m.get(&key).cloned().unwrap_or(default))
+                    Ok(rc.borrow().get(&key).cloned().unwrap_or(default))
                 }
                 _ => Err(format!("no method '{}' on type HashMap", method_name)),
             },
-            Value::HashSet(s) => match method_name {
-                "len" => Ok(Value::Integer(s.len() as i64)),
-                "is_empty" => Ok(Value::Bool(s.is_empty())),
+            Value::HashSet(rc) => match method_name {
+                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
+                "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
                 "contains" => {
                     let val = args.first().cloned().unwrap_or(Value::Unit);
-                    Ok(Value::Bool(s.contains(&val)))
+                    Ok(Value::Bool(rc.borrow().contains(&val)))
                 }
                 "insert" => {
-                    let mut new = s.clone();
                     let val = args.first().cloned().unwrap_or(Value::Unit);
-                    let was_new = new.insert(val);
-                    Ok(Value::Tuple(vec![
-                        Value::HashSet(new),
-                        Value::Bool(was_new),
-                    ]))
+                    let was_new = rc.borrow_mut().insert(val);
+                    Ok(Value::Bool(was_new))
                 }
                 "remove" => {
-                    let mut new = s.clone();
                     let val = args.first().cloned().unwrap_or(Value::Unit);
-                    let existed = new.remove(&val);
-                    Ok(Value::Tuple(vec![
-                        Value::HashSet(new),
-                        Value::Bool(existed),
-                    ]))
+                    let existed = rc.borrow_mut().remove(&val);
+                    Ok(Value::Bool(existed))
                 }
                 "to_vec" => {
+                    let s = rc.borrow();
                     let mut v: Vec<Value> = s.iter().cloned().collect();
                     v.sort();
-                    Ok(Value::Vec(v))
+                    Ok(Value::Vec(Rc::new(RefCell::new(v))))
                 }
-                "clone" => Ok(Value::HashSet(s.clone())),
+                "clone" => Ok(receiver.clone()),
                 _ => Err(format!("no method '{}' on type HashSet", method_name)),
             },
             Value::VecDeque(d) => match method_name {
@@ -1044,7 +1041,7 @@ impl Vm {
                     let popped = new.pop_back().unwrap_or(Value::Unit);
                     Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
                 }
-                "to_vec" => Ok(Value::Vec(d.iter().cloned().collect())),
+                "to_vec" => Ok(Value::Vec(Rc::new(RefCell::new(d.iter().cloned().collect())))),
                 "clone" => Ok(Value::VecDeque(d.clone())),
                 _ => Err(format!("no method '{}' on type VecDeque", method_name)),
             },
@@ -1071,7 +1068,7 @@ impl Vm {
                         None => Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::none()])),
                     }
                 }
-                "to_vec" => Ok(Value::Vec(h.clone().into_sorted_vec())),
+                "to_vec" => Ok(Value::Vec(Rc::new(RefCell::new(h.clone().into_sorted_vec())))),
                 "clone" => Ok(Value::BinaryHeap(h.clone())),
                 _ => Err(format!("no method '{}' on type BinaryHeap", method_name)),
             },
@@ -1248,8 +1245,8 @@ impl Vm {
                 let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                 Ok(Value::String(s))
             }
-            ["HashMap", "new"] => Ok(Value::HashMap(HashMap::new())),
-            ["HashSet", "new"] => Ok(Value::HashSet(HashSet::new())),
+            ["HashMap", "new"] => Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(HashMap::new())))),
+            ["HashSet", "new"] => Ok(Value::HashSet(std::rc::Rc::new(std::cell::RefCell::new(HashSet::new())))),
             ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(BinaryHeap::new())),
             ["VecDeque", "new"] => Ok(Value::VecDeque(VecDeque::new())),
             ["ListNode", "new"] => {

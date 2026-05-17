@@ -336,7 +336,7 @@ impl Interpreter {
                     .iter()
                     .map(|e| self.eval_expr(e, env))
                     .collect::<Result<_, _>>()?;
-                Ok(Value::Vec(vals))
+                Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vals))))
             }
 
             Expr::Tuple { elements, .. } => {
@@ -5995,11 +5995,27 @@ fn main() {
                 let a = vec![1, 2, 3];
                 let mut b = a.clone();
                 b.push(4);
+                // .clone() is a deep copy — mutations don't propagate
                 println!("{} {}", a.len(), b.len());
             }
             "#,
         );
         assert_eq!(output, vec!["3 4\n"]);
+    }
+
+    #[test]
+    fn test_vec_shared_mutation() {
+        let output = run_and_capture(
+            r#"
+            fn main() {
+                let a = vec![1, 2, 3];
+                let mut b = a;        // shared via Rc — no deep copy
+                b.push(4);            // mutation visible through both
+                println!("{} {}", a.len(), b.len());
+            }
+            "#,
+        );
+        assert_eq!(output, vec!["4 4\n"]);
     }
 
     #[test]

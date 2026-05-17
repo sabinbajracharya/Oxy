@@ -1,7 +1,10 @@
 //! Hand-written JSON serializer and deserializer for Oxy values.
 
-use crate::types::{Value, OPTION_TYPE, RESULT_TYPE};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::types::{Value, OPTION_TYPE, RESULT_TYPE};
 
 // ---------------------------------------------------------------------------
 // Serialization
@@ -23,11 +26,17 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         Value::String(s) => Ok(escape_json_string(s)),
         Value::Char(c) => Ok(escape_json_string(&c.to_string())),
         Value::Unit => Ok("null".to_string()),
-        Value::Vec(v) | Value::Tuple(v) => {
+        Value::Vec(rc) => {
+            let v = rc.borrow();
             let items: Result<Vec<String>, String> = v.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
-        Value::HashMap(m) => {
+        Value::Tuple(v) => {
+            let items: Result<Vec<String>, String> = v.iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
+        Value::HashMap(rc) => {
+            let m = rc.borrow();
             let string_map: HashMap<String, Value> = m
                 .iter()
                 .map(|(k, v)| (format!("{}", k), v.clone()))
@@ -43,7 +52,8 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Iterator(_) => Err("cannot serialize iterator".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
-        Value::HashSet(s) => {
+        Value::HashSet(rc) => {
+            let s = rc.borrow();
             let items: Result<Vec<String>, String> = s.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
@@ -69,7 +79,8 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
         Value::String(s) => Ok(escape_json_string(s)),
         Value::Char(c) => Ok(escape_json_string(&c.to_string())),
         Value::Unit => Ok("null".to_string()),
-        Value::Vec(v) | Value::Tuple(v) => {
+        Value::Vec(rc) => {
+            let v = rc.borrow();
             if v.is_empty() {
                 return Ok("[]".to_string());
             }
@@ -85,7 +96,24 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
         }
-        Value::HashMap(m) => {
+        Value::Tuple(v) => {
+            if v.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let items: Result<Vec<String>, String> = v
+                .iter()
+                .map(|item| {
+                    let s = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
+        Value::HashMap(rc) => {
+            let m = rc.borrow();
             let string_map: HashMap<String, Value> = m
                 .iter()
                 .map(|(k, v)| (format!("{}", k), v.clone()))
@@ -101,7 +129,8 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
         Value::Function(_) => Err("cannot serialize function".to_string()),
         Value::Iterator(_) => Err("cannot serialize iterator".to_string()),
         Value::Range(..) => Err("cannot serialize range".to_string()),
-        Value::HashSet(s) => {
+        Value::HashSet(rc) => {
+            let s = rc.borrow();
             if s.is_empty() {
                 return Ok("[]".to_string());
             }
@@ -437,7 +466,7 @@ impl JsonParser {
         let mut map: HashMap<Value, Value> = HashMap::new();
         if self.peek() == Some('}') {
             self.advance();
-            return Ok(Value::HashMap(map));
+            return Ok(Value::HashMap(Rc::new(RefCell::new(map))));
         }
         loop {
             self.skip_whitespace();
@@ -453,7 +482,7 @@ impl JsonParser {
                 }
                 Some('}') => {
                     self.advance();
-                    return Ok(Value::HashMap(map));
+                    return Ok(Value::HashMap(Rc::new(RefCell::new(map))));
                 }
                 Some(c) => {
                     return Err(format!(
@@ -472,7 +501,7 @@ impl JsonParser {
         let mut items = Vec::new();
         if self.peek() == Some(']') {
             self.advance();
-            return Ok(Value::Vec(items));
+            return Ok(Value::Vec(Rc::new(RefCell::new(items))));
         }
         loop {
             let value = self.parse_value()?;
@@ -484,7 +513,7 @@ impl JsonParser {
                 }
                 Some(']') => {
                     self.advance();
-                    return Ok(Value::Vec(items));
+                    return Ok(Value::Vec(Rc::new(RefCell::new(items))));
                 }
                 Some(c) => {
                     return Err(format!(

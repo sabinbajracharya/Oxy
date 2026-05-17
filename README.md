@@ -27,7 +27,7 @@ fn main() {
 |---|---|
 | Variables (`let`, `let mut`) | ✅ |
 | Functions, closures (with mutable captures), higher-order functions | ✅ |
-| Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`) | ✅ |
+| Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`, labeled break/continue) | ✅ |
 | Structs, enums, `impl` blocks (both structs and enums) | ✅ |
 | Traits with default methods, operator overloading | ✅ |
 | Generics with trait bounds and `where` clauses | ✅ |
@@ -61,9 +61,9 @@ fn main() {
 
 | Rust Feature | Oxy Behavior |
 |---|---|
-| Ownership / Move | Values are reference-counted, freely shared |
+| Ownership / Move | Values are reference-counted. Collections (Vec, HashMap, HashSet) use `Rc<RefCell<>>` — assignment shares data, mutations propagate. Use `.clone()` for an independent deep copy |
 | `&` and `&mut` | Syntax accepted, semantically ignored |
-| Lifetimes (`'a`) | Syntax accepted, ignored |
+| Lifetimes (`'a`) | Syntax accepted, ignored. `'label` used for labeled break/continue |
 | `unsafe` | Not supported |
 | Macros (`macro_rules!`) | Not supported (built-in pseudo-macros like `println!` work) |
 | Type inference | Dynamic with optional static checking — type annotations on `let`, `fn`, and `const` are validated before execution |
@@ -731,7 +731,7 @@ oxy/
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (640+ tests)
+# Run all tests (670+ tests)
 docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting

@@ -23,7 +23,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             check_arg_count("std::process::command_with_args", 2, args, span)?;
             let program = expect_string(&args[0], "std::process::command_with_args", span)?;
             let cmd_args = match &args[1] {
-                Value::Vec(v) => v.iter().map(|a| format!("{a}")).collect::<Vec<_>>(),
+                Value::Vec(rc) => rc.borrow().iter().map(|a| format!("{a}")).collect::<Vec<_>>(),
                 _ => {
                     return Err(runtime_error(
                         "std::process::command_with_args(): second argument must be a Vec",

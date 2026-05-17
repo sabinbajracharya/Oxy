@@ -3,17 +3,17 @@
 //
 // === Pattern: Backtracking ===
 // Build permutations by choosing one unused element at a time. Track which
-// elements are used with a Vec<bool>. Since Oxy has value semantics, use
-// functional recursion: return accumulated results rather than mutating
-// a shared result parameter.
+// elements are used with a Vec<bool>. With shared mutable collections (Rc),
+// passing by value shares the underlying data — mutations propagate.
 //
 // === Intuition ===
 // For each unused element, pick it, mark it used, recurse on remaining
-// positions, then unmark. Accumulate results through returned values.
+// positions, then unmark (backtrack). Snapshot current with .clone()
+// when storing a complete permutation.
 //
 // === Pattern Recognition ===
 // - "All permutations" → backtracking with visited tracking
-// - Return-based recursion for value-semantics languages
+// - Shared mutable collections let us use classic push/pop/recurse/undo
 
 fn main() {
     let nums = vec![1, 2, 3];
@@ -23,26 +23,22 @@ fn main() {
     }
 }
 
-fn backtrack(nums: Vec, current: Vec, used: Vec) -> Vec {
+fn backtrack(nums: Vec, current: Vec, used: Vec, result: Vec) {
     if current.len() == nums.len() {
-        return vec![current];
+        result.push(current.clone());
+        return;
     }
-    let mut result = vec![];
     let mut i = 0i64;
     while i < nums.len() {
         if !used[i] {
-            let mut new_used = used;
-            new_used[i] = true;
-            let mut new_current = current;
-            new_current.push(nums[i]);
-            let sub_results = backtrack(nums, new_current, new_used);
-            for sub in sub_results {
-                result.push(sub);
-            }
+            used[i] = true;
+            current.push(nums[i]);
+            backtrack(nums, current, used, result);
+            current.pop();
+            used[i] = false;
         }
         i = i + 1;
     }
-    result
 }
 
 fn permute(nums: Vec) -> Vec {
@@ -53,7 +49,10 @@ fn permute(nums: Vec) -> Vec {
         used.push(false);
         i = i + 1;
     }
-    backtrack(nums, vec![], used)
+    let result = vec![];
+    let current = vec![];
+    backtrack(nums, current, used, result);
+    result
 }
 
 #[test]
