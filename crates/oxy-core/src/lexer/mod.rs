@@ -208,8 +208,29 @@ impl<'src> Lexer<'src> {
             // String literal
             '"' => self.scan_string(start_offset)?,
 
-            // Character literal
-            '\'' => self.scan_char(start_offset)?,
+            // Character literal or label
+            '\'' => {
+                let next = self.peek();
+                if next.is_ascii_alphabetic() || next == '_' {
+                    // Peek ahead: if second char is also `'`, it's a char literal like 'a'
+                    // Otherwise it's a label like 'outer
+                    let peek_ahead = self.peek_at(1);
+                    if peek_ahead == Some('\'') {
+                        self.scan_char(start_offset)?
+                    } else {
+                        // Scan a label: `'identifier`
+                        let mut name = String::new();
+                        while !self.is_at_end()
+                            && (self.peek().is_ascii_alphanumeric() || self.peek() == '_')
+                        {
+                            name.push(self.advance());
+                        }
+                        TokenKind::Label(name)
+                    }
+                } else {
+                    self.scan_char(start_offset)?
+                }
+            }
 
             // Number literal
             c if c.is_ascii_digit() => self.scan_number(c, start_offset)?,

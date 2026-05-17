@@ -1341,6 +1341,10 @@ impl Compiler {
                 }
                 Ok(())
             }
+            Expr::As { expr: inner, .. } => {
+                self.compile_expr(inner)?;
+                Ok(())
+            }
         }
     }
 }

@@ -51,7 +51,7 @@ impl Precedence {
             TokenKind::Shl | TokenKind::Shr => Precedence::Shift,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
-            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket | TokenKind::Question => {
+            TokenKind::LParen | TokenKind::Dot | TokenKind::LBracket | TokenKind::Question | TokenKind::As => {
                 Precedence::Call
             }
             TokenKind::Eq
@@ -1650,6 +1650,17 @@ impl Parser {
             });
         }
 
+        // expr as Type
+        if op_kind == TokenKind::As {
+            self.advance();
+            let type_name = self.expect_ident()?;
+            return Ok(Expr::As {
+                expr: Box::new(left),
+                type_name,
+                span: self.merge_spans(op_span, self.current_span()),
+            });
+        }
+
         Err(self.error(format!(
             "unexpected token in expression: {}",
             op_kind.description()
@@ -1960,13 +1971,47 @@ impl Parser {
                 Ok(Pattern::Slice(pats, span))
             }
             // Rest pattern standalone: `..`
-            TokenKind::DotDot => {
+            TokenKind::DotDot | TokenKind::DotDotEq => {
+                let inclusive = self.check(&TokenKind::DotDotEq);
                 let span = self.current_span();
                 self.advance();
+                if let TokenKind::IntLiteral(end) = self.peek_kind().clone() {
+                    self.advance();
+                    return Ok(Pattern::Range {
+                        start: None,
+                        end: Some(end),
+                        inclusive,
+                        span,
+                    });
+                }
+                if inclusive {
+                    return Ok(Pattern::Wildcard(span));
+                }
                 Ok(Pattern::Rest(span))
             }
-            TokenKind::IntLiteral(_)
-            | TokenKind::FloatLiteral(_)
+            TokenKind::IntLiteral(n) => {
+                let val = n.clone();
+                let start_span = self.current_span();
+                self.advance(); // consume the int literal
+                if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
+                    let inclusive = self.check(&TokenKind::DotDotEq);
+                    self.advance();
+                    let end = if let TokenKind::IntLiteral(m) = self.peek_kind().clone() {
+                        self.advance();
+                        Some(m)
+                    } else {
+                        None
+                    };
+                    return Ok(Pattern::Range {
+                        start: Some(val),
+                        end,
+                        inclusive,
+                        span: start_span,
+                    });
+                }
+                Ok(Pattern::Literal(Expr::IntLiteral(val, start_span)))
+            }
+            TokenKind::FloatLiteral(_)
             | TokenKind::True
             | TokenKind::False
             | TokenKind::StringLiteral(_)

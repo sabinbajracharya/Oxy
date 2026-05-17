@@ -113,6 +113,8 @@ pub enum TokenKind {
     SelfLower,
     /// `Self` — current type reference
     SelfUpper,
+    /// Label: `'name` for loop labels
+    Label(String),
     /// `as` — type casting
     As,
     /// `ref` — reference binding in patterns
@@ -310,6 +312,7 @@ impl TokenKind {
             Self::Mod => "'mod'",
             Self::SelfLower => "'self'",
             Self::SelfUpper => "'Self'",
+            Self::Label(_) => "label",
             Self::As => "'as'",
             Self::Ref => "'ref'",
             Self::Const => "'const'",
