@@ -51,6 +51,8 @@ impl SymTable {
 
 /// Tracks loop nesting for break/continue backpatching.
 struct LoopContext {
+    /// Label for this loop (for labeled break/continue resolution).
+    label: Option<String>,
     /// Instruction index where `continue` should jump.
     continue_target: usize,
     /// Instruction indices of `Jump(0)` emitted for `break` statements.
@@ -470,6 +472,20 @@ impl Compiler {
         Ok(())
     }
 
+    /// Walk up the loop_stack to find the loop matching `label`.
+    /// - `None` (unlabeled) → innermost loop
+    /// - `Some(name)` → first loop with that label (searching from innermost outward)
+    fn resolve_label(&mut self, label: &Option<String>) -> Option<&mut LoopContext> {
+        match label {
+            None => self.loop_stack.last_mut(),
+            Some(name) => self
+                .loop_stack
+                .iter_mut()
+                .rev()
+                .find(|ctx| ctx.label.as_deref() == Some(name)),
+        }
+    }
+
     fn compile_stmt(&mut self, stmt: &Stmt, is_last: bool) -> Result<(), FerriError> {
         match stmt {
             Stmt::Let {
@@ -514,10 +530,14 @@ impl Compiler {
             }
 
             Stmt::While {
-                condition, body, ..
+                label,
+                condition,
+                body,
+                ..
             } => {
                 let loop_start = self.code.len();
                 self.loop_stack.push(LoopContext {
+                    label: label.clone(),
                     continue_target: loop_start,
                     break_patches: vec![],
                     continue_patches: vec![],
@@ -538,9 +558,10 @@ impl Compiler {
                 Ok(())
             }
 
-            Stmt::Loop { body, .. } => {
+            Stmt::Loop { label, body, .. } => {
                 let loop_start = self.code.len();
                 self.loop_stack.push(LoopContext {
+                    label: label.clone(),
                     continue_target: loop_start,
                     break_patches: vec![],
                     continue_patches: vec![],
@@ -559,6 +580,7 @@ impl Compiler {
             }
 
             Stmt::For {
+                label,
                 name,
                 iterable,
                 body,
@@ -588,6 +610,7 @@ impl Compiler {
 
                 // Push loop context (continue_target is placeholder, set after body)
                 self.loop_stack.push(LoopContext {
+                    label: label.clone(),
                     continue_target: 0,
                     break_patches: vec![],
                     continue_patches: vec![],
@@ -626,7 +649,7 @@ impl Compiler {
                 Ok(())
             }
 
-            Stmt::Break { value, span } => {
+            Stmt::Break { label, value, span } => {
                 if self.loop_stack.is_empty() {
                     return Err(FerriError::Runtime {
                         message: "break outside of loop".into(),
@@ -638,15 +661,25 @@ impl Compiler {
                     self.compile_expr(expr)?;
                 }
                 let patch = self.emit(OpCode::Jump(0));
-                self.loop_stack
-                    .last_mut()
-                    .unwrap()
-                    .break_patches
-                    .push(patch);
+                // Walk up loop_stack to find matching label
+                let target = self.resolve_label(label);
+                match target {
+                    Some(ctx) => ctx.break_patches.push(patch),
+                    None => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "use of undeclared label `{}`",
+                                label.as_deref().unwrap_or("")
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
                 Ok(())
             }
 
-            Stmt::Continue { span } => {
+            Stmt::Continue { label, span } => {
                 if self.loop_stack.is_empty() {
                     return Err(FerriError::Runtime {
                         message: "continue outside of loop".into(),
@@ -655,15 +688,25 @@ impl Compiler {
                     });
                 }
                 let patch = self.emit(OpCode::Jump(0));
-                self.loop_stack
-                    .last_mut()
-                    .unwrap()
-                    .continue_patches
-                    .push(patch);
+                let target = self.resolve_label(label);
+                match target {
+                    Some(ctx) => ctx.continue_patches.push(patch),
+                    None => {
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "use of undeclared label `{}`",
+                                label.as_deref().unwrap_or("")
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
                 Ok(())
             }
 
             Stmt::ForDestructure {
+                label,
                 names,
                 iterable,
                 body,
@@ -697,6 +740,7 @@ impl Compiler {
                 }
 
                 self.loop_stack.push(LoopContext {
+                    label: label.clone(),
                     continue_target: 0,
                     break_patches: vec![],
                     continue_patches: vec![],

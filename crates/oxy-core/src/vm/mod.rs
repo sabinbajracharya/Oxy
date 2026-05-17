@@ -1283,10 +1283,13 @@ impl Vm {
                 }
             }
             ["char", "from_code"] => {
-                let n = args.first().and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as u32),
-                    _ => None,
-                }).unwrap_or(0);
+                let n = args
+                    .first()
+                    .and_then(|v| match v {
+                        Value::Integer(n) => Some(*n as u32),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
                 match char::from_u32(n) {
                     Some(c) => Ok(Value::Char(c)),
                     None => Err(format!("char::from_code: invalid code point {n}")),

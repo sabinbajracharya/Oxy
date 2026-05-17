@@ -93,13 +93,20 @@ impl Interpreter {
                 }
             }
             Pattern::Range {
-                start, end, inclusive, ..
+                start,
+                end,
+                inclusive,
+                ..
             } => match value {
                 Value::Integer(n) => {
                     let n = *n;
                     let below_start = if let Some(s) = start { n < *s } else { false };
                     let above_end = if let Some(e) = end {
-                        if *inclusive { n > *e } else { n >= *e }
+                        if *inclusive {
+                            n > *e
+                        } else {
+                            n >= *e
+                        }
                     } else {
                         false
                     };
@@ -109,7 +116,11 @@ impl Interpreter {
                     let c = *c as i64;
                     let below_start = if let Some(s) = start { c < *s } else { false };
                     let above_end = if let Some(e) = end {
-                        if *inclusive { c > *e } else { c >= *e }
+                        if *inclusive {
+                            c > *e
+                        } else {
+                            c >= *e
+                        }
                     } else {
                         false
                     };
@@ -222,7 +233,10 @@ impl Interpreter {
                     }
                 }
             }
-            Pattern::Wildcard(_) | Pattern::Literal(_) | Pattern::Rest(_) | Pattern::Range { .. } => {}
+            Pattern::Wildcard(_)
+            | Pattern::Literal(_)
+            | Pattern::Rest(_)
+            | Pattern::Range { .. } => {}
         }
     }
 

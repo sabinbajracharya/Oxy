@@ -677,7 +677,9 @@ impl TypeChecker {
             Expr::MacroCall { .. } => Ok(TypeInfo::Unknown),
             Expr::Path { .. } => Ok(TypeInfo::Unknown),
             Expr::SelfRef { .. } => Ok(TypeInfo::Unknown),
-            Expr::As { expr, type_name, .. } => {
+            Expr::As {
+                expr, type_name, ..
+            } => {
                 let _ = self.infer_expr(expr)?;
                 match type_name.as_str() {
                     "i64" | "usize" => Ok(TypeInfo::I64),

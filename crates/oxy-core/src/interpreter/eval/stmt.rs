@@ -5,6 +5,27 @@ use crate::types::Value;
 
 use super::super::Interpreter;
 
+/// Returns true if a `Break` error with the given label should be caught by a loop
+/// with `loop_label`. Unlabeled break always caught by innermost loop; labeled break
+/// only caught by the loop whose label matches.
+fn should_catch_break(err_label: &Option<String>, loop_label: &Option<String>) -> bool {
+    match (err_label, loop_label) {
+        (None, _) => true,
+        (Some(bl), Some(ll)) => bl == ll,
+        _ => false,
+    }
+}
+
+/// Returns true if a `Continue` error with the given label should be caught by a loop
+/// with `loop_label`. Same logic as `should_catch_break`.
+fn should_catch_continue(err_label: &Option<String>, loop_label: &Option<String>) -> bool {
+    match (err_label, loop_label) {
+        (None, _) => true,
+        (Some(cl), Some(ll)) => cl == ll,
+        _ => false,
+    }
+}
+
 impl Interpreter {
     pub(crate) fn eval_stmt(&mut self, stmt: &Stmt, env: &Env) -> Result<Value, FerriError> {
         match stmt {
@@ -32,7 +53,10 @@ impl Interpreter {
                 Err(FerriError::Return(Box::new(val)))
             }
             Stmt::While {
-                condition, body, ..
+                label,
+                condition,
+                body,
+                ..
             } => {
                 loop {
                     let cond = self.eval_expr(condition, env)?;
@@ -41,26 +65,31 @@ impl Interpreter {
                     }
                     match self.eval_block(body, env) {
                         Ok(_) => {}
-                        Err(FerriError::Break(val)) => {
-                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        Err(FerriError::Break(l, val)) if should_catch_break(&l, label) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit));
                         }
-                        Err(FerriError::Continue) => continue,
+                        Err(FerriError::Continue(l)) if should_catch_continue(&l, label) => {
+                            continue;
+                        }
                         Err(e) => return Err(e),
                     }
                 }
                 Ok(Value::Unit)
             }
-            Stmt::Loop { body, .. } => loop {
+            Stmt::Loop { label, body, .. } => loop {
                 match self.eval_block(body, env) {
                     Ok(_) => {}
-                    Err(FerriError::Break(val)) => {
-                        return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                    Err(FerriError::Break(l, val)) if should_catch_break(&l, label) => {
+                        return Ok(val.map(|v| *v).unwrap_or(Value::Unit));
                     }
-                    Err(FerriError::Continue) => continue,
+                    Err(FerriError::Continue(l)) if should_catch_continue(&l, label) => {
+                        continue;
+                    }
                     Err(e) => return Err(e),
                 }
             },
             Stmt::For {
+                label,
                 name,
                 iterable,
                 body,
@@ -74,26 +103,29 @@ impl Interpreter {
                     for_env.borrow_mut().set(name, val).ok();
                     match self.eval_block(body, &for_env) {
                         Ok(_) => {}
-                        Err(FerriError::Break(val)) => {
-                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        Err(FerriError::Break(l, val)) if should_catch_break(&l, label) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit));
                         }
-                        Err(FerriError::Continue) => continue,
+                        Err(FerriError::Continue(l)) if should_catch_continue(&l, label) => {
+                            continue;
+                        }
                         Err(e) => return Err(e),
                     }
                 }
                 Ok(Value::Unit)
             }
-            Stmt::Break { value, .. } => {
+            Stmt::Break { label, value, .. } => {
                 let val = if let Some(expr) = value {
                     Some(Box::new(self.eval_expr(expr, env)?))
                 } else {
                     None
                 };
-                Err(FerriError::Break(val))
+                Err(FerriError::Break(label.clone(), val))
             }
-            Stmt::Continue { .. } => Err(FerriError::Continue),
+            Stmt::Continue { label, .. } => Err(FerriError::Continue(label.clone())),
 
             Stmt::WhileLet {
+                label,
                 pattern,
                 expr,
                 body,
@@ -109,17 +141,20 @@ impl Interpreter {
                     Self::bind_pattern(pattern, &val, &iter_env, false);
                     match self.eval_block(body, &iter_env) {
                         Ok(v) => result = v,
-                        Err(FerriError::Break(v)) => {
+                        Err(FerriError::Break(l, v)) if should_catch_break(&l, label) => {
                             result = v.map(|v| *v).unwrap_or(Value::Unit);
                             break;
                         }
-                        Err(FerriError::Continue) => continue,
+                        Err(FerriError::Continue(l)) if should_catch_continue(&l, label) => {
+                            continue;
+                        }
                         Err(e) => return Err(e),
                     }
                 }
                 Ok(result)
             }
             Stmt::ForDestructure {
+                label,
                 names,
                 iterable,
                 body,
@@ -147,10 +182,12 @@ impl Interpreter {
                     }
                     match self.eval_block(body, &for_env) {
                         Ok(_) => {}
-                        Err(FerriError::Break(val)) => {
-                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit))
+                        Err(FerriError::Break(l, val)) if should_catch_break(&l, label) => {
+                            return Ok(val.map(|v| *v).unwrap_or(Value::Unit));
                         }
-                        Err(FerriError::Continue) => continue,
+                        Err(FerriError::Continue(l)) if should_catch_continue(&l, label) => {
+                            continue;
+                        }
                         Err(e) => return Err(e),
                     }
                 }

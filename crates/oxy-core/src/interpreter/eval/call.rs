@@ -222,18 +222,9 @@ impl Interpreter {
             }),
             Expr::FieldAccess { object, field, .. } => {
                 let obj = self.eval_expr(object, env)?;
-                if let Value::Struct {
-                    name,
-                    mut fields,
-                } = obj
-                {
+                if let Value::Struct { name, mut fields } = obj {
                     fields.insert(field.clone(), new_val);
-                    self.mutate_variable(
-                        object,
-                        Value::Struct { name, fields },
-                        env,
-                        span,
-                    )
+                    self.mutate_variable(object, Value::Struct { name, fields }, env, span)
                 } else {
                     Err(FerriError::Runtime {
                         message: format!(
