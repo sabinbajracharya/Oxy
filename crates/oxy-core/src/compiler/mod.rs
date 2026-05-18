@@ -120,6 +120,8 @@ pub struct Compiler {
     require_main: bool,
     /// Current impl type name (for resolving `Self` in method bodies).
     current_impl_type: Option<String>,
+    /// Trait definitions: trait_name → methods (for default method inheritance).
+    trait_defs: HashMap<String, Vec<FnDef>>,
 }
 
 impl Compiler {
@@ -170,6 +172,7 @@ impl Default for Compiler {
             captured_mutable: HashSet::new(),
             require_main: true,
             current_impl_type: None,
+            trait_defs: HashMap::new(),
         }
     }
 }
@@ -267,17 +270,32 @@ impl Compiler {
                 Ok(())
             }
             Item::ImplTrait(i) => {
+                // Collect method names explicitly defined in this impl
+                let explicit: HashSet<String> = i.methods.iter().map(|m| m.name.clone()).collect();
+                let mut all_methods = i.methods.clone();
+                // Inherit default methods from trait that aren't explicitly overridden
+                if let Some(trait_methods) = self.trait_defs.get(&i.trait_name) {
+                    for tm in trait_methods {
+                        if !explicit.contains(&tm.name) && !tm.body.stmts.is_empty() {
+                            all_methods.push(tm.clone());
+                        }
+                    }
+                }
                 self.impl_methods
                     .entry(i.type_name.clone())
                     .or_default()
-                    .extend(i.methods.clone());
-                for method in &i.methods {
+                    .extend(all_methods.clone());
+                for method in &all_methods {
                     let type_name = i.type_name.clone();
                     self.compile_fn_item(method, Some(&type_name))?;
                 }
                 Ok(())
             }
-            Item::Trait(_) => Ok(()),
+            Item::Trait(t) => {
+                // Store trait default methods for inheritance in impl blocks
+                self.trait_defs.insert(t.name.clone(), t.default_methods.clone());
+                Ok(())
+            }
             Item::Module(m) => {
                 self.compile_module(m)?;
                 Ok(())
