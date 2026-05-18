@@ -18,8 +18,7 @@ pub mod errors;
 /// HTTP client support for Oxy scripts.
 #[cfg(feature = "http")]
 pub mod http;
-/// Tree-walking interpreter that evaluates the AST.
-pub mod interpreter;
+// Interpreter module deleted — 100% bytecode VM.
 /// JSON serialization and deserialization helpers.
 pub mod json;
 /// Lexer (tokenizer) for Oxy source code.

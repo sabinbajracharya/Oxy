@@ -144,7 +144,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::run_capturing;
+    use crate::vm::run_capturing;
 
     fn run(src: &str) -> String {
         let (_, output) = run_capturing(src).expect("runtime error");

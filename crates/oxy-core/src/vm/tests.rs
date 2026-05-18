@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use crate::interpreter::{run, run_compiled, run_compiled_capturing};
+    use crate::vm::{run, run_compiled, run_compiled_capturing};
 
     // --- Array tests ---
 

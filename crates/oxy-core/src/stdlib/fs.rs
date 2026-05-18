@@ -173,7 +173,7 @@ fn io_unit_result(result: std::io::Result<()>) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::run_capturing;
+    use crate::vm::run_capturing;
 
     fn run(src: &str) -> String {
         let (_, output) = run_capturing(src).expect("runtime error");

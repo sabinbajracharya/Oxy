@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use crate::interpreter::run;
+    use crate::vm::run;
 
     #[test]
     fn test_valid_code_passes_type_checking() {
