@@ -2,7 +2,15 @@
 
 use crate::types::Value;
 
-pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
+pub fn dispatch<F>(
+    receiver: Value,
+    method: &str,
+    args: &[Value],
+    mut call_closure: F,
+) -> Result<Value, String>
+where
+    F: FnMut(Value, &[Value]) -> Result<Value, String>,
+{
     let is_option = matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Option");
     let is_result = matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Result");
     let is_ok = receiver.is_ok_variant();
@@ -57,11 +65,74 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             }
             _ => Ok(args.first().cloned().unwrap_or(Value::Unit)),
         },
-        "unwrap_or_else" => Err("unwrap_or_else: closure calls not supported in VM builtins yet".into()),
-        "map" => Err("map: closure calls not supported in VM builtins yet".into()),
-        "map_err" => Err("map_err: closure calls not supported in VM builtins yet".into()),
-        "and_then" => Err("and_then: closure calls not supported in VM builtins yet".into()),
-        "unwrap_err" if is_result => Err("unwrap_err not implemented".into()),
+        "unwrap_or_else" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, data, .. }
+                    if variant == "Some" || variant == "Ok" =>
+                {
+                    Ok(data.first().cloned().unwrap_or(Value::Unit))
+                }
+                _ => call_closure(closure, &[]),
+            }
+        }
+        "map" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, data, .. }
+                    if variant == "Some" || variant == "Ok" =>
+                {
+                    let inner = data.first().cloned().unwrap_or(Value::Unit);
+                    let result = call_closure(closure, &[inner])?;
+                    // Re-wrap in Some/Ok
+                    if is_option || is_ok {
+                        if is_option {
+                            Ok(Value::some(result))
+                        } else {
+                            Ok(Value::ok(result))
+                        }
+                    } else {
+                        Err("map called on non-Option/Result".into())
+                    }
+                }
+                Value::EnumVariant { .. } => Ok(receiver.clone()), // None/Err pass through
+                _ => Err(format!("no method '{}' on this type", method)),
+            }
+        }
+        "map_err" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
+                    Ok(receiver.clone())
+                }
+                Value::EnumVariant { variant, data, .. } if variant == "Err" => {
+                    let inner = data.first().cloned().unwrap_or(Value::Unit);
+                    let result = call_closure(closure, &[inner])?;
+                    Ok(Value::err(result))
+                }
+                _ => Err(format!("no method '{}' on this type", method)),
+            }
+        }
+        "and_then" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, data, .. }
+                    if variant == "Some" || variant == "Ok" =>
+                {
+                    let inner = data.first().cloned().unwrap_or(Value::Unit);
+                    call_closure(closure, &[inner])
+                }
+                _ => Ok(receiver.clone()),
+            }
+        }
+        "unwrap_err" if is_result => {
+            match &receiver {
+                Value::EnumVariant { variant, data, .. } if variant == "Err" => {
+                    Ok(data.first().cloned().unwrap_or(Value::Unit))
+                }
+                _ => Err("called `unwrap_err` on an `Ok` value".into()),
+            }
+        },
         "ok" if is_result => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
                 Ok(Value::some(data.first().cloned().unwrap_or(Value::Unit)))

@@ -1519,7 +1519,9 @@ impl Vm {
             Value::EnumVariant { enum_name, .. }
                 if enum_name == "Option" || enum_name == "Result" =>
             {
-                builtins::option_result::dispatch(receiver, method_name, &args)
+                builtins::option_result::dispatch(receiver, method_name, &args, |func, fargs| {
+                    self.run_closure(&func, fargs)
+                })
             }
             Value::EnumVariant { enum_name, .. } => match method_name {
                 "clone" => Ok(receiver.clone()),
@@ -1566,10 +1568,6 @@ impl Vm {
                     Ok(val) => Ok(Value::ok(val)),
                     Err(e) => Ok(Value::err(Value::String(format!("json::parse: {}", e)))),
                 }
-            }
-            ["json", "to_string"] => {
-                let val = args.first().cloned().unwrap_or(Value::Unit);
-                Ok(Value::String(format!("{}", val)))
             }
             ["String", "from"] => {
                 let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
