@@ -253,6 +253,8 @@ struct Frame {
     max_slot: usize,
     /// Function entry IP (for looking up local variable names).
     fn_ip: usize,
+    /// If this is a method call on a local, write self back to this slot on return.
+    write_back_slot: Option<usize>,
 }
 
 /// Result of VM execution.
@@ -304,6 +306,7 @@ impl Vm {
             return_ip: 0,
             base: 0,
             max_slot: 0,
+            write_back_slot: None,
             fn_ip: self.chunk.entry_point,
         });
 
@@ -445,6 +448,7 @@ impl Vm {
                         return_ip: self.ip + 1,
                         base: args_start,
                         max_slot: arg_count,
+                        write_back_slot: None,
                         fn_ip: target,
                     });
                     self.ip = target;
@@ -965,6 +969,7 @@ impl Vm {
                                 return_ip: self.ip + 1,
                                 base: self.stack.len() - arg_count - 1,
                                 max_slot: arg_count + 1,
+                        write_back_slot: None,
                                 fn_ip: target,
                             });
                             self.ip = target;
@@ -1170,6 +1175,7 @@ impl Vm {
                                 return_ip: self.ip + 1,
                                 base,
                                 max_slot: 2,
+                                write_back_slot: None,
                                 fn_ip: target,
                             });
                             self.ip = target;
@@ -1236,6 +1242,7 @@ impl Vm {
                             return_ip: self.ip + 1,
                             base,
                             max_slot: 2,
+                                write_back_slot: None,
                             fn_ip: target,
                         });
                         self.ip = target - 1; // -1 because loop does ip += 1
