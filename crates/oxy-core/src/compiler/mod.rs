@@ -988,6 +988,20 @@ impl Compiler {
                         self.emit(OpCode::StoreLocal(slot));
                         Ok(())
                     }
+                } else if let Expr::FieldAccess {
+                    object, field, ..
+                } = target.as_ref()
+                {
+                    // obj.field = val
+                    self.emit(OpCode::Dup); // dup value
+                    self.compile_expr(object)?;
+                    self.emit(OpCode::FieldStore(field.clone()));
+                    Ok(())
+                } else if let Expr::Index { object, index, .. } = target.as_ref() {
+                    // arr[i] = val — fall back to interpreter for now
+                    self.emit(OpCode::Pop); // remove compiled value (will be re-evaluated)
+                    self.emit_eval(expr);
+                    Ok(())
                 } else {
                     Err(FerriError::Runtime {
                         message: "compiled: only simple variable assignment supported".into(),

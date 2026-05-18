@@ -189,6 +189,8 @@ pub enum OpCode {
     // --- Interpreter fallback ---
     /// Delegate evaluation of an AST expression to the tree-walking interpreter.
     /// The index references `Chunk::ast_nodes`.
+    /// Pop value, pop struct, set field. For `obj.field = val`.
+    FieldStore(String),
     Eval(usize),
 }
 
@@ -787,6 +789,29 @@ impl Vm {
                         }
                     };
                     self.stack.push(result);
+                }
+
+                OpCode::FieldStore(field_name) => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let mut obj = self.stack.pop().unwrap_or(Value::Unit);
+                    match &mut obj {
+                        Value::Struct { fields, .. } => {
+                            fields.insert(field_name.clone(), val);
+                            self.stack.push(obj);
+                        }
+                        Value::HashMap(rc) => {
+                            rc.borrow_mut()
+                                .insert(Value::String(field_name.clone()), val);
+                            self.stack.push(Value::HashMap(rc.clone()));
+                        }
+                        _ => {
+                            return VmResult::Error(format!(
+                                "cannot set field '{}' on type {}",
+                                field_name,
+                                obj.type_name()
+                            ));
+                        }
+                    }
                 }
 
                 OpCode::MethodCall {
