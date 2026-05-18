@@ -1217,7 +1217,13 @@ impl Vm {
             }
             ["int", "parse"] => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                match s.trim().parse::<i64>() {
+                let trimmed = s.trim();
+                let result = if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
+                    i64::from_str_radix(&trimmed[2..], 16).map_err(|_| ())
+                } else {
+                    trimmed.parse::<i64>().map_err(|_| ())
+                };
+                match result {
                     Ok(n) => Ok(Value::ok(Value::Integer(n))),
                     Err(_) => Ok(Value::err(Value::String(format!(
                         "cannot parse \"{s}\" as integer"
