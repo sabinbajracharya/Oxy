@@ -1434,10 +1434,6 @@ impl Compiler {
             }
 
             Expr::Index { object, index, .. } => {
-                // Range-based indexing not yet supported in native bytecode
-                if matches!(index.as_ref(), Expr::Range { .. }) {
-                    return Err(self.not_yet_supported("Range-based indexing", expr.span()));
-                }
                 self.compile_expr(object)?;
                 self.compile_expr(index)?;
                 self.emit(OpCode::VecIndex);

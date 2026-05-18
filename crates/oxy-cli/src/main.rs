@@ -3,7 +3,6 @@ use std::process;
 
 use colored::Colorize;
 use oxy_core::errors::{CallFrame, FerriError};
-use oxy_core::interpreter::Interpreter;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -16,22 +15,11 @@ fn main() {
             print_help();
         }
         Some("run") => {
-            let mut use_interpreter = false;
-            let mut file_idx = 2;
-            // Parse flags before the filename
-            while let Some(arg) = args.get(file_idx) {
-                if arg == "--interpreter" || arg == "-i" {
-                    use_interpreter = true;
-                    file_idx += 1;
-                } else {
-                    break;
-                }
-            }
-            let file = args.get(file_idx).unwrap_or_else(|| {
+            let file = args.get(2).unwrap_or_else(|| {
                 eprintln!("{} 'run' requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
-            run_file(file, use_interpreter);
+            run_file(file);
         }
         Some("repl") => {
             run_repl();
@@ -81,7 +69,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &str, use_interpreter: bool) {
+fn run_file(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -93,29 +81,8 @@ fn run_file(path: &str, use_interpreter: bool) {
         }
     };
 
-    if use_interpreter {
-        // Collect program args: everything after the file argument
-        let all_args: Vec<String> = std::env::args().collect();
-        let cli_args: Vec<String> = if all_args.len() > 3 {
-            all_args[3..].to_vec()
-        } else {
-            vec![]
-        };
-        let mut program_args = vec![path.to_string()];
-        program_args.extend(cli_args);
-
-        match oxy_core::interpreter::run_file_with_args(path, &source, program_args) {
-            Ok(_) => {}
-            Err(runtime_err) => {
-                display_error(&runtime_err.error, &source, &runtime_err.call_stack);
-                process::exit(1);
-            }
-        }
-        return;
-    }
-
-    // Default: run on the bytecode VM (with interpreter fallback via Eval)
-    match oxy_core::interpreter::run_compiled(&source) {
+    // Run on the bytecode VM
+    match oxy_core::vm::run_compiled(&source) {
         Ok(_) => {}
         Err(e) => {
             display_error(&e, &source, &[]);
@@ -132,7 +99,8 @@ fn run_repl() {
         ":quit".cyan()
     );
 
-    let mut interp = Interpreter::new();
+    // Accumulate items (fn, struct, etc.) in a persistent source buffer
+    let mut source_buffer = String::new();
 
     // Try to use rustyline for a better REPL experience
     let history_path = dirs_home().map(|h| format!("{}/.oxy_history", h));
@@ -182,10 +150,9 @@ fn run_repl() {
                 println!("  {}    Exit the REPL", ":quit, :q".cyan());
                 println!();
                 println!("Enter Oxy code directly. Items (fn, struct, enum, impl,");
-                println!("trait, type, const, use, mod, pub, async, #[...]) are");
-                println!("registered and persist. Expressions and statements execute");
-                println!("immediately. Multi-line input continues with '...' prompt");
-                println!("until braces are balanced.");
+                println!("trait, type, const, use, mod, pub, #[...]) accumulate in a");
+                println!("persistent source buffer. Expressions execute immediately");
+                println!("via the bytecode VM.");
                 continue;
             }
             _ => {}
@@ -226,53 +193,28 @@ fn run_repl() {
                 input.push_str(&more);
             }
 
+            // Validate by parsing
             match oxy_core::parser::parse(&input) {
-                Ok(program) => {
-                    for item in &program.items {
-                        if let Err(e) = interp.register_item(item) {
-                            display_error(&e, &input, &[]);
-                        }
-                    }
+                Ok(_) => {
+                    source_buffer.push_str(&input);
+                    source_buffer.push('\n');
+                    println!("  (registered)");
                 }
                 Err(e) => display_error(&e, &input, &[]),
             }
             continue;
         }
 
-        // Otherwise, try as expression/statement in the persistent REPL scope
-        let wrapped = format!("fn __repl__() {{ {trimmed} }}");
-        match oxy_core::parser::parse(&wrapped) {
-            Ok(program) => {
-                if let Some(oxy_core::ast::Item::Function(f)) = program.items.first() {
-                    for stmt in &f.body.stmts {
-                        match interp.execute_stmt(stmt) {
-                            Ok(val) => {
-                                if val != oxy_core::types::Value::Unit {
-                                    println!("{val}");
-                                }
-                            }
-                            Err(e) => {
-                                display_error(&e, trimmed, &[]);
-                            }
-                        }
-                    }
+        // Expression/statement: compile and run via VM
+        let source = format!("{}fn main() {{ {trimmed} }}\n", source_buffer);
+        match oxy_core::vm::run_compiled(&source) {
+            Ok(val) => {
+                if val != oxy_core::types::Value::Unit {
+                    println!("{val}");
                 }
             }
-            Err(_) => {
-                // If wrapping as expression failed, try parsing as item directly
-                // (handles edge cases like multi-line let + fn combos)
-                match oxy_core::parser::parse(trimmed) {
-                    Ok(program) => {
-                        for item in &program.items {
-                            if let Err(e) = interp.register_item(item) {
-                                display_error(&e, trimmed, &[]);
-                            }
-                        }
-                    }
-                    Err(e) => display_error(&e, trimmed, &[]),
-                }
-            }
-        }
+            Err(e) => display_error(&e, trimmed, &[]),
+        };
     }
 
     // Save history on exit
@@ -350,7 +292,7 @@ fn run_test_file(path: &str) {
 
     println!("\n{} tests in {}\n", "running".bold(), path.cyan());
 
-    match oxy_core::interpreter::run_tests(path, &source) {
+    match oxy_core::vm::run_tests(path, &source) {
         Ok(results) => {
             let mut passed = 0;
             let mut failed = 0;
