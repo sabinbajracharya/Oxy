@@ -545,6 +545,28 @@ impl Compiler {
         }
     }
 
+    /// Fallback emit_eval for complex let-patterns.
+    fn compile_letpattern_emit_eval(
+        &mut self,
+        pattern: &Box<Pattern>,
+        value: &Expr,
+        span: crate::lexer::Span,
+        mutable: bool,
+    ) -> Result<(), FerriError> {
+        let stmt = Stmt::LetPattern {
+            pattern: pattern.clone(),
+            value: value.clone(),
+            mutable,
+            span,
+        };
+        let fake_expr = Expr::Block(Block {
+            stmts: vec![stmt],
+            span,
+        });
+        self.emit_eval(&fake_expr);
+        Ok(())
+    }
+
     fn compile_block(&mut self, block: &Block) -> Result<(), FerriError> {
         for (i, stmt) in block.stmts.iter().enumerate() {
             let is_last = i == block.stmts.len() - 1;
@@ -883,18 +905,31 @@ impl Compiler {
                 span,
                 mutable,
             } => {
-                let stmt = Stmt::LetPattern {
-                    pattern: pattern.clone(),
-                    value: value.clone(),
-                    mutable: *mutable,
-                    span: *span,
-                };
-                let fake_expr = Expr::Block(Block {
-                    stmts: vec![stmt],
-                    span: *span,
-                });
-                self.emit_eval(&fake_expr);
-                Ok(())
+                // Try native tuple destructuring: let (a, b, ...) = expr;
+                if let Pattern::Tuple(patterns, _) = pattern.as_ref() {
+                    // Compile the value once, store in temp slot
+                    self.compile_expr(value)?;
+                    let temp_slot = self.sym.define("__destructure_tmp");
+                    self.emit(OpCode::StoreLocal(temp_slot));
+                    // For each pattern variable in order, extract from tuple and bind
+                    for (i, pat) in patterns.iter().enumerate() {
+                        if let Pattern::Ident(name, _) = pat {
+                            // Load tuple, push index, index into tuple
+                            self.emit(OpCode::LoadLocal(temp_slot));
+                            self.emit(OpCode::ConstInt(i as i64));
+                            self.emit(OpCode::VecIndex);
+                            // Define the variable and bind it
+                            let slot = self.sym.define(name);
+                            self.emit(OpCode::BindIdent(slot));
+                        } else {
+                            // Nested or complex pattern — fall back to emit_eval
+                            return self.compile_letpattern_emit_eval(pattern, value, *span, *mutable);
+                        }
+                    }
+                    return Ok(());
+                }
+                // For other patterns (slice, struct), fall back to emit_eval
+                self.compile_letpattern_emit_eval(pattern, value, *span, *mutable)
             }
             _ => Ok(()),
         }
