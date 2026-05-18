@@ -83,8 +83,6 @@ pub struct Compiler {
     functions: HashMap<String, usize>,
     /// Stack of enclosing loop contexts (for break/continue).
     loop_stack: Vec<LoopContext>,
-    /// AST expressions stored for Eval opcode fallback.
-    ast_nodes: Vec<crate::ast::Expr>,
     /// Closure metadata: (param_names, body_expr, captured_vars_with_slots_and_mutability).
     closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
     /// Snapshot of main's local variable names (for Eval env reconstruction).
@@ -134,7 +132,6 @@ impl Default for Compiler {
             sym: SymTable::new(0),
             functions: HashMap::new(),
             loop_stack: Vec::new(),
-            ast_nodes: Vec::new(),
             closure_meta: Vec::new(),
             main_local_names: Vec::new(),
             struct_defs: HashMap::new(),
@@ -167,7 +164,6 @@ impl Compiler {
             local_count: 0,
             entry_point,
             functions: self.functions,
-            ast_nodes: self.ast_nodes,
             closure_meta: self.closure_meta,
             local_names: self.main_local_names,
             fn_local_names: self.fn_local_names,
@@ -175,7 +171,6 @@ impl Compiler {
             enum_defs: self.enum_defs,
             impl_methods: self.impl_methods,
             method_ips: self.method_ips,
-            program_items: program.items.clone(),
         })
     }
 
@@ -185,11 +180,13 @@ impl Compiler {
         idx
     }
 
-    /// Store an AST expression and emit an Eval opcode for interpreter fallback.
-    fn emit_eval(&mut self, expr: &crate::ast::Expr) -> usize {
-        let idx = self.ast_nodes.len();
-        self.ast_nodes.push(expr.clone());
-        self.emit(OpCode::Eval(idx))
+    /// Report a compile error for features not yet supported in native bytecode.
+    fn not_yet_supported(&self, feature: &str, span: crate::lexer::Span) -> FerriError {
+        FerriError::Runtime {
+            message: format!("{feature} not yet supported in native bytecode"),
+            line: span.line,
+            column: span.column,
+        }
     }
 
     /// Patch a previously emitted instruction at `idx` with a new opcode.
@@ -601,26 +598,15 @@ impl Compiler {
         Ok(())
     }
 
-    /// Fallback emit_eval for complex let-patterns.
-    fn compile_letpattern_emit_eval(
+    /// Complex let-patterns not yet supported in native bytecode.
+    fn compile_letpattern_unsupported(
         &mut self,
-        pattern: &Box<Pattern>,
-        value: &Expr,
+        _pattern: &Box<Pattern>,
+        _value: &Expr,
         span: crate::lexer::Span,
-        mutable: bool,
+        _mutable: bool,
     ) -> Result<(), FerriError> {
-        let stmt = Stmt::LetPattern {
-            pattern: pattern.clone(),
-            value: value.clone(),
-            mutable,
-            span,
-        };
-        let fake_expr = Expr::Block(Block {
-            stmts: vec![stmt],
-            span,
-        });
-        self.emit_eval(&fake_expr);
-        Ok(())
+        Err(self.not_yet_supported("Complex destructure patterns", span))
     }
 
     fn compile_block(&mut self, block: &Block) -> Result<(), FerriError> {
@@ -955,12 +941,7 @@ impl Compiler {
                     label: label.clone(),
                     span: *span,
                 };
-                let fake_expr = Expr::Block(Block {
-                    stmts: vec![stmt],
-                    span: *span,
-                });
-                self.emit_eval(&fake_expr);
-                Ok(())
+                Err(self.not_yet_supported("while-let", *span))
             }
             Stmt::LetPattern {
                 pattern,
@@ -976,8 +957,8 @@ impl Compiler {
                 if let Pattern::Slice(patterns, _) = pattern.as_ref() {
                     return self.compile_destructure(value, patterns, *span);
                 }
-                // For other patterns, fall back to emit_eval
-                self.compile_letpattern_emit_eval(pattern, value, *span, *mutable)
+                // For other patterns, not yet supported natively
+                self.compile_letpattern_unsupported(pattern, value, *span, *mutable)
             }
             _ => Ok(()),
         }
@@ -1208,8 +1189,8 @@ impl Compiler {
                             return Ok(());
                         }
                     }
-                    // Unknown function — interpreter fallback
-                    self.emit_eval(expr);
+                    // Unknown function — not yet supported in native bytecode
+                    return Err(self.not_yet_supported("Call to unknown function", expr.span()));
                 }
                 Ok(())
             }
@@ -1282,9 +1263,7 @@ impl Compiler {
                     }
                     Ok(())
                 } else if let Expr::Index { .. } = target.as_ref() {
-                    // Index assignment — use interpreter
-                    self.emit_eval(expr);
-                    Ok(())
+                    Err(self.not_yet_supported("Index assignment", expr.span()))
                 } else {
                     Err(FerriError::Runtime {
                         message: "compiled: only simple variable assignment supported".into(),
@@ -1332,9 +1311,7 @@ impl Compiler {
                         })
                     }
                 } else {
-                    // Non-Ident compound assign — fall back to interpreter
-                    self.emit_eval(expr);
-                    Ok(())
+                    Err(self.not_yet_supported("Compound assign on field/index", expr.span()))
                 }
             }
 
@@ -1387,10 +1364,9 @@ impl Compiler {
             }
 
             Expr::Index { object, index, .. } => {
-                // Range-based indexing (e.g., s[0..3]) falls back to interpreter
+                // Range-based indexing not yet supported in native bytecode
                 if matches!(index.as_ref(), Expr::Range { .. }) {
-                    self.emit_eval(expr);
-                    return Ok(());
+                    return Err(self.not_yet_supported("Range-based indexing", expr.span()));
                 }
                 self.compile_expr(object)?;
                 self.compile_expr(index)?;
@@ -1496,8 +1472,7 @@ impl Compiler {
                         }
                     }
                 }
-                self.emit_eval(expr);
-                Ok(())
+                Err(self.not_yet_supported("Unknown path", expr.span()))
             }
 
             Expr::PathCall { path, args, .. } => {
@@ -1538,8 +1513,7 @@ impl Compiler {
                         return Ok(());
                     }
                 }
-                self.emit_eval(expr);
-                Ok(())
+                Err(self.not_yet_supported("Unknown path call", expr.span()))
             }
 
             Expr::Closure { params, body, .. } => {
@@ -1589,8 +1563,7 @@ impl Compiler {
                 // If any arm uses a range pattern, fall back to interpreter
                 let has_range = arms.iter().any(|arm| matches!(arm.pattern, Pattern::Range { .. }));
                 if has_range {
-                    self.emit_eval(expr);
-                    return Ok(());
+                    return Err(self.not_yet_supported("Range patterns in match", expr.span()));
                 }
 
                 // Evaluate scrutinee once, store in temp slot
@@ -1710,10 +1683,8 @@ impl Compiler {
                 Ok(())
             }
 
-            // Fallback to interpreter for expressions not yet natively compiled.
             Expr::Await { .. } => {
-                self.emit_eval(expr);
-                Ok(())
+                Err(self.not_yet_supported("await", expr.span()))
             }
 
             Expr::MacroCall { name, args, .. } => {
@@ -1797,10 +1768,10 @@ impl Compiler {
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "dbg" {
                     for arg in args { self.compile_expr(arg)?; }
-                    self.emit_eval(expr);
+                    return Err(self.not_yet_supported("dbg! macro", expr.span()));
                 } else {
                     for arg in args { self.compile_expr(arg)?; }
-                    self.emit_eval(expr);
+                    return Err(self.not_yet_supported("Unknown macro", expr.span()));
                 }
                 Ok(())
             }

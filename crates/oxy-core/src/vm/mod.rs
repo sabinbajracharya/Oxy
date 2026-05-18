@@ -188,8 +188,6 @@ pub enum OpCode {
 
     // --- Interpreter fallback ---
     /// Delegate evaluation of an AST expression to the tree-walking interpreter.
-    /// The index references `Chunk::ast_nodes`.
-    /// Pop value, pop struct, set field. For `obj.field = val`.
     FieldStore(String),
     /// Pop a value, push its display string — dispatches to Display::fmt natively
     /// if the receiver implements the trait, otherwise uses Rust Display.
@@ -197,7 +195,6 @@ pub enum OpCode {
     /// Pop the current value at stack[base+slot], wrap it in Value::Cell,
     /// and store it back. Used for `let mut` to enable shared mutation.
     MakeCell(usize),
-    Eval(usize),
 }
 
 /// A compiled Oxy program: a flat sequence of opcodes.
@@ -210,8 +207,6 @@ pub struct Chunk {
     pub entry_point: usize,
     /// Entry points: function name → instruction index.
     pub functions: std::collections::HashMap<String, usize>,
-    /// AST expression nodes for interpreter fallback (indexed by Eval opcode arg).
-    pub ast_nodes: Vec<crate::ast::Expr>,
     /// Closure metadata: (param_names, body_expr, captured_vars_with_slots_and_mutable).
     pub closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
     /// Local variable names: slot_index → name (for Eval env reconstruction of main).
@@ -226,8 +221,6 @@ pub struct Chunk {
     pub impl_methods: std::collections::HashMap<String, Vec<crate::ast::FnDef>>,
     /// Compiled method entry points: (type_name, method_name) → instruction index.
     pub method_ips: std::collections::HashMap<(String, String), usize>,
-    /// Full program items (for interpreter fallback registration).
-    pub program_items: Vec<crate::ast::Item>,
 }
 
 /// The stack-based VM executor.
@@ -266,10 +259,6 @@ pub enum VmResult {
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
         let mut interpreter = Interpreter::new();
-        // Register all program items so emit_eval works correctly
-        for item in &chunk.program_items {
-            let _ = interpreter.register_item(item);
-        }
         Self {
             chunk,
             stack: Vec::new(),
@@ -790,6 +779,7 @@ impl Vm {
                                 base,
                                 max_slot: max_slot.max(arg_count),
                                 fn_ip: target,
+                                write_back_slot: None,
                             });
                             self.ip = target;
                             continue;
@@ -1115,31 +1105,6 @@ impl Vm {
                     }
                 }
 
-                OpCode::Eval(idx) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!(
-                        "warning: Eval fallback used for ast_node {} — add native VM support",
-                        idx
-                    );
-                    let expr = self.chunk.ast_nodes.get(idx).cloned();
-                    match expr {
-                        Some(expr) => {
-                            let env = self.build_env_for_eval();
-                            match self.interpreter.eval_expr(&expr, &env) {
-                                Ok(val) => self.stack.push(val),
-                                Err(e) => {
-                                    return VmResult::Error(format!("eval fallback failed: {}", e));
-                                }
-                            }
-                        }
-                        None => {
-                            return VmResult::Error(format!(
-                                "Eval: invalid ast_node index {}",
-                                idx
-                            ));
-                        }
-                    }
-                }
             }
 
             self.ip += 1;
@@ -1207,6 +1172,7 @@ impl Vm {
                     base,
                     max_slot: 1,
                     fn_ip: target,
+                    write_back_slot: None,
                 });
                 self.ip = target;
                 return true;
@@ -1252,30 +1218,6 @@ impl Vm {
                 self.stack.push(Value::Unit);
             }
         }
-    }
-
-    /// Reconstruct an interpreter Env from the current VM stack frame.
-    fn build_env_for_eval(&self) -> crate::env::Env {
-        // Use interpreter's env (with all registered items) as parent
-        let env = crate::env::Environment::child(&self.interpreter.env);
-        let base = self.frame_base();
-        let max_slot = self.call_stack.last().map(|f| f.max_slot).unwrap_or(0);
-        // Look up per-function local names using the current frame's fn_ip
-        let fn_ip = self.call_stack.last().map(|f| f.fn_ip).unwrap_or(0);
-        let names = self
-            .chunk
-            .fn_local_names
-            .get(&fn_ip)
-            .unwrap_or(&self.chunk.local_names);
-        for slot in 0..max_slot {
-            if let Some(name) = names.get(slot) {
-                if !name.is_empty() {
-                    let val = self.stack.get(base + slot).cloned().unwrap_or(Value::Unit);
-                    env.borrow_mut().define(name.clone(), val, true);
-                }
-            }
-        }
-        env
     }
 
     /// Built-in method dispatch (Vec, String, HashMap, Option, Result, etc.).
@@ -1468,7 +1410,7 @@ impl Vm {
                 }
             }
             // --- stdlib modules ---
-            // db and server are feature-gated, handled via emit_eval fallback
+            // db and server are feature-gated
             ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
             ["env", func] => call_stdlib(crate::stdlib::env::call, func, args),
             ["process", func] => call_stdlib(crate::stdlib::process::call, func, args),
