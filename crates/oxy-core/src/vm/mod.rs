@@ -218,6 +218,8 @@ pub struct Chunk {
     pub impl_methods: std::collections::HashMap<String, Vec<crate::ast::FnDef>>,
     /// Compiled method entry points: (type_name, method_name) → instruction index.
     pub method_ips: std::collections::HashMap<(String, String), usize>,
+    /// Full program items (for interpreter fallback registration).
+    pub program_items: Vec<crate::ast::Item>,
 }
 
 /// The stack-based VM executor.
@@ -251,13 +253,18 @@ pub enum VmResult {
 
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
+        let mut interpreter = Interpreter::new();
+        // Register all program items so emit_eval works correctly
+        for item in &chunk.program_items {
+            let _ = interpreter.register_item(item);
+        }
         Self {
             chunk,
             stack: Vec::new(),
             ip: 0,
             call_stack: Vec::new(),
             output: None,
-            interpreter: Interpreter::new(),
+            interpreter,
         }
     }
 

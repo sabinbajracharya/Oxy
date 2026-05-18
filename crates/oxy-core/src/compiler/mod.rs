@@ -153,6 +153,7 @@ impl Compiler {
             enum_defs: self.enum_defs,
             impl_methods: self.impl_methods,
             method_ips: self.method_ips,
+            program_items: program.items.clone(),
         })
     }
 
