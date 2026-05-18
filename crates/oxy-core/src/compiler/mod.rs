@@ -820,6 +820,18 @@ impl Compiler {
             }
 
             Expr::Ident(name, span) => {
+                // Handle bare enum variant constructors without parens
+                match name.as_str() {
+                    "None" => {
+                        self.emit(OpCode::MakeEnumVariant {
+                            enum_name: "Option".to_string(),
+                            variant: "None".to_string(),
+                            arg_count: 0,
+                        });
+                        return Ok(());
+                    }
+                    _ => {}
+                }
                 // Check const values first (compile-time inlined)
                 if let Some(val) = self.const_values.get(name) {
                     match val {
