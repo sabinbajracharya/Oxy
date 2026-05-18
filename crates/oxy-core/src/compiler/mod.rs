@@ -891,61 +891,54 @@ impl Compiler {
             }
 
             Expr::Call {
-                callee, args, span, ..
+                callee, args, ..
             } => {
-                if let Expr::Ident(name, _) = callee.as_ref() {
-                    // Compile arguments first for direct calls
-                    for arg in args {
-                        self.compile_expr(arg)?;
-                    }
-
-                    // Check for built-in macros that we handle inline
+                // Determine if this is a direct function call (compile-time resolved)
+                let direct_target: Option<usize> = if let Expr::Ident(name, _) = callee.as_ref() {
                     if name == "println!" || name == "print!" {
-                        let is_println = name == "println!";
-                        if is_println {
+                        // Compile args first, then emit print
+                        for arg in args {
+                            self.compile_expr(arg)?;
+                        }
+                        if name == "println!" {
                             self.emit(OpCode::PrintLn);
                         } else {
                             self.emit(OpCode::Print);
                         }
                         return Ok(());
                     }
-
-                    // Try use alias first
                     let resolved = self
                         .use_aliases
                         .get(name)
                         .cloned()
                         .unwrap_or_else(|| name.clone());
-                    if let Some(&target) = self.functions.get(&resolved) {
-                        self.emit(OpCode::Call {
-                            target,
-                            arg_count: args.len(),
-                        });
-                        return Ok(());
-                    }
-                    if resolved != *name {
-                        if let Some(&target) = self.functions.get(name) {
-                            self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            return Ok(());
-                        }
-                    }
+                    self.functions
+                        .get(&resolved)
+                        .copied()
+                        .or_else(|| self.functions.get(name).copied())
+                } else {
+                    None
+                };
 
-                    // Function not found at compile time — fall back to interpreter
-                    self.emit_eval(expr);
-                    return Ok(());
+                if let Some(target) = direct_target {
+                    // Direct call: compile args first, emit Call
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    self.emit(OpCode::Call {
+                        target,
+                        arg_count: args.len(),
+                    });
+                } else {
+                    // Indirect: compile callee first, then args, emit CallClosure
+                    self.compile_expr(callee)?;
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    self.emit(OpCode::CallClosure {
+                        arg_count: args.len(),
+                    });
                 }
-
-                // Indirect call: compile callee first (needs to be below args on stack)
-                self.compile_expr(callee)?;
-                for arg in args {
-                    self.compile_expr(arg)?;
-                }
-                self.emit(OpCode::CallClosure {
-                    arg_count: args.len(),
-                });
                 Ok(())
             }
 
