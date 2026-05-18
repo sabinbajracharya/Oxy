@@ -2070,8 +2070,6 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["VecDeque", "new"]
             | ["ListNode", "new"]
             | ["TreeNode", "new"]
-            | ["Db", "memory"]
-            | ["Db", "open"]
             | ["char", "from_code"]
             | ["int", "parse"]
             | ["float", "parse"]

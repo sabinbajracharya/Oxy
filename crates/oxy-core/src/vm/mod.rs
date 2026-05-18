@@ -1703,47 +1703,6 @@ impl Vm {
                 let body = args.get(1).map(|v| v.to_string());
                 http_call("PUT", args, body)
             }
-            ["http", "request"] => {
-                let method = args.first().map(|v| v.to_string()).unwrap_or_default();
-                let url = args.get(1).map(|v| v.to_string()).unwrap_or_default();
-                Ok(make_http_request_builder(&method, &url))
-            }
-            // --- db ---
-            ["Db", "memory"] => {
-                #[cfg(feature = "db")]
-                {
-                    let span = crate::lexer::Span { start: 0, end: 0, line: 0, column: 0 };
-                    match crate::stdlib::db::open_in_memory(&span) {
-                        Ok(_conn) => Ok(Value::Struct {
-                            name: "Db".to_string(),
-                            fields: HashMap::new(),
-                        }),
-                        Err(e) => Err(format!("Db::memory: {}", e)),
-                    }
-                }
-                #[cfg(not(feature = "db"))]
-                {
-                    Err("db feature not enabled".into())
-                }
-            }
-            ["Db", "open"] => {
-                let path = args.first().map(|v| v.to_string()).unwrap_or_default();
-                #[cfg(feature = "db")]
-                {
-                    let span = crate::lexer::Span { start: 0, end: 0, line: 0, column: 0 };
-                    match crate::stdlib::db::open(&path, &span) {
-                        Ok(_conn) => Ok(Value::Struct {
-                            name: "Db".to_string(),
-                            fields: HashMap::new(),
-                        }),
-                        Err(e) => Err(format!("Db::open: {}", e)),
-                    }
-                }
-                #[cfg(not(feature = "db"))]
-                {
-                    Err("db feature not enabled".into())
-                }
-            }
             // --- stdlib modules ---
             ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
             ["env", func] => call_stdlib(crate::stdlib::env::call, func, args),
@@ -1833,17 +1792,6 @@ fn http_call(method: &str, args: &[Value], body: Option<String>) -> Result<Value
             }))
         }
         Err(e) => Ok(Value::err(Value::String(e))),
-    }
-}
-
-/// Create an HttpRequestBuilder struct for http::request(method, url).
-fn make_http_request_builder(method: &str, url: &str) -> Value {
-    let mut fields = HashMap::new();
-    fields.insert("method".to_string(), Value::String(method.to_string()));
-    fields.insert("url".to_string(), Value::String(url.to_string()));
-    Value::Struct {
-        name: "HttpRequestBuilder".to_string(),
-        fields,
     }
 }
 
