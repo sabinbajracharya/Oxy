@@ -16,12 +16,18 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
         "get" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
-            Ok(rc.borrow().get(&key).cloned().unwrap_or(Value::Unit))
+            match rc.borrow().get(&key).cloned() {
+                Some(val) => Ok(Value::some(val)),
+                None => Ok(Value::none()),
+            }
         }
         "get_or" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
             let default = args.get(1).cloned().unwrap_or(Value::Unit);
-            Ok(rc.borrow().get(&key).cloned().unwrap_or(default))
+            match rc.borrow().get(&key).cloned() {
+                Some(val) => Ok(val),
+                None => Ok(default),
+            }
         }
         "contains_key" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
@@ -30,13 +36,18 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         "insert" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
             let val = args.get(1).cloned().unwrap_or(Value::Unit);
-            rc.borrow_mut().insert(key, val);
-            Ok(Value::Unit)
+            let old = rc.borrow_mut().insert(key, val);
+            match old {
+                Some(v) => Ok(Value::some(v)),
+                None => Ok(Value::none()),
+            }
         }
         "remove" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
-            rc.borrow_mut().remove(&key);
-            Ok(Value::Unit)
+            match rc.borrow_mut().remove(&key) {
+                Some(val) => Ok(val),
+                None => Ok(Value::Unit),
+            }
         }
         "keys" => {
             let keys: Vec<Value> = rc.borrow().keys().cloned().collect();
