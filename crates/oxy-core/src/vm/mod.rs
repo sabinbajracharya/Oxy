@@ -1031,7 +1031,28 @@ impl Vm {
         args: Vec<Value>,
     ) -> Result<Value, String> {
         match &receiver {
-            Value::Vec(_) => builtins::vec::dispatch(receiver, method_name, &args),
+            Value::Vec(_) => {
+                // Try builtins first; fall back to iterator delegation for closure methods
+                match builtins::vec::dispatch(receiver, method_name, &args) {
+                    Ok(val) => Ok(val),
+                    Err(_) => {
+                        // Extract Vec data and delegate to iterator builtins
+                        if let Value::Vec(rc) = &receiver {
+                            let data = rc.borrow().clone();
+                            let iter = Value::Iterator(Box::new(
+                                crate::types::IteratorState::VecSource { data, index: 0 },
+                            ));
+                            builtins::iterator::dispatch(iter, method_name, &args, |func, fargs| {
+                                self.interpreter
+                                    .call_function(func, fargs, 0, 0)
+                                    .map_err(|e| format!("{e}"))
+                            })
+                        } else {
+                            Err(format!("no method '{}' on type Vec", method_name))
+                        }
+                    }
+                }
+            },
             Value::String(_) => builtins::string::dispatch(receiver, method_name, &args),
             Value::HashMap(_) => builtins::hashmap::dispatch(receiver, method_name, &args),
             Value::HashSet(_) => builtins::hashset::dispatch(receiver, method_name, &args),
