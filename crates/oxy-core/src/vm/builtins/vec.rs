@@ -207,10 +207,19 @@ where
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut v = rc.borrow_mut();
             let len = v.len();
+            if len <= 1 {
+                return Ok(Value::Unit);
+            }
             for i in 0..len {
                 for j in 0..len - i - 1 {
-                    let a_key = call_closure(closure.clone(), &[v[j].clone()])?;
-                    let b_key = call_closure(closure.clone(), &[v[j + 1].clone()])?;
+                    let a_key = match call_closure(closure.clone(), &[v[j].clone()]) {
+                        Ok(v) => v,
+                        Err(e) => return Err(format!("sort_by_key call_closure failed: {e}")),
+                    };
+                    let b_key = match call_closure(closure.clone(), &[v[j + 1].clone()]) {
+                        Ok(v) => v,
+                        Err(e) => return Err(format!("sort_by_key call_closure failed: {e}")),
+                    };
                     if a_key > b_key {
                         v.swap(j, j + 1);
                     }

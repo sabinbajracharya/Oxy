@@ -1487,6 +1487,18 @@ impl Vm {
                     let cap_slots: Vec<(String, usize)> = captured_vars.iter().map(|(n, s, _)| (n.clone(), *s)).collect();
                     self.stack.push(Value::Function(Box::new(crate::types::FunctionData { name: "<closure>".into(), params, return_type: None, body: body_block, closure_env, target_ip: Some(ct), captured_slots: cap_slots })));
                 }
+                OpCode::MethodCall {
+                    method_name,
+                    arg_count,
+                } => {
+                    let args_start = self.stack.len() - arg_count;
+                    let args: Vec<Value> = self.stack.drain(args_start..).collect();
+                    let receiver = self.stack.pop().unwrap_or(Value::Unit);
+                    match self.builtin_method(receiver, &method_name, args) {
+                        Ok(val) => self.stack.push(val),
+                        Err(e) => break Err(e),
+                    }
+                }
                 _ => {
                     if let Err(e) = self.execute_op(op) { break Err(e); }
                 }
@@ -1521,8 +1533,10 @@ impl Vm {
                     &args,
                     |func, fargs| self.run_closure(&func, fargs),
                 );
-                if result.is_ok() {
-                    return result;
+                match &result {
+                    Ok(_) => return result,
+                    Err(e) if e.starts_with("no method") => {} // fall through to iterator
+                    Err(_) => return result, // propagate real errors
                 }
                 // Fall back to iterator delegation for closure-based methods
                 let data = rc.borrow().clone();
