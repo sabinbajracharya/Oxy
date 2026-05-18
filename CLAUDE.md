@@ -4,6 +4,10 @@
 
 Interpreted programming language written in Rust. Replicates Rust syntax without borrow checker/ownership. File extension: `.ox`.
 
+### Success Criterion
+
+**Tests passing through the VM path with zero new `emit_eval` calls.** Making tests pass by routing through the interpreter fallback (`emit_eval`, `self.interpreter.call_method()`, etc.) is NOT success. Every feature must have native bytecode execution. The end goal is to delete the interpreter directory entirely — one execution path: compiler → VM.
+
 ## Build & Test (Docker — no local Rust)
 
 ```bash

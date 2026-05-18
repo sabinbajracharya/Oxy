@@ -950,7 +950,9 @@ impl Vm {
 
                 OpCode::ToString => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
-                    self.stack.push(Value::String(val.to_string()));
+                    if self.try_display_trait_dispatch(val) {
+                        continue;
+                    }
                 }
 
                 OpCode::FStringConcat { count } => {
@@ -1113,6 +1115,33 @@ impl Vm {
                 false
             }
         }
+    }
+
+    /// Try to call the Display::fmt method natively. Returns true if dispatch was set up.
+    fn try_display_trait_dispatch(&mut self, val: Value) -> bool {
+        let struct_name = match &val {
+            Value::Struct { name, .. } => name.clone(),
+            _ => {
+                self.stack.push(Value::String(val.to_string()));
+                return false;
+            }
+        };
+        if let Some(&target) = self.chunk.method_ips.get(&(struct_name, "fmt".to_string())) {
+            self.stack.push(val.clone());
+            if self.call_stack.len() < 1024 {
+                let base = self.stack.len() - 1;
+                self.call_stack.push(Frame {
+                    return_ip: self.ip + 1,
+                    base,
+                    max_slot: 1,
+                    fn_ip: target,
+                });
+                self.ip = target;
+                return true;
+            }
+        }
+        self.stack.push(Value::String(val.to_string()));
+        false
     }
 
     fn binary_op(&mut self, f: fn(Value, Value) -> Result<Value, String>) {
