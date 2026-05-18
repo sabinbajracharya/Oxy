@@ -1130,6 +1130,11 @@ impl Vm {
                         .map_err(|e| format!("{e}"))
                 })
             }
+            Value::Tuple(_) => match method_name {
+                "clone" => Ok(receiver.clone()),
+                "to_string" => Ok(Value::String(receiver.to_string())),
+                _ => Err(format!("no method '{}' on type tuple", method_name)),
+            },
             _ => Err(format!(
                 "no method '{}' on type {}",
                 method_name,
