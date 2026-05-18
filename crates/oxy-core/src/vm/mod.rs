@@ -208,8 +208,10 @@ pub struct Chunk {
     pub ast_nodes: Vec<crate::ast::Expr>,
     /// Closure metadata: (param_names, body_expr, captured_vars_with_slots).
     pub closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize)>)>,
-    /// Local variable names: slot_index → name (for Eval env reconstruction).
+    /// Local variable names: slot_index → name (for Eval env reconstruction of main).
     pub local_names: Vec<String>,
+    /// Per-function local variable names: function entry IP → slot_names.
+    pub fn_local_names: std::collections::HashMap<usize, Vec<String>>,
     /// Registered struct definitions (for StructInit and method dispatch).
     pub struct_defs: std::collections::HashMap<String, crate::ast::StructDef>,
     /// Registered enum definitions (for Path enum variant lookup).
@@ -243,6 +245,8 @@ struct Frame {
     base: usize,
     /// Maximum slot index accessed + 1 (protects locals from Pop).
     max_slot: usize,
+    /// Function entry IP (for looking up local variable names).
+    fn_ip: usize,
 }
 
 /// Result of VM execution.
@@ -294,6 +298,7 @@ impl Vm {
             return_ip: 0,
             base: 0,
             max_slot: 0,
+            fn_ip: self.chunk.entry_point,
         });
 
         loop {
@@ -416,7 +421,8 @@ impl Vm {
                     self.call_stack.push(Frame {
                         return_ip: self.ip + 1,
                         base: args_start,
-                        max_slot: arg_count, // args occupy slots 0..arg_count-1
+                        max_slot: arg_count,
+                        fn_ip: target,
                     });
                     self.ip = target;
                     continue;
@@ -731,6 +737,7 @@ impl Vm {
                                 return_ip: self.ip + 1,
                                 base: args_start,
                                 max_slot: arg_count,
+                                fn_ip: target,
                             });
                             self.ip = target;
                             continue;
@@ -910,6 +917,7 @@ impl Vm {
                                 return_ip: self.ip + 1,
                                 base: self.stack.len() - arg_count - 1,
                                 max_slot: arg_count + 1,
+                                fn_ip: target,
                             });
                             self.ip = target;
                             continue;
@@ -1079,8 +1087,15 @@ impl Vm {
         let env = crate::env::Environment::child(&self.interpreter.env);
         let base = self.frame_base();
         let max_slot = self.call_stack.last().map(|f| f.max_slot).unwrap_or(0);
+        // Look up per-function local names using the current frame's fn_ip
+        let fn_ip = self.call_stack.last().map(|f| f.fn_ip).unwrap_or(0);
+        let names = self
+            .chunk
+            .fn_local_names
+            .get(&fn_ip)
+            .unwrap_or(&self.chunk.local_names);
         for slot in 0..max_slot {
-            if let Some(name) = self.chunk.local_names.get(slot) {
+            if let Some(name) = names.get(slot) {
                 if !name.is_empty() {
                     let val = self.stack.get(base + slot).cloned().unwrap_or(Value::Unit);
                     env.borrow_mut().define(name.clone(), val, true);

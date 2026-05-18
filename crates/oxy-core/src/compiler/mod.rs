@@ -93,6 +93,8 @@ pub struct Compiler {
     const_values: HashMap<String, crate::types::Value>,
     /// Function metadata for named function references: name → (params, body, return_type).
     fn_meta: HashMap<String, (Vec<crate::ast::Param>, Box<crate::ast::Expr>, Option<crate::ast::TypeAnnotation>)>,
+    /// Per-function local variable names: function entry IP → slot_names.
+    fn_local_names: HashMap<usize, Vec<String>>,
 }
 
 impl Compiler {
@@ -129,6 +131,7 @@ impl Default for Compiler {
             use_aliases: HashMap::new(),
             const_values: HashMap::new(),
             fn_meta: HashMap::new(),
+            fn_local_names: HashMap::new(),
         }
     }
 }
@@ -152,6 +155,7 @@ impl Compiler {
             ast_nodes: self.ast_nodes,
             closure_meta: self.closure_meta,
             local_names: self.main_local_names,
+            fn_local_names: self.fn_local_names,
             struct_defs: self.struct_defs,
             enum_defs: self.enum_defs,
             impl_methods: self.impl_methods,
@@ -267,6 +271,7 @@ impl Compiler {
         if f.name == "main" {
             self.main_local_names = self.sym.build_slot_names();
         }
+        self.fn_local_names.insert(ip, self.sym.build_slot_names());
 
         self.sym = saved_sym;
         Ok(())
@@ -324,6 +329,7 @@ impl Compiler {
                     }
                     self.compile_block(&f.body)?;
                     self.emit(OpCode::Return);
+                    self.fn_local_names.insert(ip, self.sym.build_slot_names());
                     self.sym = saved_sym;
                 }
                 Item::Struct(s) => {
@@ -352,6 +358,7 @@ impl Compiler {
                         }
                         self.compile_block(&method.body)?;
                         self.emit(OpCode::Return);
+                        self.fn_local_names.insert(ip, self.sym.build_slot_names());
                         self.sym = saved_sym;
                     }
                 }
