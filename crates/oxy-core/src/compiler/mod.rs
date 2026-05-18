@@ -1161,10 +1161,22 @@ impl Compiler {
                         self.emit(OpCode::StoreLocal(slot));
                     }
                     Ok(())
-                } else if let Expr::FieldAccess { .. } | Expr::Index { .. } =
-                    target.as_ref()
-                {
-                    // Field/index assignment — use interpreter
+                } else if let Expr::FieldAccess { object, field, .. } = target.as_ref() {
+                    // Field assignment: compile object, push value, emit FieldStore,
+                    // then store back to the original variable if it's a local.
+                    self.compile_expr(object)?;
+                    self.compile_expr(value)?;
+                    self.emit(OpCode::FieldStore(field.clone()));
+                    // If the object is a local variable, store the updated struct back
+                    if let Expr::Ident(name, _) = object.as_ref() {
+                        if let Some(slot) = self.sym.get(name) {
+                            self.emit(OpCode::Dup);
+                            self.emit(OpCode::StoreLocal(slot));
+                        }
+                    }
+                    Ok(())
+                } else if let Expr::Index { .. } = target.as_ref() {
+                    // Index assignment — use interpreter
                     self.emit_eval(expr);
                     Ok(())
                 } else {
