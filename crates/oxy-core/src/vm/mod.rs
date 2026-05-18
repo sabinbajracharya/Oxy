@@ -770,10 +770,12 @@ impl Vm {
                     let result = match target {
                         0 => match val {
                             Value::Integer(n) => Value::Float(n as f64),
+                            Value::Char(c) => Value::Float(c as u32 as f64),
                             v => v,
                         },
                         1 => match val {
                             Value::Float(n) => Value::Integer(n as i64),
+                            Value::Char(c) => Value::Integer(c as u32 as i64),
                             v => v,
                         },
                         2 => match val {

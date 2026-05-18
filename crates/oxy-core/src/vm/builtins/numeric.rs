@@ -32,9 +32,9 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let exp = to_f64(args.first().unwrap_or(&Value::Unit));
             Ok(float_to_value(base.powf(exp)))
         }
-        "sin" => Ok(Value::Float(to_f64(&receiver).sin())),
-        "cos" => Ok(Value::Float(to_f64(&receiver).cos())),
-        "tan" => Ok(Value::Float(to_f64(&receiver).tan())),
+        "sin" => Ok(float_to_value(to_f64(&receiver).sin())),
+        "cos" => Ok(float_to_value(to_f64(&receiver).cos())),
+        "tan" => Ok(float_to_value(to_f64(&receiver).tan())),
         "min" => {
             let a = to_f64(&receiver);
             let b = to_f64(args.first().unwrap_or(&Value::Unit));

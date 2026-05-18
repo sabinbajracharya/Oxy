@@ -91,12 +91,20 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 Err(format!("substring: invalid range {}..{}", start, end))
             }
         }
-        "parse_int" => match s.trim().parse::<i64>() {
-            Ok(n) => Ok(Value::ok(Value::Integer(n))),
-            Err(_) => Ok(Value::err(Value::String(format!(
-                "cannot parse \"{s}\" as integer"
-            )))),
-        },
+        "parse_int" => {
+            let trimmed = s.trim();
+            let result = if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
+                i64::from_str_radix(&trimmed[2..], 16).map_err(|_| ())
+            } else {
+                trimmed.parse::<i64>().map_err(|_| ())
+            };
+            match result {
+                Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                Err(_) => Ok(Value::err(Value::String(format!(
+                    "cannot parse \"{s}\" as integer"
+                )))),
+            }
+        }
         "parse_float" => match s.trim().parse::<f64>() {
             Ok(n) => Ok(Value::ok(Value::Float(n))),
             Err(_) => Ok(Value::err(Value::String(format!(

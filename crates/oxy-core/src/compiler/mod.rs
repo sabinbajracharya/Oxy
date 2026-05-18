@@ -1422,6 +1422,13 @@ impl Compiler {
                 arms,
                 ..
             } => {
+                // If any arm uses a range pattern, fall back to interpreter
+                let has_range = arms.iter().any(|arm| matches!(arm.pattern, Pattern::Range { .. }));
+                if has_range {
+                    self.emit_eval(expr);
+                    return Ok(());
+                }
+
                 // Evaluate scrutinee once, store in temp slot
                 self.compile_expr(scrutinee)?;
                 let scrutinee_slot = self.sym.define("__match_scrutinee");
@@ -1435,6 +1442,9 @@ impl Compiler {
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last = i == arms.len() - 1;
 
+                    // Pop leftover scrutinee from a previous failed arm
+                    // (harmlessly pops Unit if stack is empty on first arm)
+                    self.emit(OpCode::Pop);
                     // Push scrutinee for this arm
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
 
@@ -1588,9 +1598,7 @@ impl Compiler {
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "dbg" {
-                    // Print the value with debug formatting, then push it
-                    self.emit(OpCode::Dup);
-                    self.emit(OpCode::PrintLn);
+                    self.emit_eval(expr);
                 } else {
                     self.emit_eval(expr);
                 }
@@ -1603,14 +1611,10 @@ impl Compiler {
             } => {
                 self.compile_expr(inner)?;
                 let target = match type_name.as_str() {
-                    "f64" | "f32" | "Float" => 0,   // int → float
-                    "i64" | "i32" | "Integer" => 1,  // float → int
-                    "char" => 2,                      // int → char
-                    _ => {
-                        // int→int casts are no-ops (all integers are i64)
-                        // Other casts: just pass through
-                        return Ok(());
-                    }
+                    "f64" | "f32" | "Float" => 0,   // → float
+                    "i64" | "i32" | "Integer" => 1,  // → int
+                    "char" => 2,                      // → char
+                    _ => return Ok(()),
                 };
                 self.emit(OpCode::Cast(target));
                 Ok(())
