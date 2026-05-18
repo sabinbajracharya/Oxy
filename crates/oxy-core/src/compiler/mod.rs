@@ -285,6 +285,14 @@ impl Compiler {
         self.captured_mutable = find_captured_mutable(&f.body, &param_names);
 
         self.compile_block(&f.body)?;
+        // For methods with self parameter and no explicit tail expression,
+        // implicitly return self so mutations propagate to caller.
+        let has_tail_expr = f.body.stmts.last().map_or(false, |s| {
+            matches!(s, crate::ast::Stmt::Expr { has_semicolon: false, .. })
+        });
+        if !has_tail_expr && f.params.first().map(|p| p.name.as_str()) == Some("self") {
+            self.emit(OpCode::LoadLocal(0));
+        }
         self.emit(OpCode::Return);
 
         if f.name == "main" {
