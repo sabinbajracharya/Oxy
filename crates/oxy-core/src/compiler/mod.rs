@@ -1167,12 +1167,20 @@ impl Compiler {
                     self.compile_expr(object)?;
                     self.compile_expr(value)?;
                     self.emit(OpCode::FieldStore(field.clone()));
-                    // If the object is a local variable, store the updated struct back
-                    if let Expr::Ident(name, _) = object.as_ref() {
-                        if let Some(slot) = self.sym.get(name) {
-                            self.emit(OpCode::Dup);
-                            self.emit(OpCode::StoreLocal(slot));
+                    // If the object is a local/SelfRef, store the updated struct back
+                    match object.as_ref() {
+                        Expr::Ident(name, _) => {
+                            if let Some(slot) = self.sym.get(name) {
+                                self.emit(OpCode::Dup);
+                                self.emit(OpCode::StoreLocal(slot));
+                            }
                         }
+                        Expr::SelfRef(_) => {
+                            // self is always at slot 0 in methods
+                            self.emit(OpCode::Dup);
+                            self.emit(OpCode::StoreLocal(0));
+                        }
+                        _ => {}
                     }
                     Ok(())
                 } else if let Expr::Index { .. } = target.as_ref() {
