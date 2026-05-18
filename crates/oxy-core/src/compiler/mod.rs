@@ -4,7 +4,7 @@
 //! slot indices and emits [`OpCode`]s into a [`Chunk`]. Forward jumps
 //! (for `if`, `while`, `loop`) are backpatched after the target is known.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::errors::FerriError;
@@ -15,6 +15,8 @@ use crate::vm::{Chunk, OpCode};
 struct SymTable {
     /// Variable name → stack slot index.
     locals: HashMap<String, usize>,
+    /// Mutable variables (declared with `let mut`).
+    mutable: HashSet<String>,
     /// Next available slot index.
     next_slot: usize,
 }
@@ -23,6 +25,7 @@ impl SymTable {
     fn new(start_slot: usize) -> Self {
         Self {
             locals: HashMap::new(),
+            mutable: HashSet::new(),
             next_slot: start_slot,
         }
     }
@@ -32,6 +35,15 @@ impl SymTable {
         self.locals.insert(name.to_string(), slot);
         self.next_slot += 1;
         slot
+    }
+
+    fn define_mut(&mut self, name: &str) -> usize {
+        self.mutable.insert(name.to_string());
+        self.define(name)
+    }
+
+    fn is_mutable(&self, name: &str) -> bool {
+        self.mutable.contains(name)
     }
 
     fn get(&self, name: &str) -> Option<usize> {
@@ -73,8 +85,8 @@ pub struct Compiler {
     loop_stack: Vec<LoopContext>,
     /// AST expressions stored for Eval opcode fallback.
     ast_nodes: Vec<crate::ast::Expr>,
-    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots).
-    closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize)>)>,
+    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots_and_mutability).
+    closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
     /// Snapshot of main's local variable names (for Eval env reconstruction).
     main_local_names: Vec<String>,
     /// Registered struct definitions.
@@ -622,7 +634,7 @@ impl Compiler {
         match stmt {
             Stmt::Let {
                 name,
-                mutable: _,
+                mutable,
                 value,
                 ..
             } => {
@@ -631,7 +643,11 @@ impl Compiler {
                 } else {
                     self.emit(OpCode::ConstUnit);
                 }
-                let slot = self.sym.define(name);
+                let slot = if *mutable {
+                    self.sym.define_mut(name)
+                } else {
+                    self.sym.define(name)
+                };
                 self.emit(OpCode::StoreLocal(slot));
                 Ok(())
             }
@@ -1511,10 +1527,12 @@ impl Compiler {
                 let param_names: Vec<String> =
                     params.iter().map(|p| p.name.clone()).collect();
                 let captured_names = find_free_vars(body, &param_names);
-                let captured: Vec<(String, usize)> = captured_names
+                let captured: Vec<(String, usize, bool)> = captured_names
                     .iter()
                     .filter_map(|name| {
-                        saved_sym.get(name).map(|slot| (name.clone(), slot))
+                        saved_sym.get(name).map(|slot| {
+                            (name.clone(), slot, saved_sym.is_mutable(name))
+                        })
                     })
                     .collect();
                 self.sym = saved_sym;
@@ -1833,6 +1851,14 @@ fn collect_free_vars(
             for arg in args {
                 collect_free_vars(arg, params, vars);
             }
+        }
+        crate::ast::Expr::Assign { target, value, .. } => {
+            collect_free_vars(target, params, vars);
+            collect_free_vars(value, params, vars);
+        }
+        crate::ast::Expr::CompoundAssign { target, value, .. } => {
+            collect_free_vars(target, params, vars);
+            collect_free_vars(value, params, vars);
         }
         crate::ast::Expr::MacroCall { args, .. } => {
             for arg in args {

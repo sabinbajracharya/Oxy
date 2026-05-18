@@ -209,8 +209,8 @@ pub struct Chunk {
     pub functions: std::collections::HashMap<String, usize>,
     /// AST expression nodes for interpreter fallback (indexed by Eval opcode arg).
     pub ast_nodes: Vec<crate::ast::Expr>,
-    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots).
-    pub closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize)>)>,
+    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots_and_mutable).
+    pub closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
     /// Local variable names: slot_index → name (for Eval env reconstruction of main).
     pub local_names: Vec<String>,
     /// Per-function local variable names: function entry IP → slot_names.
@@ -705,10 +705,10 @@ impl Vm {
                     let mut closure_env = crate::env::Environment::new();
                     if !captured_vars.is_empty() {
                         let base = self.frame_base();
-                        for (name, slot) in &captured_vars {
+                        for (name, slot, is_mut) in &captured_vars {
                             let idx = base + slot;
                             let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
-                            closure_env.borrow_mut().define(name.clone(), val, false);
+                            closure_env.borrow_mut().define(name.clone(), val, *is_mut);
                         }
                     }
                     self.stack
