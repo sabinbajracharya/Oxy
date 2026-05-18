@@ -1227,6 +1227,11 @@ impl Compiler {
             }
 
             Expr::Index { object, index, .. } => {
+                // Range-based indexing (e.g., s[0..3]) falls back to interpreter
+                if matches!(index.as_ref(), Expr::Range { .. }) {
+                    self.emit_eval(expr);
+                    return Ok(());
+                }
                 self.compile_expr(object)?;
                 self.compile_expr(index)?;
                 self.emit(OpCode::VecIndex);

@@ -491,7 +491,31 @@ impl Vm {
 
                 OpCode::VecIndex => {
                     let key = self.stack.pop().unwrap_or(Value::Unit);
-                    match self.stack.pop().unwrap_or(Value::Unit) {
+                    let collection = self.stack.pop().unwrap_or(Value::Unit);
+                    // Handle Range-based slicing
+                    if let Value::Range(start, end) = &key {
+                        match collection {
+                            Value::String(s) => {
+                                let len = s.chars().count() as i64;
+                                let s_idx = if *start < 0 { (len + start).max(0) } else { *start }.min(len) as usize;
+                                let e_idx = if *end < 0 { (len + end).max(0) } else { *end }.min(len) as usize;
+                                let slice: String = s.chars().skip(s_idx).take(e_idx.saturating_sub(s_idx)).collect();
+                                self.stack.push(Value::String(slice));
+                                continue;
+                            }
+                            Value::Vec(rc) => {
+                                let vec = rc.borrow();
+                                let len = vec.len() as i64;
+                                let s_idx = if *start < 0 { (len + start).max(0) } else { *start }.min(len) as usize;
+                                let e_idx = if *end < 0 { (len + end).max(0) } else { *end }.min(len) as usize;
+                                let slice: Vec<Value> = vec[s_idx..e_idx].to_vec();
+                                self.stack.push(Value::Vec(Rc::new(RefCell::new(slice))));
+                                continue;
+                            }
+                            _ => return VmResult::Error(format!("cannot slice {}", collection.type_name())),
+                        }
+                    }
+                    match collection {
                         Value::HashMap(rc) => {
                             match rc.borrow().get(&key).cloned() {
                                 Some(val) => self.stack.push(val),
