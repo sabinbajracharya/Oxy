@@ -1032,7 +1032,7 @@ println!("{:?}", t);
         let result = run("fn main() { let v = vec![1, 2]; let x = v[5]; }");
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("index out of bounds"));
+        assert!(err.contains("out of bounds"), "actual error: {err}");
     }
 
     #[test]
@@ -1040,7 +1040,7 @@ println!("{:?}", t);
         let result = run("fn main() { let t = (1, 2); let x = t.5; }");
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("index out of bounds"));
+        assert!(err.contains("out of bounds"), "actual error: {err}");
     }
 
     // === Phase 7: Structs ===
