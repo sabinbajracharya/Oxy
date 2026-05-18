@@ -811,7 +811,7 @@ impl Compiler {
                 Ok(())
             }
             Expr::CharLiteral(c, _) => {
-                self.emit(OpCode::ConstString(c.to_string()));
+                self.emit(OpCode::ConstChar(*c));
                 Ok(())
             }
 

@@ -19,6 +19,7 @@ pub enum OpCode {
     ConstFloat(f64),
     ConstBool(bool),
     ConstString(String),
+    ConstChar(char),
     ConstUnit,
 
     // --- Variables ---
@@ -292,6 +293,7 @@ impl Vm {
                 OpCode::ConstFloat(n) => self.stack.push(Value::Float(n)),
                 OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
                 OpCode::ConstString(s) => self.stack.push(Value::String(s.clone())),
+                OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
                 OpCode::ConstUnit => self.stack.push(Value::Unit),
 
                 OpCode::LoadLocal(slot) => {
@@ -1141,81 +1143,8 @@ impl Vm {
             _ => 0.0,
         };
         match segs.as_slice() {
-            ["math", "sqrt"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).sqrt(),
-            )),
-            ["math", "abs"] => match args.first().unwrap_or(&Value::Unit) {
-                Value::Integer(n) => Ok(Value::Integer(n.abs())),
-                Value::Float(x) => Ok(Value::Float(x.abs())),
-                _ => Ok(Value::Integer(0)),
-            },
-            ["math", "sin"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).sin(),
-            )),
-            ["math", "cos"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).cos(),
-            )),
-            ["math", "pow"] => {
-                let base = to_f64(args.first().unwrap_or(&Value::Unit));
-                let exp = to_f64(args.get(1).unwrap_or(&Value::Unit));
-                Ok(Value::Float(base.powf(exp)))
-            }
-            ["math", "floor"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).floor(),
-            )),
-            ["math", "ceil"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).ceil(),
-            )),
-            ["math", "round"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).round(),
-            )),
-            ["math", "min"] => {
-                let a = to_f64(args.first().unwrap_or(&Value::Unit));
-                let b = to_f64(args.get(1).unwrap_or(&Value::Unit));
-                Ok(Value::Float(a.min(b)))
-            }
-            ["math", "max"] => {
-                let a = to_f64(args.first().unwrap_or(&Value::Unit));
-                let b = to_f64(args.get(1).unwrap_or(&Value::Unit));
-                Ok(Value::Float(a.max(b)))
-            }
-            ["math", "log"] => Ok(Value::Float(
-                to_f64(args.first().unwrap_or(&Value::Unit)).ln(),
-            )),
-            ["math", "gcd"] => {
-                let a = args
-                    .first()
-                    .and_then(|v| match v {
-                        Value::Integer(n) => Some(*n),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                let b = args
-                    .get(1)
-                    .and_then(|v| match v {
-                        Value::Integer(n) => Some(*n),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                Ok(Value::Integer(gcd(a, b)))
-            }
-            ["math", "lcm"] => {
-                let a = args
-                    .first()
-                    .and_then(|v| match v {
-                        Value::Integer(n) => Some(*n),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                let b = args
-                    .get(1)
-                    .and_then(|v| match v {
-                        Value::Integer(n) => Some(*n),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                Ok(Value::Integer(lcm(a, b)))
-            }
+            // math routes through the stdlib module for float_to_value consistency
+            ["math", func] => call_stdlib(crate::stdlib::math::call, func, args),
             ["json", "parse"] => {
                 let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
                 crate::json::deserialize(&s).map_err(|e| format!("json::parse: {}", e))
