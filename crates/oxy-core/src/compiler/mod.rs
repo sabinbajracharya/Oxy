@@ -302,6 +302,9 @@ impl Compiler {
         // Register as a plain function and as a method if applicable
         self.functions.insert(f.name.clone(), ip);
         if let Some(tn) = type_name {
+            // Also register qualified name so PathCall can resolve Type::method
+            let qualified = format!("{}::{}", tn, f.name);
+            self.functions.insert(qualified, ip);
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
         }
         // Store metadata for function-reference-as-value support
@@ -309,10 +312,11 @@ impl Compiler {
             crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
             _ => None,
         }).unwrap_or(crate::ast::Expr::IntLiteral(0, f.body.span));
-        self.fn_meta.insert(
-            f.name.clone(),
-            (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
-        );
+        let meta = (f.params.clone(), Box::new(body_expr), f.return_type.clone());
+        self.fn_meta.insert(f.name.clone(), meta.clone());
+        if let Some(tn) = type_name {
+            self.fn_meta.insert(format!("{}::{}", tn, f.name), meta);
+        }
 
         let saved_sym = self.sym.clone();
         for param in &f.params {
