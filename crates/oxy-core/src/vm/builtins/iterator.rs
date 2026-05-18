@@ -109,6 +109,15 @@ pub fn dispatch(
             source: iter,
             index: 0,
         }))),
+        "rev" => {
+            // Eager: collect all elements, reverse, return VecSource
+            let mut v = Vec::new();
+            while let Some(val) = drive_next(&mut iter) {
+                v.push(val);
+            }
+            v.reverse();
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(v))))
+        }
         "flat_map" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut result = Vec::new();
