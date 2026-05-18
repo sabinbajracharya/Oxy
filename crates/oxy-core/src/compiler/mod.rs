@@ -118,6 +118,8 @@ pub struct Compiler {
     /// If true, compilation fails when no `main` function exists.
     /// Set to false for test runners and library code.
     require_main: bool,
+    /// Current impl type name (for resolving `Self` in method bodies).
+    current_impl_type: Option<String>,
 }
 
 impl Compiler {
@@ -167,6 +169,7 @@ impl Default for Compiler {
             fn_local_names: HashMap::new(),
             captured_mutable: HashSet::new(),
             require_main: true,
+            current_impl_type: None,
         }
     }
 }
@@ -299,6 +302,11 @@ impl Compiler {
     /// Compile a function or method body.
     fn compile_fn_item(&mut self, f: &FnDef, type_name: Option<&str>) -> Result<(), FerriError> {
         let ip = self.code.len();
+        // Track current impl type so `Self` can be resolved inside method bodies
+        let saved_impl_type = self.current_impl_type.clone();
+        if let Some(tn) = type_name {
+            self.current_impl_type = Some(tn.to_string());
+        }
         // Register as a plain function and as a method if applicable
         self.functions.insert(f.name.clone(), ip);
         if let Some(tn) = type_name {
@@ -344,6 +352,7 @@ impl Compiler {
         self.fn_local_names.insert(ip, self.sym.build_slot_names());
 
         self.sym = saved_sym;
+        self.current_impl_type = saved_impl_type;
         Ok(())
     }
 
@@ -1506,12 +1515,18 @@ impl Compiler {
             }
 
             Expr::StructInit { name, fields, .. } => {
+                // Resolve `Self` to the current impl type name
+                let resolved_name = if name == "Self" {
+                    self.current_impl_type.clone().unwrap_or_else(|| name.clone())
+                } else {
+                    name.clone()
+                };
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
                 for (_, expr) in fields {
                     self.compile_expr(expr)?;
                 }
                 self.emit(OpCode::StructInit {
-                    name: name.clone(),
+                    name: resolved_name,
                     field_count: fields.len(),
                     field_names,
                 });
