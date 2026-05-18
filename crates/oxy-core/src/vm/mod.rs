@@ -863,12 +863,15 @@ impl Vm {
 
                 OpCode::Format { arg_count } => {
                     let start = self.stack.len().saturating_sub(arg_count);
-                    let args: Vec<String> =
-                        self.stack.drain(start..).map(|v| v.to_string()).collect();
-                    let mut result = args.first().cloned().unwrap_or_default();
-                    for arg in &args[1..] {
-                        if let Some(pos) = result.find("{}") {
-                            result.replace_range(pos..pos + 2, arg);
+                    let args: Vec<Value> = self.stack.drain(start..).collect();
+                    let fmt_str = args.first().map(|v| v.to_string()).unwrap_or_default();
+                    let mut result = fmt_str.clone();
+                    for val in &args[1..] {
+                        let s = val.to_string();
+                        if let Some(pos) = result.find("{:?}") {
+                            result.replace_range(pos..pos + 4, &s);
+                        } else if let Some(pos) = result.find("{}") {
+                            result.replace_range(pos..pos + 2, &s);
                         }
                     }
                     self.stack.push(Value::String(result));
