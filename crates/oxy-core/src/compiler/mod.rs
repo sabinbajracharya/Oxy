@@ -1513,7 +1513,6 @@ impl Compiler {
                     let is_last = i == arms.len() - 1;
 
                     // Pop leftover scrutinee from a previous failed arm
-                    // (harmlessly pops Unit if stack is empty on first arm)
                     self.emit(OpCode::Pop);
                     // Push scrutinee for this arm
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
