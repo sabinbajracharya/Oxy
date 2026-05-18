@@ -1461,11 +1461,12 @@ impl Vm {
     ) -> Result<Value, String> {
         match &receiver {
             Value::Vec(rc) => {
-                // Try builtins first
+                // Try builtins first (with closure callback)
                 let result = builtins::vec::dispatch(
                     Value::Vec(rc.clone()),
                     method_name,
                     &args,
+                    |func, fargs| self.run_closure(&func, fargs),
                 );
                 if result.is_ok() {
                     return result;

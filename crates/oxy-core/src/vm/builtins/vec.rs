@@ -7,7 +7,15 @@ use crate::types::Value;
 
 /// Dispatch a method call on a Vec value.
 /// Returns Ok(value) or Err(message) if the method is unknown.
-pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
+pub fn dispatch<F>(
+    receiver: Value,
+    method: &str,
+    args: &[Value],
+    mut call_closure: F,
+) -> Result<Value, String>
+where
+    F: FnMut(Value, &[Value]) -> Result<Value, String>,
+{
     let Value::Vec(rc) = &receiver else {
         unreachable!()
     };
@@ -158,8 +166,73 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 .collect();
             Ok(Value::Vec(Rc::new(RefCell::new(windows))))
         }
-        "sort_by" | "sort_by_key" => {
-            Err(format!("{}: closure methods not supported in VM yet", method))
+        "min" => {
+            let v = rc.borrow();
+            if v.is_empty() {
+                Ok(Value::none())
+            } else {
+                let min = v.iter().min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                Ok(Value::some(min.cloned().unwrap_or(Value::Unit)))
+            }
+        }
+        "max" => {
+            let v = rc.borrow();
+            if v.is_empty() {
+                Ok(Value::none())
+            } else {
+                let max = v.iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                Ok(Value::some(max.cloned().unwrap_or(Value::Unit)))
+            }
+        }
+        "sort_by" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut v = rc.borrow_mut();
+            let len = v.len();
+            // Simple bubble sort using the closure
+            for i in 0..len {
+                for j in 0..len - i - 1 {
+                    let a = v[j].clone();
+                    let b = v[j + 1].clone();
+                    match call_closure(closure.clone(), &[a, b]) {
+                        Ok(Value::Integer(n)) if n > 0 => {
+                            v.swap(j, j + 1);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Ok(Value::Unit)
+        }
+        "sort_by" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut v = rc.borrow_mut();
+            let len = v.len();
+            for i in 0..len {
+                for j in 0..len - i - 1 {
+                    let cmp = call_closure(closure.clone(), &[v[j].clone(), v[j + 1].clone()])?;
+                    if let Value::Integer(n) = cmp {
+                        if n > 0 {
+                            v.swap(j, j + 1);
+                        }
+                    }
+                }
+            }
+            Ok(Value::Unit)
+        }
+        "sort_by_key" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut v = rc.borrow_mut();
+            let len = v.len();
+            for i in 0..len {
+                for j in 0..len - i - 1 {
+                    let a_key = call_closure(closure.clone(), &[v[j].clone()])?;
+                    let b_key = call_closure(closure.clone(), &[v[j + 1].clone()])?;
+                    if a_key > b_key {
+                        v.swap(j, j + 1);
+                    }
+                }
+            }
+            Ok(Value::Unit)
         }
         _ => Err(format!("no method '{}' on type Vec", method)),
     }
