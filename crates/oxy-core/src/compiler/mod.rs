@@ -884,17 +884,15 @@ impl Compiler {
             Expr::Call {
                 callee, args, span, ..
             } => {
-                // Compile arguments (left to right, so first arg is deepest on stack)
-                for arg in args {
-                    self.compile_expr(arg)?;
-                }
-
                 if let Expr::Ident(name, _) = callee.as_ref() {
+                    // Compile arguments first for direct calls
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+
                     // Check for built-in macros that we handle inline
                     if name == "println!" || name == "print!" {
                         let is_println = name == "println!";
-                        // For now, just print the first formatted arg
-                        // (full format string support would need interpreter interop)
                         if is_println {
                             self.emit(OpCode::PrintLn);
                         } else {
@@ -916,7 +914,6 @@ impl Compiler {
                         });
                         return Ok(());
                     }
-                    // Also try original name
                     if resolved != *name {
                         if let Some(&target) = self.functions.get(name) {
                             self.emit(OpCode::Call {
@@ -926,13 +923,21 @@ impl Compiler {
                             return Ok(());
                         }
                     }
+
+                    // Function not found at compile time — fall back to interpreter
+                    self.emit_eval(expr);
+                    return Ok(());
                 }
 
-                Err(FerriError::Runtime {
-                    message: "compiled: only direct function calls supported".into(),
-                    line: span.line,
-                    column: span.column,
-                })
+                // Indirect call: compile callee first (needs to be below args on stack)
+                self.compile_expr(callee)?;
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                self.emit(OpCode::CallClosure {
+                    arg_count: args.len(),
+                });
+                Ok(())
             }
 
             Expr::If {
