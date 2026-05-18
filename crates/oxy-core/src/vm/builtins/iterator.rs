@@ -19,20 +19,29 @@ pub fn dispatch(
     };
 
     match method {
-        // --- Adapters (return new Iterator — no closures called) ---
+        // --- Adapters ---
+        // Map and Filter are eager (not lazy) to avoid closure-in-drive_next issue
         "map" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
-            Ok(Value::Iterator(Box::new(IteratorState::Map {
-                source: iter,
-                closure,
-            })))
+            let mut result = Vec::new();
+            while let Some(val) = drive_next(&mut iter) {
+                result.push(call_fn(&closure, &[val])?);
+            }
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                result,
+            ))))
         }
         "filter" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
-            Ok(Value::Iterator(Box::new(IteratorState::Filter {
-                source: iter,
-                closure,
-            })))
+            let mut result = Vec::new();
+            while let Some(val) = drive_next(&mut iter) {
+                if call_fn(&closure, &[val.clone()])?.is_truthy() {
+                    result.push(val);
+                }
+            }
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                result,
+            ))))
         }
         "take" => {
             let n = args
@@ -102,16 +111,40 @@ pub fn dispatch(
         }))),
         "flat_map" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
-            Ok(Value::Iterator(Box::new(IteratorState::FlatMap {
-                source: iter,
-                closure,
-                current: None,
-            })))
+            let mut result = Vec::new();
+            while let Some(val) = drive_next(&mut iter) {
+                let mapped = call_fn(&closure, &[val])?;
+                match mapped {
+                    Value::Vec(rc) => result.extend(rc.borrow().clone()),
+                    Value::Iterator(mut inner) => {
+                        while let Some(v) = drive_next(&mut inner) {
+                            result.push(v);
+                        }
+                    }
+                    other => result.push(other),
+                }
+            }
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                result,
+            ))))
         }
-        "flatten" => Ok(Value::Iterator(Box::new(IteratorState::Flatten {
-            source: iter,
-            current: None,
-        }))),
+        "flatten" => {
+            let mut result = Vec::new();
+            while let Some(val) = drive_next(&mut iter) {
+                match val {
+                    Value::Vec(rc) => result.extend(rc.borrow().clone()),
+                    Value::Iterator(mut inner) => {
+                        while let Some(v) = drive_next(&mut inner) {
+                            result.push(v);
+                        }
+                    }
+                    other => result.push(other),
+                }
+            }
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                result,
+            ))))
+        }
 
         // --- Simple consumers (drain iterator — no closures) ---
         "next" => Ok(drive_next(&mut iter)
@@ -240,16 +273,10 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
                 None
             }
         }
-        IteratorState::Map { source, closure } => {
-            let val = drive_next(source)?;
-            // Can't call closures from standalone drive_next; skip map
-            Some(val)
+        IteratorState::Map { .. } | IteratorState::Filter { .. } => {
+            // Map/Filter are now eager — should not appear in lazy state
+            None
         }
-        IteratorState::Filter { source, closure: _ } => loop {
-            let val = drive_next(source)?;
-            // Can't call closures from standalone drive_next; pass through
-            return Some(val);
-        },
         IteratorState::Take { source, remaining } => {
             if *remaining == 0 {
                 None
@@ -279,25 +306,10 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
             *index += 1;
             Some(pair)
         }
-        IteratorState::FlatMap {
-            source,
-            closure: _,
-            current,
-        } => loop {
-            if let Some(inner) = current {
-                if let Some(val) = drive_next(inner) {
-                    return Some(val);
-                }
-                *current = None;
-            }
-            let next_val = drive_next(source)?;
-            match next_val {
-                Value::Iterator(inner_iter) => {
-                    *current = Some(inner_iter);
-                }
-                _ => return Some(next_val),
-            }
-        },
+        IteratorState::FlatMap { .. } => {
+            // FlatMap is now eager — should not appear in lazy state
+            None
+        }
         IteratorState::Flatten { source, current } => loop {
             if let Some(inner) = current {
                 if let Some(val) = drive_next(inner) {
