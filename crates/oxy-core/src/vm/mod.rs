@@ -338,11 +338,11 @@ impl Vm {
                     }
                 }
 
-                OpCode::Add => self.binary_op(vm_add),
-                OpCode::Sub => self.binary_op(vm_sub),
-                OpCode::Mul => self.binary_op(vm_mul),
-                OpCode::Div => self.binary_op(vm_div),
-                OpCode::Mod => self.binary_op(vm_rem),
+                OpCode::Add => { if self.binary_op_native(vm_add, "add") { continue; } }
+                OpCode::Sub => { if self.binary_op_native(vm_sub, "sub") { continue; } }
+                OpCode::Mul => { if self.binary_op_native(vm_mul, "mul") { continue; } }
+                OpCode::Div => { if self.binary_op_native(vm_div, "div") { continue; } }
+                OpCode::Mod => { if self.binary_op_native(vm_rem, "rem") { continue; } }
                 OpCode::Eq => {
                     let (a, b) = self.pop_two();
                     self.stack.push(Value::Bool(a == b));
@@ -1073,11 +1073,82 @@ impl Vm {
         }
     }
 
+    /// Try native op first; if it fails, dispatch to trait method (operator overloading).
+    /// Returns `true` if `continue` should be called (trait method call set up).
+    fn binary_op_native(
+        &mut self,
+        f: fn(Value, Value) -> Result<Value, String>,
+        method: &str,
+    ) -> bool {
+        let (a, b) = self.pop_two();
+        match f(a.clone(), b.clone()) {
+            Ok(v) => {
+                self.stack.push(v);
+                false
+            }
+            Err(_) => {
+                let struct_name = match &a {
+                    Value::Struct { name, .. } => name.clone(),
+                    Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+                    _ => String::new(),
+                };
+                if !struct_name.is_empty() {
+                    if let Some(&target) = self.chunk.method_ips.get(&(struct_name, method.to_string())) {
+                        self.stack.push(a);
+                        self.stack.push(b);
+                        if self.call_stack.len() < 1024 {
+                            let base = self.stack.len() - 2;
+                            self.call_stack.push(Frame {
+                                return_ip: self.ip + 1,
+                                base,
+                                max_slot: 2,
+                                fn_ip: target,
+                            });
+                            self.ip = target;
+                            return true; // caller should continue
+                        }
+                    }
+                }
+                self.stack.push(Value::Unit);
+                false
+            }
+        }
+    }
+
     fn binary_op(&mut self, f: fn(Value, Value) -> Result<Value, String>) {
         let (a, b) = self.pop_two();
-        match f(a, b) {
+        match f(a.clone(), b.clone()) {
             Ok(v) => self.stack.push(v),
-            Err(_e) => self.stack.push(Value::Unit),
+            Err(_) => {
+                // Operator overloading: look up trait method on receiver type
+                let method = method_name_from_op(f);
+                let struct_name = match &a {
+                    Value::Struct { name, .. } => name.clone(),
+                    Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+                    _ => String::new(),
+                };
+                if !struct_name.is_empty() {
+                    if let Some(&target) = self.chunk.method_ips.get(&(struct_name, method.to_string())) {
+                        // Call the trait method natively via VM call stack
+                        self.stack.push(a);
+                        self.stack.push(b);
+                        if self.call_stack.len() >= 1024 {
+                            self.stack.push(Value::Unit);
+                            return;
+                        }
+                        let base = self.stack.len() - 2;
+                        self.call_stack.push(Frame {
+                            return_ip: self.ip + 1,
+                            base,
+                            max_slot: 2,
+                            fn_ip: target,
+                        });
+                        self.ip = target - 1; // -1 because loop does ip += 1
+                        return;
+                    }
+                }
+                self.stack.push(Value::Unit);
+            }
         }
     }
 
@@ -1355,6 +1426,16 @@ fn call_stdlib(
         column: 0,
     };
     f(func, args, &span).map_err(|e| format!("{e}"))
+}
+
+/// Map a binary op function to the corresponding method name for trait dispatch.
+fn method_name_from_op(f: fn(Value, Value) -> Result<Value, String>) -> &'static str {
+    if f as usize == vm_add as usize { return "add"; }
+    if f as usize == vm_sub as usize { return "sub"; }
+    if f as usize == vm_mul as usize { return "mul"; }
+    if f as usize == vm_div as usize { return "div"; }
+    if f as usize == vm_rem as usize { return "rem"; }
+    "add"
 }
 
 // --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
