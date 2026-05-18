@@ -1036,6 +1036,7 @@ impl Compiler {
                 match op {
                     UnaryOp::Neg => self.emit(OpCode::Neg),
                     UnaryOp::Not => self.emit(OpCode::Not),
+                    UnaryOp::Ref => return Ok(()), // & is a no-op in Oxy (no ownership/borrowing)
                     _ => {
                         return Err(FerriError::Runtime {
                             message: format!("unsupported unary op in compiler: {:?}", op),

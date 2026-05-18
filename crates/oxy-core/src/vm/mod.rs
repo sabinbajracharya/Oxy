@@ -1219,7 +1219,10 @@ impl Vm {
             ["math", func] => call_stdlib(crate::stdlib::math::call, func, args),
             ["json", "parse"] => {
                 let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                crate::json::deserialize(&s).map_err(|e| format!("json::parse: {}", e))
+                match crate::json::deserialize(&s) {
+                    Ok(val) => Ok(Value::ok(val)),
+                    Err(e) => Ok(Value::err(Value::String(format!("json::parse: {}", e)))),
+                }
             }
             ["json", "to_string"] => {
                 let val = args.first().cloned().unwrap_or(Value::Unit);
