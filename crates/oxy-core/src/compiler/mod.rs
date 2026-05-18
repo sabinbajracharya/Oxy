@@ -1162,7 +1162,8 @@ impl Compiler {
                         arg_count: args.len(),
                     });
                 } else {
-                    // Indirect/closure call — use interpreter fallback
+                    // Indirect call — use interpreter fallback for now.
+                    // TODO: native CallClosure with captured variable support in VM.
                     self.emit_eval(expr);
                 }
                 Ok(())
