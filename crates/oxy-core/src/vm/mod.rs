@@ -333,7 +333,6 @@ impl Vm {
                         self.stack.push(Value::Unit);
                     }
                     self.stack[idx] = val;
-                    // Update frame's max_slot to protect this local
                     if let Some(frame) = self.call_stack.last_mut() {
                         if slot + 1 > frame.max_slot {
                             frame.max_slot = slot + 1;
@@ -997,7 +996,15 @@ impl Vm {
                     while idx >= self.stack.len() {
                         self.stack.push(Value::Unit);
                     }
-                    self.stack[idx] = val;
+                    // Insert rather than assign: assigning at the stack top puts
+                    // the value back on top where the next BindIdent would pop it.
+                    // insert shifts elements right so remaining data stays above.
+                    // Only use insert when actually needed (idx at or near top).
+                    if idx + 1 >= self.stack.len() && !self.stack.is_empty() {
+                        self.stack.insert(idx, val);
+                    } else {
+                        self.stack[idx] = val;
+                    }
                     if let Some(frame) = self.call_stack.last_mut() {
                         if slot + 1 > frame.max_slot {
                             frame.max_slot = slot + 1;
