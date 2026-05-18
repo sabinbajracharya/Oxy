@@ -1000,43 +1000,19 @@ impl Vm {
                 "code" => Ok(Value::Integer(*c as i64)),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
+            Value::Integer(_) | Value::Float(_) => {
+                builtins::numeric::dispatch(receiver, method_name, &args)
+            }
+            Value::EnumVariant { enum_name, .. }
+                if enum_name == "Option" || enum_name == "Result" =>
+            {
+                builtins::option_result::dispatch(receiver, method_name, &args)
+            }
             Value::EnumVariant { enum_name, .. } => {
-                // Option/Result builtins
-                match enum_name.as_str() {
-                    "Option" => match method_name {
-                        "is_some" => Ok(Value::Bool(!matches!(receiver,
-                            Value::EnumVariant { variant, .. } if variant == "None"))),
-                        "is_none" => Ok(Value::Bool(matches!(receiver,
-                            Value::EnumVariant { variant, .. } if variant == "None"))),
-                        "unwrap" => match &receiver {
-                            Value::EnumVariant { variant, data, .. } if variant == "Some" => {
-                                Ok(data.first().cloned().unwrap_or(Value::Unit))
-                            }
-                            _ => Err("called `unwrap` on a `None` value".into()),
-                        },
-                        _ => Err(format!("no method '{}' on Option", method_name)),
-                    },
-                    "Result" => match method_name {
-                        "is_ok" => Ok(Value::Bool(!matches!(receiver,
-                            Value::EnumVariant { variant, .. } if variant == "Err"))),
-                        "is_err" => Ok(Value::Bool(matches!(receiver,
-                            Value::EnumVariant { variant, .. } if variant == "Err"))),
-                        "unwrap" => match &receiver {
-                            Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
-                                Ok(data.first().cloned().unwrap_or(Value::Unit))
-                            }
-                            _ => Err("called `unwrap` on an `Err` value".into()),
-                        },
-                        _ => Err(format!("no method '{}' on Result", method_name)),
-                    },
-                    _ => {
-                        // Other enum: check for user methods? Already handled above.
-                        Err(format!(
-                            "no method '{}' on enum '{}'",
-                            method_name, enum_name
-                        ))
-                    }
-                }
+                Err(format!(
+                    "no method '{}' on enum '{}'",
+                    method_name, enum_name
+                ))
             }
             Value::Struct { name, .. } => match method_name {
                 "clone" => Ok(receiver.clone()),
