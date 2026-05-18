@@ -6,7 +6,13 @@ Interpreted programming language written in Rust. Replicates Rust syntax without
 
 ### Success Criterion
 
-**Tests passing through the VM path with zero new `emit_eval` calls.** Making tests pass by routing through the interpreter fallback (`emit_eval`, `self.interpreter.call_method()`, etc.) is NOT success. Every feature must have native bytecode execution. The end goal is to delete the interpreter directory entirely — one execution path: compiler → VM.
+**Complete bytecode migration and interpreter removal — then all tests pass natively.**
+
+- Making tests pass by routing through interpreter fallback (`emit_eval`, `self.interpreter.call_method()`, etc.) is NOT success.
+- Every feature must have native bytecode execution.
+- The end goal is to delete the interpreter directory entirely — one execution path: compiler → VM.
+- **Test regressions during architectural changes are expected and acceptable.** Do not revert necessary architectural work just to keep tests green. Temporarily disable failing tests if they distract from productive work — re-enable when the migration is complete.
+- Tests are a verification tool, not the goal itself. The goal is zero interpreter code.
 
 ## Build & Test (Docker — no local Rust)
 

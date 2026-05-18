@@ -191,6 +191,9 @@ pub enum OpCode {
     /// The index references `Chunk::ast_nodes`.
     /// Pop value, pop struct, set field. For `obj.field = val`.
     FieldStore(String),
+    /// Pop a value, push its display string — dispatches to Display::fmt natively
+    /// if the receiver implements the trait, otherwise uses Rust Display.
+    DisplayArg,
     Eval(usize),
 }
 
@@ -955,6 +958,13 @@ impl Vm {
                     }
                 }
 
+                OpCode::DisplayArg => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    if self.try_display_trait_dispatch(val) {
+                        continue;
+                    }
+                }
+
                 OpCode::FStringConcat { count } => {
                     let start = self.stack.len().saturating_sub(count);
                     let parts: Vec<String> =
@@ -1004,7 +1014,10 @@ impl Vm {
                             variant: v,
                             data,
                         } if en == &enum_name && v == &variant => {
-                            for d in data.iter() {
+                            // Push in reverse: bind_pattern_data processes fields
+                            // left-to-right but pops from top (LIFO), so we push
+                            // rightmost field first so leftmost is on top
+                            for d in data.iter().rev() {
                                 self.stack.push(d.clone());
                             }
                             self.stack.push(Value::Bool(true));

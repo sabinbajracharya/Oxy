@@ -1621,52 +1621,89 @@ impl Compiler {
             }
 
             Expr::MacroCall { name, args, .. } => {
-                for arg in args {
-                    self.compile_expr(arg)?;
-                }
-                if name == "println" || name == "print" {
-                    if args.len() > 1 {
-                        self.emit(OpCode::Format {
-                            arg_count: args.len(),
-                        });
+                // For println!/print!/format! with simple {} format strings,
+                // emit native DisplayArg for each arg to enable Display::fmt dispatch.
+                let is_println = name == "println" || name == "print";
+                let is_format = name == "format";
+                if (is_println || is_format) && args.len() > 1 {
+                    // Parse format string: split on "{}" and emit parts + DisplayArg
+                    let fmt = match &args[0] {
+                        Expr::StringLiteral(s, _) => s.clone(),
+                        Expr::FString { .. } => String::new(), // f-strings handled elsewhere
+                        _ => String::new(),
+                    };
+                    let parts: Vec<&str> = fmt.split("{}").collect();
+                    // If there are {:?} placeholders, fall back to Format opcode
+                    if fmt.contains("{:?}") {
+                        for arg in args { self.compile_expr(arg)?; }
+                        self.emit(OpCode::Format { arg_count: args.len() });
+                    } else if parts.len() == args.len() {
+                        // Interleave format parts and args: part0, arg1, part1, arg2, part2, ...
+                        let mut concat_count = 0usize;
+                        for i in 0..parts.len() {
+                            // Emit the literal part
+                            if !parts[i].is_empty() {
+                                self.emit(OpCode::ConstString(parts[i].to_string()));
+                                concat_count += 1;
+                            }
+                            // Emit the arg (except for the last part)
+                            if i < args.len() - 1 {
+                                self.compile_expr(&args[i + 1])?;
+                                self.emit(OpCode::DisplayArg);
+                                concat_count += 1;
+                            }
+                        }
+                        if concat_count > 1 {
+                            self.emit(OpCode::FStringConcat { count: concat_count });
+                        }
+                    } else {
+                        // Mismatched {} count — fall back to Format
+                        for arg in args { self.compile_expr(arg)?; }
+                        self.emit(OpCode::Format { arg_count: args.len() });
                     }
+                    if is_println {
+                        if name == "println" {
+                            self.emit(OpCode::PrintLn);
+                        } else {
+                            self.emit(OpCode::Print);
+                        }
+                    }
+                } else if (is_println || is_format) && args.len() == 1 {
+                    // No format args — just print/format the literal
+                    self.compile_expr(&args[0])?;
                     if name == "println" {
                         self.emit(OpCode::PrintLn);
-                    } else {
+                    } else if name == "print" {
                         self.emit(OpCode::Print);
                     }
+                    // format! with no args just returns the string
                 } else if name == "vec" {
-                    self.emit(OpCode::MakeArray {
-                        count: args.len(),
-                    });
+                    for arg in args { self.compile_expr(arg)?; }
+                    self.emit(OpCode::MakeArray { count: args.len() });
                 } else if name == "format" {
-                    self.emit(OpCode::Format {
-                        arg_count: args.len(),
-                    });
+                    for arg in args { self.compile_expr(arg)?; }
+                    self.emit(OpCode::Format { arg_count: args.len() });
                 } else if name == "panic" {
-                    // Pop the message and halt with error
+                    for arg in args { self.compile_expr(arg)?; }
                     self.emit(OpCode::Panic);
                 } else if name == "assert" {
-                    // If condition is false, panic with a generic message
+                    for arg in args { self.compile_expr(arg)?; }
                     let skip = self.emit(OpCode::JumpIfTrue(0));
-                    self.emit(OpCode::ConstString(
-                        "assertion failed".to_string(),
-                    ));
+                    self.emit(OpCode::ConstString("assertion failed".to_string()));
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "assert_eq" {
-                    // Compare two values, panic if not equal
+                    for arg in args { self.compile_expr(arg)?; }
                     self.emit(OpCode::Eq);
                     let skip = self.emit(OpCode::JumpIfTrue(0));
-                    // Format the panic message with the two values
-                    self.emit(OpCode::ConstString(
-                        "assertion failed: left != right".to_string(),
-                    ));
+                    self.emit(OpCode::ConstString("assertion failed: left != right".to_string()));
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "dbg" {
+                    for arg in args { self.compile_expr(arg)?; }
                     self.emit_eval(expr);
                 } else {
+                    for arg in args { self.compile_expr(arg)?; }
                     self.emit_eval(expr);
                 }
                 Ok(())
