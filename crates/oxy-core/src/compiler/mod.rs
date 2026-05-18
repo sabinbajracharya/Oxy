@@ -980,14 +980,8 @@ impl Compiler {
                         arg_count: args.len(),
                     });
                 } else {
-                    // Indirect: compile callee first, then args, emit CallClosure
-                    self.compile_expr(callee)?;
-                    for arg in args {
-                        self.compile_expr(arg)?;
-                    }
-                    self.emit(OpCode::CallClosure {
-                        arg_count: args.len(),
-                    });
+                    // Indirect/closure call — use interpreter fallback
+                    self.emit_eval(expr);
                 }
                 Ok(())
             }
