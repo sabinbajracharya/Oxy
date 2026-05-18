@@ -1459,6 +1459,13 @@ impl Vm {
         method_name: &str,
         args: Vec<Value>,
     ) -> Result<Value, String> {
+        // to_json works on any type — serialize to JSON string via the json module
+        if method_name == "to_json" {
+            return match crate::json::serialize(&receiver) {
+                Ok(s) => Ok(Value::ok(Value::String(s))),
+                Err(e) => Ok(Value::err(Value::String(e))),
+            };
+        }
         match &receiver {
             Value::Vec(rc) => {
                 // Try builtins first (with closure callback)
