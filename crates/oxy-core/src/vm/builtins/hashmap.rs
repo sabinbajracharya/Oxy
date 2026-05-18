@@ -45,16 +45,18 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         "remove" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);
             match rc.borrow_mut().remove(&key) {
-                Some(val) => Ok(val),
-                None => Ok(Value::Unit),
+                Some(val) => Ok(Value::some(val)),
+                None => Ok(Value::none()),
             }
         }
         "keys" => {
-            let keys: Vec<Value> = rc.borrow().keys().cloned().collect();
+            let mut keys: Vec<Value> = rc.borrow().keys().cloned().collect();
+            keys.sort();
             Ok(Value::Vec(Rc::new(RefCell::new(keys))))
         }
         "values" => {
-            let values: Vec<Value> = rc.borrow().values().cloned().collect();
+            let mut values: Vec<Value> = rc.borrow().values().cloned().collect();
+            values.sort();
             Ok(Value::Vec(Rc::new(RefCell::new(values))))
         }
         "clone" => Ok(Value::HashMap(Rc::new(RefCell::new(

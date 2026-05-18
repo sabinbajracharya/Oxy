@@ -272,12 +272,17 @@ impl Vm {
     pub fn with_captured_output(chunk: Chunk) -> Self {
         let mut vm = Self::new(chunk);
         vm.output = Some(Vec::new());
+        vm.interpreter.output = Some(Vec::new());
         vm
     }
 
-    /// Get captured output lines.
-    pub fn captured_output(&self) -> &[String] {
-        self.output.as_deref().unwrap_or(&[])
+    /// Get captured output lines (VM + interpreter fallback output merged).
+    pub fn captured_output(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.output.clone().unwrap_or_default();
+        if let Some(ref interp_out) = self.interpreter.output {
+            out.extend(interp_out.iter().cloned());
+        }
+        out
     }
 
     /// Execute the chunk, starting at the entry point.
@@ -885,9 +890,25 @@ impl Vm {
                         }
                         None => {
                             // Handle built-in methods (Vec, String, HashMap, etc.)
-                            match self.builtin_method(receiver, &method_name, args) {
+                            match self.builtin_method(receiver.clone(), &method_name, args.clone()) {
                                 Ok(val) => self.stack.push(val),
-                                Err(e) => return VmResult::Error(e),
+                                Err(_) => {
+                                    // Fall back to interpreter for unknown types
+                                    let dummy_span = crate::lexer::Span {
+                                        start: 0, end: 0, line: 0, column: 0,
+                                    };
+                                    let dummy_expr = crate::ast::Expr::IntLiteral(0, dummy_span);
+                                    let env = self.interpreter.env.clone();
+                                    match self.interpreter.call_method(
+                                        receiver, &method_name, args,
+                                        &dummy_expr,
+                                        &env,
+                                        &dummy_span,
+                                    ) {
+                                        Ok(val) => self.stack.push(val),
+                                        Err(e) => return VmResult::Error(e.to_string()),
+                                    }
+                                }
                             }
                         }
                     }
@@ -911,11 +932,13 @@ impl Vm {
                     let fmt_str = args.first().map(|v| v.to_string()).unwrap_or_default();
                     let mut result = fmt_str.clone();
                     for val in &args[1..] {
-                        let s = val.to_string();
                         if let Some(pos) = result.find("{:?}") {
-                            result.replace_range(pos..pos + 4, &s);
+                            result.replace_range(
+                                pos..pos + 4,
+                                &crate::interpreter::format::debug_format(val),
+                            );
                         } else if let Some(pos) = result.find("{}") {
-                            result.replace_range(pos..pos + 2, &s);
+                            result.replace_range(pos..pos + 2, &val.to_string());
                         }
                     }
                     self.stack.push(Value::String(result));
@@ -1167,8 +1190,8 @@ impl Vm {
             }
             ["HashMap", "new"] => Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(HashMap::new())))),
             ["HashSet", "new"] => Ok(Value::HashSet(std::rc::Rc::new(std::cell::RefCell::new(HashSet::new())))),
-            ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(BinaryHeap::new())),
-            ["VecDeque", "new"] => Ok(Value::VecDeque(VecDeque::new())),
+            ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(std::rc::Rc::new(std::cell::RefCell::new(BinaryHeap::new())))),
+            ["VecDeque", "new"] => Ok(Value::VecDeque(std::rc::Rc::new(std::cell::RefCell::new(VecDeque::new())))),
             ["ListNode", "new"] => {
                 let val = args.first().cloned().unwrap_or(Value::Unit);
                 let mut fields = HashMap::new();

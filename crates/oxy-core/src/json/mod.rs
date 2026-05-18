@@ -57,13 +57,13 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             let items: Result<Vec<String>, String> = s.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
-        Value::BinaryHeap(h) => {
-            let sorted = h.clone().into_sorted_vec();
+        Value::BinaryHeap(rc) => {
+            let sorted = rc.borrow().clone().into_sorted_vec();
             let items: Result<Vec<String>, String> = sorted.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
-        Value::VecDeque(d) => {
-            let items: Result<Vec<String>, String> = d.iter().map(serialize_value).collect();
+        Value::VecDeque(rc) => {
+            let items: Result<Vec<String>, String> = rc.borrow().iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
         Value::Future(_) => Err("cannot serialize future".to_string()),
@@ -148,7 +148,8 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
         }
-        Value::BinaryHeap(h) => {
+        Value::BinaryHeap(rc) => {
+            let h = rc.borrow();
             if h.is_empty() {
                 return Ok("[]".to_string());
             }
@@ -165,7 +166,8 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
         }
-        Value::VecDeque(d) => {
+        Value::VecDeque(rc) => {
+            let d = rc.borrow();
             if d.is_empty() {
                 return Ok("[]".to_string());
             }

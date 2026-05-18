@@ -5,34 +5,39 @@ use std::cell::RefCell;
 use crate::types::Value;
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
-    let Value::VecDeque(d) = &receiver else { unreachable!() };
+    let Value::VecDeque(rc) = &receiver else { unreachable!() };
+    let d = rc.borrow();
     match method {
         "len" => Ok(Value::Integer(d.len() as i64)),
         "is_empty" => Ok(Value::Bool(d.is_empty())),
         "front" => d.front().cloned().ok_or_else(|| "VecDeque::front on empty deque".into()),
         "back" => d.back().cloned().ok_or_else(|| "VecDeque::back on empty deque".into()),
         "push_front" => {
-            let mut new = d.clone();
-            new.push_front(args.first().cloned().unwrap_or(Value::Unit));
-            Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
+            drop(d);
+            rc.borrow_mut().push_front(args.first().cloned().unwrap_or(Value::Unit));
+            Ok(Value::Unit)
         }
         "push_back" => {
-            let mut new = d.clone();
-            new.push_back(args.first().cloned().unwrap_or(Value::Unit));
-            Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
+            drop(d);
+            rc.borrow_mut().push_back(args.first().cloned().unwrap_or(Value::Unit));
+            Ok(Value::Unit)
         }
         "pop_front" => {
-            let mut new = d.clone();
-            let popped = new.pop_front().unwrap_or(Value::Unit);
-            Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
+            drop(d);
+            match rc.borrow_mut().pop_front() {
+                Some(val) => Ok(Value::some(val)),
+                None => Ok(Value::none()),
+            }
         }
         "pop_back" => {
-            let mut new = d.clone();
-            let popped = new.pop_back().unwrap_or(Value::Unit);
-            Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
+            drop(d);
+            match rc.borrow_mut().pop_back() {
+                Some(val) => Ok(Value::some(val)),
+                None => Ok(Value::none()),
+            }
         }
         "to_vec" => Ok(Value::Vec(Rc::new(RefCell::new(d.iter().cloned().collect())))),
-        "clone" => Ok(Value::VecDeque(d.clone())),
+        "clone" => Ok(Value::VecDeque(Rc::clone(rc))),
         _ => Err(format!("no method '{}' on type VecDeque", method)),
     }
 }

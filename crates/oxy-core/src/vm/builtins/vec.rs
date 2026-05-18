@@ -124,6 +124,43 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             }
             Ok(Value::Unit)
         }
+        "rev" => {
+            rc.borrow_mut().reverse();
+            Ok(Value::Unit)
+        }
+        "chunks" => {
+            let n = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .ok_or("Vec::chunks requires an integer size")?;
+            let chunks: Vec<Value> = rc
+                .borrow()
+                .chunks(n.max(1))
+                .map(|chunk| Value::Vec(Rc::new(RefCell::new(chunk.to_vec()))))
+                .collect();
+            Ok(Value::Vec(Rc::new(RefCell::new(chunks))))
+        }
+        "windows" => {
+            let n = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .ok_or("Vec::windows requires an integer size")?;
+            let windows: Vec<Value> = rc
+                .borrow()
+                .windows(n.max(1))
+                .map(|w| Value::Vec(Rc::new(RefCell::new(w.to_vec()))))
+                .collect();
+            Ok(Value::Vec(Rc::new(RefCell::new(windows))))
+        }
+        "sort_by" | "sort_by_key" => {
+            Err(format!("{}: closure methods not supported in VM yet", method))
+        }
         _ => Err(format!("no method '{}' on type Vec", method)),
     }
 }

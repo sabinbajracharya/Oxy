@@ -15,7 +15,7 @@ use crate::types::{Value, NONE_VARIANT};
 #[cfg(feature = "db")]
 mod db_dispatch;
 mod eval;
-mod format;
+pub(crate) mod format;
 #[cfg(feature = "http")]
 mod http;
 mod json;
@@ -33,7 +33,7 @@ pub struct Interpreter {
     /// The global environment.
     pub(crate) env: Env,
     /// Captured output (for testing). If `None`, prints to stdout.
-    output: Option<Vec<String>>,
+    pub(crate) output: Option<Vec<String>>,
     /// Registered struct definitions.
     struct_defs: HashMap<String, StructDef>,
     /// Registered enum definitions.
@@ -597,7 +597,7 @@ pub fn run_compiled_capturing(source: &str) -> Result<(Value, Vec<String>), Ferr
     let chunk = crate::compiler::Compiler::new().compile(&program)?;
     let mut vm = crate::vm::Vm::with_captured_output(chunk);
     match vm.run() {
-        crate::vm::VmResult::Value(v) => Ok((v, vm.captured_output().to_vec())),
+        crate::vm::VmResult::Value(v) => Ok((v, vm.captured_output())),
         crate::vm::VmResult::Error(e) => Err(FerriError::Runtime {
             message: e,
             line: 0,
@@ -717,12 +717,12 @@ mod tests {
     use super::*;
 
     fn run_and_capture(src: &str) -> Vec<String> {
-        let (_, output) = run_capturing(src).unwrap();
+        let (_, output) = run_compiled_capturing(src).unwrap();
         output
     }
 
     fn run_and_get_value(src: &str) -> Value {
-        let (val, _) = run_capturing(src).unwrap();
+        let (val, _) = run_compiled_capturing(src).unwrap();
         val
     }
 

@@ -18,13 +18,14 @@ impl Interpreter {
         receiver: Value,
         method: &str,
         args: Vec<Value>,
-        receiver_expr: &Expr,
-        env: &Env,
+        _receiver_expr: &Expr,
+        _env: &Env,
         span: &Span,
     ) -> Result<Value, FerriError> {
-        let Value::VecDeque(d) = receiver else {
+        let Value::VecDeque(rc) = &receiver else {
             unreachable!()
         };
+        let d = rc.borrow();
         match method {
             "len" => Ok(Value::Integer(d.len() as i64)),
             "is_empty" => Ok(Value::Bool(d.is_empty())),
@@ -47,40 +48,36 @@ impl Interpreter {
             "push_front" => {
                 check_arg_count("VecDeque::push_front", 1, &args, span)?;
                 let val = args.into_iter().next().unwrap();
-                let mut new_d = d;
-                new_d.push_front(val);
-                self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
+                drop(d);
+                rc.borrow_mut().push_front(val);
                 Ok(Value::Unit)
             }
             "push_back" => {
                 check_arg_count("VecDeque::push_back", 1, &args, span)?;
                 let val = args.into_iter().next().unwrap();
-                let mut new_d = d;
-                new_d.push_back(val);
-                self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
+                drop(d);
+                rc.borrow_mut().push_back(val);
                 Ok(Value::Unit)
             }
             "pop_front" => {
-                let mut new_d = d;
-                let popped = new_d.pop_front();
-                self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
-                match popped {
+                drop(d);
+                match rc.borrow_mut().pop_front() {
                     Some(val) => Ok(Value::some(val)),
                     None => Ok(Value::none()),
                 }
             }
             "pop_back" => {
-                let mut new_d = d;
-                let popped = new_d.pop_back();
-                self.mutate_variable(receiver_expr, Value::VecDeque(new_d), env, span)?;
-                match popped {
+                drop(d);
+                match rc.borrow_mut().pop_back() {
                     Some(val) => Ok(Value::some(val)),
                     None => Ok(Value::none()),
                 }
             }
-            "clone" => Ok(Value::VecDeque(d)),
-            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(d.into_iter().collect())))),
-            _ => self.try_to_json_method(Value::VecDeque(d), method, span, "VecDeque"),
+            "clone" => Ok(Value::VecDeque(std::rc::Rc::clone(rc))),
+            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                d.iter().cloned().collect(),
+            )))),
+            _ => self.try_to_json_method(Value::VecDeque(std::rc::Rc::clone(rc)), method, span, "VecDeque"),
         }
     }
 }

@@ -67,10 +67,10 @@ pub enum Value {
     HashMap(Rc<RefCell<HashMap<Value, Value>>>),
     /// A hash set — shared mutable via Rc<RefCell<>>.
     HashSet(Rc<RefCell<HashSet<Value>>>),
-    /// A binary heap (max-heap by default).
-    BinaryHeap(BinaryHeap<Value>),
-    /// A double-ended queue.
-    VecDeque(VecDeque<Value>),
+    /// A binary heap (max-heap by default) — shared mutable via Rc<RefCell<>>.
+    BinaryHeap(Rc<RefCell<BinaryHeap<Value>>>),
+    /// A double-ended queue — shared mutable via Rc<RefCell<>>.
+    VecDeque(Rc<RefCell<VecDeque<Value>>>),
     /// A lazy iterator (adapter chain).
     Iterator(Box<IteratorState>),
     /// A future (lazy thunk wrapping an async function call).
@@ -107,8 +107,8 @@ impl Clone for Value {
             },
             Value::HashMap(rc) => Value::HashMap(Rc::clone(rc)),
             Value::HashSet(rc) => Value::HashSet(Rc::clone(rc)),
-            Value::BinaryHeap(h) => Value::BinaryHeap(h.clone()),
-            Value::VecDeque(d) => Value::VecDeque(d.clone()),
+            Value::BinaryHeap(rc) => Value::BinaryHeap(Rc::clone(rc)),
+            Value::VecDeque(rc) => Value::VecDeque(Rc::clone(rc)),
             Value::Iterator(it) => Value::Iterator(it.clone()),
             Value::Future(f) => Value::Future(f.clone()),
             Value::JoinHandle(h) => Value::JoinHandle(h.clone()),
@@ -298,8 +298,8 @@ impl Value {
                 v.sort();
                 Ok(v)
             }
-            Value::BinaryHeap(h) => Ok(h.into_sorted_vec()),
-            Value::VecDeque(d) => Ok(d.into_iter().collect()),
+            Value::BinaryHeap(rc) => Ok(rc.borrow().clone().into_sorted_vec()),
+            Value::VecDeque(rc) => Ok(rc.borrow().clone().into_iter().collect()),
             Value::Iterator(_) => Err(
                 "Iterators must be consumed with .collect() or another consumer method, not iterated directly".into(),
             ),
@@ -345,8 +345,8 @@ impl Value {
             Value::EnumVariant { .. } => true,
             Value::HashMap(rc) => !rc.borrow().is_empty(),
             Value::HashSet(rc) => !rc.borrow().is_empty(),
-            Value::BinaryHeap(h) => !h.is_empty(),
-            Value::VecDeque(d) => !d.is_empty(),
+            Value::BinaryHeap(rc) => !rc.borrow().is_empty(),
+            Value::VecDeque(rc) => !rc.borrow().is_empty(),
             Value::Iterator(_) => true,
             Value::Future(_) => true,
             Value::JoinHandle(_) => true,
@@ -458,9 +458,9 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
-            Value::BinaryHeap(heap) => {
+            Value::BinaryHeap(rc) => {
                 write!(f, "BinaryHeap([")?;
-                let sorted = heap.clone().into_sorted_vec();
+                let sorted = rc.borrow().clone().into_sorted_vec();
                 for (i, elem) in sorted.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -469,9 +469,9 @@ impl fmt::Display for Value {
                 }
                 write!(f, "])")
             }
-            Value::VecDeque(d) => {
+            Value::VecDeque(rc) => {
                 write!(f, "VecDeque([")?;
-                for (i, elem) in d.iter().enumerate() {
+                for (i, elem) in rc.borrow().iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
@@ -524,13 +524,13 @@ impl PartialEq for Value {
             (Value::HashMap(a), Value::HashMap(b)) => *a.borrow() == *b.borrow(),
             (Value::HashSet(a), Value::HashSet(b)) => *a.borrow() == *b.borrow(),
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
-                let va = a.clone().into_sorted_vec();
-                let vb = b.clone().into_sorted_vec();
+                let va = a.borrow().clone().into_sorted_vec();
+                let vb = b.borrow().clone().into_sorted_vec();
                 va == vb
             }
             (Value::VecDeque(a), Value::VecDeque(b)) => {
-                let va: Vec<&Value> = a.iter().collect();
-                let vb: Vec<&Value> = b.iter().collect();
+                let va: Vec<Value> = a.borrow().iter().cloned().collect();
+                let vb: Vec<Value> = b.borrow().iter().cloned().collect();
                 va == vb
             }
             (Value::Iterator(_), Value::Iterator(_)) => false,
@@ -674,8 +674,8 @@ impl Ord for Value {
                 av.len().cmp(&bv.len())
             }
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
-                let va = a.clone().into_sorted_vec();
-                let vb = b.clone().into_sorted_vec();
+                let va = a.borrow().clone().into_sorted_vec();
+                let vb = b.borrow().clone().into_sorted_vec();
                 for (ai, bi) in va.iter().zip(vb.iter()) {
                     match ai.cmp(bi) {
                         Ordering::Equal => continue,
@@ -685,6 +685,8 @@ impl Ord for Value {
                 va.len().cmp(&vb.len())
             }
             (Value::VecDeque(a), Value::VecDeque(b)) => {
+                let a = a.borrow();
+                let b = b.borrow();
                 for (ai, bi) in a.iter().zip(b.iter()) {
                     match ai.cmp(bi) {
                         Ordering::Equal => continue,
@@ -772,14 +774,14 @@ impl Hash for Value {
                     item.hash(state);
                 }
             }
-            Value::BinaryHeap(h) => {
-                let sorted = h.clone().into_sorted_vec();
+            Value::BinaryHeap(rc) => {
+                let sorted = rc.borrow().clone().into_sorted_vec();
                 for item in sorted {
                     item.hash(state);
                 }
             }
-            Value::VecDeque(d) => {
-                for elem in d {
+            Value::VecDeque(rc) => {
+                for elem in rc.borrow().iter() {
                     elem.hash(state);
                 }
             }

@@ -139,12 +139,12 @@ impl Interpreter {
 
             // Built-in BinaryHeap::new
             if type_name == "BinaryHeap" && method_name == "new" && args.is_empty() {
-                return Ok(Value::BinaryHeap(BinaryHeap::new()));
+                return Ok(Value::BinaryHeap(std::rc::Rc::new(std::cell::RefCell::new(BinaryHeap::new()))));
             }
 
             // Built-in VecDeque::new
             if type_name == "VecDeque" && method_name == "new" && args.is_empty() {
-                return Ok(Value::VecDeque(VecDeque::new()));
+                return Ok(Value::VecDeque(std::rc::Rc::new(std::cell::RefCell::new(VecDeque::new()))));
             }
 
             // Built-in ListNode::new(val)

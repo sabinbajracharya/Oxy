@@ -69,6 +69,15 @@ pub(crate) fn debug_format(val: &Value) -> String {
                 .collect();
             format!("{{{}}}", items.join(", "))
         }
+        Value::BinaryHeap(rc) => {
+            let sorted = rc.borrow().clone().into_sorted_vec();
+            let items: Vec<String> = sorted.iter().map(debug_format).collect();
+            format!("BinaryHeap([{}])", items.join(", "))
+        }
+        Value::VecDeque(rc) => {
+            let items: Vec<String> = rc.borrow().iter().map(debug_format).collect();
+            format!("VecDeque([{}])", items.join(", "))
+        }
         Value::Future(f) => format!("Future<{}>", f.name),
         Value::JoinHandle(v) => format!("JoinHandle({})", debug_format(v)),
         other => format!("{other}"),

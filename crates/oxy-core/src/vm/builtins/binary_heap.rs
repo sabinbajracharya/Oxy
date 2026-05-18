@@ -3,7 +3,8 @@ use std::collections::BinaryHeap;
 use crate::types::Value;
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
-    let Value::BinaryHeap(h) = &receiver else { unreachable!() };
+    let Value::BinaryHeap(rc) = &receiver else { unreachable!() };
+    let h = rc.borrow();
     match method {
         "len" => Ok(Value::Integer(h.len() as i64)),
         "is_empty" => Ok(Value::Bool(h.is_empty())),
@@ -12,19 +13,21 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             None => Ok(Value::none()),
         },
         "push" => {
-            let mut new = h.clone();
-            new.push(args.first().cloned().unwrap_or(Value::Unit));
-            Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::Unit]))
+            drop(h);
+            rc.borrow_mut().push(args.first().cloned().unwrap_or(Value::Unit));
+            Ok(Value::Unit)
         }
         "pop" => {
-            let mut new = h.clone();
-            match new.pop() {
-                Some(val) => Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::some(val)])),
-                None => Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::none()])),
+            drop(h);
+            match rc.borrow_mut().pop() {
+                Some(val) => Ok(Value::some(val)),
+                None => Ok(Value::none()),
             }
         }
-        "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(h.clone().into_sorted_vec())))),
-        "clone" => Ok(Value::BinaryHeap(h.clone())),
+        "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+            h.clone().into_sorted_vec(),
+        )))),
+        "clone" => Ok(Value::BinaryHeap(std::rc::Rc::clone(rc))),
         _ => Err(format!("no method '{}' on type BinaryHeap", method)),
     }
 }

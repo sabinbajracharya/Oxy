@@ -22,9 +22,10 @@ impl Interpreter {
         env: &Env,
         span: &Span,
     ) -> Result<Value, FerriError> {
-        let Value::BinaryHeap(h) = receiver else {
+        let Value::BinaryHeap(rc) = &receiver else {
             unreachable!()
         };
+        let h = rc.borrow();
         match method {
             "len" => Ok(Value::Integer(h.len() as i64)),
             "is_empty" => Ok(Value::Bool(h.is_empty())),
@@ -35,23 +36,22 @@ impl Interpreter {
             "push" => {
                 check_arg_count("BinaryHeap::push", 1, &args, span)?;
                 let val = args.into_iter().next().unwrap();
-                let mut new_h = h;
-                new_h.push(val);
-                self.mutate_variable(receiver_expr, Value::BinaryHeap(new_h), env, span)?;
+                drop(h);
+                rc.borrow_mut().push(val);
                 Ok(Value::Unit)
             }
             "pop" => {
-                let mut new_h = h;
-                let popped = new_h.pop();
-                self.mutate_variable(receiver_expr, Value::BinaryHeap(new_h), env, span)?;
-                match popped {
+                drop(h);
+                match rc.borrow_mut().pop() {
                     Some(val) => Ok(Value::some(val)),
                     None => Ok(Value::none()),
                 }
             }
-            "clone" => Ok(Value::BinaryHeap(h)),
-            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(h.into_sorted_vec())))),
-            _ => self.try_to_json_method(Value::BinaryHeap(h), method, span, "BinaryHeap"),
+            "clone" => Ok(Value::BinaryHeap(std::rc::Rc::clone(rc))),
+            "to_vec" => Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                h.clone().into_sorted_vec(),
+            )))),
+            _ => self.try_to_json_method(Value::BinaryHeap(std::rc::Rc::clone(rc)), method, span, "BinaryHeap"),
         }
     }
 }
