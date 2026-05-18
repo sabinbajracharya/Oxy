@@ -70,6 +70,8 @@ pub enum OpCode {
     },
     /// Return from the current function, leaving the top-of-stack as the result.
     Return,
+    /// Pop a string message and halt with a runtime error.
+    Panic,
     /// Stop execution.
     Halt,
 
@@ -418,6 +420,10 @@ impl Vm {
                     continue;
                 }
 
+                OpCode::Panic => {
+                    let msg = self.stack.pop().map(|v| v.to_string()).unwrap_or_default();
+                    return VmResult::Error(msg);
+                }
                 OpCode::Halt => {
                     return VmResult::Value(Value::Unit);
                 }

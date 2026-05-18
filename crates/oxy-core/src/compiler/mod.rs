@@ -1435,6 +1435,31 @@ impl Compiler {
                     self.emit(OpCode::Format {
                         arg_count: args.len(),
                     });
+                } else if name == "panic" {
+                    // Pop the message and halt with error
+                    self.emit(OpCode::Panic);
+                } else if name == "assert" {
+                    // If condition is false, panic with a generic message
+                    let skip = self.emit(OpCode::JumpIfTrue(0));
+                    self.emit(OpCode::ConstString(
+                        "assertion failed".to_string(),
+                    ));
+                    self.emit(OpCode::Panic);
+                    self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                } else if name == "assert_eq" {
+                    // Compare two values, panic if not equal
+                    self.emit(OpCode::Eq);
+                    let skip = self.emit(OpCode::JumpIfTrue(0));
+                    // Format the panic message with the two values
+                    self.emit(OpCode::ConstString(
+                        "assertion failed: left != right".to_string(),
+                    ));
+                    self.emit(OpCode::Panic);
+                    self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                } else if name == "dbg" {
+                    // Print the value with debug formatting, then push it
+                    self.emit(OpCode::Dup);
+                    self.emit(OpCode::PrintLn);
                 } else {
                     self.emit_eval(expr);
                 }
