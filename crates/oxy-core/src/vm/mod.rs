@@ -1035,68 +1035,8 @@ impl Vm {
             Value::String(_) => builtins::string::dispatch(receiver, method_name, &args),
             Value::HashMap(_) => builtins::hashmap::dispatch(receiver, method_name, &args),
             Value::HashSet(_) => builtins::hashset::dispatch(receiver, method_name, &args),
-            Value::VecDeque(d) => match method_name {
-                "len" => Ok(Value::Integer(d.len() as i64)),
-                "is_empty" => Ok(Value::Bool(d.is_empty())),
-                "front" => d
-                    .front()
-                    .cloned()
-                    .ok_or_else(|| "VecDeque::front on empty deque".to_string()),
-                "back" => d
-                    .back()
-                    .cloned()
-                    .ok_or_else(|| "VecDeque::back on empty deque".to_string()),
-                "push_front" => {
-                    let mut new = d.clone();
-                    new.push_front(args.first().cloned().unwrap_or(Value::Unit));
-                    Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
-                }
-                "push_back" => {
-                    let mut new = d.clone();
-                    new.push_back(args.first().cloned().unwrap_or(Value::Unit));
-                    Ok(Value::Tuple(vec![Value::VecDeque(new), Value::Unit]))
-                }
-                "pop_front" => {
-                    let mut new = d.clone();
-                    let popped = new.pop_front().unwrap_or(Value::Unit);
-                    Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
-                }
-                "pop_back" => {
-                    let mut new = d.clone();
-                    let popped = new.pop_back().unwrap_or(Value::Unit);
-                    Ok(Value::Tuple(vec![Value::VecDeque(new), popped]))
-                }
-                "to_vec" => Ok(Value::Vec(Rc::new(RefCell::new(d.iter().cloned().collect())))),
-                "clone" => Ok(Value::VecDeque(d.clone())),
-                _ => Err(format!("no method '{}' on type VecDeque", method_name)),
-            },
-            Value::BinaryHeap(h) => match method_name {
-                "len" => Ok(Value::Integer(h.len() as i64)),
-                "is_empty" => Ok(Value::Bool(h.is_empty())),
-                "peek" => match h.peek() {
-                    Some(val) => Ok(Value::some(val.clone())),
-                    None => Ok(Value::none()),
-                },
-                "push" => {
-                    let mut new = h.clone();
-                    let val = args.first().cloned().unwrap_or(Value::Unit);
-                    new.push(val);
-                    Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::Unit]))
-                }
-                "pop" => {
-                    let mut new = h.clone();
-                    let popped = new.pop();
-                    match popped {
-                        Some(val) => {
-                            Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::some(val)]))
-                        }
-                        None => Ok(Value::Tuple(vec![Value::BinaryHeap(new), Value::none()])),
-                    }
-                }
-                "to_vec" => Ok(Value::Vec(Rc::new(RefCell::new(h.clone().into_sorted_vec())))),
-                "clone" => Ok(Value::BinaryHeap(h.clone())),
-                _ => Err(format!("no method '{}' on type BinaryHeap", method_name)),
-            },
+            Value::VecDeque(_) => builtins::vec_deque::dispatch(receiver, method_name, &args),
+            Value::BinaryHeap(_) => builtins::binary_heap::dispatch(receiver, method_name, &args),
             Value::Char(c) => match method_name {
                 "is_digit" => Ok(Value::Bool(c.is_ascii_digit())),
                 "is_alphabetic" => Ok(Value::Bool(c.is_alphabetic())),

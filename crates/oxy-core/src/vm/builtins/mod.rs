@@ -4,6 +4,7 @@
 //! Both the tree-walking interpreter and the bytecode VM route
 //! method calls through these functions.
 
+pub mod binary_heap;
 pub mod hashmap;
 pub mod hashset;
 pub mod iterator;
@@ -11,3 +12,4 @@ pub mod numeric;
 pub mod option_result;
 pub mod string;
 pub mod vec;
+pub mod vec_deque;
