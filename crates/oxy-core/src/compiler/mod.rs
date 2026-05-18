@@ -1032,30 +1032,21 @@ impl Compiler {
                 value,
                 span,
             } => {
-                self.compile_expr(value)?;
                 if let Expr::Ident(name, _) = target.as_ref() {
+                    self.compile_expr(value)?;
                     if let Some(slot) = self.sym.get(name) {
                         self.emit(OpCode::Dup);
                         self.emit(OpCode::StoreLocal(slot));
-                        Ok(())
                     } else {
                         let slot = self.sym.define(name);
                         self.emit(OpCode::Dup);
                         self.emit(OpCode::StoreLocal(slot));
-                        Ok(())
                     }
-                } else if let Expr::FieldAccess {
-                    object, field, ..
-                } = target.as_ref()
-                {
-                    // obj.field = val
-                    self.emit(OpCode::Dup); // dup value
-                    self.compile_expr(object)?;
-                    self.emit(OpCode::FieldStore(field.clone()));
                     Ok(())
-                } else if let Expr::Index { object, index, .. } = target.as_ref() {
-                    // arr[i] = val — fall back to interpreter for now
-                    self.emit(OpCode::Pop); // remove compiled value (will be re-evaluated)
+                } else if let Expr::FieldAccess { .. } | Expr::Index { .. } =
+                    target.as_ref()
+                {
+                    // Field/index assignment — use interpreter
                     self.emit_eval(expr);
                     Ok(())
                 } else {
@@ -1105,12 +1096,9 @@ impl Compiler {
                         })
                     }
                 } else {
-                    Err(FerriError::Runtime {
-                        message: "compiled: only simple variable compound assignment supported"
-                            .into(),
-                        line: span.line,
-                        column: span.column,
-                    })
+                    // Non-Ident compound assign — fall back to interpreter
+                    self.emit_eval(expr);
+                    Ok(())
                 }
             }
 
