@@ -347,11 +347,41 @@ impl Vm {
                     }
                 }
 
-                OpCode::Add => { if self.binary_op_native(vm_add, "add") { continue; } }
-                OpCode::Sub => { if self.binary_op_native(vm_sub, "sub") { continue; } }
-                OpCode::Mul => { if self.binary_op_native(vm_mul, "mul") { continue; } }
-                OpCode::Div => { if self.binary_op_native(vm_div, "div") { continue; } }
-                OpCode::Mod => { if self.binary_op_native(vm_rem, "rem") { continue; } }
+                OpCode::Add => {
+                    match self.binary_op_native(vm_add, "add") {
+                        Ok(true) => continue,
+                        Err(e) => return VmResult::Error(e),
+                        _ => {}
+                    }
+                }
+                OpCode::Sub => {
+                    match self.binary_op_native(vm_sub, "sub") {
+                        Ok(true) => continue,
+                        Err(e) => return VmResult::Error(e),
+                        _ => {}
+                    }
+                }
+                OpCode::Mul => {
+                    match self.binary_op_native(vm_mul, "mul") {
+                        Ok(true) => continue,
+                        Err(e) => return VmResult::Error(e),
+                        _ => {}
+                    }
+                }
+                OpCode::Div => {
+                    match self.binary_op_native(vm_div, "div") {
+                        Ok(true) => continue,
+                        Err(e) => return VmResult::Error(e),
+                        _ => {}
+                    }
+                }
+                OpCode::Mod => {
+                    match self.binary_op_native(vm_rem, "rem") {
+                        Ok(true) => continue,
+                        Err(e) => return VmResult::Error(e),
+                        _ => {}
+                    }
+                }
                 OpCode::Eq => {
                     let (a, b) = self.pop_two();
                     self.stack.push(Value::Bool(a == b));
@@ -1095,23 +1125,32 @@ impl Vm {
         &mut self,
         f: fn(Value, Value) -> Result<Value, String>,
         method: &str,
-    ) -> bool {
+    ) -> Result<bool, String> {
         let (a, b) = self.pop_two();
         match f(a.clone(), b.clone()) {
             Ok(v) => {
                 self.stack.push(v);
-                false
+                Ok(false)
             }
-            Err(_) => {
-                let struct_name = match &a {
-                    Value::Struct { name, .. } => name.clone(),
-                    Value::EnumVariant { enum_name, .. } => enum_name.clone(),
-                    _ => String::new(),
+            Err(e) => {
+                // Only try operator overloading for struct/enum variant types.
+                // For primitives, the error is genuine (e.g. division by zero) — propagate it.
+                let a_name = match &a {
+                    Value::Struct { name, .. } => Some(name.clone()),
+                    Value::EnumVariant { enum_name, .. } => Some(enum_name.clone()),
+                    _ => None,
                 };
-                if !struct_name.is_empty() {
-                    if let Some(&target) = self.chunk.method_ips.get(&(struct_name, method.to_string())) {
-                        self.stack.push(a);
-                        self.stack.push(b);
+                let b_name = match &b {
+                    Value::Struct { name, .. } => Some(name.clone()),
+                    Value::EnumVariant { enum_name, .. } => Some(enum_name.clone()),
+                    _ => None,
+                };
+                // Try a's operator overloading
+                if let Some(ref name) = a_name {
+                    let key = (name.clone(), method.to_string());
+                    if let Some(&target) = self.chunk.method_ips.get(&key) {
+                        self.stack.push(a.clone());
+                        self.stack.push(b.clone());
                         if self.call_stack.len() < 1024 {
                             let base = self.stack.len() - 2;
                             self.call_stack.push(Frame {
@@ -1122,12 +1161,39 @@ impl Vm {
                                 fn_ip: target,
                             });
                             self.ip = target;
-                            return true; // caller should continue
+                            return Ok(true);
                         }
                     }
                 }
-                self.stack.push(Value::Unit);
-                false
+                // Try b's operator overloading
+                if let Some(ref name) = b_name {
+                    let key = (name.clone(), method.to_string());
+                    if let Some(&target) = self.chunk.method_ips.get(&key) {
+                        self.stack.push(b.clone());
+                        self.stack.push(a.clone());
+                        if self.call_stack.len() < 1024 {
+                            let base = self.stack.len() - 2;
+                            self.call_stack.push(Frame {
+                                return_ip: self.ip + 1,
+                                base,
+                                max_slot: 2,
+                                write_back_slot: None,
+                                fn_ip: target,
+                            });
+                            self.ip = target;
+                            return Ok(true);
+                        }
+                    }
+                }
+                // No operator overloading available
+                if a_name.is_none() && b_name.is_none() {
+                    Err(e)
+                } else {
+                    self.stack.push(a);
+                    self.stack.push(b);
+                    self.stack.push(Value::Unit);
+                    Ok(false)
+                }
             }
         }
     }
@@ -1874,6 +1940,34 @@ pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), crate::errors
 /// Run a program, return its value (compatibility alias).
 pub fn run(source: &str) -> Result<Value, crate::errors::FerriError> {
     run_compiled(source)
+}
+
+/// Result of running a test suite.
+pub struct TestResult {
+    pub name: String,
+    pub passed: bool,
+    pub error: Option<String>,
+}
+
+/// Run all #[test] functions in source via the VM.
+pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+    let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
+    let chunk = crate::compiler::Compiler::new_with_source_dir(Some(path)).compile(&program)?;
+    let test_fns: Vec<&crate::ast::FnDef> = program.items.iter().filter_map(|item| {
+        if let crate::ast::Item::Function(f) = item {
+            if f.attributes.iter().any(|a| a.name == "test") { Some(f) } else { None }
+        } else { None }
+    }).collect();
+    let mut results = Vec::new();
+    for test_fn in &test_fns {
+        let mut vm = Vm::new(chunk.clone());
+        match vm.run() {
+            VmResult::Value(_) => results.push(TestResult { name: test_fn.name.clone(), passed: true, error: None }),
+            VmResult::Error(e) => results.push(TestResult { name: test_fn.name.clone(), passed: false, error: Some(e) }),
+        }
+    }
+    Ok(results)
 }
 
 pub mod builtins;

@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use oxy_core::interpreter::run_tests;
+use oxy_core::vm::run_tests;
 
 fn visit_ox_files(dir: &Path, files: &mut Vec<String>) {
     if let Ok(entries) = fs::read_dir(dir) {

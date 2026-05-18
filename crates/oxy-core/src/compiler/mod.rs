@@ -1230,6 +1230,14 @@ impl Compiler {
                 span,
             } => {
                 if let Expr::Ident(name, _) = target.as_ref() {
+                    // Check immutability: variable already defined but not mutable
+                    if self.sym.get(name).is_some() && !self.sym.is_mutable(name) {
+                        return Err(FerriError::Runtime {
+                            message: format!("cannot assign to immutable variable `{name}`"),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
                     self.compile_expr(value)?;
                     if let Some(slot) = self.sym.get(name) {
                         self.emit(OpCode::Dup);
@@ -1281,6 +1289,13 @@ impl Compiler {
             } => {
                 if let Expr::Ident(name, _) = target.as_ref() {
                     if let Some(slot) = self.sym.get(name) {
+                        if !self.sym.is_mutable(name) {
+                            return Err(FerriError::Runtime {
+                                message: format!("cannot assign to immutable variable `{name}`"),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
                         self.emit(OpCode::LoadLocal(slot));
                         self.compile_expr(value)?;
                         let opcode = match op {
@@ -1512,6 +1527,15 @@ impl Compiler {
                         });
                         return Ok(());
                     }
+                }
+                // Check is_builtin_path for any path length (catches
+                // std::env::args(), etc. that are >2 segments)
+                if is_builtin_path(path) {
+                    self.emit(OpCode::PathCallBuiltin {
+                        segments: path.clone(),
+                        arg_count: args.len(),
+                    });
+                    return Ok(());
                 }
                 Err(self.not_yet_supported("Unknown path call", expr.span()))
             }
@@ -1754,21 +1778,51 @@ impl Compiler {
                     for arg in args { self.compile_expr(arg)?; }
                     self.emit(OpCode::Panic);
                 } else if name == "assert" {
-                    for arg in args { self.compile_expr(arg)?; }
+                    // assert!(cond) or assert!(cond, "message")
+                    self.compile_expr(&args[0])?; // compile condition
                     let skip = self.emit(OpCode::JumpIfTrue(0));
-                    self.emit(OpCode::ConstString("assertion failed".to_string()));
+                    if args.len() > 1 {
+                        self.compile_expr(&args[1])?; // custom message
+                    } else {
+                        self.emit(OpCode::ConstString("assertion failed".to_string()));
+                    }
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "assert_eq" {
-                    for arg in args { self.compile_expr(arg)?; }
+                    // assert_eq!(left, right) or assert_eq!(left, right, "message")
+                    self.compile_expr(&args[0])?;
+                    self.compile_expr(&args[1])?;
                     self.emit(OpCode::Eq);
                     let skip = self.emit(OpCode::JumpIfTrue(0));
-                    self.emit(OpCode::ConstString("assertion failed: left != right".to_string()));
+                    if args.len() > 2 {
+                        self.compile_expr(&args[2])?;
+                    } else {
+                        self.emit(OpCode::ConstString(
+                            "assertion failed: left != right".to_string(),
+                        ));
+                    }
+                    self.emit(OpCode::Panic);
+                    self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                } else if name == "assert_ne" {
+                    // assert_ne!(left, right) or assert_ne!(left, right, "message")
+                    self.compile_expr(&args[0])?;
+                    self.compile_expr(&args[1])?;
+                    self.emit(OpCode::Neq);
+                    let skip = self.emit(OpCode::JumpIfTrue(0));
+                    if args.len() > 2 {
+                        self.compile_expr(&args[2])?;
+                    } else {
+                        self.emit(OpCode::ConstString(
+                            "assertion failed: left == right".to_string(),
+                        ));
+                    }
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
                 } else if name == "dbg" {
-                    for arg in args { self.compile_expr(arg)?; }
-                    return Err(self.not_yet_supported("dbg! macro", expr.span()));
+                    // dbg!(expr) — print debug representation and return the value
+                    self.compile_expr(&args[0])?;
+                    self.emit(OpCode::Dup);
+                    self.emit(OpCode::PrintLn);
                 } else {
                     for arg in args { self.compile_expr(arg)?; }
                     return Err(self.not_yet_supported("Unknown macro", expr.span()));

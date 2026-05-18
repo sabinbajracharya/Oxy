@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use oxy_core::interpreter::{run, run_compiled};
+use oxy_core::vm::{run, run_compiled};
 
 const FIB_SOURCE: &str = r#"
 fn fib(n: i64) -> i64 {
