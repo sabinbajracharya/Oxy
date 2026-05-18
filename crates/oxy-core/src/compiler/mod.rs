@@ -2055,6 +2055,11 @@ fn is_builtin_path(path: &[String]) -> bool {
             // json
             | ["json", "parse"]
             | ["json", "to_string"]
+            | ["json", "serialize"]
+            | ["json", "deserialize"]
+            | ["json", "to_string_pretty"]
+            | ["json", "from_str"]
+            | ["json", "from_struct"]
             // constructors
             | ["String", "from"]
             | ["HashMap", "new"]
@@ -2063,11 +2068,14 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["VecDeque", "new"]
             | ["ListNode", "new"]
             | ["TreeNode", "new"]
+            | ["Db", "memory"]
+            | ["Db", "open"]
             | ["char", "from_code"]
             | ["int", "parse"]
             | ["float", "parse"]
     ) || matches!(
         module,
         "fs" | "env" | "process" | "regex" | "net" | "time" | "rand"
-    )
+            | "http"
+    ) || segs.as_slice() == ["std", "env", "args"]
 }
