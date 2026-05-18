@@ -1107,19 +1107,14 @@ impl Vm {
                 "clone" => Ok(receiver.clone()),
                 _ => Err(format!("no method '{}' on struct '{}'", method_name, name)),
             },
-            // Iterator methods: use the interpreter's call_iter_method.
-            // Closure-based consumers (any, all, find, fold, for_each, position)
-            // require calling closures in a loop — full native support needs new opcodes.
+            // Iterator: native adapters + consumers via builtins.
+            // Closure consumers use interpreter's call_function in a Rust loop.
             Value::Iterator(_) => {
-                let span = crate::lexer::Span {
-                    start: 0,
-                    end: 0,
-                    line: 0,
-                    column: 0,
-                };
-                self.interpreter
-                    .call_iter_method(receiver, method_name, args, &span)
-                    .map_err(|e| format!("{e}"))
+                builtins::iterator::dispatch(receiver, method_name, &args, |func, fargs| {
+                    self.interpreter
+                        .call_function(func, fargs, 0, 0)
+                        .map_err(|e| format!("{e}"))
+                })
             }
             _ => Err(format!(
                 "no method '{}' on type {}",

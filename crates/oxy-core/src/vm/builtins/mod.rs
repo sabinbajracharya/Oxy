@@ -6,6 +6,7 @@
 
 pub mod hashmap;
 pub mod hashset;
+pub mod iterator;
 pub mod numeric;
 pub mod option_result;
 pub mod string;
