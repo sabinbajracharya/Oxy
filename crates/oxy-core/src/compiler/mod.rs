@@ -350,8 +350,11 @@ impl Compiler {
                         let mname = format!("{}::{}", prefix, method.name);
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
+                        // Register under both qualified and unqualified type names
                         self.method_ips
                             .insert((qualified_type.clone(), method.name.clone()), ip);
+                        self.method_ips
+                            .insert((i.type_name.clone(), method.name.clone()), ip);
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
                             self.sym.define(&param.name);
