@@ -2,6 +2,28 @@
 
 use crate::lexer::Span;
 
+/// Item visibility.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Visibility {
+    /// `pub` — visible everywhere.
+    Pub,
+    /// `pub(crate)` — visible within the current crate.
+    PubCrate,
+    /// `pub(super)` — visible in the parent module.
+    PubSuper,
+    /// Default — private to the current module.
+    Private,
+}
+
+impl Visibility {
+    pub fn is_pub(&self) -> bool {
+        matches!(self, Visibility::Pub)
+    }
+    pub fn is_visible(&self) -> bool {
+        !matches!(self, Visibility::Private)
+    }
+}
+
 /// A complete Oxy program — a sequence of top-level items.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
