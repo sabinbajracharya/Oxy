@@ -1472,10 +1472,7 @@ impl Compiler {
                     }
                     let qualified = format!("{}::{}", &path[0], &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
-                        self.emit(OpCode::Call {
-                            target,
-                            arg_count: args.len(),
-                        });
+                        self.emit(OpCode::Call { target, arg_count: args.len() });
                         return Ok(());
                     }
                     if is_builtin_path(path) {
