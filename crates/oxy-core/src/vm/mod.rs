@@ -159,6 +159,12 @@ pub enum OpCode {
     /// Await a future: pop Value, if Future run its body, if JoinHandle unwrap,
     /// otherwise pass through.
     Await,
+    /// Try operator `?`: pop value; if Err(e) or None, return early with that value;
+    /// otherwise push unwrapped inner value.
+    TryPop,
+    /// Type cast: pop value, push converted value. Target: 0=int→float, 1=float→int,
+    /// 2=int→char, 3=char→int.
+    Cast(u8),
 
     // --- Pattern matching ---
     /// Pop a value and store it in the given local slot (for pattern binding).
@@ -681,6 +687,65 @@ impl Vm {
                             self.stack.push(other);
                         }
                     }
+                }
+
+                OpCode::TryPop => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let is_error = matches!(&val,
+                        Value::EnumVariant { enum_name, variant, .. }
+                            if (enum_name == "Result" && variant == "Err")
+                                || (enum_name == "Option" && variant == "None")
+                    );
+                    if is_error {
+                        // Early return with the error/None value
+                        self.stack.push(val);
+                        let frame = self.call_stack.pop().unwrap();
+                        if self.call_stack.is_empty() {
+                            return VmResult::Value(self.stack.pop().unwrap_or(Value::Unit));
+                        }
+                        let ret_val = self.stack.pop().unwrap_or(Value::Unit);
+                        self.stack.truncate(frame.base);
+                        self.stack.push(ret_val);
+                        self.ip = frame.return_ip;
+                        continue;
+                    }
+                    match val {
+                        Value::EnumVariant { variant, data, .. }
+                            if variant == "Some" || variant == "Ok" =>
+                        {
+                            self.stack
+                                .push(data.first().cloned().unwrap_or(Value::Unit));
+                        }
+                        other => {
+                            self.stack.push(other);
+                        }
+                    }
+                }
+
+                OpCode::Cast(target) => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let result = match target {
+                        0 => match val {
+                            Value::Integer(n) => Value::Float(n as f64),
+                            v => v,
+                        },
+                        1 => match val {
+                            Value::Float(n) => Value::Integer(n as i64),
+                            v => v,
+                        },
+                        2 => match val {
+                            Value::Integer(n) => {
+                                Value::Char(char::from_u32(n as u32).unwrap_or('\0'))
+                            }
+                            v => v,
+                        },
+                        3 => match val {
+                            Value::Char(c) => Value::Integer(c as i64),
+                            v => v,
+                        },
+                        _ => val,
+                    };
+                    self.stack.push(result);
                 }
 
                 OpCode::FieldAccess { field_name } => {

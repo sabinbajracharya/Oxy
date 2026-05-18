@@ -1044,6 +1044,7 @@ impl Compiler {
 
             Expr::Try { expr: inner, .. } => {
                 self.compile_expr(inner)?;
+                self.emit(OpCode::TryPop);
                 Ok(())
             }
 
@@ -1419,8 +1420,23 @@ impl Compiler {
                 }
                 Ok(())
             }
-            Expr::As { expr: inner, .. } => {
+            Expr::As {
+                expr: inner,
+                type_name,
+                ..
+            } => {
                 self.compile_expr(inner)?;
+                let target = match type_name.as_str() {
+                    "f64" | "f32" | "Float" => 0,   // int → float
+                    "i64" | "i32" | "Integer" => 1,  // float → int
+                    "char" => 2,                      // int → char
+                    _ => {
+                        // int→int casts are no-ops (all integers are i64)
+                        // Other casts: just pass through
+                        return Ok(());
+                    }
+                };
+                self.emit(OpCode::Cast(target));
                 Ok(())
             }
         }
