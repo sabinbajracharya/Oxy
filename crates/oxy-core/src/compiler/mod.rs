@@ -920,6 +920,28 @@ impl Compiler {
             Expr::Call {
                 callee, args, ..
             } => {
+                // Handle bare enum constructors: Some(val), None, Ok(val), Err(val)
+                if let Expr::Ident(name, _) = callee.as_ref() {
+                    let enum_info: Option<(&str, &str)> = match name.as_str() {
+                        "Some" => Some(("Option", "Some")),
+                        "None" => Some(("Option", "None")),
+                        "Ok" => Some(("Result", "Ok")),
+                        "Err" => Some(("Result", "Err")),
+                        _ => None,
+                    };
+                    if let Some((enum_name, variant)) = enum_info {
+                        for arg in args {
+                            self.compile_expr(arg)?;
+                        }
+                        self.emit(OpCode::MakeEnumVariant {
+                            enum_name: enum_name.to_string(),
+                            variant: variant.to_string(),
+                            arg_count: args.len(),
+                        });
+                        return Ok(());
+                    }
+                }
+
                 // Determine if this is a direct function call (compile-time resolved)
                 let direct_target: Option<usize> = if let Expr::Ident(name, _) = callee.as_ref() {
                     if name == "println!" || name == "print!" {
