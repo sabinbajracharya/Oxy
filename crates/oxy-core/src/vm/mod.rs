@@ -1100,14 +1100,14 @@ impl Vm {
             {
                 builtins::option_result::dispatch(receiver, method_name, &args)
             }
-            Value::EnumVariant { enum_name, .. } => {
-                Err(format!(
-                    "no method '{}' on enum '{}'",
-                    method_name, enum_name
-                ))
-            }
+            Value::EnumVariant { enum_name, .. } => match method_name {
+                "clone" => Ok(receiver.clone()),
+                "to_string" => Ok(Value::String(receiver.to_string())),
+                _ => Err(format!("no method '{}' on enum '{}'", method_name, enum_name)),
+            },
             Value::Struct { name, .. } => match method_name {
                 "clone" => Ok(receiver.clone()),
+                "to_string" => Ok(Value::String(receiver.to_string())),
                 _ => Err(format!("no method '{}' on struct '{}'", method_name, name)),
             },
             // Iterator: native adapters + consumers via builtins.

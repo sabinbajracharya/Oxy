@@ -74,6 +74,8 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             }
             _ => Ok(Value::none()),
         },
+        "clone" => Ok(receiver.clone()),
+        "to_string" => Ok(Value::String(receiver.to_string())),
         _ => Err(format!(
             "no method '{}' on type {}",
             method,
