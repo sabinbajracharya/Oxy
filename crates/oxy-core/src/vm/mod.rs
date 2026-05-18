@@ -485,17 +485,19 @@ impl Vm {
                 }
 
                 OpCode::VecIndex => {
-                    let idx = match self.stack.pop().unwrap_or(Value::Unit) {
-                        Value::Integer(i) => i as usize,
-                        other => {
-                            return VmResult::Error(format!(
-                                "index must be integer, got {}",
-                                other.type_name()
-                            ))
-                        }
-                    };
+                    let key = self.stack.pop().unwrap_or(Value::Unit);
                     match self.stack.pop().unwrap_or(Value::Unit) {
+                        Value::HashMap(rc) => {
+                            match rc.borrow().get(&key).cloned() {
+                                Some(val) => self.stack.push(val),
+                                None => self.stack.push(Value::Unit),
+                            }
+                        }
                         Value::Vec(rc) => {
+                            let idx = match key {
+                                Value::Integer(i) => i as usize,
+                                other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
+                            };
                             let vec = rc.borrow();
                             if idx < vec.len() {
                                 self.stack.push(vec[idx].clone());
@@ -508,6 +510,10 @@ impl Vm {
                             }
                         }
                         Value::String(s) => {
+                            let idx = match key {
+                                Value::Integer(i) => i as usize,
+                                other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
+                            };
                             if let Some(c) = s.chars().nth(idx) {
                                 self.stack.push(Value::Char(c));
                             } else {
@@ -519,6 +525,10 @@ impl Vm {
                             }
                         }
                         Value::Tuple(t) => {
+                            let idx = match key {
+                                Value::Integer(i) => i as usize,
+                                other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
+                            };
                             if idx < t.len() {
                                 self.stack.push(t[idx].clone());
                             } else {
