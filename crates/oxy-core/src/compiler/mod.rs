@@ -115,11 +115,25 @@ pub struct Compiler {
     fn_local_names: HashMap<usize, Vec<String>>,
     /// Mutable variables captured by closures (for targeted Cell wrapping).
     captured_mutable: HashSet<String>,
+    /// If true, compilation fails when no `main` function exists.
+    /// Set to false for test runners and library code.
+    require_main: bool,
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a compiler that does not require a `main` function (for test runners, etc.).
+    pub fn new_for_tests(source_path: Option<&str>) -> Self {
+        let source_dir =
+            source_path.and_then(|p| std::path::Path::new(p).parent().map(|d| d.to_path_buf()));
+        Self {
+            source_dir,
+            require_main: false,
+            ..Self::default()
+        }
     }
 
     /// Create a compiler that can resolve file-based modules relative to `source_path`.
@@ -152,6 +166,7 @@ impl Default for Compiler {
             fn_meta: HashMap::new(),
             fn_local_names: HashMap::new(),
             captured_mutable: HashSet::new(),
+            require_main: true,
         }
     }
 }
@@ -173,10 +188,10 @@ impl Compiler {
             }
         });
 
-        // Require a `main` function for executable programs (unless it's a test file)
+        // Require a `main` function for executable programs
         let entry_point = match self.functions.get("main").copied() {
             Some(ip) => ip,
-            None if has_test_fns => 0, // test runner mode — no main needed
+            None if !self.require_main || has_test_fns => 0,
             None => {
                 return Err(FerriError::Runtime {
                     message: "no `main` function found".into(),

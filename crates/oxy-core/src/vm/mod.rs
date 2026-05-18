@@ -2049,7 +2049,7 @@ pub struct TestResult {
 pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::errors::FerriError> {
     let program = crate::parser::parse(source)?;
     crate::type_checker::TypeChecker::new().check_program(&program)?;
-    let chunk = crate::compiler::Compiler::new_with_source_dir(Some(path)).compile(&program)?;
+    let chunk = crate::compiler::Compiler::new_for_tests(Some(path)).compile(&program)?;
     let test_fns: Vec<&crate::ast::FnDef> = program.items.iter().filter_map(|item| {
         if let crate::ast::Item::Function(f) = item {
             if f.attributes.iter().any(|a| a.name == "test") { Some(f) } else { None }

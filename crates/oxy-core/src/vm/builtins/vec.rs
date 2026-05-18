@@ -203,22 +203,6 @@ where
             }
             Ok(Value::Unit)
         }
-        "sort_by" => {
-            let closure = args.first().cloned().unwrap_or(Value::Unit);
-            let mut v = rc.borrow_mut();
-            let len = v.len();
-            for i in 0..len {
-                for j in 0..len - i - 1 {
-                    let cmp = call_closure(closure.clone(), &[v[j].clone(), v[j + 1].clone()])?;
-                    if let Value::Integer(n) = cmp {
-                        if n > 0 {
-                            v.swap(j, j + 1);
-                        }
-                    }
-                }
-            }
-            Ok(Value::Unit)
-        }
         "sort_by_key" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut v = rc.borrow_mut();
