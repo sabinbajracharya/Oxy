@@ -1544,7 +1544,9 @@ impl Compiler {
                 // Emit a jump to skip over the closure body in the instruction stream
                 let skip_jump_idx = self.emit(OpCode::Jump(0));
                 let target_ip = self.code.len();
-                let saved_sym = self.sym.clone();
+                // Swap in a fresh sym table so closure params start at slot 0.
+                // Outer sym is needed to resolve captured variable slots.
+                let saved_sym = std::mem::replace(&mut self.sym, SymTable::new(0));
                 for param in params {
                     self.sym.define(&param.name);
                 }
