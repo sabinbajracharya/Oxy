@@ -73,6 +73,8 @@ pub struct Compiler {
     loop_stack: Vec<LoopContext>,
     /// AST expressions stored for Eval opcode fallback.
     ast_nodes: Vec<crate::ast::Expr>,
+    /// Closure metadata: (param_names, body_expr) for interpreter fallback on compiled closures.
+    closure_meta: Vec<(Vec<String>, crate::ast::Expr)>,
     /// Snapshot of main's local variable names (for Eval env reconstruction).
     main_local_names: Vec<String>,
     /// Registered struct definitions.
@@ -113,6 +115,7 @@ impl Default for Compiler {
             functions: HashMap::new(),
             loop_stack: Vec::new(),
             ast_nodes: Vec::new(),
+            closure_meta: Vec::new(),
             main_local_names: Vec::new(),
             struct_defs: HashMap::new(),
             enum_defs: HashMap::new(),
@@ -141,6 +144,7 @@ impl Compiler {
             entry_point,
             functions: self.functions,
             ast_nodes: self.ast_nodes,
+            closure_meta: self.closure_meta,
             local_names: self.main_local_names,
             struct_defs: self.struct_defs,
             enum_defs: self.enum_defs,
@@ -1230,6 +1234,8 @@ impl Compiler {
             }
 
             Expr::Closure { params, body, .. } => {
+                // Emit a jump to skip over the closure body in the instruction stream
+                let skip_jump_idx = self.emit(OpCode::Jump(0));
                 let target_ip = self.code.len();
                 let saved_sym = self.sym.clone();
                 for param in params {
@@ -1238,9 +1244,17 @@ impl Compiler {
                 self.compile_expr(body)?;
                 self.emit(OpCode::Return);
                 self.sym = saved_sym;
+                // Patch the skip jump to land after the Return
+                self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
+                let meta_idx = self.closure_meta.len();
+                self.closure_meta.push((
+                    params.iter().map(|p| p.name.clone()).collect(),
+                    *body.clone(),
+                ));
                 self.emit(OpCode::Closure {
                     target_ip,
                     param_count: params.len(),
+                    meta_idx,
                 });
                 Ok(())
             }
@@ -1382,6 +1396,16 @@ impl Compiler {
                     } else {
                         self.emit(OpCode::Print);
                     }
+                } else if name == "vec" {
+                    self.emit(OpCode::MakeArray {
+                        count: args.len(),
+                    });
+                } else if name == "format" {
+                    self.emit(OpCode::Format {
+                        arg_count: args.len(),
+                    });
+                } else {
+                    self.emit_eval(expr);
                 }
                 Ok(())
             }

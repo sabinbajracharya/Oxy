@@ -1,0 +1,109 @@
+//! String method implementations — shared by interpreter and VM.
+
+use crate::types::Value;
+
+pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
+    let Value::String(s) = &receiver else {
+        unreachable!()
+    };
+    match method {
+        "len" => Ok(Value::Integer(s.len() as i64)),
+        "is_empty" => Ok(Value::Bool(s.is_empty())),
+        "to_uppercase" => Ok(Value::String(s.to_uppercase())),
+        "to_lowercase" => Ok(Value::String(s.to_lowercase())),
+        "trim" => Ok(Value::String(s.trim().to_string())),
+        "contains" => {
+            let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+            Ok(Value::Bool(s.contains(&pat)))
+        }
+        "starts_with" => {
+            let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+            Ok(Value::Bool(s.starts_with(&pat)))
+        }
+        "ends_with" => {
+            let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+            Ok(Value::Bool(s.ends_with(&pat)))
+        }
+        "replace" => {
+            let from = args.first().map(|v| v.to_string()).unwrap_or_default();
+            let to = args.get(1).map(|v| v.to_string()).unwrap_or_default();
+            Ok(Value::String(s.replace(&from, &to)))
+        }
+        "split" => {
+            let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+            let parts: Vec<Value> = s
+                .split(&pat)
+                .map(|p| Value::String(p.to_string()))
+                .collect();
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                parts,
+            ))))
+        }
+        "chars" => {
+            let chars: Vec<Value> = s.chars().map(Value::Char).collect();
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                chars,
+            ))))
+        }
+        "repeat" => {
+            let n = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .unwrap_or(1);
+            Ok(Value::String(s.repeat(n)))
+        }
+        "push_str" => {
+            eprintln!("String::push_str is unsupported (strings are immutable in Oxy)");
+            Ok(Value::Unit)
+        }
+        "char_at" => {
+            let i = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            Ok(s.chars().nth(i).map(Value::Char).unwrap_or(Value::Unit))
+        }
+        "substring" => {
+            let start = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let end = args
+                .get(1)
+                .and_then(|v| match v {
+                    Value::Integer(n) => Some(*n as usize),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let chars: Vec<char> = s.chars().collect();
+            if start <= end && end <= chars.len() {
+                Ok(Value::String(chars[start..end].iter().collect()))
+            } else {
+                Err(format!("substring: invalid range {}..{}", start, end))
+            }
+        }
+        "parse_int" => match s.trim().parse::<i64>() {
+            Ok(n) => Ok(Value::ok(Value::Integer(n))),
+            Err(_) => Ok(Value::err(Value::String(format!(
+                "cannot parse \"{s}\" as integer"
+            )))),
+        },
+        "parse_float" => match s.trim().parse::<f64>() {
+            Ok(n) => Ok(Value::ok(Value::Float(n))),
+            Err(_) => Ok(Value::err(Value::String(format!(
+                "cannot parse \"{s}\" as float"
+            )))),
+        },
+        "clone" => Ok(Value::String(s.clone())),
+        _ => Err(format!("no method '{}' on type String", method)),
+    }
+}

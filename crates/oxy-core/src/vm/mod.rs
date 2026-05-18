@@ -139,9 +139,11 @@ pub enum OpCode {
         arg_count: usize,
     },
     /// Push a closure value: body starts at `target_ip`, takes `param_count` args.
+    /// `meta_idx` indexes Chunk::closure_meta for param names + AST body.
     Closure {
         target_ip: usize,
         param_count: usize,
+        meta_idx: usize,
     },
     /// Pop a Value::Function, extract its target IP, call with `arg_count` args.
     CallClosure {
@@ -186,6 +188,8 @@ pub struct Chunk {
     pub functions: std::collections::HashMap<String, usize>,
     /// AST expression nodes for interpreter fallback (indexed by Eval opcode arg).
     pub ast_nodes: Vec<crate::ast::Expr>,
+    /// Closure metadata: (param_names, body_expr) indexed by Closure.meta_idx.
+    pub closure_meta: Vec<(Vec<String>, crate::ast::Expr)>,
     /// Local variable names: slot_index → name (for Eval env reconstruction).
     pub local_names: Vec<String>,
     /// Registered struct definitions (for StructInit and method dispatch).
@@ -578,6 +582,7 @@ impl Vm {
                 OpCode::Closure {
                     target_ip,
                     param_count,
+                    meta_idx,
                 } => {
                     let blank_span = crate::lexer::Span {
                         start: 0,
@@ -585,9 +590,19 @@ impl Vm {
                         line: 0,
                         column: 0,
                     };
-                    let params: Vec<crate::ast::Param> = (0..param_count)
-                        .map(|i| crate::ast::Param {
-                            name: format!("_{}", i),
+                    let (param_names, body_expr) =
+                        self.chunk.closure_meta.get(meta_idx).cloned().unwrap_or_else(
+                            || {
+                                (
+                                    (0..param_count).map(|i| format!("_{i}")).collect(),
+                                    crate::ast::Expr::IntLiteral(0, blank_span),
+                                )
+                            },
+                        );
+                    let params: Vec<crate::ast::Param> = param_names
+                        .into_iter()
+                        .map(|name| crate::ast::Param {
+                            name,
                             type_ann: crate::ast::TypeAnnotation {
                                 name: "_".into(),
                                 span: blank_span,
@@ -595,15 +610,19 @@ impl Vm {
                             span: blank_span,
                         })
                         .collect();
+                    let body_block = crate::ast::Block {
+                        stmts: vec![crate::ast::Stmt::Expr {
+                            expr: body_expr,
+                            has_semicolon: false,
+                        }],
+                        span: blank_span,
+                    };
                     self.stack
                         .push(Value::Function(Box::new(crate::types::FunctionData {
                             name: "<closure>".into(),
                             params,
                             return_type: None,
-                            body: crate::ast::Block {
-                                stmts: vec![],
-                                span: blank_span,
-                            },
+                            body: body_block,
                             closure_env: crate::env::Environment::new(),
                             target_ip: Some(target_ip),
                         })));
@@ -887,129 +906,10 @@ impl Vm {
         args: Vec<Value>,
     ) -> Result<Value, String> {
         match &receiver {
-            Value::Vec(rc) => match method_name {
-                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
-                "push" => {
-                    rc.borrow_mut().push(args.into_iter().next().unwrap_or(Value::Unit));
-                    Ok(Value::Unit)
-                }
-                "pop" => {
-                    let popped = rc.borrow_mut().pop();
-                    match popped {
-                        Some(val) => Ok(Value::some(val)),
-                        None => Ok(Value::none()),
-                    }
-                }
-                _ => Err(format!("no method '{}' on type Vec", method_name)),
-            },
-            Value::String(s) => match method_name {
-                "len" => Ok(Value::Integer(s.len() as i64)),
-                "to_uppercase" => Ok(Value::String(s.to_uppercase())),
-                "to_lowercase" => Ok(Value::String(s.to_lowercase())),
-                "trim" => Ok(Value::String(s.trim().to_string())),
-                "contains" => {
-                    let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
-                    Ok(Value::Bool(s.contains(&pat)))
-                }
-                "split" => {
-                    let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
-                    let parts: Vec<Value> = s
-                        .split(&pat)
-                        .map(|p| Value::String(p.to_string()))
-                        .collect();
-                    Ok(Value::Vec(Rc::new(RefCell::new(parts))))
-                }
-                "char_at" => {
-                    let i = args
-                        .first()
-                        .and_then(|v| match v {
-                            Value::Integer(n) => Some(*n as usize),
-                            _ => None,
-                        })
-                        .unwrap_or(0);
-                    Ok(s.chars().nth(i).map(Value::Char).unwrap_or(Value::Unit))
-                }
-                "substring" => {
-                    let start = args
-                        .first()
-                        .and_then(|v| match v {
-                            Value::Integer(n) => Some(*n as usize),
-                            _ => None,
-                        })
-                        .unwrap_or(0);
-                    let end = args
-                        .get(1)
-                        .and_then(|v| match v {
-                            Value::Integer(n) => Some(*n as usize),
-                            _ => None,
-                        })
-                        .unwrap_or(0);
-                    let chars: Vec<char> = s.chars().collect();
-                    if start <= end && end <= chars.len() {
-                        Ok(Value::String(chars[start..end].iter().collect()))
-                    } else {
-                        Err(format!("substring: invalid range {}..{}", start, end))
-                    }
-                }
-                "parse_int" => match s.trim().parse::<i64>() {
-                    Ok(n) => Ok(Value::ok(Value::Integer(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{s}\" as integer"
-                    )))),
-                },
-                "parse_float" => match s.trim().parse::<f64>() {
-                    Ok(n) => Ok(Value::ok(Value::Float(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{s}\" as float"
-                    )))),
-                },
-                _ => Err(format!("no method '{}' on type String", method_name)),
-            },
-            Value::HashMap(rc) => match method_name {
-                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
-                "get" => {
-                    let key = args.first().cloned().unwrap_or(Value::Unit);
-                    Ok(rc.borrow().get(&key).cloned().unwrap_or(Value::Unit))
-                }
-                "insert" => {
-                    let key = args.first().cloned().unwrap_or(Value::Unit);
-                    let val = args.get(1).cloned().unwrap_or(Value::Unit);
-                    rc.borrow_mut().insert(key, val);
-                    Ok(Value::Unit)
-                }
-                "get_or" => {
-                    let key = args.first().cloned().unwrap_or(Value::Unit);
-                    let default = args.get(1).cloned().unwrap_or(Value::Unit);
-                    Ok(rc.borrow().get(&key).cloned().unwrap_or(default))
-                }
-                _ => Err(format!("no method '{}' on type HashMap", method_name)),
-            },
-            Value::HashSet(rc) => match method_name {
-                "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
-                "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
-                "contains" => {
-                    let val = args.first().cloned().unwrap_or(Value::Unit);
-                    Ok(Value::Bool(rc.borrow().contains(&val)))
-                }
-                "insert" => {
-                    let val = args.first().cloned().unwrap_or(Value::Unit);
-                    let was_new = rc.borrow_mut().insert(val);
-                    Ok(Value::Bool(was_new))
-                }
-                "remove" => {
-                    let val = args.first().cloned().unwrap_or(Value::Unit);
-                    let existed = rc.borrow_mut().remove(&val);
-                    Ok(Value::Bool(existed))
-                }
-                "to_vec" => {
-                    let s = rc.borrow();
-                    let mut v: Vec<Value> = s.iter().cloned().collect();
-                    v.sort();
-                    Ok(Value::Vec(Rc::new(RefCell::new(v))))
-                }
-                "clone" => Ok(receiver.clone()),
-                _ => Err(format!("no method '{}' on type HashSet", method_name)),
-            },
+            Value::Vec(_) => builtins::vec::dispatch(receiver, method_name, &args),
+            Value::String(_) => builtins::string::dispatch(receiver, method_name, &args),
+            Value::HashMap(_) => builtins::hashmap::dispatch(receiver, method_name, &args),
+            Value::HashSet(_) => builtins::hashset::dispatch(receiver, method_name, &args),
             Value::VecDeque(d) => match method_name {
                 "len" => Ok(Value::Integer(d.len() as i64)),
                 "is_empty" => Ok(Value::Bool(d.is_empty())),
@@ -1142,6 +1042,20 @@ impl Vm {
                 "clone" => Ok(receiver.clone()),
                 _ => Err(format!("no method '{}' on struct '{}'", method_name, name)),
             },
+            // Iterator methods: use the interpreter's call_iter_method.
+            // Closure-based consumers (any, all, find, fold, for_each, position)
+            // require calling closures in a loop — full native support needs new opcodes.
+            Value::Iterator(_) => {
+                let span = crate::lexer::Span {
+                    start: 0,
+                    end: 0,
+                    line: 0,
+                    column: 0,
+                };
+                self.interpreter
+                    .call_iter_method(receiver, method_name, args, &span)
+                    .map_err(|e| format!("{e}"))
+            }
             _ => Err(format!(
                 "no method '{}' on type {}",
                 method_name,
@@ -1444,5 +1358,6 @@ fn lcm(a: i64, b: i64) -> i64 {
     }
 }
 
+pub mod builtins;
 #[cfg(test)]
 mod tests;

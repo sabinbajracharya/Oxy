@@ -14,7 +14,7 @@ use super::super::Interpreter;
 
 impl Interpreter {
     /// Drive an iterator forward one step. Returns Some(value) or None if exhausted.
-    fn drive_next(&mut self, iter: &mut IteratorState) -> Option<Value> {
+    pub(crate) fn drive_next(&mut self, iter: &mut IteratorState) -> Option<Value> {
         match iter {
             IteratorState::VecSource { data, index } => {
                 if *index < data.len() {

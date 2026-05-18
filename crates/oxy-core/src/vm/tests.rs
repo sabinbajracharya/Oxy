@@ -912,4 +912,19 @@ mod tests {
         let (_, output) = result.unwrap();
         assert_eq!(output, vec!["2\n"]);
     }
+
+    #[test]
+    fn test_compiled_iter_any() {
+        let source = r#"
+        fn main() {
+            let v = vec![1, 2, 3];
+            let r = v.iter().any(|x| x == 2);
+            println!("{}", r);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "iter any failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["true\n"], "expected 'true', got {:?}", output);
+    }
 }
