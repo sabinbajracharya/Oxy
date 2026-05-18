@@ -66,6 +66,7 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             let items: Result<Vec<String>, String> = rc.borrow().iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
+        Value::Cell(rc) => serialize_value(&rc.borrow()),
         Value::Future(_) => Err("cannot serialize future".to_string()),
         Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }
@@ -183,6 +184,7 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
         }
+        Value::Cell(rc) => serialize_value(&rc.borrow()),
         Value::Future(_) => Err("cannot serialize future".to_string()),
         Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
     }

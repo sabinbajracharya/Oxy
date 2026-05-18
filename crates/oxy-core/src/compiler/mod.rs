@@ -107,6 +107,8 @@ pub struct Compiler {
     fn_meta: HashMap<String, (Vec<crate::ast::Param>, Box<crate::ast::Expr>, Option<crate::ast::TypeAnnotation>)>,
     /// Per-function local variable names: function entry IP → slot_names.
     fn_local_names: HashMap<usize, Vec<String>>,
+    /// Mutable variables captured by closures (for targeted Cell wrapping).
+    captured_mutable: HashSet<String>,
 }
 
 impl Compiler {
@@ -144,6 +146,7 @@ impl Default for Compiler {
             const_values: HashMap::new(),
             fn_meta: HashMap::new(),
             fn_local_names: HashMap::new(),
+            captured_mutable: HashSet::new(),
         }
     }
 }
@@ -276,6 +279,10 @@ impl Compiler {
         for param in &f.params {
             self.sym.define(&param.name);
         }
+
+        // Pre-scan: find mutable variables captured by closures
+        let param_names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
+        self.captured_mutable = find_captured_mutable(&f.body, &param_names);
 
         self.compile_block(&f.body)?;
         self.emit(OpCode::Return);
@@ -649,6 +656,9 @@ impl Compiler {
                     self.sym.define(name)
                 };
                 self.emit(OpCode::StoreLocal(slot));
+                if *mutable && self.captured_mutable.contains(name) {
+                    self.emit(OpCode::MakeCell(slot));
+                }
                 Ok(())
             }
 
@@ -1178,8 +1188,19 @@ impl Compiler {
                         arg_count: args.len(),
                     });
                 } else {
-                    // Indirect call — use interpreter fallback for now.
-                    // TODO: native CallClosure with captured variable support in VM.
+                    // Check if callee is a local variable (closure/function value)
+                    if let Expr::Ident(name, _) = callee.as_ref() {
+                        if self.sym.get(name).is_some() {
+                            // Native CallClosure for indirect calls
+                            self.compile_expr(callee)?;
+                            for arg in args {
+                                self.compile_expr(arg)?;
+                            }
+                            self.emit(OpCode::CallClosure { arg_count: args.len() });
+                            return Ok(());
+                        }
+                    }
+                    // Unknown function — interpreter fallback
                     self.emit_eval(expr);
                 }
                 Ok(())
@@ -1795,6 +1816,54 @@ impl Compiler {
 }
 
 /// Find all free variables in an expression (variables used but not defined in `params`).
+/// Pre-scan: find names of free variables in all closures in the function body.
+fn find_captured_mutable(block: &crate::ast::Block, params: &[String]) -> HashSet<String> {
+    let mut captured = HashSet::new();
+    collect_closure_free_vars_in_block(block, params, &mut captured);
+    captured
+}
+
+fn collect_closure_free_vars_in_block(block: &crate::ast::Block, params: &[String], out: &mut HashSet<String>) {
+    for stmt in &block.stmts {
+        match stmt {
+            crate::ast::Stmt::Expr { expr, .. } => collect_closure_free_vars(expr, params, out),
+            crate::ast::Stmt::Let { value, .. } => {
+                if let Some(v) = value { collect_closure_free_vars(v, params, out); }
+            }
+            crate::ast::Stmt::While { condition, body, .. } => {
+                collect_closure_free_vars(condition, params, out);
+                collect_closure_free_vars_in_block(body, params, out);
+            }
+            crate::ast::Stmt::Loop { body, .. } => collect_closure_free_vars_in_block(body, params, out),
+            _ => {}
+        }
+    }
+}
+
+fn collect_closure_free_vars(expr: &crate::ast::Expr, params: &[String], out: &mut HashSet<String>) {
+    match expr {
+        crate::ast::Expr::Closure { params: inner_params, body, .. } => {
+            let mut cp = params.to_vec();
+            for p in inner_params { cp.push(p.name.clone()); }
+            for v in find_free_vars(body, &cp) { out.insert(v); }
+        }
+        crate::ast::Expr::BinaryOp { left, right, .. } => {
+            collect_closure_free_vars(left, params, out);
+            collect_closure_free_vars(right, params, out);
+        }
+        crate::ast::Expr::Call { callee, args, .. } => {
+            collect_closure_free_vars(callee, params, out);
+            for a in args { collect_closure_free_vars(a, params, out); }
+        }
+        crate::ast::Expr::UnaryOp { expr: inner, .. } => collect_closure_free_vars(inner, params, out),
+        crate::ast::Expr::Assign { target, value, .. } => {
+            collect_closure_free_vars(target, params, out);
+            collect_closure_free_vars(value, params, out);
+        }
+        _ => {}
+    }
+}
+
 fn find_free_vars(expr: &crate::ast::Expr, params: &[String]) -> Vec<String> {
     let mut vars = Vec::new();
     collect_free_vars(expr, params, &mut vars);

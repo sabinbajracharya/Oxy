@@ -21,6 +21,7 @@ impl Interpreter {
                     body: f.body.clone(),
                     closure_env: Rc::clone(&self.env),
                     target_ip: None,
+                            captured_slots: vec![],
                 }));
                 self.env.borrow_mut().define(f.name.clone(), value, false);
                 if f.is_async {
@@ -103,6 +104,7 @@ impl Interpreter {
                         body: f.body.clone(),
                         closure_env: Rc::clone(&mod_env),
                         target_ip: None,
+                            captured_slots: vec![],
                     }));
                     mod_env.borrow_mut().define(f.name.clone(), value, false);
                     if f.is_async {

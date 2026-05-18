@@ -194,6 +194,9 @@ pub enum OpCode {
     /// Pop a value, push its display string — dispatches to Display::fmt natively
     /// if the receiver implements the trait, otherwise uses Rust Display.
     DisplayArg,
+    /// Pop the current value at stack[base+slot], wrap it in Value::Cell,
+    /// and store it back. Used for `let mut` to enable shared mutation.
+    MakeCell(usize),
     Eval(usize),
 }
 
@@ -322,13 +325,22 @@ impl Vm {
                     let base = self.frame_base();
                     let idx = base + slot;
                     let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
-                    self.stack.push(val);
+                    self.stack.push(val.deref_cell());
                 }
 
                 OpCode::StoreLocal(slot) => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
                     let base = self.frame_base();
                     let idx = base + slot;
+                    if idx < self.stack.len() {
+                        if let Value::Cell(rc) = &self.stack[idx] {
+                            *rc.borrow_mut() = val;
+                            if let Some(frame) = self.call_stack.last_mut() {
+                                if slot + 1 > frame.max_slot { frame.max_slot = slot + 1; }
+                            }
+                            continue;
+                        }
+                    }
                     while idx >= self.stack.len() {
                         self.stack.push(Value::Unit);
                     }
@@ -337,6 +349,15 @@ impl Vm {
                         if slot + 1 > frame.max_slot {
                             frame.max_slot = slot + 1;
                         }
+                    }
+                }
+
+                OpCode::MakeCell(slot) => {
+                    let base = self.frame_base();
+                    let idx = base + slot;
+                    if idx < self.stack.len() {
+                        let val = self.stack[idx].clone();
+                        self.stack[idx] = Value::cell(val);
                     }
                 }
 
@@ -711,6 +732,10 @@ impl Vm {
                             closure_env.borrow_mut().define(name.clone(), val, *is_mut);
                         }
                     }
+                    let captured_slots: Vec<(String, usize)> = captured_vars
+                        .iter()
+                        .map(|(name, slot, _)| (name.clone(), *slot))
+                        .collect();
                     self.stack
                         .push(Value::Function(Box::new(crate::types::FunctionData {
                             name: "<closure>".into(),
@@ -719,6 +744,7 @@ impl Vm {
                             body: body_block,
                             closure_env,
                             target_ip: Some(target_ip),
+                            captured_slots,
                         })));
                 }
 
@@ -734,11 +760,31 @@ impl Vm {
                                     "recursion limit exceeded (max depth 1024)".into(),
                                 );
                             }
-                            let args_start = self.stack.len() - arg_count;
+                            // Save args and closure from stack
+                            let args_start = self.stack.len() - arg_count - 1;
+                            let saved: Vec<Value> = self.stack.drain(args_start..).collect();
+                            // saved = [closure_fn, arg1, arg2, ...], skip closure_fn
+                            let args = &saved[1..];
+
+                            // Push captured vars at frame-relative positions (B + outer_slot)
+                            let base = self.stack.len();
+                            let mut max_slot = 0usize;
+                            for (name, outer_slot) in &f.captured_slots {
+                                let val = f.closure_env.borrow().get(name).ok().map(|v| v.clone()).unwrap_or(Value::Unit);
+                                while base + outer_slot >= self.stack.len() {
+                                    self.stack.push(Value::Unit);
+                                }
+                                self.stack[base + outer_slot] = val;
+                                max_slot = max_slot.max(outer_slot + 1);
+                            }
+                            // Push args after captured vars
+                            for arg in args {
+                                self.stack.push(arg.clone());
+                            }
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
-                                base: args_start,
-                                max_slot: arg_count,
+                                base,
+                                max_slot: max_slot.max(arg_count),
                                 fn_ip: target,
                             });
                             self.ip = target;

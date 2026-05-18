@@ -80,6 +80,7 @@ pub(crate) fn debug_format(val: &Value) -> String {
         }
         Value::Future(f) => format!("Future<{}>", f.name),
         Value::JoinHandle(v) => format!("JoinHandle({})", debug_format(v)),
+        Value::Cell(rc) => debug_format(&rc.borrow()),
         other => format!("{other}"),
     }
 }

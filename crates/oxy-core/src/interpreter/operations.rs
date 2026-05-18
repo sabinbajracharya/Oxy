@@ -24,7 +24,9 @@ impl Interpreter {
         line: usize,
         col: usize,
     ) -> Result<Value, FerriError> {
-        match (left, op, right) {
+        let left_val = left.clone().deref_cell();
+        let right_val = right.clone().deref_cell();
+        match (&left_val, op, &right_val) {
             // Integer arithmetic
             (Value::Integer(a), BinOp::Add, Value::Integer(b)) => Ok(Value::Integer(a + b)),
             (Value::Integer(a), BinOp::Sub, Value::Integer(b)) => Ok(Value::Integer(a - b)),
@@ -179,7 +181,8 @@ impl Interpreter {
         line: usize,
         col: usize,
     ) -> Result<Value, FerriError> {
-        match (op, val) {
+        let val = val.deref_cell();
+        match (op, &val) {
             (UnaryOp::Neg, Value::Integer(n)) => Ok(Value::Integer(-n)),
             (UnaryOp::Neg, Value::Float(n)) => Ok(Value::Float(-n)),
             (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),

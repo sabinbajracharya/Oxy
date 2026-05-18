@@ -77,6 +77,23 @@ pub enum Value {
     Future(Box<FutureData>),
     /// A join handle (eagerly evaluated, wraps a result).
     JoinHandle(Box<Value>),
+    /// A shared mutable cell — any value wrapped in Rc<RefCell<>> for mutation sharing.
+    /// Used for mutable variables captured by closures and &mut self methods.
+    Cell(Rc<RefCell<Value>>),
+}
+
+impl Value {
+    /// Wrap a value in a shared mutable cell.
+    pub fn cell(val: Value) -> Self {
+        Value::Cell(Rc::new(RefCell::new(val)))
+    }
+    /// If this is a Cell, borrow and return the inner value. Otherwise return self.
+    pub fn deref_cell(&self) -> Value {
+        match self {
+            Value::Cell(rc) => rc.borrow().clone(),
+            other => other.clone(),
+        }
+    }
 }
 
 impl Clone for Value {
@@ -112,6 +129,7 @@ impl Clone for Value {
             Value::Iterator(it) => Value::Iterator(it.clone()),
             Value::Future(f) => Value::Future(f.clone()),
             Value::JoinHandle(h) => Value::JoinHandle(h.clone()),
+            Value::Cell(rc) => Value::Cell(Rc::clone(rc)),
         }
     }
 }
@@ -187,6 +205,8 @@ pub struct FunctionData {
     pub closure_env: Env,
     /// VM-only: bytecode instruction index where the function body starts.
     pub target_ip: Option<usize>,
+    /// Captured variable slot indices (name, outer_slot) for CallClosure stack setup.
+    pub captured_slots: Vec<(String, usize)>,
 }
 
 impl Value {
@@ -212,6 +232,7 @@ impl Value {
             Value::Iterator(_) => "Iterator".into(),
             Value::Future(_) => "Future".into(),
             Value::JoinHandle(_) => "JoinHandle".into(),
+            Value::Cell(_) => "Cell".into(),
         }
     }
 
@@ -329,6 +350,7 @@ impl Value {
             Value::Function(_) => 16,
             Value::Future(_) => 17,
             Value::JoinHandle(_) => 18,
+            Value::Cell(_) => 19,
         }
     }
 
@@ -350,6 +372,7 @@ impl Value {
             Value::Iterator(_) => true,
             Value::Future(_) => true,
             Value::JoinHandle(_) => true,
+            Value::Cell(rc) => rc.borrow().is_truthy(),
             _ => true,
         }
     }
@@ -482,6 +505,7 @@ impl fmt::Display for Value {
             Value::Iterator(_) => write!(f, "<iterator>"),
             Value::Future(_) => write!(f, "<future>"),
             Value::JoinHandle(_) => write!(f, "<join_handle>"),
+            Value::Cell(rc) => write!(f, "{}", rc.borrow()),
         }
     }
 }
@@ -788,6 +812,7 @@ impl Hash for Value {
             Value::Iterator(_) => "_iterator_".hash(state),
             Value::Future(_) => "_future_".hash(state),
             Value::JoinHandle(v) => v.hash(state),
+            Value::Cell(rc) => rc.borrow().hash(state),
         }
     }
 }

@@ -440,6 +440,7 @@ impl Interpreter {
             body: closure_body,
             closure_env: env.clone(),
             target_ip: None,
+                            captured_slots: vec![],
         })))
     }
 
