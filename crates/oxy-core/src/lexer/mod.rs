@@ -236,11 +236,14 @@ impl<'src> Lexer<'src> {
             c if c.is_ascii_digit() => self.scan_number(c, start_offset)?,
 
             // Identifier or keyword (including _)
-            // Special case: `f"..."` is an f-string literal
-            c if c == '_' || c.is_ascii_alphabetic() => {
+            // Special case: `f"..."` is an f-string, `r"..."` is a raw string
+            c if c == '_' || c.is_alphabetic() => {
                 if c == 'f' && !self.is_at_end() && self.peek() == '"' {
-                    self.advance(); // consume the '"'
+                    self.advance();
                     self.scan_fstring(start_offset)?
+                } else if c == 'r' && !self.is_at_end() && self.peek() == '"' {
+                    self.advance();
+                    self.scan_raw_string(start_offset)?
                 } else {
                     self.scan_identifier(c, start_offset)
                 }
@@ -417,6 +420,54 @@ impl<'src> Lexer<'src> {
         }
 
         Ok(TokenKind::FStringLiteral(raw))
+    }
+
+    /// Scan a raw string literal: `r"..."` or `r#"..."#`.
+    fn scan_raw_string(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+        // Count opening hash characters (for r#"..."# style)
+        let mut hash_count = 0usize;
+        while !self.is_at_end() && self.peek() == '#' {
+            hash_count += 1;
+            self.advance();
+        }
+        // Expect opening quote
+        if self.is_at_end() || self.peek() != '"' {
+            return Err(FerriError::Lexer {
+                message: "expected '\"' after r\" or r#\"".into(),
+                line: self.line,
+                column: self.column,
+            });
+        }
+        self.advance(); // consume opening '"'
+
+        let mut content = String::new();
+        while !self.is_at_end() {
+            let ch = self.advance();
+            if ch == '"' {
+                // Check for closing hash sequence
+                let mut close_hashes = 0;
+                while !self.is_at_end() && self.peek() == '#' {
+                    close_hashes += 1;
+                    self.advance();
+                }
+                if close_hashes == hash_count {
+                    return Ok(TokenKind::StringLiteral(content));
+                }
+                // Not enough hashes — append the quote and hashes to content
+                content.push('"');
+                for _ in 0..close_hashes {
+                    content.push('#');
+                }
+            } else {
+                content.push(ch);
+            }
+        }
+
+        Err(FerriError::Lexer {
+            message: "unterminated raw string literal".into(),
+            line: self.line,
+            column: self.column,
+        })
     }
 
     fn scan_char(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
@@ -678,7 +729,7 @@ impl<'src> Lexer<'src> {
         let mut name = String::new();
         name.push(first);
 
-        while !self.is_at_end() && (self.peek().is_ascii_alphanumeric() || self.peek() == '_') {
+        while !self.is_at_end() && (self.peek().is_alphanumeric() || self.peek() == '_') {
             name.push(self.advance());
         }
 
