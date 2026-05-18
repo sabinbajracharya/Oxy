@@ -156,8 +156,27 @@ impl Compiler {
             self.compile_item(item)?;
         }
 
-        // Start execution at main
-        let entry_point = self.functions.get("main").copied().unwrap_or(0);
+        // Check if any function has #[test] attribute (test runner mode)
+        let has_test_fns = program.items.iter().any(|item| {
+            if let Item::Function(f) = item {
+                f.attributes.iter().any(|a| a.name == "test")
+            } else {
+                false
+            }
+        });
+
+        // Require a `main` function for executable programs (unless it's a test file)
+        let entry_point = match self.functions.get("main").copied() {
+            Some(ip) => ip,
+            None if has_test_fns => 0, // test runner mode — no main needed
+            None => {
+                return Err(FerriError::Runtime {
+                    message: "no `main` function found".into(),
+                    line: 0,
+                    column: 0,
+                });
+            }
+        };
 
         Ok(Chunk {
             code: self.code,
@@ -1046,8 +1065,24 @@ impl Compiler {
                         });
                         Ok(())
                     } else {
+                        // Suggest similar variable names
+                        let suggestion = self
+                            .sym
+                            .build_slot_names()
+                            .into_iter()
+                            .filter(|n| !n.is_empty())
+                            .map(|n| (crate::errors::edit_distance(name, &n), n))
+                            .filter(|(d, _)| *d <= 2)
+                            .min_by_key(|(d, _)| *d);
+                        let msg = if let Some((_, suggestion)) = suggestion {
+                            format!(
+                                "undefined variable '{name}'; did you mean '{suggestion}'?"
+                            )
+                        } else {
+                            format!("undefined variable '{name}'")
+                        };
                         Err(FerriError::Runtime {
-                            message: format!("undefined variable '{name}'"),
+                            message: msg,
                             line: span.line,
                             column: span.column,
                         })
@@ -1168,6 +1203,26 @@ impl Compiler {
                 };
 
                 if let Some(target) = direct_target {
+                    // Check argument count against function definition
+                    if let Expr::Ident(name, _) = callee.as_ref() {
+                        let resolved = self.use_aliases.get(name).cloned().unwrap_or_else(|| name.clone());
+                        if let Some((params, _, _)) = self.fn_meta.get(&resolved).or_else(|| self.fn_meta.get(name)) {
+                            if args.len() != params.len() {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "function '{}' expects {} argument{}, but {} {} provided",
+                                        resolved,
+                                        params.len(),
+                                        if params.len() == 1 { "" } else { "s" },
+                                        args.len(),
+                                        if args.len() == 1 { "was" } else { "were" },
+                                    ),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
+                        }
+                    }
                     // Direct call: compile args first, emit Call
                     for arg in args {
                         self.compile_expr(arg)?;
