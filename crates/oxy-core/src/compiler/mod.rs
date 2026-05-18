@@ -545,6 +545,35 @@ impl Compiler {
         }
     }
 
+    /// Native destructuring for tuple and slice patterns.
+    fn compile_destructure(
+        &mut self,
+        value: &Expr,
+        patterns: &[Pattern],
+        span: crate::lexer::Span,
+    ) -> Result<(), FerriError> {
+        self.compile_expr(value)?;
+        let temp_slot = self.sym.define("__destructure_tmp");
+        self.emit(OpCode::StoreLocal(temp_slot));
+        for (i, pat) in patterns.iter().enumerate() {
+            if let Pattern::Ident(name, _) = pat {
+                self.emit(OpCode::LoadLocal(temp_slot));
+                self.emit(OpCode::ConstInt(i as i64));
+                self.emit(OpCode::VecIndex);
+                let slot = self.sym.define(name);
+                self.emit(OpCode::BindIdent(slot));
+            } else {
+                // Nested or rest/wildcard pattern — not supported yet
+                return Err(FerriError::Runtime {
+                    message: "complex destructure patterns not yet supported natively".into(),
+                    line: span.line,
+                    column: span.column,
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// Fallback emit_eval for complex let-patterns.
     fn compile_letpattern_emit_eval(
         &mut self,
@@ -907,28 +936,13 @@ impl Compiler {
             } => {
                 // Try native tuple destructuring: let (a, b, ...) = expr;
                 if let Pattern::Tuple(patterns, _) = pattern.as_ref() {
-                    // Compile the value once, store in temp slot
-                    self.compile_expr(value)?;
-                    let temp_slot = self.sym.define("__destructure_tmp");
-                    self.emit(OpCode::StoreLocal(temp_slot));
-                    // For each pattern variable in order, extract from tuple and bind
-                    for (i, pat) in patterns.iter().enumerate() {
-                        if let Pattern::Ident(name, _) = pat {
-                            // Load tuple, push index, index into tuple
-                            self.emit(OpCode::LoadLocal(temp_slot));
-                            self.emit(OpCode::ConstInt(i as i64));
-                            self.emit(OpCode::VecIndex);
-                            // Define the variable and bind it
-                            let slot = self.sym.define(name);
-                            self.emit(OpCode::BindIdent(slot));
-                        } else {
-                            // Nested or complex pattern — fall back to emit_eval
-                            return self.compile_letpattern_emit_eval(pattern, value, *span, *mutable);
-                        }
-                    }
-                    return Ok(());
+                    return self.compile_destructure(value, patterns, *span);
                 }
-                // For other patterns (slice, struct), fall back to emit_eval
+                // Try native slice destructuring: let [a, b, ...] = expr;
+                if let Pattern::Slice(patterns, _) = pattern.as_ref() {
+                    return self.compile_destructure(value, patterns, *span);
+                }
+                // For other patterns, fall back to emit_eval
                 self.compile_letpattern_emit_eval(pattern, value, *span, *mutable)
             }
             _ => Ok(()),
