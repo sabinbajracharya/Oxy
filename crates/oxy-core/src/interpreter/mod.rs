@@ -31,7 +31,7 @@ mod server_dispatch;
 /// The Oxy interpreter.
 pub struct Interpreter {
     /// The global environment.
-    env: Env,
+    pub(crate) env: Env,
     /// Captured output (for testing). If `None`, prints to stdout.
     output: Option<Vec<String>>,
     /// Registered struct definitions.
@@ -717,12 +717,12 @@ mod tests {
     use super::*;
 
     fn run_and_capture(src: &str) -> Vec<String> {
-        let (_, output) = run_capturing(src).unwrap();
+        let (_, output) = run_compiled_capturing(src).unwrap();
         output
     }
 
     fn run_and_get_value(src: &str) -> Value {
-        let (val, _) = run_capturing(src).unwrap();
+        let (val, _) = run_compiled_capturing(src).unwrap();
         val
     }
 

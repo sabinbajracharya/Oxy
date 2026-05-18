@@ -1016,7 +1016,8 @@ impl Vm {
 
     /// Reconstruct an interpreter Env from the current VM stack frame.
     fn build_env_for_eval(&self) -> crate::env::Env {
-        let env = crate::env::Environment::new();
+        // Use interpreter's env (with all registered items) as parent
+        let env = crate::env::Environment::child(&self.interpreter.env);
         let base = self.frame_base();
         let max_slot = self.call_stack.last().map(|f| f.max_slot).unwrap_or(0);
         for slot in 0..max_slot {
