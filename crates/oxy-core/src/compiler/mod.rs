@@ -42,6 +42,14 @@ impl SymTable {
         self.define(name)
     }
 
+    /// Register a variable at a specific slot (for captured closure vars).
+    fn define_at(&mut self, name: &str, slot: usize) {
+        self.locals.insert(name.to_string(), slot);
+        if slot >= self.next_slot {
+            self.next_slot = slot + 1;
+        }
+    }
+
     fn is_mutable(&self, name: &str) -> bool {
         self.mutable.contains(name)
     }
@@ -1598,12 +1606,9 @@ impl Compiler {
                 // Swap in a fresh sym table so closure params start at slot 0.
                 // Outer sym is needed to resolve captured variable slots.
                 let saved_sym = std::mem::replace(&mut self.sym, SymTable::new(0));
-                for param in params {
-                    self.sym.define(&param.name);
-                }
-                self.compile_expr(body)?;
-                self.emit(OpCode::Return);
-                // Find free variables and their slot indices
+                // Pre-scan: find which outer variables the closure body references.
+                // Register them in the fresh sym at their outer slot positions so
+                // LoadLocal in the closure body emits the correct frame offset.
                 let param_names: Vec<String> =
                     params.iter().map(|p| p.name.clone()).collect();
                 let captured_names = find_free_vars(body, &param_names);
@@ -1611,10 +1616,23 @@ impl Compiler {
                     .iter()
                     .filter_map(|name| {
                         saved_sym.get(name).map(|slot| {
-                            (name.clone(), slot, saved_sym.is_mutable(name))
+                            let is_mut = saved_sym.is_mutable(name);
+                            // Register captured var in closure sym at its outer slot,
+                            // preserving mutability so assignments work inside the closure.
+                            self.sym.define_at(name, slot);
+                            if is_mut {
+                                self.sym.mutable.insert(name.clone());
+                            }
+                            (name.clone(), slot, is_mut)
                         })
                     })
                     .collect();
+                // Now define params — they get slots above the captured vars
+                for param in params {
+                    self.sym.define(&param.name);
+                }
+                self.compile_expr(body)?;
+                self.emit(OpCode::Return);
                 self.sym = saved_sym;
                 // Patch the skip jump to land after the Return
                 self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
