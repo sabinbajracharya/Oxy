@@ -844,6 +844,11 @@ impl Compiler {
                     BinOp::GtEq => OpCode::Ge,
                     BinOp::And => OpCode::And,
                     BinOp::Or => OpCode::Or,
+                    BinOp::BitAnd => OpCode::BitAnd,
+                    BinOp::BitOr => OpCode::BitOr,
+                    BinOp::BitXor => OpCode::BitXor,
+                    BinOp::Shl => OpCode::Shl,
+                    BinOp::Shr => OpCode::Shr,
                     _ => {
                         return Err(FerriError::Runtime {
                             message: format!("unsupported binary op in compiler: {:?}", op),
@@ -1420,8 +1425,10 @@ impl Compiler {
 /// Known built-in paths that the VM can dispatch natively.
 fn is_builtin_path(path: &[String]) -> bool {
     let segs: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
+    let module = segs.first().copied().unwrap_or("");
     matches!(
         segs.as_slice(),
+        // math
         ["math", "sqrt"]
             | ["math", "abs"]
             | ["math", "sin"]
@@ -1435,8 +1442,10 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["math", "log"]
             | ["math", "gcd"]
             | ["math", "lcm"]
+            // json
             | ["json", "parse"]
             | ["json", "to_string"]
+            // constructors
             | ["String", "from"]
             | ["HashMap", "new"]
             | ["HashSet", "new"]
@@ -1447,5 +1456,8 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["char", "from_code"]
             | ["int", "parse"]
             | ["float", "parse"]
+    ) || matches!(
+        module,
+        "fs" | "env" | "process" | "regex" | "net" | "time" | "rand"
     )
 }

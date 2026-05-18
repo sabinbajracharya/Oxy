@@ -42,6 +42,13 @@ pub enum OpCode {
     And,
     Or,
 
+    // --- Bitwise operations ---
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+
     // --- Unary operations ---
     Neg,
     Not,
@@ -339,6 +346,12 @@ impl Vm {
                     let (a, b) = self.pop_two();
                     self.stack.push(Value::Bool(a.is_truthy() || b.is_truthy()));
                 }
+
+                OpCode::BitAnd => self.binary_op(vm_bitand),
+                OpCode::BitOr => self.binary_op(vm_bitor),
+                OpCode::BitXor => self.binary_op(vm_bitxor),
+                OpCode::Shl => self.binary_op(vm_shl),
+                OpCode::Shr => self.binary_op(vm_shr),
 
                 OpCode::Neg => {
                     let v = self.stack.pop().unwrap_or(Value::Unit);
@@ -1191,6 +1204,15 @@ impl Vm {
                     )))),
                 }
             }
+            // --- stdlib modules ---
+            // db and server are feature-gated, handled via emit_eval fallback
+            ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
+            ["env", func] => call_stdlib(crate::stdlib::env::call, func, args),
+            ["process", func] => call_stdlib(crate::stdlib::process::call, func, args),
+            ["regex", func] => call_stdlib(crate::stdlib::regex::call, func, args),
+            ["net", func] => call_stdlib(crate::stdlib::net::call, func, args),
+            ["time", func] => call_stdlib(crate::stdlib::time::call, func, args),
+            ["rand", func] => call_stdlib(crate::stdlib::rand::call, func, args),
             _ => Err(format!("unknown built-in path: {}", segments.join("::"))),
         }
     }
@@ -1225,6 +1247,23 @@ impl Vm {
             print!("{s}");
         }
     }
+}
+
+// --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
+
+/// Call a stdlib module function, converting FerriError to String.
+fn call_stdlib(
+    f: fn(&str, &[Value], &crate::lexer::Span) -> Result<Value, crate::errors::FerriError>,
+    func: &str,
+    args: &[Value],
+) -> Result<Value, String> {
+    let span = crate::lexer::Span {
+        start: 0,
+        end: 0,
+        line: 0,
+        column: 0,
+    };
+    f(func, args, &span).map_err(|e| format!("{e}"))
 }
 
 // --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
@@ -1314,6 +1353,45 @@ fn vm_neg(v: Value) -> Value {
         Value::Integer(n) => Value::Integer(-n),
         Value::Float(n) => Value::Float(-n),
         v => v,
+    }
+}
+
+fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
+    match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a & b)),
+        _ => Err(format!("bitwise AND requires integers, got {} and {}", a.type_name(), b.type_name())),
+    }
+}
+
+fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
+    match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a | b)),
+        _ => Err(format!("bitwise OR requires integers, got {} and {}", a.type_name(), b.type_name())),
+    }
+}
+
+fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
+    match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a ^ b)),
+        _ => Err(format!("bitwise XOR requires integers, got {} and {}", a.type_name(), b.type_name())),
+    }
+}
+
+fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
+    match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => {
+            Ok(Value::Integer(a.wrapping_shl(*b as u32)))
+        }
+        _ => Err(format!("shift left requires integers, got {} and {}", a.type_name(), b.type_name())),
+    }
+}
+
+fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
+    match (&a, &b) {
+        (Value::Integer(a), Value::Integer(b)) => {
+            Ok(Value::Integer(a.wrapping_shr(*b as u32)))
+        }
+        _ => Err(format!("shift right requires integers, got {} and {}", a.type_name(), b.type_name())),
     }
 }
 
