@@ -91,6 +91,8 @@ pub struct Compiler {
     use_aliases: HashMap<String, String>,
     /// Const/static values: name → value (inlined at reference sites).
     const_values: HashMap<String, crate::types::Value>,
+    /// Function metadata for named function references: name → (params, body, return_type).
+    fn_meta: HashMap<String, (Vec<crate::ast::Param>, Box<crate::ast::Expr>, Option<crate::ast::TypeAnnotation>)>,
 }
 
 impl Compiler {
@@ -126,6 +128,7 @@ impl Default for Compiler {
             source_dir: None,
             use_aliases: HashMap::new(),
             const_values: HashMap::new(),
+            fn_meta: HashMap::new(),
         }
     }
 }
@@ -243,6 +246,15 @@ impl Compiler {
         if let Some(tn) = type_name {
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
         }
+        // Store metadata for function-reference-as-value support
+        let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
+            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+            _ => None,
+        }).unwrap_or(crate::ast::Expr::IntLiteral(0, f.body.span));
+        self.fn_meta.insert(
+            f.name.clone(),
+            (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
+        );
 
         let saved_sym = self.sym.clone();
         for param in &f.params {
@@ -299,7 +311,13 @@ impl Compiler {
                 Item::Function(f) => {
                     let qualified = format!("{}::{}", prefix, f.name);
                     let ip = self.code.len();
-                    self.functions.insert(qualified, ip);
+                    self.functions.insert(qualified.clone(), ip);
+                    // Store metadata for function-reference-as-value
+                    let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
+                        crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                        _ => None,
+                    }).unwrap_or(crate::ast::Expr::IntLiteral(0, f.body.span));
+                    self.fn_meta.insert(qualified, (f.params.clone(), Box::new(body_expr), f.return_type.clone()));
                     let saved_sym = self.sym.clone();
                     for param in &f.params {
                         self.sym.define(&param.name);
@@ -935,15 +953,31 @@ impl Compiler {
                 if let Some(slot) = self.sym.get(name) {
                     self.emit(OpCode::LoadLocal(slot));
                     Ok(())
-                } else if self.functions.contains_key(name) {
-                    self.emit(OpCode::ConstUnit); // placeholder for function ref
-                    Ok(())
                 } else {
-                    Err(FerriError::Runtime {
-                        message: format!("undefined variable '{name}'"),
-                        line: span.line,
-                        column: span.column,
-                    })
+                    let resolved = self.use_aliases.get(name).cloned().unwrap_or_else(|| name.clone());
+                    if let Some(target) = self.functions.get(&resolved).copied() {
+                        // Emit a function reference as a Value::Function pointing to the
+                        // existing compiled function body at `target`.
+                        let (params, body_expr, _return_type) =
+                            self.fn_meta.get(&resolved).cloned().unwrap_or_else(|| {
+                                (vec![], Box::new(crate::ast::Expr::IntLiteral(0, *span)), None)
+                            });
+                        let meta_idx = self.closure_meta.len();
+                        let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                        self.closure_meta.push((param_names, *body_expr, vec![]));
+                        self.emit(OpCode::Closure {
+                            target_ip: target,
+                            param_count: params.len(),
+                            meta_idx,
+                        });
+                        Ok(())
+                    } else {
+                        Err(FerriError::Runtime {
+                            message: format!("undefined variable '{name}'"),
+                            line: span.line,
+                            column: span.column,
+                        })
+                    }
                 }
             }
 
