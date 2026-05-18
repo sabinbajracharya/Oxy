@@ -232,8 +232,8 @@ pub struct Vm {
     ip: usize,
     /// Call stack: (return_address, stack_base_before_call, local_count).
     call_stack: Vec<Frame>,
-    /// Captured output (for testing).
-    output: Option<Vec<String>>,
+    /// Captured output (for testing). Shared with interpreter via Rc<RefCell<>>.
+    output: Option<Rc<RefCell<Vec<String>>>>,
     /// Tree-walking interpreter for Eval opcode fallback.
     interpreter: Interpreter,
 }
@@ -271,18 +271,18 @@ impl Vm {
     /// Create a VM that captures printed output (for testing).
     pub fn with_captured_output(chunk: Chunk) -> Self {
         let mut vm = Self::new(chunk);
-        vm.output = Some(Vec::new());
-        vm.interpreter.output = Some(Vec::new());
+        let shared = Rc::new(RefCell::new(Vec::new()));
+        vm.output = Some(Rc::clone(&shared));
+        vm.interpreter.output = Some(shared);
         vm
     }
 
-    /// Get captured output lines (VM + interpreter fallback output merged).
+    /// Get captured output lines (from shared buffer — already correctly ordered).
     pub fn captured_output(&self) -> Vec<String> {
-        let mut out: Vec<String> = self.output.clone().unwrap_or_default();
-        if let Some(ref interp_out) = self.interpreter.output {
-            out.extend(interp_out.iter().cloned());
+        match &self.output {
+            Some(rc) => rc.borrow().clone(),
+            None => Vec::new(),
         }
-        out
     }
 
     /// Execute the chunk, starting at the entry point.
@@ -1283,7 +1283,8 @@ impl Vm {
     }
 
     fn write_output(&mut self, s: &str) {
-        if let Some(ref mut output) = self.output {
+        if let Some(ref output_rc) = self.output {
+            let mut output = output_rc.borrow_mut();
             if let Some(last) = output.last_mut() {
                 if !last.ends_with('\n') {
                     last.push_str(s);

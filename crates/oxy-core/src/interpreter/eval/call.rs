@@ -183,7 +183,8 @@ impl Interpreter {
     }
 
     pub(crate) fn write_output(&mut self, s: &str) {
-        if let Some(ref mut output) = self.output {
+        if let Some(ref output_rc) = self.output {
+            let mut output = output_rc.borrow_mut();
             if let Some(last) = output.last_mut() {
                 if !last.ends_with('\n') {
                     last.push_str(s);

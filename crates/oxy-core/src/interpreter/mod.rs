@@ -33,7 +33,8 @@ pub struct Interpreter {
     /// The global environment.
     pub(crate) env: Env,
     /// Captured output (for testing). If `None`, prints to stdout.
-    pub(crate) output: Option<Vec<String>>,
+    /// Shared via Rc<RefCell<>> so VM and interpreter can write to the same buffer.
+    pub(crate) output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
     /// Registered struct definitions.
     struct_defs: HashMap<String, StructDef>,
     /// Registered enum definitions.
@@ -92,7 +93,7 @@ pub(crate) struct ModuleData {
 
 impl Interpreter {
     /// Internal constructor with all fields parameterized.
-    fn new_internal(env: Env, output: Option<Vec<String>>) -> Self {
+    fn new_internal(env: Env, output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>) -> Self {
         let mut s = Self::default_impl();
         s.env = env;
         s.output = output;
@@ -106,7 +107,10 @@ impl Interpreter {
 
     /// Create an interpreter that captures output instead of printing.
     pub fn new_with_captured_output() -> Self {
-        Self::new_internal(Environment::new(), Some(Vec::new()))
+        Self::new_internal(
+            Environment::new(),
+            Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))),
+        )
     }
 
     /// Create an interpreter with an existing environment (for REPL).
@@ -134,8 +138,11 @@ impl Interpreter {
     }
 
     /// Get captured output (for testing).
-    pub fn captured_output(&self) -> &[String] {
-        self.output.as_deref().unwrap_or(&[])
+    pub fn captured_output(&self) -> Vec<String> {
+        match &self.output {
+            Some(rc) => rc.borrow().clone(),
+            None => Vec::new(),
+        }
     }
 
     /// Get a snapshot of the call stack (for error reporting).
