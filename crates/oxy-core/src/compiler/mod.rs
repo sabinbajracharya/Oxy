@@ -89,6 +89,8 @@ pub struct Compiler {
     source_dir: Option<std::path::PathBuf>,
     /// Use aliases: alias_name → qualified_name (e.g., "add" → "math::add").
     use_aliases: HashMap<String, String>,
+    /// Const/static values: name → value (inlined at reference sites).
+    const_values: HashMap<String, crate::types::Value>,
 }
 
 impl Compiler {
@@ -123,6 +125,7 @@ impl Default for Compiler {
             method_ips: HashMap::new(),
             source_dir: None,
             use_aliases: HashMap::new(),
+            const_values: HashMap::new(),
         }
     }
 }
@@ -135,7 +138,7 @@ impl Compiler {
             self.compile_item(item)?;
         }
 
-        // Start execution at main (no preamble needed — main's Return exits the VM)
+        // Start execution at main
         let entry_point = self.functions.get("main").copied().unwrap_or(0);
 
         Ok(Chunk {
@@ -220,12 +223,12 @@ impl Compiler {
             }
             Item::TypeAlias { .. } => Ok(()),
             Item::Const {
-                name, value, span, ..
+                name, value, ..
             } => {
-                self.compile_expr(value)?;
-                let slot = self.sym.define(name);
-                self.emit(OpCode::StoreLocal(slot));
-                let _ = span;
+                // Evaluate at compile time and store for inlining
+                if let Some(val) = try_eval_const(&value) {
+                    self.const_values.insert(name.clone(), val);
+                }
                 Ok(())
             }
         }
@@ -816,6 +819,30 @@ impl Compiler {
             }
 
             Expr::Ident(name, span) => {
+                // Check const values first (compile-time inlined)
+                if let Some(val) = self.const_values.get(name) {
+                    match val {
+                        crate::types::Value::Integer(n) => {
+                            self.emit(OpCode::ConstInt(*n));
+                        }
+                        crate::types::Value::Float(n) => {
+                            self.emit(OpCode::ConstFloat(*n));
+                        }
+                        crate::types::Value::Bool(b) => {
+                            self.emit(OpCode::ConstBool(*b));
+                        }
+                        crate::types::Value::String(s) => {
+                            self.emit(OpCode::ConstString(s.clone()));
+                        }
+                        crate::types::Value::Char(c) => {
+                            self.emit(OpCode::ConstChar(*c));
+                        }
+                        crate::types::Value::Unit | _ => {
+                            self.emit(OpCode::ConstUnit);
+                        }
+                    }
+                    return Ok(());
+                }
                 if let Some(slot) = self.sym.get(name) {
                     self.emit(OpCode::LoadLocal(slot));
                     Ok(())
@@ -1593,6 +1620,27 @@ fn collect_free_vars_in_stmt(
             }
         }
         _ => {}
+    }
+}
+
+/// Evaluate a simple constant expression at compile time.
+fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
+    match expr {
+        crate::ast::Expr::IntLiteral(n, _) => Some(crate::types::Value::Integer(*n)),
+        crate::ast::Expr::FloatLiteral(n, _) => Some(crate::types::Value::Float(*n)),
+        crate::ast::Expr::BoolLiteral(b, _) => Some(crate::types::Value::Bool(*b)),
+        crate::ast::Expr::StringLiteral(s, _) => Some(crate::types::Value::String(s.clone())),
+        crate::ast::Expr::CharLiteral(c, _) => Some(crate::types::Value::Char(*c)),
+        crate::ast::Expr::UnaryOp {
+            op: crate::ast::UnaryOp::Neg,
+            expr: inner,
+            ..
+        } => match try_eval_const(inner) {
+            Some(crate::types::Value::Integer(n)) => Some(crate::types::Value::Integer(-n)),
+            Some(crate::types::Value::Float(n)) => Some(crate::types::Value::Float(-n)),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
