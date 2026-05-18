@@ -423,6 +423,51 @@ impl Compiler {
                 self.define_pattern_slots(fields);
                 Ok(())
             }
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                // Stack: [scrutinee] → After: [scrutinee, Bool]
+                match (start, end) {
+                    (Some(s), None) => {
+                        self.emit(OpCode::Dup);
+                        self.emit(OpCode::ConstInt(*s));
+                        self.emit(OpCode::Ge);
+                    }
+                    (None, Some(e)) => {
+                        self.emit(OpCode::Dup);
+                        self.emit(OpCode::ConstInt(*e));
+                        if *inclusive {
+                            self.emit(OpCode::Le);
+                        } else {
+                            self.emit(OpCode::Lt);
+                        }
+                    }
+                    (Some(s), Some(e)) => {
+                        // Compute both bounds. Use a temp slot to stash the lower result.
+                        let tmp = self.sym.define("__range_tmp");
+                        self.emit(OpCode::Dup);              // [s, s_copy]
+                        self.emit(OpCode::ConstInt(*s));
+                        self.emit(OpCode::Ge);               // [s, lower]
+                        self.emit(OpCode::StoreLocal(tmp));   // [s]
+                        self.emit(OpCode::Dup);              // [s, s]
+                        self.emit(OpCode::ConstInt(*e));
+                        if *inclusive {
+                            self.emit(OpCode::Le);
+                        } else {
+                            self.emit(OpCode::Lt);
+                        }                                    // [s, upper]
+                        self.emit(OpCode::LoadLocal(tmp));    // [s, upper, lower]
+                        self.emit(OpCode::And);              // [s, result]
+                    }
+                    (None, None) => {
+                        self.emit(OpCode::ConstBool(true));
+                    }
+                }
+                Ok(())
+            }
             _ => {
                 // For Struct, Tuple, Or, Slice, Rest — fall back to const false
                 // (will be handled properly in subsequent iterations)
@@ -783,14 +828,45 @@ impl Compiler {
             }
 
             // Statements without native bytecode — fall back to interpreter
-            Stmt::WhileLet { .. } | Stmt::LetPattern { .. } => {
-                // emit_eval requires an Expr; these statements don't map cleanly.
-                // For now, error with a clear message. Full native support is Phase 4.
-                Err(FerriError::Runtime {
-                    message: "while-let and destructuring-let are not yet supported in compiled mode. Use -i flag for interpreter.".into(),
-                    line: 0,
-                    column: 0,
-                })
+            Stmt::WhileLet {
+                pattern,
+                expr,
+                body,
+                label,
+                span,
+            } => {
+                let stmt = Stmt::WhileLet {
+                    pattern: pattern.clone(),
+                    expr: expr.clone(),
+                    body: body.clone(),
+                    label: label.clone(),
+                    span: *span,
+                };
+                let fake_expr = Expr::Block(Block {
+                    stmts: vec![stmt],
+                    span: *span,
+                });
+                self.emit_eval(&fake_expr);
+                Ok(())
+            }
+            Stmt::LetPattern {
+                pattern,
+                value,
+                span,
+                mutable,
+            } => {
+                let stmt = Stmt::LetPattern {
+                    pattern: pattern.clone(),
+                    value: value.clone(),
+                    mutable: *mutable,
+                    span: *span,
+                };
+                let fake_expr = Expr::Block(Block {
+                    stmts: vec![stmt],
+                    span: *span,
+                });
+                self.emit_eval(&fake_expr);
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -1354,10 +1430,10 @@ impl Compiler {
 
                 let _match_end_label = self.code.len(); // placeholder
                 let mut arm_jumps: Vec<usize> = vec![];
+                let mut guard_fail_jumps: Vec<usize> = vec![];
 
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last = i == arms.len() - 1;
-                    let _next_arm_label_idx = self.code.len(); // will be patched later
 
                     // Push scrutinee for this arm
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
@@ -1380,8 +1456,9 @@ impl Compiler {
                     if let Some(guard) = &arm.guard {
                         self.compile_expr(guard)?;
                         let guard_jump = self.emit(OpCode::JumpIfFalse(0));
-                        // If guard fails, go to next arm (need to record for patching)
-                        arm_jumps.push(guard_jump);
+                        guard_fail_jumps.push(guard_jump);
+                        // Clean up guard bindings before next arm
+                        self.sym.next_slot = current_slot;
                     }
 
                     // Compile arm body
@@ -1392,10 +1469,13 @@ impl Compiler {
 
                     // Patch the "jump to next arm" from pattern check
                     self.patch(jump_to_next, OpCode::JumpIfFalse(self.code.len()));
+                    // Patch guard-fail jumps to the next arm too
+                    for gj in &guard_fail_jumps {
+                        self.patch(*gj, OpCode::JumpIfFalse(self.code.len()));
+                    }
+                    guard_fail_jumps.clear();
 
                     // Clean up sym for bindings in this arm
-                    // (Remove any pattern-bound variables)
-                    // For simplicity, reset next_slot to the state before this arm
                     self.sym.next_slot = current_slot;
                 }
 
