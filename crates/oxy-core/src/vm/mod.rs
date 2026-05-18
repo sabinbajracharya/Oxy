@@ -1510,6 +1510,7 @@ impl Vm {
                 }
                 "clone" => Ok(Value::Char(*c)),
                 "code" => Ok(Value::Integer(*c as i64)),
+                "to_string" => Ok(Value::String(c.to_string())),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
             Value::Integer(_) | Value::Float(_) => {

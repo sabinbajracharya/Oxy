@@ -51,6 +51,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let hi = to_f64(args.get(1).unwrap_or(&Value::Unit));
             Ok(float_to_value(v.clamp(lo, hi)))
         }
+        "to_string" => Ok(Value::String(receiver.to_string())),
         _ => Err(format!(
             "no method '{}' on type {}",
             method,
