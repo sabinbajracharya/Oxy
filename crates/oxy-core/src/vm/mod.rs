@@ -94,6 +94,9 @@ pub enum OpCode {
     IterLen,
     /// Pop index (Integer), pop Vec, push element at Vec[index].
     VecIndex,
+    /// Pop value, pop index (Integer), pop collection, store value at collection[index].
+    /// Pushes value back so it can be used in chains.
+    VecIndexStore,
     /// Pop end (Value), pop start (Value), push Range(start, end).
     MakeRange,
 
@@ -616,6 +619,32 @@ impl Vm {
                         }
                         other => {
                             return VmResult::Error(format!("cannot index {}", other.type_name()))
+                        }
+                    }
+                }
+
+                OpCode::VecIndexStore => {
+                    let value = self.stack.pop().unwrap_or(Value::Unit);
+                    let key = self.stack.pop().unwrap_or(Value::Unit);
+                    let collection = self.stack.pop().unwrap_or(Value::Unit);
+                    match collection {
+                        Value::Vec(rc) => {
+                            let idx = match key {
+                                Value::Integer(i) => i as usize,
+                                other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
+                            };
+                            let len = rc.borrow().len();
+                            if idx < len {
+                                rc.borrow_mut()[idx] = value.clone();
+                                self.stack.push(value);
+                            } else {
+                                return VmResult::Error(format!(
+                                    "index {} out of bounds for len {}", idx, len
+                                ));
+                            }
+                        }
+                        other => {
+                            return VmResult::Error(format!("cannot index-assign {}", other.type_name()))
                         }
                     }
                 }
@@ -1333,6 +1362,23 @@ impl Vm {
                     Value::String(s) => { if let Value::Integer(i) = key { self.stack.push(s.chars().nth(i as usize).map(Value::Char).unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
                     _ => self.stack.push(Value::Unit),
                 }
+            }
+            OpCode::VecIndexStore => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                let key = self.stack.pop().unwrap_or(Value::Unit);
+                let c = self.stack.pop().unwrap_or(Value::Unit);
+                match c {
+                    Value::Vec(rc) => {
+                        if let Value::Integer(i) = key {
+                            let idx = i as usize;
+                            if idx < rc.borrow().len() {
+                                rc.borrow_mut()[idx] = val.clone();
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                self.stack.push(val);
             }
             OpCode::FieldAccess{field_name} => {
                 let v = self.stack.pop().unwrap_or(Value::Unit);

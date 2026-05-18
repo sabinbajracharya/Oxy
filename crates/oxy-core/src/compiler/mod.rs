@@ -1361,8 +1361,12 @@ impl Compiler {
                         _ => {}
                     }
                     Ok(())
-                } else if let Expr::Index { .. } = target.as_ref() {
-                    Err(self.not_yet_supported("Index assignment", expr.span()))
+                } else if let Expr::Index { object, index, .. } = target.as_ref() {
+                    self.compile_expr(object)?;
+                    self.compile_expr(index)?;
+                    self.compile_expr(value)?;
+                    self.emit(OpCode::VecIndexStore);
+                    Ok(())
                 } else {
                     Err(FerriError::Runtime {
                         message: "compiled: only simple variable assignment supported".into(),
