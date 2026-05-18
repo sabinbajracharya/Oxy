@@ -201,8 +201,8 @@ pub struct Chunk {
     pub functions: std::collections::HashMap<String, usize>,
     /// AST expression nodes for interpreter fallback (indexed by Eval opcode arg).
     pub ast_nodes: Vec<crate::ast::Expr>,
-    /// Closure metadata: (param_names, body_expr) indexed by Closure.meta_idx.
-    pub closure_meta: Vec<(Vec<String>, crate::ast::Expr)>,
+    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots).
+    pub closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize)>)>,
     /// Local variable names: slot_index → name (for Eval env reconstruction).
     pub local_names: Vec<String>,
     /// Registered struct definitions (for StructInit and method dispatch).
@@ -609,12 +609,13 @@ impl Vm {
                         line: 0,
                         column: 0,
                     };
-                    let (param_names, body_expr) =
+                    let (param_names, body_expr, captured_vars) =
                         self.chunk.closure_meta.get(meta_idx).cloned().unwrap_or_else(
                             || {
                                 (
                                     (0..param_count).map(|i| format!("_{i}")).collect(),
                                     crate::ast::Expr::IntLiteral(0, blank_span),
+                                    Vec::new(),
                                 )
                             },
                         );
@@ -636,13 +637,23 @@ impl Vm {
                         }],
                         span: blank_span,
                     };
+                    // Build closure environment with captured outer variables
+                    let mut closure_env = crate::env::Environment::new();
+                    if !captured_vars.is_empty() {
+                        let base = self.frame_base();
+                        for (name, slot) in &captured_vars {
+                            let idx = base + slot;
+                            let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
+                            closure_env.borrow_mut().define(name.clone(), val, false);
+                        }
+                    }
                     self.stack
                         .push(Value::Function(Box::new(crate::types::FunctionData {
                             name: "<closure>".into(),
                             params,
                             return_type: None,
                             body: body_block,
-                            closure_env: crate::env::Environment::new(),
+                            closure_env,
                             target_ip: Some(target_ip),
                         })));
                 }

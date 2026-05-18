@@ -73,8 +73,8 @@ pub struct Compiler {
     loop_stack: Vec<LoopContext>,
     /// AST expressions stored for Eval opcode fallback.
     ast_nodes: Vec<crate::ast::Expr>,
-    /// Closure metadata: (param_names, body_expr) for interpreter fallback on compiled closures.
-    closure_meta: Vec<(Vec<String>, crate::ast::Expr)>,
+    /// Closure metadata: (param_names, body_expr, captured_vars_with_slots).
+    closure_meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize)>)>,
     /// Snapshot of main's local variable names (for Eval env reconstruction).
     main_local_names: Vec<String>,
     /// Registered struct definitions.
@@ -778,7 +778,16 @@ impl Compiler {
                 Ok(())
             }
 
-            // For simplicity, skip other statements
+            // Statements without native bytecode — fall back to interpreter
+            Stmt::WhileLet { .. } | Stmt::LetPattern { .. } => {
+                // emit_eval requires an Expr; these statements don't map cleanly.
+                // For now, error with a clear message. Full native support is Phase 4.
+                Err(FerriError::Runtime {
+                    message: "while-let and destructuring-let are not yet supported in compiled mode. Use -i flag for interpreter.".into(),
+                    line: 0,
+                    column: 0,
+                })
+            }
             _ => Ok(()),
         }
     }
@@ -1254,13 +1263,24 @@ impl Compiler {
                 }
                 self.compile_expr(body)?;
                 self.emit(OpCode::Return);
+                // Find free variables and their slot indices
+                let param_names: Vec<String> =
+                    params.iter().map(|p| p.name.clone()).collect();
+                let captured_names = find_free_vars(body, &param_names);
+                let captured: Vec<(String, usize)> = captured_names
+                    .iter()
+                    .filter_map(|name| {
+                        saved_sym.get(name).map(|slot| (name.clone(), slot))
+                    })
+                    .collect();
                 self.sym = saved_sym;
                 // Patch the skip jump to land after the Return
                 self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
                 let meta_idx = self.closure_meta.len();
                 self.closure_meta.push((
-                    params.iter().map(|p| p.name.clone()).collect(),
+                    param_names,
                     *body.clone(),
+                    captured,
                 ));
                 self.emit(OpCode::Closure {
                     target_ip,
@@ -1440,6 +1460,107 @@ impl Compiler {
                 Ok(())
             }
         }
+    }
+}
+
+/// Find all free variables in an expression (variables used but not defined in `params`).
+fn find_free_vars(expr: &crate::ast::Expr, params: &[String]) -> Vec<String> {
+    let mut vars = Vec::new();
+    collect_free_vars(expr, params, &mut vars);
+    // Deduplicate while preserving order
+    let mut seen = std::collections::HashSet::new();
+    vars.retain(|v| seen.insert(v.clone()));
+    vars
+}
+
+fn collect_free_vars(
+    expr: &crate::ast::Expr,
+    params: &[String],
+    vars: &mut Vec<String>,
+) {
+    match expr {
+        crate::ast::Expr::Ident(name, _) => {
+            if !params.contains(name) {
+                vars.push(name.clone());
+            }
+        }
+        crate::ast::Expr::BinaryOp { left, right, .. } => {
+            collect_free_vars(left, params, vars);
+            collect_free_vars(right, params, vars);
+        }
+        crate::ast::Expr::UnaryOp { expr: inner, .. } => {
+            collect_free_vars(inner, params, vars);
+        }
+        crate::ast::Expr::Call { callee, args, .. } => {
+            collect_free_vars(callee, params, vars);
+            for arg in args {
+                collect_free_vars(arg, params, vars);
+            }
+        }
+        crate::ast::Expr::Block(block) => {
+            for stmt in &block.stmts {
+                collect_free_vars_in_stmt(stmt, params, vars);
+            }
+        }
+        crate::ast::Expr::If { condition, then_block, else_block, .. } => {
+            collect_free_vars(condition, params, vars);
+            for stmt in &then_block.stmts {
+                collect_free_vars_in_stmt(stmt, params, vars);
+            }
+            if let Some(else_expr) = else_block {
+                collect_free_vars(else_expr, params, vars);
+            }
+        }
+        crate::ast::Expr::Index { object, index, .. } => {
+            collect_free_vars(object, params, vars);
+            collect_free_vars(index, params, vars);
+        }
+        crate::ast::Expr::MethodCall { object, args, .. } => {
+            collect_free_vars(object, params, vars);
+            for arg in args {
+                collect_free_vars(arg, params, vars);
+            }
+        }
+        crate::ast::Expr::MacroCall { args, .. } => {
+            for arg in args {
+                collect_free_vars(arg, params, vars);
+            }
+        }
+        crate::ast::Expr::Closure { params: inner_params, body, .. } => {
+            let mut new_params = params.to_vec();
+            for p in inner_params {
+                new_params.push(p.name.clone());
+            }
+            collect_free_vars(body, &new_params, vars);
+        }
+        _ => {} // Skip other expression types for now
+    }
+}
+
+fn collect_free_vars_in_stmt(
+    stmt: &crate::ast::Stmt,
+    params: &[String],
+    vars: &mut Vec<String>,
+) {
+    match stmt {
+        crate::ast::Stmt::Expr { expr, .. } => collect_free_vars(expr, params, vars),
+        crate::ast::Stmt::Let { value, .. } => {
+            if let Some(val) = value {
+                collect_free_vars(val, params, vars);
+            }
+        }
+        crate::ast::Stmt::While { condition, body, .. } => {
+            collect_free_vars(condition, params, vars);
+            for s in &body.stmts {
+                collect_free_vars_in_stmt(s, params, vars);
+            }
+        }
+        crate::ast::Stmt::Loop { body, .. } => {
+            for s in &body.stmts {
+                collect_free_vars_in_stmt(s, params, vars);
+            }
+        }
+        _ => {}
     }
 }
 
