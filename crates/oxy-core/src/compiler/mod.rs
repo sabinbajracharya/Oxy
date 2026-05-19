@@ -444,9 +444,16 @@ impl Compiler {
                         .or_default()
                         .extend(i.methods.clone());
                     for method in &i.methods {
-                        let mname = format!("{}::{}", prefix, method.name);
+                        // Register as qualified_type::method (e.g. geometry::Point::new)
+                        let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
+                        // Store fn_meta for arg count checking
+                        let body_expr = method.body.stmts.last().and_then(|stmt| match stmt {
+                            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                            _ => None,
+                        }).unwrap_or(crate::ast::Expr::IntLiteral(0, method.body.span));
+                        self.fn_meta.insert(mname.clone(), (method.params.clone(), Box::new(body_expr), method.return_type.clone()));
                         // Register under both qualified and unqualified type names
                         self.method_ips
                             .insert((qualified_type.clone(), method.name.clone()), ip);
@@ -540,8 +547,10 @@ impl Compiler {
                 fields,
                 ..
             } => {
+                // Resolve enum_name via use aliases (e.g. Color → colors::Color)
+                let resolved_enum = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
                 self.emit(OpCode::EnumVariantEqual {
-                    enum_name: enum_name.clone(),
+                    enum_name: resolved_enum,
                     variant: variant.clone(),
                 });
                 // Pre-define slots for field pattern bindings
@@ -1576,11 +1585,15 @@ impl Compiler {
                 if segments.len() == 2 {
                     let enum_name = &segments[0];
                     let variant = &segments[1];
-                    if let Some(ed) = self.enum_defs.get(enum_name) {
+                    // Check enum_defs with original name and use-aliased name
+                    let lookup_name = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
+                    let enum_key = self.enum_defs.get(enum_name).or_else(|| self.enum_defs.get(&lookup_name));
+                    if let Some(ed) = enum_key {
                         for v in &ed.variants {
                             if &v.name == variant {
+                                let emit_name = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
                                 self.emit(OpCode::ConstEnumVariant {
-                                    enum_name: enum_name.clone(),
+                                    enum_name: emit_name,
                                     variant: variant.clone(),
                                     data: vec![],
                                 });
@@ -1624,6 +1637,14 @@ impl Compiler {
                     if let Some(&target) = self.functions.get(&qualified) {
                         self.emit(OpCode::Call { target, arg_count: args.len() });
                         return Ok(());
+                    }
+                    // Try use-aliased prefix (e.g. `use geometry::Point` → `geometry::Point::new`)
+                    if let Some(aliased_prefix) = self.use_aliases.get(&path[0]) {
+                        let aliased = format!("{}::{}", aliased_prefix, &path[1]);
+                        if let Some(&target) = self.functions.get(&aliased) {
+                            self.emit(OpCode::Call { target, arg_count: args.len() });
+                            return Ok(());
+                        }
                     }
                     if is_builtin_path(path) {
                         self.emit(OpCode::PathCallBuiltin {
