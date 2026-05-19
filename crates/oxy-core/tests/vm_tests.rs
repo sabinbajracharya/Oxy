@@ -2883,6 +2883,42 @@ fn main() {
     assert_eq!(output, vec!["99\n"]);
 }
 
+#[test]
+fn test_integer_type_annotation_accepts_unsuffixed_literal() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let x: u32 = 123123;
+    println!("{}", x);
+}"#,
+    );
+    assert_eq!(output, vec!["123123\n"]);
+}
+
+#[test]
+fn test_large_u64_literal() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let x = 12312312312312312311u64;
+    println!("{}", x);
+}"#,
+    );
+    assert_eq!(output, vec!["12312312312312312311\n"]);
+}
+
+#[test]
+fn test_hex_literal_with_suffix() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let x = 0xFFu8;
+    println!("{}", x);
+}"#,
+    );
+    assert_eq!(output, vec!["255\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]

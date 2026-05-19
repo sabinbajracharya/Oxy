@@ -37,6 +37,24 @@ pub enum TypeInfo {
 }
 
 impl TypeInfo {
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            TypeInfo::I8
+                | TypeInfo::I16
+                | TypeInfo::I32
+                | TypeInfo::I64
+                | TypeInfo::U8
+                | TypeInfo::U16
+                | TypeInfo::U32
+                | TypeInfo::U64
+        )
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, TypeInfo::F32 | TypeInfo::F64)
+    }
+
     pub fn name(&self) -> &str {
         match self {
             TypeInfo::I8 => "i8",
@@ -104,29 +122,20 @@ impl TypeInfo {
         if self == other {
             return true;
         }
-        // Integer promotion: narrower → wider (same sign)
-        matches!(
-            (self, other),
-            (TypeInfo::I16, TypeInfo::I8) | (TypeInfo::I32, TypeInfo::I8) | (TypeInfo::I64, TypeInfo::I8)
-            | (TypeInfo::I32, TypeInfo::I16) | (TypeInfo::I64, TypeInfo::I16)
-            | (TypeInfo::I64, TypeInfo::I32)
-            | (TypeInfo::U16, TypeInfo::U8) | (TypeInfo::U32, TypeInfo::U8) | (TypeInfo::U64, TypeInfo::U8)
-            | (TypeInfo::U32, TypeInfo::U16) | (TypeInfo::U64, TypeInfo::U16)
-            | (TypeInfo::U64, TypeInfo::U32)
-            // Unsigned → wider signed
-            | (TypeInfo::I16, TypeInfo::U8) | (TypeInfo::I32, TypeInfo::U8) | (TypeInfo::I64, TypeInfo::U8)
-            | (TypeInfo::I32, TypeInfo::U16) | (TypeInfo::I64, TypeInfo::U16)
-            | (TypeInfo::I64, TypeInfo::U32)
-            // Float promotion
-            | (TypeInfo::F64, TypeInfo::F32)
-            // Integer → float
-            | (TypeInfo::F32, TypeInfo::I8) | (TypeInfo::F32, TypeInfo::I16) | (TypeInfo::F32, TypeInfo::I32)
-            | (TypeInfo::F64, TypeInfo::I8) | (TypeInfo::F64, TypeInfo::I16)
-            | (TypeInfo::F64, TypeInfo::I32) | (TypeInfo::F64, TypeInfo::I64)
-            | (TypeInfo::F32, TypeInfo::U8) | (TypeInfo::F32, TypeInfo::U16)
-            | (TypeInfo::F64, TypeInfo::U8) | (TypeInfo::F64, TypeInfo::U16)
-            | (TypeInfo::F64, TypeInfo::U32) | (TypeInfo::F64, TypeInfo::U64)
-        )
+        // Any integer type accepts any other integer type (suffixed literals,
+        // cross-sign assignments — wrapping happens at runtime).
+        if self.is_integer() && other.is_integer() {
+            return true;
+        }
+        // Float promotion
+        if matches!((self, other), (TypeInfo::F64, TypeInfo::F32)) {
+            return true;
+        }
+        // Integer → float
+        if self.is_float() && other.is_integer() {
+            return true;
+        }
+        false
     }
 }
 
