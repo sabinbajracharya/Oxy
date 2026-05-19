@@ -104,23 +104,36 @@ impl Parser {
             attributes.push(self.parse_attribute()?);
         }
 
-        // Handle optional `pub` keyword
-        let is_pub = self.check(&TokenKind::Pub);
-        if is_pub {
-            self.advance();
-        }
+        // Handle optional `pub` keyword with optional restriction: `pub`, `pub(crate)`, `pub(super)`
+        let visibility = if self.match_token(&TokenKind::Pub) {
+            if self.match_token(&TokenKind::LParen) {
+                let vis = if self.match_token(&TokenKind::Crate) {
+                    Visibility::PubCrate
+                } else if self.match_token(&TokenKind::Super) {
+                    Visibility::PubSuper
+                } else {
+                    return Err(self.error("expected `crate` or `super` after `pub(`".to_string()));
+                };
+                self.expect(TokenKind::RParen)?;
+                vis
+            } else {
+                Visibility::Pub
+            }
+        } else {
+            Visibility::Private
+        };
         match self.peek_kind() {
-            TokenKind::Fn => self.parse_fn_def(false, attributes, is_pub).map(Item::Function),
+            TokenKind::Fn => self.parse_fn_def(false, attributes, visibility).map(Item::Function),
             TokenKind::Async => {
                 self.advance(); // consume `async`
-                self.parse_fn_def(true, attributes, is_pub).map(Item::Function)
+                self.parse_fn_def(true, attributes, visibility).map(Item::Function)
             }
-            TokenKind::Struct => self.parse_struct_def(attributes, is_pub).map(Item::Struct),
-            TokenKind::Enum => self.parse_enum_def(attributes, is_pub).map(Item::Enum),
+            TokenKind::Struct => self.parse_struct_def(attributes, visibility).map(Item::Struct),
+            TokenKind::Enum => self.parse_enum_def(attributes, visibility).map(Item::Enum),
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
-            TokenKind::Trait => self.parse_trait_def(is_pub).map(Item::Trait),
-            TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
-            TokenKind::Use => self.parse_use_def(is_pub).map(Item::Use),
+            TokenKind::Trait => self.parse_trait_def(visibility).map(Item::Trait),
+            TokenKind::Mod => self.parse_module_def(visibility).map(Item::Module),
+            TokenKind::Use => self.parse_use_def(visibility).map(Item::Use),
             TokenKind::Type => self.parse_type_alias(),
             TokenKind::Const => self.parse_const_def(false),
             TokenKind::Static => self.parse_const_def(true),
@@ -170,7 +183,7 @@ impl Parser {
         })
     }
 
-    fn parse_module_def(&mut self, is_pub: bool) -> Result<ModuleDef, FerriError> {
+    fn parse_module_def(&mut self, visibility: Visibility) -> Result<ModuleDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Mod)?;
         let name = self.expect_ident()?;
@@ -180,7 +193,7 @@ impl Parser {
             let end_span = self.prev_span();
             Ok(ModuleDef {
                 name,
-                is_pub,
+                visibility: visibility.clone(),
                 body: None,
                 span: self.merge_spans(start_span, end_span),
             })
@@ -195,14 +208,14 @@ impl Parser {
             self.expect(TokenKind::RBrace)?;
             Ok(ModuleDef {
                 name,
-                is_pub,
+                visibility: visibility.clone(),
                 body: Some(items),
                 span: self.merge_spans(start_span, end_span),
             })
         }
     }
 
-    fn parse_use_def(&mut self, is_pub: bool) -> Result<UseDef, FerriError> {
+    fn parse_use_def(&mut self, visibility: Visibility) -> Result<UseDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Use)?;
 
@@ -234,7 +247,7 @@ impl Parser {
                 return Ok(UseDef {
                     path,
                     tree: UseTree::Glob,
-                    is_pub,
+                    visibility: visibility.clone(),
                     span: self.merge_spans(start_span, end_span),
                 });
             }
@@ -264,7 +277,7 @@ impl Parser {
                 return Ok(UseDef {
                     path,
                     tree: UseTree::Group(items),
-                    is_pub,
+                    visibility: visibility.clone(),
                     span: self.merge_spans(start_span, end_span),
                 });
             }
@@ -295,7 +308,7 @@ impl Parser {
         Ok(UseDef {
             path,
             tree: UseTree::Simple(alias),
-            is_pub,
+            visibility,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -345,7 +358,7 @@ impl Parser {
         &mut self,
         is_async: bool,
         attributes: Vec<Attribute>,
-        is_pub: bool,
+        visibility: Visibility,
     ) -> Result<FnDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Fn)?;
@@ -408,7 +421,7 @@ impl Parser {
             return_type,
             body: body.clone(),
             attributes,
-            is_pub,
+            visibility: visibility.clone(),
             span: self.merge_spans(start_span, body.span),
         })
     }
@@ -576,7 +589,7 @@ impl Parser {
     fn parse_struct_def(
         &mut self,
         attributes: Vec<Attribute>,
-        is_pub: bool,
+        visibility: Visibility,
     ) -> Result<StructDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Struct)?;
@@ -588,7 +601,7 @@ impl Parser {
                 name,
                 attributes: attributes.clone(),
                 kind: StructKind::Unit,
-                is_pub,
+                visibility: visibility.clone(),
                 span: self.merge_spans(start_span, self.prev_span()),
             });
         }
@@ -615,7 +628,7 @@ impl Parser {
                 name,
                 attributes: attributes.clone(),
                 kind: StructKind::Tuple(types),
-                is_pub,
+                visibility: visibility.clone(),
                 span: self.merge_spans(start_span, end_span),
             });
         }
@@ -633,7 +646,11 @@ impl Parser {
                 span: self.merge_spans(field_span, type_ann.span),
                 name: field_name,
                 type_ann,
-                is_pub: field_pub,
+                visibility: if field_pub {
+                    Visibility::Pub
+                } else {
+                    Visibility::Private
+                },
             });
             if !self.match_token(&TokenKind::Comma) {
                 break;
@@ -646,7 +663,7 @@ impl Parser {
             name,
             attributes,
             kind: StructKind::Named(fields),
-            is_pub,
+            visibility: visibility.clone(),
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -656,7 +673,7 @@ impl Parser {
     fn parse_enum_def(
         &mut self,
         attributes: Vec<Attribute>,
-        is_pub: bool,
+        visibility: Visibility,
     ) -> Result<EnumDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Enum)?;
@@ -698,7 +715,7 @@ impl Parser {
                         span: self.merge_spans(fspan, ftype.span),
                         name: fname,
                         type_ann: ftype,
-                        is_pub: false,
+                        visibility: Visibility::Private,
                     });
                     if !self.match_token(&TokenKind::Comma) {
                         break;
@@ -727,7 +744,7 @@ impl Parser {
             name,
             attributes,
             variants,
-            is_pub,
+            visibility: visibility.clone(),
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -748,8 +765,12 @@ impl Parser {
 
             let mut methods = Vec::new();
             while !self.check(&TokenKind::RBrace) {
-                let is_pub_method = self.match_token(&TokenKind::Pub);
-                methods.push(self.parse_fn_def(false, vec![], is_pub_method)?);
+                let method_vis = if self.match_token(&TokenKind::Pub) {
+                    Visibility::Pub
+                } else {
+                    Visibility::Private
+                };
+                methods.push(self.parse_fn_def(false, vec![], method_vis)?);
             }
             let end_span = self.current_span();
             self.expect(TokenKind::RBrace)?;
@@ -767,8 +788,12 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.check(&TokenKind::RBrace) {
-            let is_pub_method = self.match_token(&TokenKind::Pub);
-            methods.push(self.parse_fn_def(false, vec![], is_pub_method)?);
+            let method_vis = if self.match_token(&TokenKind::Pub) {
+                Visibility::Pub
+            } else {
+                Visibility::Private
+            };
+            methods.push(self.parse_fn_def(false, vec![], method_vis)?);
         }
         let end_span = self.current_span();
         self.expect(TokenKind::RBrace)?;
@@ -782,7 +807,7 @@ impl Parser {
 
     // === Trait parsing ===
 
-    fn parse_trait_def(&mut self, is_pub: bool) -> Result<TraitDef, FerriError> {
+    fn parse_trait_def(&mut self, visibility: Visibility) -> Result<TraitDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Trait)?;
         let name = self.expect_ident()?;
@@ -825,7 +850,7 @@ impl Parser {
                     return_type,
                     body: body.clone(),
                     attributes: vec![],
-                    is_pub: false,
+                    visibility: Visibility::Private,
                     span: self.merge_spans(sig_start, body.span),
                 });
             } else {
@@ -847,7 +872,7 @@ impl Parser {
             name,
             methods,
             default_methods,
-            is_pub,
+            visibility: visibility.clone(),
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -3738,7 +3763,7 @@ fn main() {}"#,
         let Item::Module(m) = &program.items[0] else {
             panic!("expected module");
         };
-        assert!(m.is_pub);
+        assert!(m.visibility.is_pub());
     }
 
     #[test]

@@ -2847,6 +2847,42 @@ fn main() {
     assert_eq!(output, vec!["1 oxy\n"]);
 }
 
+#[test]
+fn test_pub_crate_visibility() {
+    // pub(crate) works like pub — visible everywhere within the crate
+    let output = run_and_capture(
+        r#"
+mod m {
+    pub(crate) fn val() -> i64 { 42 }
+}
+use m::val;
+fn main() {
+    println!("{}", val());
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_pub_super_visibility() {
+    // pub(super) is visible to the parent module
+    let output = run_and_capture(
+        r#"
+mod a {
+    pub(super) fn val() -> i64 { 99 }
+    pub mod b {
+        use super::val;
+        pub fn call() -> i64 { val() }
+    }
+}
+use a::b::call;
+fn main() {
+    println!("{}", call());
+}"#,
+    );
+    assert_eq!(output, vec!["99\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]

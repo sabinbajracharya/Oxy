@@ -519,7 +519,7 @@ impl Compiler {
                 span: default_span,
             },
             attributes: vec![],
-            is_pub: false,
+            visibility: Visibility::Private,
             span: default_span,
         };
         self.compile_fn_item(&fn_def, Some(&s.name))
@@ -539,7 +539,7 @@ impl Compiler {
             // Also register qualified name so PathCall can resolve Type::method
             let qualified = format!("{}::{}", tn, f.name);
             self.functions.insert(qualified.clone(), ip);
-            if f.is_pub {
+            if f.visibility.is_pub() {
                 self.pub_fns.insert(qualified);
             }
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
@@ -644,7 +644,7 @@ impl Compiler {
                     .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
                 if self.is_visible(&base_path) {
                     self.use_aliases.insert(name.clone(), base_path.clone());
-                    if use_def.is_pub {
+                    if use_def.visibility.is_pub() {
                         let reexport_name = if module_prefix.is_empty() {
                             name.clone()
                         } else {
@@ -663,7 +663,7 @@ impl Compiler {
                     if self.is_visible(&qualified) {
                         self.use_aliases
                             .insert(local_name.clone(), qualified.clone());
-                        if use_def.is_pub {
+                        if use_def.visibility.is_pub() {
                             let reexport_name = if module_prefix.is_empty() {
                                 local_name.clone()
                             } else {
@@ -684,7 +684,7 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
-                            if use_def.is_pub {
+                            if use_def.visibility.is_pub() {
                                 let reexport_name = if module_prefix.is_empty() {
                                     stripped.to_string()
                                 } else {
@@ -703,7 +703,7 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
-                            if use_def.is_pub {
+                            if use_def.visibility.is_pub() {
                                 let reexport_name = if module_prefix.is_empty() {
                                     stripped.to_string()
                                 } else {
@@ -722,7 +722,7 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
-                            if use_def.is_pub {
+                            if use_def.visibility.is_pub() {
                                 let reexport_name = if module_prefix.is_empty() {
                                     stripped.to_string()
                                 } else {
@@ -794,7 +794,7 @@ impl Compiler {
                                 .unwrap_or_else(|| u.path.last().cloned().unwrap_or_default());
                             if self.is_visible(&base_path) {
                                 self.use_aliases.insert(name.clone(), base_path.clone());
-                                if u.is_pub {
+                                if u.visibility.is_pub() {
                                     let reexport = if module_prefix.is_empty() {
                                         name.clone()
                                     } else {
@@ -812,7 +812,7 @@ impl Compiler {
                                 if self.is_visible(&qualified) {
                                     self.use_aliases
                                         .insert(local_name.clone(), qualified.clone());
-                                    if u.is_pub {
+                                    if u.visibility.is_pub() {
                                         let reexport = if module_prefix.is_empty() {
                                             local_name.clone()
                                         } else {
@@ -834,7 +834,7 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
-                                        if u.is_pub {
+                                        if u.visibility.is_pub() {
                                             let reexport_name = if module_prefix.is_empty() {
                                                 stripped.to_string()
                                             } else {
@@ -857,7 +857,7 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
-                                        if u.is_pub {
+                                        if u.visibility.is_pub() {
                                             let reexport_name = if module_prefix.is_empty() {
                                                 stripped.to_string()
                                             } else {
@@ -880,7 +880,7 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
-                                        if u.is_pub {
+                                        if u.visibility.is_pub() {
                                             let reexport_name = if module_prefix.is_empty() {
                                                 stripped.to_string()
                                             } else {
@@ -971,7 +971,7 @@ impl Compiler {
                     let qualified = format!("{}::{}", prefix, f.name);
                     let ip = self.code.len();
                     self.functions.insert(qualified.clone(), ip);
-                    if f.is_pub {
+                    if f.visibility.is_pub() {
                         self.pub_fns.insert(qualified.clone());
                     }
                     // Store metadata for function-reference-as-value
@@ -1004,14 +1004,14 @@ impl Compiler {
                 Item::Struct(s) => {
                     let qualified = format!("{}::{}", prefix, s.name);
                     self.struct_defs.insert(qualified.clone(), s.clone());
-                    if s.is_pub {
+                    if s.visibility.is_pub() {
                         self.pub_structs.insert(qualified);
                     }
                 }
                 Item::Enum(e) => {
                     let qualified = format!("{}::{}", prefix, e.name);
                     self.enum_defs.insert(qualified.clone(), e.clone());
-                    if e.is_pub {
+                    if e.visibility.is_pub() {
                         self.pub_enums.insert(qualified);
                     }
                 }
@@ -1026,7 +1026,7 @@ impl Compiler {
                         let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
-                        if method.is_pub {
+                        if method.visibility.is_pub() {
                             self.pub_fns.insert(mname.clone());
                         }
                         // Store fn_meta for arg count checking
@@ -1116,7 +1116,7 @@ impl Compiler {
                         let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
-                        if method.is_pub {
+                        if method.visibility.is_pub() {
                             self.pub_fns.insert(mname.clone());
                         }
                         let body_expr = method

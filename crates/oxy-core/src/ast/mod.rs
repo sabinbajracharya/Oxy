@@ -16,11 +16,25 @@ pub enum Visibility {
 }
 
 impl Visibility {
+    /// True for `pub`, `pub(crate)`, `pub(super)` — item is publicly accessible.
     pub fn is_pub(&self) -> bool {
-        matches!(self, Visibility::Pub)
+        matches!(
+            self,
+            Visibility::Pub | Visibility::PubCrate | Visibility::PubSuper
+        )
     }
+    /// True for everything except `Private` — item is visible outside its own module.
     pub fn is_visible(&self) -> bool {
         !matches!(self, Visibility::Private)
+    }
+    /// Display as the Rust-style keyword.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Visibility::Pub => "pub",
+            Visibility::PubCrate => "pub(crate)",
+            Visibility::PubSuper => "pub(super)",
+            Visibility::Private => "",
+        }
     }
 }
 
@@ -94,7 +108,7 @@ pub struct FnDef {
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
     pub attributes: Vec<Attribute>,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -128,7 +142,7 @@ pub struct StructDef {
     pub name: String,
     pub attributes: Vec<Attribute>,
     pub kind: StructKind,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -148,7 +162,7 @@ pub enum StructKind {
 pub struct StructField {
     pub name: String,
     pub type_ann: TypeAnnotation,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -158,7 +172,7 @@ pub struct EnumDef {
     pub name: String,
     pub attributes: Vec<Attribute>,
     pub variants: Vec<EnumVariant>,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -195,7 +209,7 @@ pub struct TraitDef {
     pub name: String,
     pub methods: Vec<TraitMethodSig>,
     pub default_methods: Vec<FnDef>,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -236,7 +250,7 @@ pub struct TypeAnnotation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleDef {
     pub name: String,
-    pub is_pub: bool,
+    pub visibility: Visibility,
     /// `Some(items)` for inline modules, `None` for file-based (`mod name;`).
     pub body: Option<Vec<Item>>,
     pub span: Span,
@@ -249,8 +263,8 @@ pub struct UseDef {
     pub path: Vec<String>,
     /// What to import from the path.
     pub tree: UseTree,
-    /// Whether this is a `pub use` (re-export).
-    pub is_pub: bool,
+    /// Whether this is a `pub use` (re-export) and at what visibility.
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -915,7 +929,12 @@ impl Item {
             }
             Item::Module(m) => {
                 let pad = "  ".repeat(indent);
-                let pub_str = if m.is_pub { "pub " } else { "" };
+                let pub_str = m.visibility.as_str();
+                let pub_str = if pub_str.is_empty() {
+                    String::new()
+                } else {
+                    format!("{pub_str} ")
+                };
                 if let Some(body) = &m.body {
                     out.push_str(&format!("{pub_str}{pad}mod {} {{\n", m.name));
                     for item in body {
@@ -928,7 +947,12 @@ impl Item {
             }
             Item::Use(u) => {
                 let pad = "  ".repeat(indent);
-                let pub_str = if u.is_pub { "pub " } else { "" };
+                let pub_str = u.visibility.as_str();
+                let pub_str = if pub_str.is_empty() {
+                    String::new()
+                } else {
+                    format!("{pub_str} ")
+                };
                 out.push_str(&format!("{pad}{pub_str}use "));
                 let path_str = u.path.join("::");
                 match &u.tree {
