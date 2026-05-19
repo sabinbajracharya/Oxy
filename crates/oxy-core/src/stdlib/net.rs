@@ -106,7 +106,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let data = expect_string(&args[2], "std::net::udp_send_to(data)", span)?;
             match std::net::UdpSocket::bind(bind_addr) {
                 Ok(socket) => match socket.send_to(data.as_bytes(), target_addr) {
-                    Ok(bytes) => Ok(Value::ok(Value::Integer(bytes as i64))),
+                    Ok(bytes) => Ok(Value::ok(Value::I64(bytes as i64))),
                     Err(e) => Ok(Value::err(Value::String(e.to_string()))),
                 },
                 Err(e) => Ok(Value::err(Value::String(e.to_string()))),

@@ -20,8 +20,8 @@ pub fn serialize_pretty(value: &Value) -> Result<String, String> {
 
 fn serialize_value(value: &Value) -> Result<String, String> {
     match value {
-        Value::Integer(n) => Ok(n.to_string()),
-        Value::Float(f) => Ok(format_float(*f)),
+        Value::I64(n) => Ok(n.to_string()),
+        Value::F64(f) => Ok(format_float(*f)),
         Value::I8(n) => Ok(n.to_string()), Value::I16(n) => Ok(n.to_string()),
         Value::I32(n) => Ok(n.to_string()), Value::I64(n) => Ok(n.to_string()),
         Value::U8(n) => Ok(n.to_string()), Value::U16(n) => Ok(n.to_string()),
@@ -80,8 +80,8 @@ fn serialize_value(value: &Value) -> Result<String, String> {
 
 fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String> {
     match value {
-        Value::Integer(n) => Ok(n.to_string()),
-        Value::Float(f) => Ok(format_float(*f)),
+        Value::I64(n) => Ok(n.to_string()),
+        Value::F64(f) => Ok(format_float(*f)),
         Value::I8(n) => Ok(n.to_string()), Value::I16(n) => Ok(n.to_string()),
         Value::I32(n) => Ok(n.to_string()), Value::I64(n) => Ok(n.to_string()),
         Value::U8(n) => Ok(n.to_string()), Value::U16(n) => Ok(n.to_string()),
@@ -623,12 +623,12 @@ impl JsonParser {
         if is_float {
             num_str
                 .parse::<f64>()
-                .map(Value::Float)
+                .map(Value::F64)
                 .map_err(|e| format!("invalid float: {e}"))
         } else {
             num_str
                 .parse::<i64>()
-                .map(Value::Integer)
+                .map(Value::I64)
                 .map_err(|e| format!("invalid integer: {e}"))
         }
     }

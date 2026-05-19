@@ -21,7 +21,7 @@ where
     };
     let rc = rc.clone();
     match method {
-        "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
+        "len" => Ok(Value::I64(rc.borrow().len() as i64)),
         "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
         "contains" => {
             let val = args.first().ok_or("Vec::contains takes 1 argument")?;
@@ -48,7 +48,7 @@ where
             let idx = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .ok_or("Vec::get requires an integer index")?;
@@ -61,7 +61,7 @@ where
             let idx = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .ok_or("Vec::insert requires an integer index")?;
@@ -74,7 +74,7 @@ where
             let idx = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .ok_or("Vec::remove requires an integer index")?;
@@ -140,7 +140,7 @@ where
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .ok_or("Vec::chunks requires an integer size")?;
@@ -155,7 +155,7 @@ where
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .ok_or("Vec::windows requires an integer size")?;
@@ -194,7 +194,7 @@ where
                     let a = v[j].clone();
                     let b = v[j + 1].clone();
                     match call_closure(closure.clone(), &[a, b]) {
-                        Ok(Value::Integer(n)) if n > 0 => {
+                        Ok(Value::I64(n)) if n > 0 => {
                             v.swap(j, j + 1);
                         }
                         _ => {}

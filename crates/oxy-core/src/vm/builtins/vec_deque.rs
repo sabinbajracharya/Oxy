@@ -8,7 +8,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
     let Value::VecDeque(rc) = &receiver else { unreachable!() };
     let d = rc.borrow();
     match method {
-        "len" => Ok(Value::Integer(d.len() as i64)),
+        "len" => Ok(Value::I64(d.len() as i64)),
         "is_empty" => Ok(Value::Bool(d.is_empty())),
         "front" => d.front().cloned().ok_or_else(|| "VecDeque::front on empty deque".into()),
         "back" => d.back().cloned().ok_or_else(|| "VecDeque::back on empty deque".into()),

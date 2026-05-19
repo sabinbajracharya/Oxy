@@ -16,14 +16,14 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let dur = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap();
-            Ok(Value::Float(dur.as_secs_f64()))
+            Ok(Value::F64(dur.as_secs_f64()))
         }
         "millis" => {
             check_arg_count("time::millis", 0, args, span)?;
             let dur = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap();
-            Ok(Value::Integer(dur.as_millis() as i64))
+            Ok(Value::I64(dur.as_millis() as i64))
         }
         "elapsed" => {
             check_arg_count("time::elapsed", 1, args, span)?;
@@ -32,7 +32,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs_f64();
-            Ok(Value::Float(now - start))
+            Ok(Value::F64(now - start))
         }
         _ => Err(FerriError::Runtime {
             message: format!("unknown time function `time::{func_name}`"),

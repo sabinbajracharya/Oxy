@@ -94,7 +94,7 @@ pub fn expect_integer(
     span: &crate::lexer::Span,
 ) -> Result<i64, FerriError> {
     match val {
-        crate::types::Value::Integer(n) => Ok(*n),
+        crate::types::Value::I64(n) => Ok(*n),
         _ => Err(runtime_error(
             format!("{context}: expected integer, got {}", val.type_name()),
             span,

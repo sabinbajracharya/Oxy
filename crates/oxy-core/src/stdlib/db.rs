@@ -47,7 +47,7 @@ pub fn execute(
             line: span.line,
             column: span.column,
         })?;
-    Ok(Value::Integer(affected as i64))
+    Ok(Value::I64(affected as i64))
 }
 
 /// Execute a SQL query and return results as a Vec of HashMaps.
@@ -101,7 +101,7 @@ pub fn query(
 
 /// Get the last inserted row ID.
 pub fn last_insert_id(conn: &Connection) -> Value {
-    Value::Integer(conn.last_insert_rowid())
+    Value::I64(conn.last_insert_rowid())
 }
 
 /// Convert Oxy Values to rusqlite-compatible parameters.
@@ -109,8 +109,8 @@ fn convert_params(params: &[Value], span: &Span) -> Result<Vec<SqlValue>, FerriE
     params
         .iter()
         .map(|v| match v {
-            Value::Integer(n) => Ok(SqlValue::Integer(*n)),
-            Value::Float(f) => Ok(SqlValue::Real(*f)),
+            Value::I64(n) => Ok(SqlValue::Integer(*n)),
+            Value::F64(f) => Ok(SqlValue::Real(*f)),
             Value::String(s) => Ok(SqlValue::Text(s.clone())),
             Value::Bool(b) => Ok(SqlValue::Integer(if *b { 1 } else { 0 })),
             Value::Unit => Ok(SqlValue::Null),
@@ -127,8 +127,8 @@ fn convert_params(params: &[Value], span: &Span) -> Result<Vec<SqlValue>, FerriE
 fn sql_value_to_oxy(val: SqlValue) -> Value {
     match val {
         SqlValue::Null => Value::Unit,
-        SqlValue::Integer(n) => Value::Integer(n),
-        SqlValue::Real(f) => Value::Float(f),
+        SqlValue::Integer(n) => Value::I64(n),
+        SqlValue::Real(f) => Value::F64(f),
         SqlValue::Text(s) => Value::String(s),
         SqlValue::Blob(b) => Value::String(String::from_utf8_lossy(&b).to_string()),
     }
@@ -171,7 +171,7 @@ mod tests {
             &span,
         )
         .unwrap();
-        assert_eq!(affected, Value::Integer(1));
+        assert_eq!(affected, Value::I64(1));
     }
 
     #[test]
@@ -188,14 +188,14 @@ mod tests {
         execute(
             &conn,
             "INSERT INTO users (name, age) VALUES (?1, ?2)",
-            &[Value::String("Alice".to_string()), Value::Integer(30)],
+            &[Value::String("Alice".to_string()), Value::I64(30)],
             &span,
         )
         .unwrap();
         execute(
             &conn,
             "INSERT INTO users (name, age) VALUES (?1, ?2)",
-            &[Value::String("Bob".to_string()), Value::Integer(25)],
+            &[Value::String("Bob".to_string()), Value::I64(25)],
             &span,
         )
         .unwrap();
@@ -218,7 +218,7 @@ mod tests {
                 );
                 assert_eq!(
                     row.get(&Value::String("age".to_string())),
-                    Some(&Value::Integer(25))
+                    Some(&Value::I64(25))
                 );
             }
         } else {
@@ -240,7 +240,7 @@ mod tests {
         execute(
             &conn,
             "INSERT INTO items (value) VALUES (?1)",
-            &[Value::Float(3.125)],
+            &[Value::F64(3.125)],
             &span,
         )
         .unwrap();
@@ -248,7 +248,7 @@ mod tests {
         let result = query(
             &conn,
             "SELECT value FROM items WHERE value > ?1",
-            &[Value::Float(3.0)],
+            &[Value::F64(3.0)],
             &span,
         )
         .unwrap();
@@ -278,7 +278,7 @@ mod tests {
         )
         .unwrap();
         let id = last_insert_id(&conn);
-        assert_eq!(id, Value::Integer(1));
+        assert_eq!(id, Value::I64(1));
     }
 
     #[test]

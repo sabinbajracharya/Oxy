@@ -114,8 +114,8 @@ fn compile_regex(pattern: &str, span: &Span) -> Result<regex::Regex, FerriError>
 fn match_to_value(m: regex::Match<'_>) -> Value {
     let mut fields = std::collections::HashMap::new();
     fields.insert("text".to_string(), Value::String(m.as_str().to_string()));
-    fields.insert("start".to_string(), Value::Integer(m.start() as i64));
-    fields.insert("end".to_string(), Value::Integer(m.end() as i64));
+    fields.insert("start".to_string(), Value::I64(m.start() as i64));
+    fields.insert("end".to_string(), Value::I64(m.end() as i64));
     Value::Struct {
         name: "Match".to_string(),
         fields,

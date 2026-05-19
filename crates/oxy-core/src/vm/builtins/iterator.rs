@@ -47,7 +47,7 @@ pub fn dispatch(
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
@@ -60,7 +60,7 @@ pub fn dispatch(
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
@@ -169,7 +169,7 @@ pub fn dispatch(
             ))))
         }
         "sum" => {
-            let mut total: Value = Value::Integer(0);
+            let mut total: Value = Value::I64(0);
             while let Some(val) = drive_next(&mut iter) {
                 total = add_values(total, val);
             }
@@ -180,13 +180,13 @@ pub fn dispatch(
             while drive_next(&mut iter).is_some() {
                 n += 1;
             }
-            Ok(Value::Integer(n))
+            Ok(Value::I64(n))
         }
         "nth" => {
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
@@ -232,7 +232,7 @@ pub fn dispatch(
                     let mut idx = 0i64;
                     while let Some(val) = drive_next(&mut iter) {
                         if call_fn(&closure, &[val])?.is_truthy() {
-                            return Ok(Value::some(Value::Integer(idx)));
+                            return Ok(Value::some(Value::I64(idx)));
                         }
                         idx += 1;
                     }
@@ -275,7 +275,7 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
         }
         IteratorState::RangeSource { current, end } => {
             if *current < *end {
-                let val = Value::Integer(*current);
+                let val = Value::I64(*current);
                 *current += 1;
                 Some(val)
             } else {
@@ -311,7 +311,7 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
         }
         IteratorState::Enumerate { source, index } => {
             let val = drive_next(source)?;
-            let pair = Value::Tuple(vec![Value::Integer(*index as i64), val]);
+            let pair = Value::Tuple(vec![Value::I64(*index as i64), val]);
             *index += 1;
             Some(pair)
         }
@@ -339,10 +339,10 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
 
 fn add_values(a: Value, b: Value) -> Value {
     match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
-        (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
-        (Value::Integer(a), Value::Float(b)) => Value::Float(*a as f64 + b),
-        (Value::Float(a), Value::Integer(b)) => Value::Float(a + *b as f64),
-        _ => Value::Integer(0),
+        (Value::I64(a), Value::I64(b)) => Value::I64(a + b),
+        (Value::F64(a), Value::F64(b)) => Value::F64(a + b),
+        (Value::I64(a), Value::F64(b)) => Value::F64(*a as f64 + b),
+        (Value::F64(a), Value::I64(b)) => Value::F64(a + *b as f64),
+        _ => Value::I64(0),
     }
 }

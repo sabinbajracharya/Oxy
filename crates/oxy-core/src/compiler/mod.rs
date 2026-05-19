@@ -1233,10 +1233,10 @@ impl Compiler {
                 // Check const values first (compile-time inlined)
                 if let Some(val) = self.const_values.get(name) {
                     match val {
-                        crate::types::Value::Integer(n) => {
+                        crate::types::Value::I64(n) => {
                             self.emit(OpCode::ConstInt(*n, IntegerWidth::I64));
                         }
-                        crate::types::Value::Float(n) => {
+                        crate::types::Value::F64(n) => {
                             self.emit(OpCode::ConstFloat(*n, FloatWidth::F64));
                         }
                         crate::types::Value::Bool(b) => {
@@ -2333,8 +2333,8 @@ fn collect_free_vars_in_stmt(
 /// Evaluate a simple constant expression at compile time.
 fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
     match expr {
-        crate::ast::Expr::IntLiteral(n, IntegerSuffix::None, _) => Some(crate::types::Value::Integer(*n)),
-        crate::ast::Expr::FloatLiteral(n, FloatSuffix::None, _) => Some(crate::types::Value::Float(*n)),
+        crate::ast::Expr::IntLiteral(n, IntegerSuffix::None, _) => Some(crate::types::Value::I64(*n)),
+        crate::ast::Expr::FloatLiteral(n, FloatSuffix::None, _) => Some(crate::types::Value::F64(*n)),
         crate::ast::Expr::BoolLiteral(b, _) => Some(crate::types::Value::Bool(*b)),
         crate::ast::Expr::StringLiteral(s, _) => Some(crate::types::Value::String(s.clone())),
         crate::ast::Expr::CharLiteral(c, _) => Some(crate::types::Value::Char(*c)),
@@ -2343,8 +2343,8 @@ fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
             expr: inner,
             ..
         } => match try_eval_const(inner) {
-            Some(crate::types::Value::Integer(n)) => Some(crate::types::Value::Integer(-n)),
-            Some(crate::types::Value::Float(n)) => Some(crate::types::Value::Float(-n)),
+            Some(crate::types::Value::I64(n)) => Some(crate::types::Value::I64(-n)),
+            Some(crate::types::Value::F64(n)) => Some(crate::types::Value::F64(-n)),
             _ => None,
         },
         _ => None,

@@ -107,7 +107,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let from = expect_string(&args[0], "std::fs::copy", span)?;
             let to = expect_string(&args[1], "std::fs::copy", span)?;
             match std::fs::copy(from, to) {
-                Ok(bytes) => Ok(Value::ok(Value::Integer(bytes as i64))),
+                Ok(bytes) => Ok(Value::ok(Value::I64(bytes as i64))),
                 Err(e) => Ok(Value::err(Value::String(e.to_string()))),
             }
         }
@@ -127,7 +127,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             match std::fs::metadata(path) {
                 Ok(meta) => {
                     let mut fields = std::collections::HashMap::new();
-                    fields.insert("size".to_string(), Value::Integer(meta.len() as i64));
+                    fields.insert("size".to_string(), Value::I64(meta.len() as i64));
                     fields.insert("is_file".to_string(), Value::Bool(meta.is_file()));
                     fields.insert("is_dir".to_string(), Value::Bool(meta.is_dir()));
                     fields.insert(
@@ -136,7 +136,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                     );
                     if let Ok(modified) = meta.modified() {
                         if let Ok(dur) = modified.duration_since(std::time::UNIX_EPOCH) {
-                            fields.insert("modified".to_string(), Value::Float(dur.as_secs_f64()));
+                            fields.insert("modified".to_string(), Value::F64(dur.as_secs_f64()));
                         }
                     }
                     Ok(Value::ok(Value::Struct {

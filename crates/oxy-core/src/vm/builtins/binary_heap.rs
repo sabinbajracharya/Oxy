@@ -6,7 +6,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
     let Value::BinaryHeap(rc) = &receiver else { unreachable!() };
     let h = rc.borrow();
     match method {
-        "len" => Ok(Value::Integer(h.len() as i64)),
+        "len" => Ok(Value::I64(h.len() as i64)),
         "is_empty" => Ok(Value::Bool(h.is_empty())),
         "peek" => match h.peek() {
             Some(val) => Ok(Value::some(val.clone())),

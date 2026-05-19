@@ -12,7 +12,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
     };
     let rc = rc.clone();
     match method {
-        "len" => Ok(Value::Integer(rc.borrow().len() as i64)),
+        "len" => Ok(Value::I64(rc.borrow().len() as i64)),
         "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
         "get" => {
             let key = args.first().cloned().unwrap_or(Value::Unit);

@@ -326,7 +326,7 @@ pub fn value_to_response(val: &Value) -> HttpResponse {
             let status = fields
                 .get("status")
                 .and_then(|v| {
-                    if let Value::Integer(n) = v {
+                    if let Value::I64(n) = v {
                         Some(*n as u16)
                     } else {
                         None
@@ -438,7 +438,7 @@ pub fn read_request(stream: &std::net::TcpStream) -> Result<String, String> {
 /// Create a Response::text() value.
 pub fn response_text(text: &str, _span: &Span) -> Result<Value, FerriError> {
     let mut fields = HashMap::new();
-    fields.insert("status".to_string(), Value::Integer(200));
+    fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(text.to_string()));
     fields.insert(
         "content_type".to_string(),
@@ -453,7 +453,7 @@ pub fn response_text(text: &str, _span: &Span) -> Result<Value, FerriError> {
 /// Create a Response::json() value.
 pub fn response_json(body: &str, _span: &Span) -> Result<Value, FerriError> {
     let mut fields = HashMap::new();
-    fields.insert("status".to_string(), Value::Integer(200));
+    fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(body.to_string()));
     fields.insert(
         "content_type".to_string(),
@@ -468,7 +468,7 @@ pub fn response_json(body: &str, _span: &Span) -> Result<Value, FerriError> {
 /// Create a Response::html() value.
 pub fn response_html(body: &str, _span: &Span) -> Result<Value, FerriError> {
     let mut fields = HashMap::new();
-    fields.insert("status".to_string(), Value::Integer(200));
+    fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(body.to_string()));
     fields.insert(
         "content_type".to_string(),
@@ -483,7 +483,7 @@ pub fn response_html(body: &str, _span: &Span) -> Result<Value, FerriError> {
 /// Create a Response::status() value.
 pub fn response_with_status(status: u16, body: &str, _span: &Span) -> Result<Value, FerriError> {
     let mut fields = HashMap::new();
-    fields.insert("status".to_string(), Value::Integer(status as i64));
+    fields.insert("status".to_string(), Value::I64(status as i64));
     fields.insert("body".to_string(), Value::String(body.to_string()));
     fields.insert(
         "content_type".to_string(),

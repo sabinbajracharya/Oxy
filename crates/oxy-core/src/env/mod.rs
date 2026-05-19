@@ -115,8 +115,8 @@ mod tests {
     fn test_define_and_get() {
         let env = Environment::new();
         env.borrow_mut()
-            .define("x".into(), Value::Integer(42), false);
-        assert_eq!(env.borrow().get("x").unwrap(), Value::Integer(42));
+            .define("x".into(), Value::I64(42), false);
+        assert_eq!(env.borrow().get("x").unwrap(), Value::I64(42));
     }
 
     #[test]
@@ -130,16 +130,16 @@ mod tests {
         let parent = Environment::new();
         parent
             .borrow_mut()
-            .define("x".into(), Value::Integer(1), false);
+            .define("x".into(), Value::I64(1), false);
 
         let child = Environment::child(&parent);
         child
             .borrow_mut()
-            .define("y".into(), Value::Integer(2), false);
+            .define("y".into(), Value::I64(2), false);
 
         // Child can see parent's variables
-        assert_eq!(child.borrow().get("x").unwrap(), Value::Integer(1));
-        assert_eq!(child.borrow().get("y").unwrap(), Value::Integer(2));
+        assert_eq!(child.borrow().get("x").unwrap(), Value::I64(1));
+        assert_eq!(child.borrow().get("y").unwrap(), Value::I64(2));
 
         // Parent cannot see child's variables
         assert!(parent.borrow().get("y").is_err());
@@ -148,17 +148,17 @@ mod tests {
     #[test]
     fn test_set_mutable() {
         let env = Environment::new();
-        env.borrow_mut().define("x".into(), Value::Integer(1), true);
-        env.borrow_mut().set("x", Value::Integer(2)).unwrap();
-        assert_eq!(env.borrow().get("x").unwrap(), Value::Integer(2));
+        env.borrow_mut().define("x".into(), Value::I64(1), true);
+        env.borrow_mut().set("x", Value::I64(2)).unwrap();
+        assert_eq!(env.borrow().get("x").unwrap(), Value::I64(2));
     }
 
     #[test]
     fn test_set_immutable_fails() {
         let env = Environment::new();
         env.borrow_mut()
-            .define("x".into(), Value::Integer(1), false);
-        let result = env.borrow_mut().set("x", Value::Integer(2));
+            .define("x".into(), Value::I64(1), false);
+        let result = env.borrow_mut().set("x", Value::I64(2));
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -171,12 +171,12 @@ mod tests {
         let parent = Environment::new();
         parent
             .borrow_mut()
-            .define("x".into(), Value::Integer(1), true);
+            .define("x".into(), Value::I64(1), true);
 
         let child = Environment::child(&parent);
-        child.borrow_mut().set("x", Value::Integer(99)).unwrap();
+        child.borrow_mut().set("x", Value::I64(99)).unwrap();
 
-        assert_eq!(parent.borrow().get("x").unwrap(), Value::Integer(99));
+        assert_eq!(parent.borrow().get("x").unwrap(), Value::I64(99));
     }
 
     #[test]
@@ -184,7 +184,7 @@ mod tests {
         let parent = Environment::new();
         parent
             .borrow_mut()
-            .define("x".into(), Value::Integer(1), false);
+            .define("x".into(), Value::I64(1), false);
 
         let child = Environment::child(&parent);
         child
@@ -196,6 +196,6 @@ mod tests {
             Value::String("shadowed".into())
         );
         // Parent still has original
-        assert_eq!(parent.borrow().get("x").unwrap(), Value::Integer(1));
+        assert_eq!(parent.borrow().get("x").unwrap(), Value::I64(1));
     }
 }

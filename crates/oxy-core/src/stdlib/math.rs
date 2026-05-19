@@ -11,8 +11,8 @@ use crate::types::Value;
 /// Convert a Value to f64.
 pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
     match val {
-        Value::Integer(n) => Ok(*n as f64),
-        Value::Float(f) => Ok(*f),
+        Value::I64(n) => Ok(*n as f64),
+        Value::F64(f) => Ok(*f),
         _ => Err(FerriError::Runtime {
             message: format!("expected numeric argument, got {}", val.type_name()),
             line: span.line,
@@ -28,9 +28,9 @@ pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
 // downstream comparisons and pattern matches.
 pub fn float_to_value(f: f64) -> Value {
     if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
-        Value::Integer(f as i64)
+        Value::I64(f as i64)
     } else {
-        Value::Float(f)
+        Value::F64(f)
     }
 }
 
@@ -41,8 +41,8 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         "abs" => {
             check_arg_count("math::abs", 1, args, span)?;
             match &args[0] {
-                Value::Integer(n) => Ok(Value::Integer(n.abs())),
-                Value::Float(f) => Ok(float_to_value(f.abs())),
+                Value::I64(n) => Ok(Value::I64(n.abs())),
+                Value::F64(f) => Ok(float_to_value(f.abs())),
                 _ => Err(FerriError::Runtime {
                     message: format!(
                         "math::abs() requires numeric argument, got {}",
@@ -66,7 +66,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         "min" => {
             check_arg_count("math::min", 2, args, span)?;
             match (&args[0], &args[1]) {
-                (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
+                (Value::I64(a), Value::I64(b)) => Ok(Value::I64(*a.min(b))),
                 _ => {
                     let a = value_to_f64(&args[0], span)?;
                     let b = value_to_f64(&args[1], span)?;
@@ -77,7 +77,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         "max" => {
             check_arg_count("math::max", 2, args, span)?;
             match (&args[0], &args[1]) {
-                (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
+                (Value::I64(a), Value::I64(b)) => Ok(Value::I64(*a.max(b))),
                 _ => {
                     let a = value_to_f64(&args[0], span)?;
                     let b = value_to_f64(&args[1], span)?;
@@ -89,13 +89,13 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             check_arg_count("math::gcd", 2, args, span)?;
             let a = math_int(&args[0], "gcd", span)?;
             let b = math_int(&args[1], "gcd", span)?;
-            Ok(Value::Integer(gcd(a, b)))
+            Ok(Value::I64(gcd(a, b)))
         }
         "lcm" => {
             check_arg_count("math::lcm", 2, args, span)?;
             let a = math_int(&args[0], "lcm", span)?;
             let b = math_int(&args[1], "lcm", span)?;
-            Ok(Value::Integer(lcm(a, b)))
+            Ok(Value::I64(lcm(a, b)))
         }
         "log" => unary_op("log", args, f64::ln, span),
         "log2" => unary_op("log2", args, f64::log2, span),
@@ -111,8 +111,8 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
 /// Get math constant by name.
 pub fn constant(name: &str) -> Option<Value> {
     match name {
-        "PI" => Some(Value::Float(std::f64::consts::PI)),
-        "E" => Some(Value::Float(std::f64::consts::E)),
+        "PI" => Some(Value::F64(std::f64::consts::PI)),
+        "E" => Some(Value::F64(std::f64::consts::E)),
         _ => None,
     }
 }
@@ -142,7 +142,7 @@ fn binary_op(
 
 fn math_int(val: &Value, name: &str, span: &Span) -> Result<i64, FerriError> {
     match val {
-        Value::Integer(n) => Ok(*n),
+        Value::I64(n) => Ok(*n),
         _ => Err(FerriError::Runtime {
             message: format!(
                 "math::{name} requires integer arguments, got {}",

@@ -305,15 +305,14 @@ impl Vm {
 
             match op {
                 OpCode::ConstInt(n, w) => self.stack.push(match w {
-                    IntegerWidth::I64 => Value::Integer(n), // legacy compat
                     IntegerWidth::I8 => Value::I8(n as i8), IntegerWidth::I16 => Value::I16(n as i16),
-                    IntegerWidth::I32 => Value::I32(n as i32),
+                    IntegerWidth::I32 => Value::I32(n as i32), IntegerWidth::I64 => Value::I64(n),
                     IntegerWidth::U8 => Value::U8(n as u8), IntegerWidth::U16 => Value::U16(n as u16),
                     IntegerWidth::U32 => Value::U32(n as u32), IntegerWidth::U64 => Value::U64(n as u64),
                 }),
                 OpCode::ConstFloat(n, w) => self.stack.push(match w {
-                    FloatWidth::F64 => Value::Float(n), // legacy compat
                     FloatWidth::F32 => Value::F32(n as f32),
+                    FloatWidth::F64 => Value::F64(n),
                 }),
                 OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
                 OpCode::ConstString(s) => self.stack.push(Value::String(s.clone())),
@@ -538,7 +537,7 @@ impl Vm {
                 OpCode::IterLen => {
                     let v = self.stack.pop().unwrap_or(Value::Unit);
                     match v {
-                        Value::Vec(rc) => self.stack.push(Value::Integer(rc.borrow().len() as i64)),
+                        Value::Vec(rc) => self.stack.push(Value::I64(rc.borrow().len() as i64)),
                         other => {
                             return VmResult::Error(format!(
                                 "cannot get length of {}",
@@ -582,7 +581,7 @@ impl Vm {
                             }
                             Value::Vec(rc) => {
                                 let idx = match key {
-                                    Value::Integer(i) => i as usize,
+                                    Value::I64(i) => i as usize,
                                     other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
                                 };
                                 let vec = rc.borrow();
@@ -598,7 +597,7 @@ impl Vm {
                             }
                             Value::String(s) => {
                                 let idx = match key {
-                                    Value::Integer(i) => i as usize,
+                                    Value::I64(i) => i as usize,
                                     other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
                                 };
                                 if let Some(c) = s.chars().nth(idx) {
@@ -613,7 +612,7 @@ impl Vm {
                             }
                             Value::Tuple(t) => {
                                 let idx = match key {
-                                    Value::Integer(i) => i as usize,
+                                    Value::I64(i) => i as usize,
                                     other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
                                 };
                                 if idx < t.len() {
@@ -640,7 +639,7 @@ impl Vm {
                     match collection {
                         Value::Vec(rc) => {
                             let idx = match key {
-                                Value::Integer(i) => i as usize,
+                                Value::I64(i) => i as usize,
                                 other => return VmResult::Error(format!("index must be integer, got {}", other.type_name())),
                             };
                             let len = rc.borrow().len();
@@ -663,7 +662,7 @@ impl Vm {
                     let end = self.stack.pop().unwrap_or(Value::Unit);
                     let start = self.stack.pop().unwrap_or(Value::Unit);
                     match (start, end) {
-                        (Value::Integer(s), Value::Integer(e)) => {
+                        (Value::I64(s), Value::I64(e)) => {
                             self.stack.push(Value::Range(s, e));
                         }
                         (s, e) => {
@@ -905,23 +904,23 @@ impl Vm {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
                     let result = match target {
                         0 => match val {
-                            Value::Integer(n) => Value::Float(n as f64),
-                            Value::Char(c) => Value::Float(c as u32 as f64),
+                            Value::I64(n) => Value::F64(n as f64),
+                            Value::Char(c) => Value::F64(c as u32 as f64),
                             v => v,
                         },
                         1 => match val {
-                            Value::Float(n) => Value::Integer(n as i64),
-                            Value::Char(c) => Value::Integer(c as u32 as i64),
+                            Value::F64(n) => Value::I64(n as i64),
+                            Value::Char(c) => Value::I64(c as u32 as i64),
                             v => v,
                         },
                         2 => match val {
-                            Value::Integer(n) => {
+                            Value::I64(n) => {
                                 Value::Char(char::from_u32(n as u32).unwrap_or('\0'))
                             }
                             v => v,
                         },
                         3 => match val {
-                            Value::Char(c) => Value::Integer(c as i64),
+                            Value::Char(c) => Value::I64(c as i64),
                             v => v,
                         },
                         _ => val,
@@ -1309,15 +1308,14 @@ impl Vm {
             OpCode::ConstUnit => self.stack.push(Value::Unit),
             OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
             OpCode::ConstInt(n, w) => self.stack.push(match w {
-                IntegerWidth::I64 => Value::Integer(n), // legacy compat
                 IntegerWidth::I8 => Value::I8(n as i8), IntegerWidth::I16 => Value::I16(n as i16),
-                IntegerWidth::I32 => Value::I32(n as i32),
+                IntegerWidth::I32 => Value::I32(n as i32), IntegerWidth::I64 => Value::I64(n),
                 IntegerWidth::U8 => Value::U8(n as u8), IntegerWidth::U16 => Value::U16(n as u16),
                 IntegerWidth::U32 => Value::U32(n as u32), IntegerWidth::U64 => Value::U64(n as u64),
             }),
             OpCode::ConstFloat(f, w) => self.stack.push(match w {
-                FloatWidth::F64 => Value::Float(f), // legacy compat
                 FloatWidth::F32 => Value::F32(f as f32),
+                FloatWidth::F64 => Value::F64(f),
             }),
             OpCode::ConstString(s) => self.stack.push(Value::String(s)),
             OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
@@ -1327,8 +1325,8 @@ impl Vm {
                 let v = self.stack.pop().unwrap_or(Value::Unit);
                 match (&op, v) {
                     (OpCode::Not, v) => self.stack.push(Value::Bool(!v.is_truthy())),
-                    (_, Value::Integer(n)) => self.stack.push(Value::Integer(-n)),
-                    (_, Value::Float(n)) => self.stack.push(Value::Float(-n)),
+                    (_, Value::I64(n)) => self.stack.push(Value::I64(-n)),
+                    (_, Value::F64(n)) => self.stack.push(Value::F64(-n)),
                     (_, other) => self.stack.push(other),
                 }
             }
@@ -1375,10 +1373,10 @@ impl Vm {
                 let key = self.stack.pop().unwrap_or(Value::Unit);
                 let c = self.stack.pop().unwrap_or(Value::Unit);
                 match c {
-                    Value::Vec(rc) => { if let Value::Integer(i) = key { self.stack.push(rc.borrow().get(i as usize).cloned().unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
+                    Value::Vec(rc) => { if let Value::I64(i) = key { self.stack.push(rc.borrow().get(i as usize).cloned().unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
                     Value::HashMap(rc) => { self.stack.push(rc.borrow().get(&key).cloned().unwrap_or(Value::Unit)); }
-                    Value::Tuple(t) => { if let Value::Integer(i) = key { self.stack.push(t.get(i as usize).cloned().unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
-                    Value::String(s) => { if let Value::Integer(i) = key { self.stack.push(s.chars().nth(i as usize).map(Value::Char).unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
+                    Value::Tuple(t) => { if let Value::I64(i) = key { self.stack.push(t.get(i as usize).cloned().unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
+                    Value::String(s) => { if let Value::I64(i) = key { self.stack.push(s.chars().nth(i as usize).map(Value::Char).unwrap_or(Value::Unit)); } else { self.stack.push(Value::Unit); } }
                     _ => self.stack.push(Value::Unit),
                 }
             }
@@ -1388,7 +1386,7 @@ impl Vm {
                 let c = self.stack.pop().unwrap_or(Value::Unit);
                 match c {
                     Value::Vec(rc) => {
-                        if let Value::Integer(i) = key {
+                        if let Value::I64(i) = key {
                             let idx = i as usize;
                             if idx < rc.borrow().len() {
                                 rc.borrow_mut()[idx] = val.clone();
@@ -1413,7 +1411,7 @@ impl Vm {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
                 match &val { Value::EnumVariant{enum_name:en,variant:v,data} if en==&enum_name&&v==&variant => { for d in data.iter().rev() { self.stack.push(d.clone()); } self.stack.push(Value::Bool(true)); } _ => { self.stack.push(Value::Bool(false)); } }
             }
-            OpCode::MakeRange => { let (e,s) = self.pop_two(); let si=match s{Value::Integer(n)=>n,_=>0}; let ei=match e{Value::Integer(n)=>n,_=>0}; self.stack.push(Value::Range(si,ei)); }
+            OpCode::MakeRange => { let (e,s) = self.pop_two(); let si=match s{Value::I64(n)=>n,_=>0}; let ei=match e{Value::I64(n)=>n,_=>0}; self.stack.push(Value::Range(si,ei)); }
             OpCode::Format{arg_count} => {
                 let s=self.stack.len()-arg_count; let args:Vec<_>=self.stack.drain(s..).collect();
                 let mut r=args.first().map(|v|v.to_string()).unwrap_or_default();
@@ -1423,7 +1421,7 @@ impl Vm {
             OpCode::FStringConcat{count} => { let s=self.stack.len()-count; let p:Vec<String>=self.stack.drain(s..).map(|v|v.to_string()).collect(); self.stack.push(Value::String(p.concat())); }
             OpCode::Cast(target) => {
                 let v=self.stack.pop().unwrap_or(Value::Unit);
-                let r=match target{0=>match v{Value::Integer(n)=>Value::Float(n as f64),Value::Char(c)=>Value::Float(c as u32 as f64),v=>v},1=>match v{Value::Float(n)=>Value::Integer(n as i64),Value::Char(c)=>Value::Integer(c as u32 as i64),v=>v},2=>match v{Value::Integer(n)=>Value::Char(char::from_u32(n as u32).unwrap_or('\0')),v=>v},_=>v};
+                let r=match target{0=>match v{Value::I64(n)=>Value::F64(n as f64),Value::Char(c)=>Value::F64(c as u32 as f64),v=>v},1=>match v{Value::F64(n)=>Value::I64(n as i64),Value::Char(c)=>Value::I64(c as u32 as i64),v=>v},2=>match v{Value::I64(n)=>Value::Char(char::from_u32(n as u32).unwrap_or('\0')),v=>v},_=>v};
                 self.stack.push(r);
             }
             OpCode::TryPop => {
@@ -1596,11 +1594,11 @@ impl Vm {
                     }
                 }
                 "clone" => Ok(Value::Char(*c)),
-                "code" => Ok(Value::Integer(*c as i64)),
+                "code" => Ok(Value::I64(*c as i64)),
                 "to_string" => Ok(Value::String(c.to_string())),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
-            Value::Integer(_) | Value::Float(_) => {
+            Value::I64(_) | Value::F64(_) => {
                 builtins::numeric::dispatch(receiver, method_name, &args)
             }
             Value::EnumVariant { enum_name, .. }
@@ -1642,8 +1640,8 @@ impl Vm {
     fn dispatch_pathcall(&self, segments: &[String], args: &[Value]) -> Result<Value, String> {
         let segs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
         let to_f64 = |v: &Value| match v {
-            Value::Integer(n) => *n as f64,
-            Value::Float(x) => *x,
+            Value::I64(n) => *n as f64,
+            Value::F64(x) => *x,
             _ => 0.0,
         };
         match segs.as_slice() {
@@ -1694,7 +1692,7 @@ impl Vm {
                     trimmed.parse::<i64>().map_err(|_| ())
                 };
                 match result {
-                    Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                    Ok(n) => Ok(Value::ok(Value::I64(n))),
                     Err(_) => Ok(Value::err(Value::String(format!(
                         "cannot parse \"{s}\" as integer"
                     )))),
@@ -1704,7 +1702,7 @@ impl Vm {
                 let n = args
                     .first()
                     .and_then(|v| match v {
-                        Value::Integer(n) => Some(*n as u32),
+                        Value::I64(n) => Some(*n as u32),
                         _ => None,
                     })
                     .unwrap_or(0);
@@ -1716,7 +1714,7 @@ impl Vm {
             ["float", "parse"] => {
                 let s = args.first().map(|v| v.to_string()).unwrap_or_default();
                 match s.trim().parse::<f64>() {
-                    Ok(n) => Ok(Value::ok(Value::Float(n))),
+                    Ok(n) => Ok(Value::ok(Value::F64(n))),
                     Err(_) => Ok(Value::err(Value::String(format!(
                         "cannot parse \"{s}\" as float"
                     )))),
@@ -1867,7 +1865,7 @@ fn http_call(method: &str, args: &[Value], body: Option<String>) -> Result<Value
     match result {
         Ok((status, resp_body, headers)) => {
             let mut fields = HashMap::new();
-            fields.insert("status".to_string(), Value::Integer(status));
+            fields.insert("status".to_string(), Value::I64(status));
             fields.insert("body".to_string(), Value::String(resp_body));
             let mut header_map: HashMap<Value, Value> = HashMap::new();
             for (k, v) in &headers {
@@ -1907,9 +1905,9 @@ fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     if let Value::String(s) = &b { return Ok(Value::String(format!("{a}{s}"))); }
     // Numeric: use to_f64 if either is float, otherwise as_i64
     if a.is_float() || b.is_float() {
-        Ok(Value::Float(a.to_f64() + b.to_f64()))
+        Ok(Value::F64(a.to_f64() + b.to_f64()))
     } else if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64().wrapping_add(b.as_i64())))
+        Ok(Value::I64(a.as_i64().wrapping_add(b.as_i64())))
     } else {
         Err(format!("cannot add {} and {}", a.type_name(), b.type_name()))
     }
@@ -1917,9 +1915,9 @@ fn vm_add(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
-        Ok(Value::Float(a.to_f64() - b.to_f64()))
+        Ok(Value::F64(a.to_f64() - b.to_f64()))
     } else if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64().wrapping_sub(b.as_i64())))
+        Ok(Value::I64(a.as_i64().wrapping_sub(b.as_i64())))
     } else {
         Err(format!("cannot subtract {} and {}", a.type_name(), b.type_name()))
     }
@@ -1927,9 +1925,9 @@ fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
-        Ok(Value::Float(a.to_f64() * b.to_f64()))
+        Ok(Value::F64(a.to_f64() * b.to_f64()))
     } else if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64().wrapping_mul(b.as_i64())))
+        Ok(Value::I64(a.as_i64().wrapping_mul(b.as_i64())))
     } else {
         Err(format!("cannot multiply {} and {}", a.type_name(), b.type_name()))
     }
@@ -1940,9 +1938,9 @@ fn vm_div(a: Value, b: Value) -> Result<Value, String> {
         return Err("division by zero".into());
     }
     if a.is_float() || b.is_float() {
-        Ok(Value::Float(a.to_f64() / b.to_f64()))
+        Ok(Value::F64(a.to_f64() / b.to_f64()))
     } else if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64() / b.as_i64()))
+        Ok(Value::I64(a.as_i64() / b.as_i64()))
     } else {
         Err(format!("cannot divide {} and {}", a.type_name(), b.type_name()))
     }
@@ -1953,23 +1951,23 @@ fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
         return Err("modulo by zero".into());
     }
     if a.is_float() || b.is_float() {
-        Ok(Value::Float(a.to_f64() % b.to_f64()))
+        Ok(Value::F64(a.to_f64() % b.to_f64()))
     } else if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64() % b.as_i64()))
+        Ok(Value::I64(a.as_i64() % b.as_i64()))
     } else {
         Err(format!("cannot compute modulo of {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_neg(v: Value) -> Value {
-    if v.is_integer() { Value::Integer(-v.as_i64()) }
-    else if v.is_float() { Value::Float(-v.to_f64()) }
+    if v.is_integer() { Value::I64(-v.as_i64()) }
+    else if v.is_float() { Value::F64(-v.to_f64()) }
     else { v }
 }
 
 fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64() & b.as_i64()))
+        Ok(Value::I64(a.as_i64() & b.as_i64()))
     } else {
         Err(format!("bitwise AND requires integers, got {} and {}", a.type_name(), b.type_name()))
     }
@@ -1977,7 +1975,7 @@ fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64() | b.as_i64()))
+        Ok(Value::I64(a.as_i64() | b.as_i64()))
     } else {
         Err(format!("bitwise OR requires integers, got {} and {}", a.type_name(), b.type_name()))
     }
@@ -1985,7 +1983,7 @@ fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64() ^ b.as_i64()))
+        Ok(Value::I64(a.as_i64() ^ b.as_i64()))
     } else {
         Err(format!("bitwise XOR requires integers",))
     }
@@ -1993,7 +1991,7 @@ fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64().wrapping_shl(b.as_u64() as u32)))
+        Ok(Value::I64(a.as_i64().wrapping_shl(b.as_u64() as u32)))
     } else {
         Err(format!("shift left requires integers",))
     }
@@ -2001,7 +1999,7 @@ fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::Integer(a.as_i64().wrapping_shr(b.as_u64() as u32)))
+        Ok(Value::I64(a.as_i64().wrapping_shr(b.as_u64() as u32)))
     } else {
         Err(format!("shift right requires integers",))
     }

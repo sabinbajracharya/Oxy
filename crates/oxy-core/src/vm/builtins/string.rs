@@ -7,7 +7,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         unreachable!()
     };
     match method {
-        "len" => Ok(Value::Integer(s.len() as i64)),
+        "len" => Ok(Value::I64(s.len() as i64)),
         "is_empty" => Ok(Value::Bool(s.is_empty())),
         "to_uppercase" => Ok(Value::String(s.to_uppercase())),
         "to_lowercase" => Ok(Value::String(s.to_lowercase())),
@@ -49,7 +49,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let n = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(1);
@@ -63,7 +63,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let i = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
@@ -73,14 +73,14 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let start = args
                 .first()
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
             let end = args
                 .get(1)
                 .and_then(|v| match v {
-                    Value::Integer(n) => Some(*n as usize),
+                    Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(0);
@@ -99,14 +99,14 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 trimmed.parse::<i64>().map_err(|_| ())
             };
             match result {
-                Ok(n) => Ok(Value::ok(Value::Integer(n))),
+                Ok(n) => Ok(Value::ok(Value::I64(n))),
                 Err(_) => Ok(Value::err(Value::String(format!(
                     "cannot parse \"{s}\" as integer"
                 )))),
             }
         }
         "parse_float" => match s.trim().parse::<f64>() {
-            Ok(n) => Ok(Value::ok(Value::Float(n))),
+            Ok(n) => Ok(Value::ok(Value::F64(n))),
             Err(_) => Ok(Value::err(Value::String(format!(
                 "cannot parse \"{s}\" as float"
             )))),

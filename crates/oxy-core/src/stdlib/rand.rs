@@ -45,12 +45,12 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
     match func_name {
         "random" => {
             check_arg_count("rand::random", 0, args, span)?;
-            Ok(Value::Float(simple_random_f64()))
+            Ok(Value::F64(simple_random_f64()))
         }
         "range" => {
             check_arg_count("rand::range", 2, args, span)?;
             match (&args[0], &args[1]) {
-                (Value::Integer(min), Value::Integer(max)) => {
+                (Value::I64(min), Value::I64(max)) => {
                     if min >= max {
                         return Err(FerriError::Runtime {
                             message: "rand::range() requires min < max".into(),
@@ -61,7 +61,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                     let range = (max - min) as u64;
                     let raw = simple_random_u64();
                     let val = min + (raw % range) as i64;
-                    Ok(Value::Integer(val))
+                    Ok(Value::I64(val))
                 }
                 _ => Err(FerriError::Runtime {
                     message: "rand::range() requires integer arguments".into(),

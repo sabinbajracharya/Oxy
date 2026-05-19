@@ -5,23 +5,23 @@ use crate::types::Value;
 /// Convert a float result to Integer if it's a whole number (matching interpreter behavior).
 fn float_to_value(f: f64) -> Value {
     if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
-        Value::Integer(f as i64)
+        Value::I64(f as i64)
     } else {
-        Value::Float(f)
+        Value::F64(f)
     }
 }
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
     let to_f64 = |v: &Value| match v {
-        Value::Integer(n) => *n as f64,
-        Value::Float(x) => *x,
+        Value::I64(n) => *n as f64,
+        Value::F64(x) => *x,
         _ => 0.0,
     };
     match method {
         "abs" => match &receiver {
-            Value::Integer(n) => Ok(Value::Integer(n.abs())),
-            Value::Float(x) => Ok(float_to_value(x.abs())),
-            _ => Ok(Value::Integer(0)),
+            Value::I64(n) => Ok(Value::I64(n.abs())),
+            Value::F64(x) => Ok(float_to_value(x.abs())),
+            _ => Ok(Value::I64(0)),
         },
         "sqrt" => Ok(float_to_value(to_f64(&receiver).sqrt())),
         "floor" => Ok(float_to_value(to_f64(&receiver).floor())),

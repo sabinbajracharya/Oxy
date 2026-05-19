@@ -56,7 +56,7 @@ fn run_command(program: &str, args: &[&str], _span: &Span) -> Result<Value, Ferr
             );
             fields.insert(
                 "status".to_string(),
-                Value::Integer(output.status.code().unwrap_or(-1) as i64),
+                Value::I64(output.status.code().unwrap_or(-1) as i64),
             );
             fields.insert("success".to_string(), Value::Bool(output.status.success()));
             Ok(Value::ok(Value::Struct {
