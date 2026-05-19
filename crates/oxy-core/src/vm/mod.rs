@@ -962,12 +962,12 @@ impl Vm {
 
                 OpCode::CastInt(target_width) => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
-                    let result = cast_to_int(&val, target_width.clone());
+                    let result = cast_to_int(&val, target_width);
                     self.stack.push(result);
                 }
                 OpCode::CastFloat(target_width) => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
-                    let result = cast_to_float(&val, target_width.clone());
+                    let result = cast_to_float(&val, target_width);
                     self.stack.push(result);
                 }
                 OpCode::CastToChar => {

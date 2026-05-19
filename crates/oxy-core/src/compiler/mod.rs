@@ -1432,6 +1432,10 @@ impl Compiler {
                 ..
             } => {
                 if let Some(expr) = value {
+                    // Check literal out-of-range before compilation
+                    if let Some(ann) = type_ann {
+                        check_literal_fits_type(expr, &ann.name, ann.span)?;
+                    }
                     self.compile_expr(expr)?;
                     // Narrow to the annotated type if it specifies a width
                     if let Some(ann) = type_ann {
@@ -1792,7 +1796,7 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), FerriError> {
         match expr {
-            Expr::IntLiteral(n, suffix, _) => {
+            Expr::IntLiteral(n, suffix, span) => {
                 let width = match suffix {
                     IntegerSuffix::I8 => IntegerWidth::I8,
                     IntegerSuffix::I16 => IntegerWidth::I16,
@@ -1804,6 +1808,10 @@ impl Compiler {
                     IntegerSuffix::U64 => IntegerWidth::U64,
                     IntegerSuffix::None => IntegerWidth::I64,
                 };
+                // Check that suffixed literals fit in their declared type
+                if *suffix != IntegerSuffix::None {
+                    validate_int_literal(*n, &width, *span)?;
+                }
                 self.emit(OpCode::ConstInt(*n, width));
                 Ok(())
             }
@@ -3148,6 +3156,119 @@ fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
 }
 
 /// Known built-in paths that the VM can dispatch natively.
+/// Validate that an integer literal value fits in the target width (for suffixed literals).
+/// Note: the lexer stores u64 values > i64::MAX as negative i64 via wrapping `as i64`,
+/// so we reinterpret bits as u64 for unsigned width checks.
+fn validate_int_literal(
+    n: i64,
+    width: &IntegerWidth,
+    span: crate::lexer::Span,
+) -> Result<(), FerriError> {
+    let fits = match width {
+        IntegerWidth::I8 => (i8::MIN as i64..=i8::MAX as i64).contains(&n),
+        IntegerWidth::I16 => (i16::MIN as i64..=i16::MAX as i64).contains(&n),
+        IntegerWidth::I32 => (i32::MIN as i64..=i32::MAX as i64).contains(&n),
+        IntegerWidth::I64 => true,
+        // For unsigned widths: reinterpret the bits as u64 to handle
+        // values > i64::MAX that the lexer stored via wrapping as i64.
+        IntegerWidth::U8 => (n as u64) <= u8::MAX as u64,
+        IntegerWidth::U16 => (n as u64) <= u16::MAX as u64,
+        IntegerWidth::U32 => (n as u64) <= u32::MAX as u64,
+        IntegerWidth::U64 => true,
+    };
+    if !fits {
+        return Err(FerriError::Runtime {
+            message: format!("literal out of range for `{}`", width_to_str(width)),
+            line: span.line,
+            column: span.column,
+        });
+    }
+    Ok(())
+}
+
+fn width_to_str(w: &IntegerWidth) -> &str {
+    match w {
+        IntegerWidth::I8 => "i8",
+        IntegerWidth::I16 => "i16",
+        IntegerWidth::I32 => "i32",
+        IntegerWidth::I64 => "i64",
+        IntegerWidth::U8 => "u8",
+        IntegerWidth::U16 => "u16",
+        IntegerWidth::U32 => "u32",
+        IntegerWidth::U64 => "u64",
+    }
+}
+
+/// Check that a constant integer literal fits in the target integer type's range.
+/// Returns an error if the literal value is outside the type's bounds (matches Rust).
+fn check_literal_fits_type(
+    expr: &Expr,
+    type_name: &str,
+    span: crate::lexer::Span,
+) -> Result<(), FerriError> {
+    let (min, max): (i128, i128) = match type_name {
+        "i8" => (i8::MIN as i128, i8::MAX as i128),
+        "i16" => (i16::MIN as i128, i16::MAX as i128),
+        "i32" => (i32::MIN as i128, i32::MAX as i128),
+        "i64" | "isize" => (i64::MIN as i128, i64::MAX as i128),
+        "u8" => (0, u8::MAX as i128),
+        "u16" => (0, u16::MAX as i128),
+        "u32" => (0, u32::MAX as i128),
+        "u64" | "usize" => (0, u64::MAX as i128),
+        _ => return Ok(()),
+    };
+
+    match expr {
+        Expr::IntLiteral(n, suffix, _) => {
+            if *suffix != IntegerSuffix::None {
+                return Ok(()); // suffixed literal: validated separately
+            }
+            let val = *n as i128;
+            if val < min || val > max {
+                return Err(FerriError::Runtime {
+                    message: format!(
+                        "literal out of range for `{type_name}`: value {val} is outside the range {min}..={max}"
+                    ),
+                    line: span.line,
+                    column: span.column,
+                });
+            }
+        }
+        Expr::UnaryOp {
+            op: crate::ast::UnaryOp::Neg,
+            expr: inner,
+            ..
+        } => {
+            if let Expr::IntLiteral(n, suffix, _) = inner.as_ref() {
+                if *suffix != IntegerSuffix::None {
+                    return Ok(());
+                }
+                let val = -(*n as i128);
+                if val < min {
+                    return Err(FerriError::Runtime {
+                        message: format!(
+                            "literal out of range for `{type_name}`: value {val} is less than minimum {min}"
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                if min == 0 && val < 0 {
+                    return Err(FerriError::Runtime {
+                        message: format!(
+                            "literal out of range for `{type_name}`: value {val} cannot be negative"
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// Emit a narrowing cast if the type annotation specifies an integer or float width.
 fn emit_narrowing_cast(compiler: &mut Compiler, type_name: &str) {
     let op = match type_name {
