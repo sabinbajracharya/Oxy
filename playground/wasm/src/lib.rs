@@ -11,13 +11,8 @@ pub fn run_oxy(source: &str) -> String {
 }
 
 fn run_inner(source: &str) -> Result<String, String> {
-    let program = oxy_core::parser::parse(source).map_err(|e| e.to_string())?;
-    oxy_core::type_checker::TypeChecker::new()
-        .check_program(&program)
-        .map_err(|e| e.to_string())?;
-    let mut interp = oxy_core::interpreter::Interpreter::new_with_captured_output();
-    interp
-        .execute_program(&program)
-        .map_err(|e| e.to_string())?;
-    Ok(interp.captured_output().join(""))
+    match oxy_core::vm::run_compiled_capturing(source) {
+        Ok((_, output)) => Ok(output.join("")),
+        Err(e) => Err(e.to_string()),
+    }
 }

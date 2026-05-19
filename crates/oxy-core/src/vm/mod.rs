@@ -1748,20 +1748,31 @@ impl Vm {
                 }
             }
             // --- http ---
-            ["http", "get"] => http_call("GET", args, None),
-            ["http", "post"] => {
-                let body = args.get(1).map(|v| v.to_string());
-                http_call("POST", args, body)
-            }
-            ["http", "delete"] => http_call("DELETE", args, None),
-            ["http", "get_json"] => http_call("GET", args, None),
-            ["http", "post_json"] => {
-                let body = args.get(1).map(|v| v.to_string());
-                http_call("POST", args, body)
-            }
-            ["http", "put_json"] => {
-                let body = args.get(1).map(|v| v.to_string());
-                http_call("PUT", args, body)
+            ["http", func] => {
+                #[cfg(feature = "http")]
+                {
+                    match func.as_ref() {
+                        "get" => return http_call("GET", args, None),
+                        "post" => {
+                            let body = args.get(1).map(|v| v.to_string());
+                            return http_call("POST", args, body);
+                        }
+                        "delete" => return http_call("DELETE", args, None),
+                        "get_json" => return http_call("GET", args, None),
+                        "post_json" => {
+                            let body = args.get(1).map(|v| v.to_string());
+                            return http_call("POST", args, body);
+                        }
+                        "put_json" => {
+                            let body = args.get(1).map(|v| v.to_string());
+                            return http_call("PUT", args, body);
+                        }
+                        _ => {}
+                    }
+                }
+                #[cfg(not(feature = "http"))]
+                { let _ = (func, args); }
+                Err("http feature not enabled".into())
             }
             // --- stdlib modules ---
             ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
@@ -1830,6 +1841,7 @@ fn call_stdlib(
 }
 
 /// HTTP helper: call crate::http::request and wrap result as Ok/Err enum variant.
+#[cfg(feature = "http")]
 fn http_call(method: &str, args: &[Value], body: Option<String>) -> Result<Value, String> {
     let url = args.first().map(|v| v.to_string()).unwrap_or_default();
     let result = crate::http::request(method, &url, &[], body.as_deref());
