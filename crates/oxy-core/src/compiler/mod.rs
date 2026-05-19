@@ -2396,10 +2396,13 @@ impl Compiler {
                     }
                     let qualified = format!("{}::{}", &path[0], &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
-                        self.emit(OpCode::Call {
+                        let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
                         });
+                        if target == usize::MAX {
+                            self.forward_calls.push((call_idx, qualified));
+                        }
                         return Ok(());
                     }
                     // Try type alias + use-aliased prefix
@@ -2412,21 +2415,43 @@ impl Compiler {
                     if let Some(rp) = resolved_prefix {
                         let aliased = format!("{}::{}", rp, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
-                            self.emit(OpCode::Call {
+                            let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
                             });
+                            if target == usize::MAX {
+                                self.forward_calls.push((call_idx, aliased));
+                            }
                             return Ok(());
                         }
                     }
                     // Try resolving the full qualified name through use_aliases
                     // (handles pub use re-exports like middle::msg -> inner::msg)
-                    if let Some(aliased_target) = self.use_aliases.get(&qualified) {
-                        if let Some(&target) = self.functions.get(aliased_target) {
-                            self.emit(OpCode::Call {
+                    if let Some(aliased_target) = self.use_aliases.get(&qualified).cloned() {
+                        if let Some(&target) = self.functions.get(&aliased_target) {
+                            let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
                             });
+                            if target == usize::MAX {
+                                self.forward_calls.push((call_idx, aliased_target));
+                            }
+                            return Ok(());
+                        }
+                    }
+                    // Try qualifying with current module prefix (sibling module calls)
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let module_qualified =
+                            format!("{}::{}::{}", module_prefix, &path[0], &path[1]);
+                        if let Some(&target) = self.functions.get(&module_qualified) {
+                            let call_idx = self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            if target == usize::MAX {
+                                self.forward_calls.push((call_idx, module_qualified));
+                            }
                             return Ok(());
                         }
                     }
@@ -2441,11 +2466,32 @@ impl Compiler {
                 if path.len() == 3 {
                     let qualified = format!("{}::{}::{}", &path[0], &path[1], &path[2]);
                     if let Some(&target) = self.functions.get(&qualified) {
-                        self.emit(OpCode::Call {
+                        let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
                         });
+                        if target == usize::MAX {
+                            self.forward_calls.push((call_idx, qualified));
+                        }
                         return Ok(());
+                    }
+                    // Try qualifying with current module prefix
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let module_qualified = format!(
+                            "{}::{}::{}::{}",
+                            module_prefix, &path[0], &path[1], &path[2]
+                        );
+                        if let Some(&target) = self.functions.get(&module_qualified) {
+                            let call_idx = self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            if target == usize::MAX {
+                                self.forward_calls.push((call_idx, module_qualified));
+                            }
+                            return Ok(());
+                        }
                     }
                 }
                 // Check is_builtin_path for any path length (catches

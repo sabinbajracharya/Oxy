@@ -2748,6 +2748,66 @@ fn main() {
     assert_eq!(output, vec!["hello\n"]);
 }
 
+#[test]
+fn test_sibling_module_path_call() {
+    let output = run_and_capture(
+        r#"
+mod a {
+    pub fn get_value() -> i64 {
+        b::helper()
+    }
+}
+mod b {
+    pub fn helper() -> i64 { 42 }
+}
+use a::get_value;
+fn main() {
+    println!("{}", get_value());
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_sibling_module_nested_path_call() {
+    let output = run_and_capture(
+        r#"
+mod a {
+    pub fn get_value() -> i64 {
+        b::c::deep()
+    }
+}
+mod b {
+    pub mod c {
+        pub fn deep() -> i64 { 77 }
+    }
+}
+use a::get_value;
+fn main() {
+    println!("{}", get_value());
+}"#,
+    );
+    assert_eq!(output, vec!["77\n"]);
+}
+
+#[test]
+fn test_self_qualified_path_call_in_module() {
+    let output = run_and_capture(
+        r#"
+mod m {
+    pub fn outer() -> i64 {
+        m::inner()
+    }
+    pub fn inner() -> i64 { 11 }
+}
+use m::outer;
+fn main() {
+    println!("{}", outer());
+}"#,
+    );
+    assert_eq!(output, vec!["11\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]
