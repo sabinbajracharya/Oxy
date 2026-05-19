@@ -2387,7 +2387,7 @@ fn test_inline_module() {
     let output = run_and_capture(
         r#"
 mod math {
-    fn add(a: i64, b: i64) -> i64 {
+    pub fn add(a: i64, b: i64) -> i64 {
         a + b
     }
 }
@@ -2404,7 +2404,7 @@ fn test_module_path_call() {
     let output = run_and_capture(
         r#"
 mod math {
-    fn multiply(a: i64, b: i64) -> i64 {
+    pub fn multiply(a: i64, b: i64) -> i64 {
         a * b
     }
 }
@@ -2441,9 +2441,9 @@ fn test_use_group_import() {
     let output = run_and_capture(
         r#"
 mod ops {
-    fn add(a: i64, b: i64) -> i64 { a + b }
-    fn sub(a: i64, b: i64) -> i64 { a - b }
-    fn mul(a: i64, b: i64) -> i64 { a * b }
+    pub fn add(a: i64, b: i64) -> i64 { a + b }
+    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+    pub fn mul(a: i64, b: i64) -> i64 { a * b }
 }
 use ops::{add, sub};
 fn main() {
@@ -2458,12 +2458,12 @@ fn test_module_with_struct() {
     let output = run_and_capture(
         r#"
 mod geometry {
-    struct Point { x: f64, y: f64 }
+    pub struct Point { x: f64, y: f64 }
     impl Point {
-        fn new(x: f64, y: f64) -> Self {
+        pub fn new(x: f64, y: f64) -> Self {
             Point { x, y }
         }
-        fn to_string(&self) -> String {
+        pub fn to_string(&self) -> String {
             format!("({}, {})", self.x, self.y)
         }
     }
@@ -2482,7 +2482,7 @@ fn test_module_with_enum() {
     let output = run_and_capture(
         r#"
 mod colors {
-    enum Color { Red, Green, Blue }
+    pub enum Color { Red, Green, Blue }
 }
 use colors::Color;
 fn main() {
@@ -2529,10 +2529,10 @@ fn test_multiple_modules() {
     let output = run_and_capture(
         r#"
 mod a {
-    fn foo() -> i64 { 1 }
+    pub fn foo() -> i64 { 1 }
 }
 mod b {
-    fn bar() -> i64 { 2 }
+    pub fn bar() -> i64 { 2 }
 }
 use a::foo;
 use b::bar;

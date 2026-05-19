@@ -616,63 +616,58 @@ impl Compiler {
         Ok(())
     }
 
+    /// Check whether a qualified path refers to a publicly visible item.
+    /// Returns true if the item exists and is pub, or if the item is not tracked
+    /// (allowing built-in/stdlib paths through).
+    fn is_visible(&self, qualified: &str) -> bool {
+        let in_fns = self.functions.contains_key(qualified);
+        let in_structs = self.struct_defs.contains_key(qualified);
+        let in_enums = self.enum_defs.contains_key(qualified);
+        if !in_fns && !in_structs && !in_enums {
+            return true; // not tracked — allow (builtin, forward ref)
+        }
+        self.pub_fns.contains(qualified)
+            || self.pub_structs.contains(qualified)
+            || self.pub_enums.contains(qualified)
+    }
+
     /// Process a `use` declaration.
     fn compile_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
-        let mut resolved_path = use_def.path.clone();
-
-        // Resolve self/super/crate path prefixes
-        if let Some(first) = resolved_path.first() {
-            let replacement = match first.as_str() {
-                "self" => self.module_stack.last().cloned().unwrap_or_default(),
-                "crate" => String::new(),
-                "super" => {
-                    if self.module_stack.len() >= 2 {
-                        self.module_stack[self.module_stack.len() - 2].clone()
-                    } else if self.module_stack.len() == 1 {
-                        String::new()
-                    } else {
-                        return Err(FerriError::Runtime {
-                            message: "cannot use `super` at the crate root".into(),
-                            line: use_def.span.line,
-                            column: use_def.span.column,
-                        });
-                    }
-                }
-                _ => first.clone(),
-            };
-            if replacement.is_empty() {
-                resolved_path.remove(0);
-            } else if replacement.as_str() != first.as_str() {
-                resolved_path[0] = replacement;
-            }
-        }
-
+        let resolved_path = Self::resolve_use_path(&use_def.path, &self.module_stack);
         let base_path = resolved_path.join("::");
         let module_prefix = self.module_stack.join("::");
         match &use_def.tree {
             UseTree::Simple => {
                 let name = use_def.path.last().cloned().unwrap_or_default();
-                self.use_aliases.insert(name.clone(), base_path.clone());
-                if use_def.is_pub {
-                    let reexport_name = if module_prefix.is_empty() {
-                        name.clone()
-                    } else {
-                        format!("{}::{}", module_prefix, name)
-                    };
-                    self.deferred_globs.push((base_path, reexport_name));
-                }
-            }
-            UseTree::Group(names) => {
-                for name in names {
-                    let qualified = format!("{}::{}", base_path, name);
-                    self.use_aliases.insert(name.clone(), qualified.clone());
+                if self.is_visible(&base_path) {
+                    self.use_aliases.insert(name.clone(), base_path.clone());
                     if use_def.is_pub {
                         let reexport_name = if module_prefix.is_empty() {
                             name.clone()
                         } else {
                             format!("{}::{}", module_prefix, name)
                         };
-                        self.deferred_globs.push((qualified, reexport_name));
+                        self.use_aliases
+                            .insert(reexport_name.clone(), base_path.clone());
+                        self.deferred_globs.push((base_path, reexport_name));
+                    }
+                }
+            }
+            UseTree::Group(names) => {
+                for name in names {
+                    let qualified = format!("{}::{}", base_path, name);
+                    if self.is_visible(&qualified) {
+                        self.use_aliases.insert(name.clone(), qualified.clone());
+                        if use_def.is_pub {
+                            let reexport_name = if module_prefix.is_empty() {
+                                name.clone()
+                            } else {
+                                format!("{}::{}", module_prefix, name)
+                            };
+                            self.use_aliases
+                                .insert(reexport_name.clone(), qualified.clone());
+                            self.deferred_globs.push((qualified, reexport_name));
+                        }
                     }
                 }
             }
@@ -710,6 +705,40 @@ impl Compiler {
         Ok(())
     }
 
+    /// Resolve `self`, `super`, `crate` across ALL segments of a use path.
+    /// Returns the resolved path with special keywords replaced relative to module_stack.
+    fn resolve_use_path(path: &[String], module_stack: &[String]) -> Vec<String> {
+        let mut context: Vec<String> = module_stack.to_vec();
+        let mut i = 0;
+        let mut had_special = false;
+        while i < path.len() {
+            match path[i].as_str() {
+                "self" => {
+                    had_special = true;
+                    i += 1;
+                }
+                "super" => {
+                    had_special = true;
+                    context.pop();
+                    i += 1;
+                }
+                "crate" => {
+                    had_special = true;
+                    context.clear();
+                    i += 1;
+                }
+                _ => break,
+            }
+        }
+        if had_special {
+            let mut resolved = context;
+            resolved.extend_from_slice(&path[i..]);
+            resolved
+        } else {
+            path.to_vec()
+        }
+    }
+
     /// Pre-resolve all use statements against pre-scanned data, before function bodies
     /// are compiled. This ensures use aliases (especially globs) are available.
     fn preresolve_uses(&mut self, items: &[Item]) -> Result<(), FerriError> {
@@ -717,68 +746,39 @@ impl Compiler {
         for item in items {
             match item {
                 Item::Use(u) => {
-                    let mut resolved_path = u.path.clone();
-                    if let Some(first) = resolved_path.first() {
-                        let replacement = match first.as_str() {
-                            "self" => self.module_stack.last().cloned().unwrap_or_default(),
-                            "crate" => String::new(),
-                            "super" => {
-                                if self.module_stack.len() >= 2 {
-                                    self.module_stack[self.module_stack.len() - 2].clone()
-                                } else if self.module_stack.len() == 1 {
-                                    String::new()
-                                } else {
-                                    continue; // skip invalid super
-                                }
-                            }
-                            _ => first.clone(),
-                        };
-                        if replacement.is_empty() {
-                            resolved_path.remove(0);
-                        } else if replacement.as_str() != first.as_str() {
-                            resolved_path[0] = replacement;
-                        }
-                    }
+                    let resolved_path = Self::resolve_use_path(&u.path, &self.module_stack);
                     let base_path = resolved_path.join("::");
                     match &u.tree {
                         UseTree::Simple => {
                             let name = u.path.last().cloned().unwrap_or_default();
-                            self.use_aliases.insert(name.clone(), base_path.clone());
-                            if u.is_pub {
-                                let reexport = if module_prefix.is_empty() {
-                                    name.clone()
-                                } else {
-                                    format!("{}::{}", module_prefix, name)
-                                };
-                                // Re-export: create alias from reexport_name → base_path,
-                                // which will be resolved via use_aliases chain when called
-                                self.use_aliases.insert(reexport.clone(), base_path.clone());
-                                self.deferred_globs.push((base_path, reexport));
-                            }
-                        }
-                        UseTree::Group(names) => {
-                            for name in names {
-                                let qualified = format!("{}::{}", base_path, name);
-                                self.use_aliases.insert(name.clone(), qualified.clone());
+                            if self.is_visible(&base_path) {
+                                self.use_aliases.insert(name.clone(), base_path.clone());
                                 if u.is_pub {
                                     let reexport = if module_prefix.is_empty() {
                                         name.clone()
                                     } else {
                                         format!("{}::{}", module_prefix, name)
                                     };
-                                    if let Some(&ip) = self.functions.get(&qualified) {
-                                        self.functions.insert(reexport.clone(), ip);
-                                        self.pub_fns.insert(reexport.clone());
+                                    self.use_aliases.insert(reexport.clone(), base_path.clone());
+                                    self.deferred_globs.push((base_path, reexport));
+                                }
+                            }
+                        }
+                        UseTree::Group(names) => {
+                            for name in names {
+                                let qualified = format!("{}::{}", base_path, name);
+                                if self.is_visible(&qualified) {
+                                    self.use_aliases.insert(name.clone(), qualified.clone());
+                                    if u.is_pub {
+                                        let reexport = if module_prefix.is_empty() {
+                                            name.clone()
+                                        } else {
+                                            format!("{}::{}", module_prefix, name)
+                                        };
+                                        self.use_aliases
+                                            .insert(reexport.clone(), qualified.clone());
+                                        self.deferred_globs.push((qualified, reexport));
                                     }
-                                    if let Some(def) = self.struct_defs.get(&qualified).cloned() {
-                                        self.struct_defs.insert(reexport.clone(), def);
-                                        self.pub_structs.insert(reexport.clone());
-                                    }
-                                    if let Some(def) = self.enum_defs.get(&qualified).cloned() {
-                                        self.enum_defs.insert(reexport.clone(), def);
-                                        self.pub_enums.insert(reexport.clone());
-                                    }
-                                    self.deferred_globs.push((qualified, reexport));
                                 }
                             }
                         }
