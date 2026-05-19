@@ -1511,6 +1511,17 @@ impl Parser {
                     span: self.merge_spans(span, end_span),
                 })
             }
+            TokenKind::Tilde => {
+                let span = self.current_span();
+                self.advance();
+                let expr = self.parse_expr(Precedence::Unary)?;
+                let end_span = expr.span();
+                Ok(Expr::UnaryOp {
+                    op: UnaryOp::BitNot,
+                    expr: Box::new(expr),
+                    span: self.merge_spans(span, end_span),
+                })
+            }
             TokenKind::Amp => {
                 let span = self.current_span();
                 self.advance();

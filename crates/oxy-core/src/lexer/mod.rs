@@ -165,6 +165,9 @@ impl<'src> Lexer<'src> {
                 }
             }
 
+            // Tilde (bitwise NOT)
+            '~' => TokenKind::Tilde,
+
             // Lt, LtEq, Shl
             '<' => {
                 if self.match_char('=') {

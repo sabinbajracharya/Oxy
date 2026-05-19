@@ -53,6 +53,7 @@ pub enum OpCode {
     // --- Unary operations ---
     Neg,
     Not,
+    BitNot,
 
     // --- Control flow ---
     /// Unconditional jump to instruction index.
@@ -442,6 +443,10 @@ impl Vm {
                 OpCode::Not => {
                     let v = self.stack.pop().unwrap_or(Value::Unit);
                     self.stack.push(Value::Bool(!v.is_truthy()));
+                }
+                OpCode::BitNot => {
+                    let v = self.stack.pop().unwrap_or(Value::Unit);
+                    self.stack.push(vm_bitnot(v));
                 }
 
                 OpCode::Jump(target) => {
@@ -1380,10 +1385,11 @@ impl Vm {
                 let v = self.stack.last().cloned().unwrap_or(Value::Unit);
                 self.stack.push(v);
             }
-            OpCode::Not | OpCode::Neg => {
+            OpCode::Not | OpCode::Neg | OpCode::BitNot => {
                 let v = self.stack.pop().unwrap_or(Value::Unit);
                 match (&op, v) {
                     (OpCode::Not, v) => self.stack.push(Value::Bool(!v.is_truthy())),
+                    (OpCode::BitNot, v) => self.stack.push(vm_bitnot(v)),
                     (_, Value::I64(n)) => self.stack.push(Value::I64(-n)),
                     (_, Value::F64(n)) => self.stack.push(Value::F64(-n)),
                     (_, other) => self.stack.push(other),
@@ -2367,7 +2373,7 @@ fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
 }
 
 fn vm_div(a: Value, b: Value) -> Result<Value, String> {
-    if b.as_i64() == 0 || b.to_f64() == 0.0 {
+    if b.to_f64() == 0.0 {
         return Err("division by zero".into());
     }
     if a.is_float() || b.is_float() {
@@ -2389,7 +2395,7 @@ fn vm_div(a: Value, b: Value) -> Result<Value, String> {
 }
 
 fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
-    if b.as_i64() == 0 || b.to_f64() == 0.0 {
+    if b.to_f64() == 0.0 {
         return Err("modulo by zero".into());
     }
     if a.is_float() || b.is_float() {
@@ -2418,6 +2424,20 @@ fn vm_neg(v: Value) -> Value {
         Value::I64(n) => Value::I64(n.wrapping_neg()),
         Value::F32(n) => Value::F32(-n),
         Value::F64(n) => Value::F64(-n),
+        v => v,
+    }
+}
+
+fn vm_bitnot(v: Value) -> Value {
+    match v {
+        Value::I8(n) => Value::I8(!n),
+        Value::I16(n) => Value::I16(!n),
+        Value::I32(n) => Value::I32(!n),
+        Value::I64(n) => Value::I64(!n),
+        Value::U8(n) => Value::U8(!n),
+        Value::U16(n) => Value::U16(!n),
+        Value::U32(n) => Value::U32(!n),
+        Value::U64(n) => Value::U64(!n),
         v => v,
     }
 }
@@ -2615,7 +2635,11 @@ pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::err
         .collect();
     let mut results = Vec::new();
     for test_fn in &test_fns {
-        let mut vm = Vm::new(chunk.clone());
+        let mut chunk = chunk.clone();
+        if let Some(&ip) = chunk.functions.get(&test_fn.name) {
+            chunk.entry_point = ip;
+        }
+        let mut vm = Vm::new(chunk);
         match vm.run() {
             VmResult::Value(_) => results.push(TestResult {
                 name: test_fn.name.clone(),

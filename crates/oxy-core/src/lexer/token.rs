@@ -191,6 +191,8 @@ pub enum TokenKind {
     PipePipe,
     /// `!`
     Bang,
+    /// `~`
+    Tilde,
     /// `&`
     Amp,
     /// `|`
@@ -361,6 +363,7 @@ impl TokenKind {
             Self::AmpAmp => "'&&'",
             Self::PipePipe => "'||'",
             Self::Bang => "'!'",
+            Self::Tilde => "'~'",
             Self::Amp => "'&'",
             Self::Pipe => "'|'",
             Self::Caret => "'^'",

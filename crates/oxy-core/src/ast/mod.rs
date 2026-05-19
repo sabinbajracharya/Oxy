@@ -645,6 +645,8 @@ pub enum UnaryOp {
     Neg,
     /// Logical not: `!`
     Not,
+    /// Bitwise not: `~`
+    BitNot,
     /// Borrow: `&` (parsed but semantically ignored)
     Ref,
     /// Dereference: `*` (parsed but semantically ignored)
@@ -807,6 +809,7 @@ impl std::fmt::Display for UnaryOp {
         match self {
             UnaryOp::Neg => write!(f, "-"),
             UnaryOp::Not => write!(f, "!"),
+            UnaryOp::BitNot => write!(f, "~"),
             UnaryOp::Ref => write!(f, "&"),
             UnaryOp::Deref => write!(f, "*"),
         }
