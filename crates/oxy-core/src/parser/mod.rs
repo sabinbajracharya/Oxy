@@ -242,9 +242,15 @@ impl Parser {
             // Check for group: `use path::{a, b, c};`
             if self.check(&TokenKind::LBrace) {
                 self.advance();
-                let mut names = Vec::new();
+                let mut items = Vec::new();
                 loop {
-                    names.push(self.expect_ident()?);
+                    let name = self.expect_ident()?;
+                    let alias = if self.match_token(&TokenKind::As) {
+                        Some(self.expect_ident()?)
+                    } else {
+                        None
+                    };
+                    items.push((name, alias));
                     if !self.match_token(&TokenKind::Comma) {
                         break;
                     }
@@ -257,7 +263,7 @@ impl Parser {
                 self.expect(TokenKind::Semicolon)?;
                 return Ok(UseDef {
                     path,
-                    tree: UseTree::Group(names),
+                    tree: UseTree::Group(items),
                     is_pub,
                     span: self.merge_spans(start_span, end_span),
                 });
@@ -278,12 +284,17 @@ impl Parser {
             }
         }
 
-        // Simple import: `use path::item;`
+        // Simple import: `use path::item;` or `use path::item as alias;`
+        let alias = if self.match_token(&TokenKind::As) {
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
         let end_span = self.current_span();
         self.expect(TokenKind::Semicolon)?;
         Ok(UseDef {
             path,
-            tree: UseTree::Simple,
+            tree: UseTree::Simple(alias),
             is_pub,
             span: self.merge_spans(start_span, end_span),
         })
@@ -3693,7 +3704,7 @@ fn main() {}"#,
             panic!("expected use");
         };
         assert_eq!(u.path, vec!["math", "add"]);
-        assert!(matches!(u.tree, UseTree::Simple));
+        assert!(matches!(u.tree, UseTree::Simple(None)));
     }
 
     #[test]
@@ -3713,10 +3724,11 @@ fn main() {}"#,
             panic!("expected use");
         };
         assert_eq!(u.path, vec!["math"]);
-        let UseTree::Group(names) = &u.tree else {
+        let UseTree::Group(items) = &u.tree else {
             panic!("expected group");
         };
-        assert_eq!(names, &["add", "sub"]);
+        let names: Vec<&str> = items.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["add", "sub"]);
     }
 
     #[test]

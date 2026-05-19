@@ -2699,6 +2699,55 @@ fn main() {
     assert_eq!(output, vec!["(1.5, 2.5)\n"]);
 }
 
+#[test]
+fn test_use_as_rename_simple() {
+    let output = run_and_capture(
+        r#"
+mod math {
+    pub fn add(a: i64, b: i64) -> i64 { a + b }
+}
+use math::add as sum;
+fn main() {
+    println!("{}", sum(10, 20));
+}"#,
+    );
+    assert_eq!(output, vec!["30\n"]);
+}
+
+#[test]
+fn test_use_as_rename_group() {
+    let output = run_and_capture(
+        r#"
+mod ops {
+    pub fn add(a: i64, b: i64) -> i64 { a + b }
+    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+}
+use ops::{add as plus, sub as minus};
+fn main() {
+    println!("{} {}", plus(5, 3), minus(5, 3));
+}"#,
+    );
+    assert_eq!(output, vec!["8 2\n"]);
+}
+
+#[test]
+fn test_pub_use_as_re_export() {
+    let output = run_and_capture(
+        r#"
+mod inner {
+    pub fn msg() -> String { "hello".to_string() }
+}
+mod middle {
+    pub use inner::msg as greeting;
+}
+use middle::greeting;
+fn main() {
+    println!("{}", greeting());
+}"#,
+    );
+    assert_eq!(output, vec!["hello\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]

@@ -637,8 +637,11 @@ impl Compiler {
         let base_path = resolved_path.join("::");
         let module_prefix = self.module_stack.join("::");
         match &use_def.tree {
-            UseTree::Simple => {
-                let name = use_def.path.last().cloned().unwrap_or_default();
+            UseTree::Simple(alias) => {
+                let name = alias
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
                 if self.is_visible(&base_path) {
                     self.use_aliases.insert(name.clone(), base_path.clone());
                     if use_def.is_pub {
@@ -653,16 +656,18 @@ impl Compiler {
                     }
                 }
             }
-            UseTree::Group(names) => {
-                for name in names {
+            UseTree::Group(items) => {
+                for (name, alias) in items {
+                    let local_name = alias.as_ref().unwrap_or(name);
                     let qualified = format!("{}::{}", base_path, name);
                     if self.is_visible(&qualified) {
-                        self.use_aliases.insert(name.clone(), qualified.clone());
+                        self.use_aliases
+                            .insert(local_name.clone(), qualified.clone());
                         if use_def.is_pub {
                             let reexport_name = if module_prefix.is_empty() {
-                                name.clone()
+                                local_name.clone()
                             } else {
-                                format!("{}::{}", module_prefix, name)
+                                format!("{}::{}", module_prefix, local_name)
                             };
                             self.use_aliases
                                 .insert(reexport_name.clone(), qualified.clone());
@@ -749,8 +754,11 @@ impl Compiler {
                     let resolved_path = Self::resolve_use_path(&u.path, &self.module_stack);
                     let base_path = resolved_path.join("::");
                     match &u.tree {
-                        UseTree::Simple => {
-                            let name = u.path.last().cloned().unwrap_or_default();
+                        UseTree::Simple(alias) => {
+                            let name = alias
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or_else(|| u.path.last().cloned().unwrap_or_default());
                             if self.is_visible(&base_path) {
                                 self.use_aliases.insert(name.clone(), base_path.clone());
                                 if u.is_pub {
@@ -764,16 +772,18 @@ impl Compiler {
                                 }
                             }
                         }
-                        UseTree::Group(names) => {
-                            for name in names {
+                        UseTree::Group(items) => {
+                            for (name, alias) in items {
+                                let local_name = alias.as_ref().unwrap_or(name);
                                 let qualified = format!("{}::{}", base_path, name);
                                 if self.is_visible(&qualified) {
-                                    self.use_aliases.insert(name.clone(), qualified.clone());
+                                    self.use_aliases
+                                        .insert(local_name.clone(), qualified.clone());
                                     if u.is_pub {
                                         let reexport = if module_prefix.is_empty() {
-                                            name.clone()
+                                            local_name.clone()
                                         } else {
-                                            format!("{}::{}", module_prefix, name)
+                                            format!("{}::{}", module_prefix, local_name)
                                         };
                                         self.use_aliases
                                             .insert(reexport.clone(), qualified.clone());

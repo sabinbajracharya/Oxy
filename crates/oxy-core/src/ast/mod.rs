@@ -257,12 +257,12 @@ pub struct UseDef {
 /// What to import from a use path.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UseTree {
-    /// Import a single item: `use path::item;`
-    Simple,
+    /// Import a single item: `use path::item;` or `use path::item as alias;`
+    Simple(Option<String>),
     /// Glob import: `use path::*;`
     Glob,
-    /// Multiple imports: `use path::{a, b, c};`
-    Group(Vec<String>),
+    /// Multiple imports: `use path::{a, b, c};` with optional `as` aliases
+    Group(Vec<(String, Option<String>)>),
 }
 
 /// A block: `{ stmts }` — the last expression (without semicolon) is the block's value.
@@ -932,10 +932,26 @@ impl Item {
                 out.push_str(&format!("{pad}{pub_str}use "));
                 let path_str = u.path.join("::");
                 match &u.tree {
-                    UseTree::Simple => out.push_str(&format!("{path_str};\n")),
+                    UseTree::Simple(alias) => {
+                        if let Some(a) = alias {
+                            out.push_str(&format!("{path_str} as {a};\n"));
+                        } else {
+                            out.push_str(&format!("{path_str};\n"));
+                        }
+                    }
                     UseTree::Glob => out.push_str(&format!("{path_str}::*;\n")),
-                    UseTree::Group(names) => {
-                        out.push_str(&format!("{}::{{{}}};\n", path_str, names.join(", ")));
+                    UseTree::Group(items) => {
+                        let parts: Vec<String> = items
+                            .iter()
+                            .map(|(n, alias)| {
+                                if let Some(a) = alias {
+                                    format!("{n} as {a}")
+                                } else {
+                                    n.clone()
+                                }
+                            })
+                            .collect();
+                        out.push_str(&format!("{}::{{{}}};\n", path_str, parts.join(", ")));
                     }
                 }
             }
