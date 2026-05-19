@@ -3018,6 +3018,12 @@ fn collect_closure_free_vars(
                 collect_closure_free_vars(a, params, out);
             }
         }
+        crate::ast::Expr::MethodCall { object, args, .. } => {
+            collect_closure_free_vars(object, params, out);
+            for a in args {
+                collect_closure_free_vars(a, params, out);
+            }
+        }
         crate::ast::Expr::UnaryOp { expr: inner, .. } => {
             collect_closure_free_vars(inner, params, out)
         }
