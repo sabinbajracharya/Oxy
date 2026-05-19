@@ -1429,6 +1429,25 @@ impl Compiler {
                 right,
                 span: _,
             } => {
+                // Short-circuit && and ||
+                if *op == BinOp::And {
+                    self.compile_expr(left)?;
+                    self.emit(OpCode::Dup); // preserve left for false case
+                    let jump = self.emit(OpCode::JumpIfFalse(0));
+                    self.emit(OpCode::Pop); // discard dup; left is false, keep it
+                    self.compile_expr(right)?;
+                    self.patch(jump, OpCode::JumpIfFalse(self.code.len()));
+                    return Ok(());
+                }
+                if *op == BinOp::Or {
+                    self.compile_expr(left)?;
+                    self.emit(OpCode::Dup); // preserve left for true case
+                    let jump = self.emit(OpCode::JumpIfTrue(0));
+                    self.emit(OpCode::Pop); // discard left; evaluate right
+                    self.compile_expr(right)?;
+                    self.patch(jump, OpCode::JumpIfTrue(self.code.len()));
+                    return Ok(());
+                }
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
                 let opcode = match op {
@@ -1443,13 +1462,12 @@ impl Compiler {
                     BinOp::Gt => OpCode::Gt,
                     BinOp::LtEq => OpCode::Le,
                     BinOp::GtEq => OpCode::Ge,
-                    BinOp::And => OpCode::And,
-                    BinOp::Or => OpCode::Or,
                     BinOp::BitAnd => OpCode::BitAnd,
                     BinOp::BitOr => OpCode::BitOr,
                     BinOp::BitXor => OpCode::BitXor,
                     BinOp::Shl => OpCode::Shl,
                     BinOp::Shr => OpCode::Shr,
+                    BinOp::And | BinOp::Or => unreachable!(),
                 };
                 self.emit(opcode);
                 Ok(())

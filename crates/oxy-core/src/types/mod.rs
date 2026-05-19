@@ -322,6 +322,94 @@ pub enum IteratorState {
     },
 }
 
+impl IteratorState {
+    /// Drive the iterator to produce the next value.
+    pub fn drive_next(&mut self) -> Option<Value> {
+        match self {
+            IteratorState::VecSource { data, index } => {
+                if *index < data.len() {
+                    let val = data[*index].clone();
+                    *index += 1;
+                    Some(val)
+                } else {
+                    None
+                }
+            }
+            IteratorState::RangeSource { current, end } => {
+                if *current < *end {
+                    let val = Value::I64(*current);
+                    *current += 1;
+                    Some(val)
+                } else {
+                    None
+                }
+            }
+            IteratorState::Map { .. } | IteratorState::Filter { .. } => None,
+            IteratorState::Take { source, remaining } => {
+                if *remaining == 0 {
+                    None
+                } else {
+                    *remaining -= 1;
+                    source.drive_next()
+                }
+            }
+            IteratorState::Skip { source, remaining } => {
+                while *remaining > 0 {
+                    *remaining -= 1;
+                    source.drive_next()?;
+                }
+                source.drive_next()
+            }
+            IteratorState::Chain { first, second } => {
+                first.drive_next().or_else(|| second.drive_next())
+            }
+            IteratorState::Zip { left, right } => {
+                let l = left.drive_next()?;
+                let r = right.drive_next()?;
+                Some(Value::Tuple(vec![l, r]))
+            }
+            IteratorState::Enumerate { source, index } => {
+                let val = source.drive_next()?;
+                let pair = Value::Tuple(vec![Value::I64(*index as i64), val]);
+                *index += 1;
+                Some(pair)
+            }
+            IteratorState::FlatMap {
+                source,
+                closure: _,
+                current,
+            }
+            | IteratorState::Flatten { source, current } => loop {
+                if let Some(inner) = current {
+                    if let Some(val) = inner.drive_next() {
+                        return Some(val);
+                    }
+                    *current = None;
+                }
+                let next = source.drive_next()?;
+                match next.into_iterable() {
+                    Ok(items) => {
+                        *current = Some(Box::new(IteratorState::VecSource {
+                            data: items,
+                            index: 0,
+                        }));
+                    }
+                    Err(_) => continue,
+                }
+            },
+        }
+    }
+
+    /// Collect all remaining elements into a Vec.
+    pub fn collect_all(&mut self) -> Vec<Value> {
+        let mut result = Vec::new();
+        while let Some(val) = self.drive_next() {
+            result.push(val);
+        }
+        result
+    }
+}
+
 /// Data for a function value (boxed to keep Value enum small).
 #[derive(Debug, Clone)]
 pub struct FunctionData {
@@ -456,9 +544,7 @@ impl Value {
             }
             Value::BinaryHeap(rc) => Ok(rc.borrow().clone().into_sorted_vec()),
             Value::VecDeque(rc) => Ok(rc.borrow().clone().into_iter().collect()),
-            Value::Iterator(_) => Err(
-                "Iterators must be consumed with .collect() or another consumer method, not iterated directly".into(),
-            ),
+            Value::Iterator(mut iter) => Ok(iter.collect_all()),
             other => Err(format!("cannot iterate over {}", other.type_name())),
         }
     }
