@@ -1431,6 +1431,14 @@ impl Compiler {
                 value,
                 ..
             } => {
+                // `let _ = expr;` — evaluate the expression and discard the result
+                if name == "_" {
+                    if let Some(expr) = value {
+                        self.compile_expr(expr)?;
+                        self.emit(OpCode::Pop);
+                    }
+                    return Ok(());
+                }
                 if let Some(expr) = value {
                     // Check literal out-of-range before compilation
                     if let Some(ann) = type_ann {
@@ -2372,6 +2380,26 @@ impl Compiler {
                         .or_else(|| self.use_aliases.get(name).cloned())
                         .unwrap_or_else(|| name.clone())
                 };
+                // Check if this is an enum variant constructor (e.g. Message::Move { x, y })
+                if resolved_name.contains("::") {
+                    let parts: Vec<&str> = resolved_name.split("::").collect();
+                    if parts.len() == 2 {
+                        let enum_name = parts[0].to_string();
+                        let variant = parts[1].to_string();
+                        if self.enum_defs.contains_key(&enum_name) {
+                            // Compile field values in order
+                            for (_, expr) in fields {
+                                self.compile_expr(expr)?;
+                            }
+                            self.emit(OpCode::MakeEnumVariant {
+                                enum_name,
+                                variant,
+                                arg_count: fields.len(),
+                            });
+                            return Ok(());
+                        }
+                    }
+                }
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
                 for (_, expr) in fields {
                     self.compile_expr(expr)?;

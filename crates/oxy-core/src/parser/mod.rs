@@ -963,7 +963,11 @@ impl Parser {
             });
         }
 
-        let name = self.expect_ident()?;
+        let name = if self.match_token(&TokenKind::Underscore) {
+            "_".to_string()
+        } else {
+            self.expect_ident()?
+        };
 
         // Check for struct destructuring: `let Name { x, y } = ...`
         if self.check(&TokenKind::LBrace) {
@@ -1202,7 +1206,19 @@ impl Parser {
         self.expect(TokenKind::LBrace)?;
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) {
-            let field_name = self.expect_ident()?;
+            // Accept both identifiers (named fields) and integers (tuple struct fields)
+            let is_int_field = matches!(self.peek_kind(), TokenKind::IntLiteral(..));
+            let field_name = if is_int_field {
+                if let TokenKind::IntLiteral(n, _) = self.peek_kind() {
+                    let name = n.to_string();
+                    self.advance();
+                    name
+                } else {
+                    unreachable!()
+                }
+            } else {
+                self.expect_ident()?
+            };
             // Shorthand: `Point { x, y }` where x and y are variables
             let value = if self.match_token(&TokenKind::Colon) {
                 self.parse_expr(Precedence::None)?
@@ -1374,7 +1390,10 @@ impl Parser {
                     }
 
                     // Check if followed by `{` → struct init with path (e.g. module::Struct { })
-                    // For now just return Path
+                    if self.check(&TokenKind::LBrace) {
+                        let full_name = segments.join("::");
+                        return self.parse_struct_init(full_name, span);
+                    }
                     let end_span = self.prev_span();
                     return Ok(Expr::Path {
                         segments,
@@ -2242,6 +2261,27 @@ impl Parser {
                             }
                         }
                         self.expect(TokenKind::RParen)?;
+                    } else if self.match_token(&TokenKind::LBrace) {
+                        // Struct variant destructuring: `Message::Move { x, y }`
+                        if !self.check(&TokenKind::RBrace) {
+                            loop {
+                                let fname = self.expect_ident()?;
+                                if self.match_token(&TokenKind::Colon) {
+                                    // `field: pattern`
+                                    fields.push(self.parse_pattern()?);
+                                } else {
+                                    // Shorthand: `x` means `x: x`
+                                    fields.push(Pattern::Ident(fname.clone(), self.prev_span()));
+                                }
+                                if !self.match_token(&TokenKind::Comma) {
+                                    break;
+                                }
+                                if self.check(&TokenKind::RBrace) {
+                                    break;
+                                }
+                            }
+                        }
+                        self.expect(TokenKind::RBrace)?;
                     }
 
                     let end_span = self.prev_span();

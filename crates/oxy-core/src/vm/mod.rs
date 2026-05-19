@@ -667,6 +667,11 @@ impl Vm {
                                     ));
                                 }
                             }
+                            Value::Struct { fields, .. } => {
+                                let field_key = key.to_string();
+                                self.stack
+                                    .push(fields.get(&field_key).cloned().unwrap_or(Value::Unit));
+                            }
                             other => {
                                 return VmResult::Error(format!(
                                     "cannot index {}",
