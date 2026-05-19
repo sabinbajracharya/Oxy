@@ -2808,6 +2808,45 @@ fn main() {
     assert_eq!(output, vec!["11\n"]);
 }
 
+#[test]
+fn test_pub_use_glob_re_export() {
+    let output = run_and_capture(
+        r#"
+mod inner {
+    pub fn add(a: i64, b: i64) -> i64 { a + b }
+    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+}
+mod middle {
+    pub use inner::*;
+}
+use middle::add;
+use middle::sub;
+fn main() {
+    println!("{} {}", add(10, 3), sub(10, 3));
+}"#,
+    );
+    assert_eq!(output, vec!["13 7\n"]);
+}
+
+#[test]
+fn test_pub_use_glob_re_export_single_import() {
+    let output = run_and_capture(
+        r#"
+mod lib {
+    pub fn version() -> i64 { 1 }
+    pub fn name() -> String { "oxy".to_string() }
+}
+mod prelude {
+    pub use lib::*;
+}
+use prelude::*;
+fn main() {
+    println!("{} {}", version(), name());
+}"#,
+    );
+    assert_eq!(output, vec!["1 oxy\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]

@@ -684,6 +684,17 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
+                            if use_def.is_pub {
+                                let reexport_name = if module_prefix.is_empty() {
+                                    stripped.to_string()
+                                } else {
+                                    format!("{}::{}", module_prefix, stripped)
+                                };
+                                self.use_aliases
+                                    .insert(reexport_name.clone(), qualified_name.clone());
+                                self.deferred_globs
+                                    .push((qualified_name.clone(), reexport_name));
+                            }
                         }
                     }
                 }
@@ -692,6 +703,17 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
+                            if use_def.is_pub {
+                                let reexport_name = if module_prefix.is_empty() {
+                                    stripped.to_string()
+                                } else {
+                                    format!("{}::{}", module_prefix, stripped)
+                                };
+                                self.use_aliases
+                                    .insert(reexport_name.clone(), qualified_name.clone());
+                                self.deferred_globs
+                                    .push((qualified_name.clone(), reexport_name));
+                            }
                         }
                     }
                 }
@@ -700,10 +722,21 @@ impl Compiler {
                         if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
+                            if use_def.is_pub {
+                                let reexport_name = if module_prefix.is_empty() {
+                                    stripped.to_string()
+                                } else {
+                                    format!("{}::{}", module_prefix, stripped)
+                                };
+                                self.use_aliases
+                                    .insert(reexport_name.clone(), qualified_name.clone());
+                                self.deferred_globs
+                                    .push((qualified_name.clone(), reexport_name));
+                            }
                         }
                     }
                 }
-                // Also defer so items registered later are included
+                // Also defer so items registered later are included (glob aliases)
                 self.deferred_globs.push((base_path, String::new()));
             }
         }
@@ -801,6 +834,19 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
+                                        if u.is_pub {
+                                            let reexport_name = if module_prefix.is_empty() {
+                                                stripped.to_string()
+                                            } else {
+                                                format!("{}::{}", module_prefix, stripped)
+                                            };
+                                            self.use_aliases.insert(
+                                                reexport_name.clone(),
+                                                qualified_name.clone(),
+                                            );
+                                            self.deferred_globs
+                                                .push((qualified_name.clone(), reexport_name));
+                                        }
                                     }
                                 }
                             }
@@ -811,6 +857,19 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
+                                        if u.is_pub {
+                                            let reexport_name = if module_prefix.is_empty() {
+                                                stripped.to_string()
+                                            } else {
+                                                format!("{}::{}", module_prefix, stripped)
+                                            };
+                                            self.use_aliases.insert(
+                                                reexport_name.clone(),
+                                                qualified_name.clone(),
+                                            );
+                                            self.deferred_globs
+                                                .push((qualified_name.clone(), reexport_name));
+                                        }
                                     }
                                 }
                             }
@@ -821,6 +880,19 @@ impl Compiler {
                                     if !stripped.contains("::") {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
+                                        if u.is_pub {
+                                            let reexport_name = if module_prefix.is_empty() {
+                                                stripped.to_string()
+                                            } else {
+                                                format!("{}::{}", module_prefix, stripped)
+                                            };
+                                            self.use_aliases.insert(
+                                                reexport_name.clone(),
+                                                qualified_name.clone(),
+                                            );
+                                            self.deferred_globs
+                                                .push((qualified_name.clone(), reexport_name));
+                                        }
                                     }
                                 }
                             }
