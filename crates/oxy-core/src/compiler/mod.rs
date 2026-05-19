@@ -1889,6 +1889,18 @@ impl Compiler {
                 arms,
                 ..
             } => {
+                // Exhaustiveness check: require wildcard for integer literal matches.
+                // Enum variants, bool, and ident patterns are fine without catch-all.
+                let has_catch_all = arms.iter().any(|a| matches!(a.pattern, Pattern::Wildcard(_) | Pattern::Ident(..)));
+                let has_enum = arms.iter().any(|a| matches!(a.pattern, Pattern::EnumVariant { .. }));
+                let has_int_literal = arms.iter().any(|a| matches!(a.pattern, Pattern::Literal(Expr::IntLiteral(..))));
+                if !has_catch_all && !has_enum && has_int_literal {
+                    return Err(FerriError::Runtime {
+                        message: "non-exhaustive patterns: missing wildcard `_` arm".into(),
+                        line: expr.span().line,
+                        column: expr.span().column,
+                    });
+                }
                 // Evaluate scrutinee once, store in temp slot
                 self.compile_expr(scrutinee)?;
                 let scrutinee_slot = self.sym.define("__match_scrutinee");
