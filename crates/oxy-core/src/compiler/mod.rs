@@ -401,7 +401,32 @@ impl Compiler {
                     self.use_aliases.insert(name.clone(), qualified);
                 }
             }
-            UseTree::Glob => {}
+            UseTree::Glob => {
+                // Add aliases for all public items in the module
+                let prefix = &base_path;
+                for (qualified_name, _ip) in &self.functions.clone() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") {
+                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+                // Also scan struct_defs and enum_defs
+                for (qualified_name, _) in &self.struct_defs.clone() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") {
+                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+                for (qualified_name, _) in &self.enum_defs.clone() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") {
+                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
