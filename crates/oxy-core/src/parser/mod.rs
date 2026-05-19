@@ -120,7 +120,7 @@ impl Parser {
             TokenKind::Impl => self.parse_impl_or_impl_trait(),
             TokenKind::Trait => self.parse_trait_def(is_pub).map(Item::Trait),
             TokenKind::Mod => self.parse_module_def(is_pub).map(Item::Module),
-            TokenKind::Use => self.parse_use_def().map(Item::Use),
+            TokenKind::Use => self.parse_use_def(is_pub).map(Item::Use),
             TokenKind::Type => self.parse_type_alias(),
             TokenKind::Const => self.parse_const_def(false),
             TokenKind::Static => self.parse_const_def(true),
@@ -202,7 +202,7 @@ impl Parser {
         }
     }
 
-    fn parse_use_def(&mut self) -> Result<UseDef, FerriError> {
+    fn parse_use_def(&mut self, is_pub: bool) -> Result<UseDef, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Use)?;
 
@@ -234,6 +234,7 @@ impl Parser {
                 return Ok(UseDef {
                     path,
                     tree: UseTree::Glob,
+                    is_pub,
                     span: self.merge_spans(start_span, end_span),
                 });
             }
@@ -257,12 +258,24 @@ impl Parser {
                 return Ok(UseDef {
                     path,
                     tree: UseTree::Group(names),
+                    is_pub,
                     span: self.merge_spans(start_span, end_span),
                 });
             }
 
-            // Regular path segment
-            path.push(self.expect_ident()?);
+            // Regular path segment (including self/super/crate as identifiers)
+            if self.check(&TokenKind::Crate) {
+                path.push("crate".to_string());
+                self.advance();
+            } else if self.check(&TokenKind::SelfLower) {
+                path.push("self".to_string());
+                self.advance();
+            } else if self.check(&TokenKind::Super) {
+                path.push("super".to_string());
+                self.advance();
+            } else {
+                path.push(self.expect_ident()?);
+            }
         }
 
         // Simple import: `use path::item;`
@@ -271,6 +284,7 @@ impl Parser {
         Ok(UseDef {
             path,
             tree: UseTree::Simple,
+            is_pub,
             span: self.merge_spans(start_span, end_span),
         })
     }

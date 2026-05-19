@@ -249,6 +249,8 @@ pub struct UseDef {
     pub path: Vec<String>,
     /// What to import from the path.
     pub tree: UseTree,
+    /// Whether this is a `pub use` (re-export).
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -926,7 +928,8 @@ impl Item {
             }
             Item::Use(u) => {
                 let pad = "  ".repeat(indent);
-                out.push_str(&format!("{pad}use "));
+                let pub_str = if u.is_pub { "pub " } else { "" };
+                out.push_str(&format!("{pad}{pub_str}use "));
                 let path_str = u.path.join("::");
                 match &u.tree {
                     UseTree::Simple => out.push_str(&format!("{path_str};\n")),

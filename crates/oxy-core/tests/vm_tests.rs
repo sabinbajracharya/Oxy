@@ -2420,10 +2420,10 @@ fn test_use_glob_import() {
     let output = run_and_capture(
         r#"
 mod utils {
-    fn greet(name: String) -> String {
+    pub fn greet(name: String) -> String {
         format!("Hello, {}!", name)
     }
-    fn farewell(name: String) -> String {
+    pub fn farewell(name: String) -> String {
         format!("Goodbye, {}!", name)
     }
 }
@@ -2541,6 +2541,162 @@ fn main() {
 }"#,
     );
     assert_eq!(output, vec!["3\n"]);
+}
+
+// === Module System Fixes ===
+
+#[test]
+fn test_use_inside_module() {
+    let output = run_and_capture(
+        r#"
+mod outer {
+    pub fn value() -> i64 { 42 }
+}
+mod inner {
+    use outer::value;
+    pub fn call() -> i64 { value() }
+}
+use inner::call;
+fn main() {
+    println!("{}", call());
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_type_alias_inside_module() {
+    let output = run_and_capture(
+        r#"
+mod types {
+    pub type Num = i64;
+    pub fn make() -> Num { 10 }
+}
+use types::make;
+fn main() {
+    println!("{}", make());
+}"#,
+    );
+    assert_eq!(output, vec!["10\n"]);
+}
+
+#[test]
+fn test_visibility_filtering_glob() {
+    let output = run_and_capture(
+        r#"
+mod lib {
+    pub fn visible() -> &str { "yes" }
+    fn hidden() -> &str { "no" }
+}
+use lib::*;
+fn main() {
+    println!("{}", visible());
+}"#,
+    );
+    assert_eq!(output, vec!["yes\n"]);
+}
+
+#[test]
+fn test_glob_after_module_definition() {
+    // Glob after module: still works (eager path)
+    let output = run_and_capture(
+        r#"
+mod math {
+    pub fn double(x: i64) -> i64 { x * 2 }
+}
+use math::*;
+fn main() {
+    println!("{}", double(21));
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_glob_before_module_definition() {
+    // Glob BEFORE module: works via deferred resolution
+    let output = run_and_capture(
+        r#"
+use math::*;
+mod math {
+    pub fn triple(x: i64) -> i64 { x * 3 }
+}
+fn main() {
+    println!("{}", triple(7));
+}"#,
+    );
+    assert_eq!(output, vec!["21\n"]);
+}
+
+#[test]
+fn test_self_in_use_path() {
+    // `self` in use paths resolves to the current module
+    let output = run_and_capture(
+        r#"
+mod m {
+    pub fn val() -> i64 { 42 }
+    pub use self::val;
+}
+use m::val;
+fn main() {
+    println!("{}", val());
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_super_in_use_path() {
+    // super resolves to parent module in nested modules
+    let output = run_and_capture(
+        r#"
+mod a {
+    pub fn val() -> i64 { 99 }
+    pub mod b {
+        use super::val;
+        pub fn call() -> i64 { val() }
+    }
+}
+use a::b::call;
+fn main() {
+    println!("{}", call());
+}"#,
+    );
+    assert_eq!(output, vec!["99\n"]);
+}
+
+#[test]
+fn test_pub_use_re_export() {
+    let output = run_and_capture(
+        r#"
+mod inner {
+    pub fn msg() -> String { "hi".to_string() }
+}
+mod middle {
+    pub use inner::msg;
+}
+use middle::msg;
+fn main() {
+    println!("{}", msg());
+}"#,
+    );
+    assert_eq!(output, vec!["hi\n"]);
+}
+
+#[test]
+fn test_struct_init_with_use_import() {
+    let output = run_and_capture(
+        r#"
+mod geom {
+    pub struct Point { x: f64, y: f64 }
+}
+use geom::Point;
+fn main() {
+    let p = Point { x: 1.5, y: 2.5 };
+    println!("({}, {})", p.x, p.y);
+}"#,
+    );
+    assert_eq!(output, vec!["(1.5, 2.5)\n"]);
 }
 
 // === Phase 12: Type Aliases ===

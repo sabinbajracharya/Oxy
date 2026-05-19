@@ -135,6 +135,17 @@ pub struct Compiler {
     type_aliases: HashMap<String, String>,
     /// Forward calls that need target patching: (bytecode_index, function_name).
     forward_calls: Vec<(usize, String)>,
+    /// Module name stack for resolving `self`, `super`, `crate` in paths.
+    module_stack: Vec<String>,
+    /// Deferred use resolutions processed in post-pass: (qualified_path, reexport_name_or_empty).
+    /// Empty reexport_name means glob import; non-empty means pub use re-export.
+    deferred_globs: Vec<(String, String)>,
+    /// Qualified names of public functions (for visibility-aware glob filters).
+    pub_fns: HashSet<String>,
+    /// Qualified names of public structs (for visibility-aware glob filters).
+    pub_structs: HashSet<String>,
+    /// Qualified names of public enums (for visibility-aware glob filters).
+    pub_enums: HashSet<String>,
 }
 
 impl Compiler {
@@ -188,6 +199,11 @@ impl Default for Compiler {
             trait_defs: HashMap::new(),
             type_aliases: HashMap::new(),
             forward_calls: Vec::new(),
+            module_stack: Vec::new(),
+            deferred_globs: Vec::new(),
+            pub_fns: HashSet::new(),
+            pub_structs: HashSet::new(),
+            pub_enums: HashSet::new(),
         }
     }
 }
@@ -197,28 +213,98 @@ impl Compiler {
     pub fn compile(mut self, program: &Program) -> Result<Chunk, FerriError> {
         // Pre-scan: register all function names so forward references resolve.
         // Sentinel IP usize::MAX marks functions not yet compiled.
-        for item in &program.items {
-            if let Item::Function(f) = item {
-                self.functions.insert(f.name.clone(), usize::MAX);
-                let body_expr = f
-                    .body
-                    .stmts
-                    .last()
-                    .and_then(|stmt| match stmt {
-                        crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                        _ => None,
-                    })
-                    .unwrap_or(crate::ast::Expr::IntLiteral(
-                        0,
-                        crate::lexer::IntegerSuffix::None,
-                        f.body.span,
-                    ));
-                self.fn_meta.insert(
-                    f.name.clone(),
-                    (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
-                );
+        // Also drill into inline modules so glob imports can find them.
+        fn prescan_items(
+            items: &[Item],
+            functions: &mut HashMap<String, usize>,
+            fn_meta: &mut HashMap<
+                String,
+                (
+                    Vec<crate::ast::Param>,
+                    Box<crate::ast::Expr>,
+                    Option<crate::ast::TypeAnnotation>,
+                ),
+            >,
+            struct_defs: &mut HashMap<String, StructDef>,
+            enum_defs: &mut HashMap<String, EnumDef>,
+            prefix: &str,
+        ) {
+            for item in items {
+                match item {
+                    Item::Function(f) => {
+                        let name = if prefix.is_empty() {
+                            f.name.clone()
+                        } else {
+                            format!("{}::{}", prefix, f.name)
+                        };
+                        functions.insert(name.clone(), usize::MAX);
+                        let body_expr = f
+                            .body
+                            .stmts
+                            .last()
+                            .and_then(|stmt| match stmt {
+                                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                                _ => None,
+                            })
+                            .unwrap_or(crate::ast::Expr::IntLiteral(
+                                0,
+                                crate::lexer::IntegerSuffix::None,
+                                f.body.span,
+                            ));
+                        fn_meta.insert(
+                            name,
+                            (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
+                        );
+                    }
+                    Item::Struct(s) => {
+                        let name = if prefix.is_empty() {
+                            s.name.clone()
+                        } else {
+                            format!("{}::{}", prefix, s.name)
+                        };
+                        struct_defs.insert(name, s.clone());
+                    }
+                    Item::Enum(e) => {
+                        let name = if prefix.is_empty() {
+                            e.name.clone()
+                        } else {
+                            format!("{}::{}", prefix, e.name)
+                        };
+                        enum_defs.insert(name, e.clone());
+                    }
+                    Item::Module(m) => {
+                        if let Some(body) = &m.body {
+                            let nested = if prefix.is_empty() {
+                                m.name.clone()
+                            } else {
+                                format!("{}::{}", prefix, m.name)
+                            };
+                            prescan_items(
+                                body,
+                                functions,
+                                fn_meta,
+                                struct_defs,
+                                enum_defs,
+                                &nested,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
+        prescan_items(
+            &program.items,
+            &mut self.functions,
+            &mut self.fn_meta,
+            &mut self.struct_defs,
+            &mut self.enum_defs,
+            "",
+        );
+
+        // Pre-resolve globs: process all use statements eagerly against pre-scanned data.
+        // This ensures glob aliases exist before function bodies are compiled.
+        self.preresolve_uses(&program.items)?;
 
         // Compile function bodies
         for item in &program.items {
@@ -236,6 +322,9 @@ impl Compiler {
                 _ => continue,
             };
         }
+
+        // Resolve deferred use declarations (pub use re-exports and late globs)
+        self.resolve_deferred_uses();
 
         // Check if any function has #[test] attribute (test runner mode)
         let has_test_fns = program.items.iter().any(|item| {
@@ -297,11 +386,13 @@ impl Compiler {
     fn compile_item(&mut self, item: &Item) -> Result<(), FerriError> {
         match item {
             Item::Function(f) => {
+                self.pub_fns.insert(f.name.clone());
                 self.compile_fn_item(f, None)?;
                 Ok(())
             }
             Item::Struct(s) => {
                 self.struct_defs.insert(s.name.clone(), s.clone());
+                self.pub_structs.insert(s.name.clone());
                 // Handle #[derive(Default)] by generating a default() constructor
                 if s.attributes
                     .iter()
@@ -313,6 +404,7 @@ impl Compiler {
             }
             Item::Enum(e) => {
                 self.enum_defs.insert(e.name.clone(), e.clone());
+                self.pub_enums.insert(e.name.clone());
                 Ok(())
             }
             Item::Impl(i) => {
@@ -446,7 +538,10 @@ impl Compiler {
         if let Some(tn) = type_name {
             // Also register qualified name so PathCall can resolve Type::method
             let qualified = format!("{}::{}", tn, f.name);
-            self.functions.insert(qualified, ip);
+            self.functions.insert(qualified.clone(), ip);
+            if f.is_pub {
+                self.pub_fns.insert(qualified);
+            }
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
         }
         // Store metadata for function-reference-as-value support
@@ -515,54 +610,275 @@ impl Compiler {
             program.items
         };
         let prefix = module.name.clone();
-        self.compile_module_items(&items, &prefix)
+        self.module_stack.push(module.name.clone());
+        self.compile_module_items(&items, &prefix)?;
+        self.module_stack.pop();
+        Ok(())
     }
 
     /// Process a `use` declaration.
     fn compile_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
-        let base_path = use_def.path.join("::");
+        let mut resolved_path = use_def.path.clone();
+
+        // Resolve self/super/crate path prefixes
+        if let Some(first) = resolved_path.first() {
+            let replacement = match first.as_str() {
+                "self" => self.module_stack.last().cloned().unwrap_or_default(),
+                "crate" => String::new(),
+                "super" => {
+                    if self.module_stack.len() >= 2 {
+                        self.module_stack[self.module_stack.len() - 2].clone()
+                    } else if self.module_stack.len() == 1 {
+                        String::new()
+                    } else {
+                        return Err(FerriError::Runtime {
+                            message: "cannot use `super` at the crate root".into(),
+                            line: use_def.span.line,
+                            column: use_def.span.column,
+                        });
+                    }
+                }
+                _ => first.clone(),
+            };
+            if replacement.is_empty() {
+                resolved_path.remove(0);
+            } else if replacement.as_str() != first.as_str() {
+                resolved_path[0] = replacement;
+            }
+        }
+
+        let base_path = resolved_path.join("::");
+        let module_prefix = self.module_stack.join("::");
         match &use_def.tree {
             UseTree::Simple => {
                 let name = use_def.path.last().cloned().unwrap_or_default();
-                self.use_aliases.insert(name, base_path);
+                self.use_aliases.insert(name.clone(), base_path.clone());
+                if use_def.is_pub {
+                    let reexport_name = if module_prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}::{}", module_prefix, name)
+                    };
+                    self.deferred_globs.push((base_path, reexport_name));
+                }
             }
             UseTree::Group(names) => {
                 for name in names {
                     let qualified = format!("{}::{}", base_path, name);
-                    self.use_aliases.insert(name.clone(), qualified);
+                    self.use_aliases.insert(name.clone(), qualified.clone());
+                    if use_def.is_pub {
+                        let reexport_name = if module_prefix.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{}::{}", module_prefix, name)
+                        };
+                        self.deferred_globs.push((qualified, reexport_name));
+                    }
                 }
             }
             UseTree::Glob => {
-                // Add aliases for all public items in the module
+                // Eager: alias all currently-known pub items
                 let prefix = &base_path;
-                for (qualified_name, _ip) in &self.functions.clone() {
+                for qualified_name in self.functions.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") {
+                        if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
-                // Also scan struct_defs and enum_defs
-                for (qualified_name, _) in &self.struct_defs.clone() {
+                for qualified_name in self.struct_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") {
+                        if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
-                for (qualified_name, _) in &self.enum_defs.clone() {
+                for qualified_name in self.enum_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") {
+                        if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
+                // Also defer so items registered later are included
+                self.deferred_globs.push((base_path, String::new()));
             }
         }
         Ok(())
+    }
+
+    /// Pre-resolve all use statements against pre-scanned data, before function bodies
+    /// are compiled. This ensures use aliases (especially globs) are available.
+    fn preresolve_uses(&mut self, items: &[Item]) -> Result<(), FerriError> {
+        let module_prefix = self.module_stack.join("::");
+        for item in items {
+            match item {
+                Item::Use(u) => {
+                    let mut resolved_path = u.path.clone();
+                    if let Some(first) = resolved_path.first() {
+                        let replacement = match first.as_str() {
+                            "self" => self.module_stack.last().cloned().unwrap_or_default(),
+                            "crate" => String::new(),
+                            "super" => {
+                                if self.module_stack.len() >= 2 {
+                                    self.module_stack[self.module_stack.len() - 2].clone()
+                                } else if self.module_stack.len() == 1 {
+                                    String::new()
+                                } else {
+                                    continue; // skip invalid super
+                                }
+                            }
+                            _ => first.clone(),
+                        };
+                        if replacement.is_empty() {
+                            resolved_path.remove(0);
+                        } else if replacement.as_str() != first.as_str() {
+                            resolved_path[0] = replacement;
+                        }
+                    }
+                    let base_path = resolved_path.join("::");
+                    match &u.tree {
+                        UseTree::Simple => {
+                            let name = u.path.last().cloned().unwrap_or_default();
+                            self.use_aliases.insert(name.clone(), base_path.clone());
+                            if u.is_pub {
+                                let reexport = if module_prefix.is_empty() {
+                                    name.clone()
+                                } else {
+                                    format!("{}::{}", module_prefix, name)
+                                };
+                                // Re-export: create alias from reexport_name → base_path,
+                                // which will be resolved via use_aliases chain when called
+                                self.use_aliases.insert(reexport.clone(), base_path.clone());
+                                self.deferred_globs.push((base_path, reexport));
+                            }
+                        }
+                        UseTree::Group(names) => {
+                            for name in names {
+                                let qualified = format!("{}::{}", base_path, name);
+                                self.use_aliases.insert(name.clone(), qualified.clone());
+                                if u.is_pub {
+                                    let reexport = if module_prefix.is_empty() {
+                                        name.clone()
+                                    } else {
+                                        format!("{}::{}", module_prefix, name)
+                                    };
+                                    if let Some(&ip) = self.functions.get(&qualified) {
+                                        self.functions.insert(reexport.clone(), ip);
+                                        self.pub_fns.insert(reexport.clone());
+                                    }
+                                    if let Some(def) = self.struct_defs.get(&qualified).cloned() {
+                                        self.struct_defs.insert(reexport.clone(), def);
+                                        self.pub_structs.insert(reexport.clone());
+                                    }
+                                    if let Some(def) = self.enum_defs.get(&qualified).cloned() {
+                                        self.enum_defs.insert(reexport.clone(), def);
+                                        self.pub_enums.insert(reexport.clone());
+                                    }
+                                    self.deferred_globs.push((qualified, reexport));
+                                }
+                            }
+                        }
+                        UseTree::Glob => {
+                            let prefix = &base_path;
+                            for qualified_name in self.functions.keys() {
+                                if let Some(stripped) =
+                                    qualified_name.strip_prefix(&format!("{}::", prefix))
+                                {
+                                    if !stripped.contains("::") {
+                                        self.use_aliases
+                                            .insert(stripped.to_string(), qualified_name.clone());
+                                    }
+                                }
+                            }
+                            for qualified_name in self.struct_defs.keys() {
+                                if let Some(stripped) =
+                                    qualified_name.strip_prefix(&format!("{}::", prefix))
+                                {
+                                    if !stripped.contains("::") {
+                                        self.use_aliases
+                                            .insert(stripped.to_string(), qualified_name.clone());
+                                    }
+                                }
+                            }
+                            for qualified_name in self.enum_defs.keys() {
+                                if let Some(stripped) =
+                                    qualified_name.strip_prefix(&format!("{}::", prefix))
+                                {
+                                    if !stripped.contains("::") {
+                                        self.use_aliases
+                                            .insert(stripped.to_string(), qualified_name.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Item::Module(m) => {
+                    if let Some(body) = &m.body {
+                        self.module_stack.push(m.name.clone());
+                        self.preresolve_uses(body)?;
+                        self.module_stack.pop();
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Resolve deferred use declarations: glob imports and pub use re-exports.
+    /// Called after all items have been compiled, so forward references are resolved.
+    fn resolve_deferred_uses(&mut self) {
+        // Take deferred_globs to avoid borrow issues, process, then discard
+        let deferred: Vec<(String, String)> = std::mem::take(&mut self.deferred_globs);
+        for (base_path, reexport_name) in &deferred {
+            if reexport_name.is_empty() {
+                // Glob import: alias all pub items under base_path
+                let prefix = base_path;
+                for qualified_name in self.functions.keys() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+                for qualified_name in self.struct_defs.keys() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+                for qualified_name in self.enum_defs.keys() {
+                    if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
+                        if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
+                        }
+                    }
+                }
+            } else {
+                // pub use re-export: register qualified item under alias name
+                if let Some(&ip) = self.functions.get(base_path) {
+                    self.functions.insert(reexport_name.clone(), ip);
+                    self.pub_fns.insert(reexport_name.clone());
+                }
+                if let Some(def) = self.struct_defs.get(base_path).cloned() {
+                    self.struct_defs.insert(reexport_name.clone(), def);
+                    self.pub_structs.insert(reexport_name.clone());
+                }
+                if let Some(def) = self.enum_defs.get(base_path).cloned() {
+                    self.enum_defs.insert(reexport_name.clone(), def);
+                    self.pub_enums.insert(reexport_name.clone());
+                }
+            }
+        }
     }
 
     /// Compile items with a module prefix (qualified names).
@@ -573,6 +889,9 @@ impl Compiler {
                     let qualified = format!("{}::{}", prefix, f.name);
                     let ip = self.code.len();
                     self.functions.insert(qualified.clone(), ip);
+                    if f.is_pub {
+                        self.pub_fns.insert(qualified.clone());
+                    }
                     // Store metadata for function-reference-as-value
                     let body_expr = f
                         .body
@@ -602,11 +921,17 @@ impl Compiler {
                 }
                 Item::Struct(s) => {
                     let qualified = format!("{}::{}", prefix, s.name);
-                    self.struct_defs.insert(qualified, s.clone());
+                    self.struct_defs.insert(qualified.clone(), s.clone());
+                    if s.is_pub {
+                        self.pub_structs.insert(qualified);
+                    }
                 }
                 Item::Enum(e) => {
                     let qualified = format!("{}::{}", prefix, e.name);
-                    self.enum_defs.insert(qualified, e.clone());
+                    self.enum_defs.insert(qualified.clone(), e.clone());
+                    if e.is_pub {
+                        self.pub_enums.insert(qualified);
+                    }
                 }
                 Item::Impl(i) => {
                     let qualified_type = format!("{}::{}", prefix, i.type_name);
@@ -619,6 +944,9 @@ impl Compiler {
                         let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
+                        if method.is_pub {
+                            self.pub_fns.insert(mname.clone());
+                        }
                         // Store fn_meta for arg count checking
                         let body_expr = method
                             .body
@@ -658,6 +986,7 @@ impl Compiler {
                 }
                 Item::Module(m) => {
                     let nested_prefix = format!("{}::{}", prefix, m.name);
+                    self.module_stack.push(m.name.clone());
                     if let Some(body) = &m.body {
                         self.compile_module_items(body, &nested_prefix)?;
                     } else {
@@ -665,8 +994,93 @@ impl Compiler {
                         let program = crate::parser::parse(&source)?;
                         self.compile_module_items(&program.items, &nested_prefix)?;
                     }
+                    self.module_stack.pop();
                 }
-                _ => {} // skip use, trait, type alias inside modules
+                Item::Use(u) => {
+                    self.compile_use(u)?;
+                }
+                Item::Trait(t) => {
+                    let qualified = format!("{}::{}", prefix, t.name);
+                    self.trait_defs.insert(qualified, t.default_methods.clone());
+                }
+                Item::ImplTrait(i) => {
+                    let qualified_type = format!("{}::{}", prefix, i.type_name);
+                    let explicit: HashSet<String> =
+                        i.methods.iter().map(|m| m.name.clone()).collect();
+                    let mut all_methods = i.methods.clone();
+                    // Try both unqualified and qualified trait name
+                    let trait_key = self
+                        .trait_defs
+                        .contains_key(&i.trait_name)
+                        .then_some(i.trait_name.clone())
+                        .or_else(|| {
+                            let q = format!("{}::{}", prefix, i.trait_name);
+                            self.trait_defs.contains_key(&q).then_some(q)
+                        });
+                    if let Some(tk) = &trait_key {
+                        if let Some(trait_methods) = self.trait_defs.get(tk) {
+                            for tm in trait_methods {
+                                if !explicit.contains(&tm.name) && !tm.body.stmts.is_empty() {
+                                    all_methods.push(tm.clone());
+                                }
+                            }
+                        }
+                    }
+                    self.impl_methods
+                        .entry(qualified_type.clone())
+                        .or_default()
+                        .extend(all_methods.clone());
+                    for method in &all_methods {
+                        let mname = format!("{}::{}", qualified_type, method.name);
+                        let ip = self.code.len();
+                        self.functions.insert(mname.clone(), ip);
+                        if method.is_pub {
+                            self.pub_fns.insert(mname.clone());
+                        }
+                        let body_expr = method
+                            .body
+                            .stmts
+                            .last()
+                            .and_then(|stmt| match stmt {
+                                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                                _ => None,
+                            })
+                            .unwrap_or(crate::ast::Expr::IntLiteral(
+                                0,
+                                IntegerSuffix::None,
+                                method.body.span,
+                            ));
+                        self.fn_meta.insert(
+                            mname.clone(),
+                            (
+                                method.params.clone(),
+                                Box::new(body_expr),
+                                method.return_type.clone(),
+                            ),
+                        );
+                        self.method_ips
+                            .insert((qualified_type.clone(), method.name.clone()), ip);
+                        self.method_ips
+                            .insert((i.type_name.clone(), method.name.clone()), ip);
+                        let saved_sym = self.sym.clone();
+                        for param in &method.params {
+                            self.sym.define(&param.name);
+                        }
+                        self.compile_block(&method.body)?;
+                        self.emit(OpCode::Return);
+                        self.fn_local_names.insert(ip, self.sym.build_slot_names());
+                        self.sym = saved_sym;
+                    }
+                }
+                Item::TypeAlias { name, target, .. } => {
+                    let qualified = format!("{}::{}", prefix, name);
+                    self.type_aliases.insert(qualified, target.name.clone());
+                }
+                Item::Const { name, value, .. } => {
+                    if let Some(val) = try_eval_const(value) {
+                        self.const_values.insert(name.clone(), val);
+                    }
+                }
             }
         }
         Ok(())
@@ -1531,11 +1945,15 @@ impl Compiler {
                         }
                         return Ok(());
                     }
-                    let resolved = self
-                        .use_aliases
-                        .get(name)
-                        .cloned()
-                        .unwrap_or_else(|| name.clone());
+                    // Follow use_aliases chain (handles pub use re-exports)
+                    let mut resolved = name.clone();
+                    let mut seen: HashSet<&str> = HashSet::new();
+                    while let Some(alias_target) = self.use_aliases.get(&resolved) {
+                        if !seen.insert(alias_target) {
+                            break; // cycle guard
+                        }
+                        resolved = alias_target.clone();
+                    }
                     self.functions
                         .get(&resolved)
                         .copied()
@@ -1846,7 +2264,7 @@ impl Compiler {
             }
 
             Expr::StructInit { name, fields, .. } => {
-                // Resolve `Self` to the current impl type name, then type aliases
+                // Resolve `Self` to the current impl type name, then type aliases, then use aliases
                 let resolved_name = if name == "Self" {
                     self.current_impl_type
                         .clone()
@@ -1855,6 +2273,7 @@ impl Compiler {
                     self.type_aliases
                         .get(name)
                         .cloned()
+                        .or_else(|| self.use_aliases.get(name).cloned())
                         .unwrap_or_else(|| name.clone())
                 };
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
@@ -1983,6 +2402,17 @@ impl Compiler {
                     if let Some(rp) = resolved_prefix {
                         let aliased = format!("{}::{}", rp, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
+                            self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
+                        }
+                    }
+                    // Try resolving the full qualified name through use_aliases
+                    // (handles pub use re-exports like middle::msg -> inner::msg)
+                    if let Some(aliased_target) = self.use_aliases.get(&qualified) {
+                        if let Some(&target) = self.functions.get(aliased_target) {
                             self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
