@@ -340,8 +340,6 @@ impl Value {
     /// Returns the type name of this value for error messages.
     pub fn type_name(&self) -> String {
         match self {
-            Value::I64(_) => "i64".into(),
-            Value::F64(_) => "f64".into(),
             Value::I8(_) => "i8".into(),
             Value::I16(_) => "i16".into(),
             Value::I32(_) => "i32".into(),
@@ -470,8 +468,7 @@ impl Value {
         match self {
             Value::Unit => 0,
             Value::Bool(_) => 1,
-            Value::I64(_)
-            | Value::I8(_)
+            Value::I8(_)
             | Value::I16(_)
             | Value::I32(_)
             | Value::I64(_)
@@ -479,7 +476,7 @@ impl Value {
             | Value::U16(_)
             | Value::U32(_)
             | Value::U64(_) => 2,
-            Value::F64(_) | Value::F32(_) | Value::F64(_) => 3,
+            Value::F32(_) | Value::F64(_) => 3,
             Value::Char(_) => 4,
             Value::String(_) => 5,
             Value::Range(_, _) => 6,
@@ -503,7 +500,6 @@ impl Value {
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Bool(b) => *b,
-            Value::I64(n) => *n != 0,
             Value::I8(n) => *n != 0,
             Value::I16(n) => *n != 0,
             Value::I32(n) => *n != 0,
@@ -543,8 +539,6 @@ fn float_display(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::I64(n) => write!(f, "{n}"),
-            Value::F64(n) => float_display(*n, f),
             Value::I8(n) => write!(f, "{n}"),
             Value::I16(n) => write!(f, "{n}"),
             Value::I32(n) => write!(f, "{n}"),
@@ -917,11 +911,6 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            Value::I64(n) => n.hash(state),
-            Value::F64(f) => {
-                let bits = if *f == 0.0 { 0u64 } else { f64::to_bits(*f) };
-                bits.hash(state);
-            }
             Value::I8(n) => n.hash(state),
             Value::I16(n) => n.hash(state),
             Value::I32(n) => n.hash(state),

@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree definitions for the Oxy language.
 
-use crate::lexer::{FloatSuffix, IntegerSuffix, Span};
+use crate::lexer::Span;
 
 /// Item visibility.
 #[derive(Debug, Clone, PartialEq)]
@@ -1440,6 +1440,7 @@ impl Expr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lexer::IntegerSuffix;
 
     #[test]
     fn test_binop_display() {

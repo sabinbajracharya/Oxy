@@ -1,6 +1,5 @@
 //! BinaryHeap method implementations — shared by interpreter and VM.
 use crate::types::Value;
-use std::collections::BinaryHeap;
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
     let Value::BinaryHeap(rc) = &receiver else {

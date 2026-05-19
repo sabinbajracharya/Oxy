@@ -1169,7 +1169,7 @@ impl Compiler {
                 expr,
                 body,
                 label,
-                span,
+                span: _,
             } => {
                 let loop_start = self.code.len();
                 // Evaluate expression, store in temp
@@ -1228,7 +1228,6 @@ impl Compiler {
                 // For other patterns, not yet supported natively
                 self.compile_letpattern_unsupported(pattern, value, *span, *mutable)
             }
-            _ => Ok(()),
         }
     }
 
@@ -1370,7 +1369,7 @@ impl Compiler {
                 left,
                 op,
                 right,
-                span,
+                span: _,
             } => {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
@@ -1393,13 +1392,6 @@ impl Compiler {
                     BinOp::BitXor => OpCode::BitXor,
                     BinOp::Shl => OpCode::Shl,
                     BinOp::Shr => OpCode::Shr,
-                    _ => {
-                        return Err(FerriError::Runtime {
-                            message: format!("unsupported binary op in compiler: {:?}", op),
-                            line: span.line,
-                            column: span.column,
-                        })
-                    }
                 };
                 self.emit(opcode);
                 Ok(())
@@ -2502,6 +2494,12 @@ fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
 fn is_builtin_path(path: &[String]) -> bool {
     let segs: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
     let module = segs.first().copied().unwrap_or("");
+    // Handle std::module::function paths (3+ segments starting with "std")
+    let effective_module = if segs.len() >= 3 && module == "std" {
+        segs.get(1).copied().unwrap_or("")
+    } else {
+        module
+    };
     matches!(
         segs.as_slice(),
         // math
@@ -2544,7 +2542,7 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["int", "parse"]
             | ["float", "parse"]
     ) || matches!(
-        module,
+        effective_module,
         "fs" | "env" | "process" | "regex" | "net" | "time" | "rand" | "http"
     ) || segs.as_slice() == ["std", "env", "args"]
 }

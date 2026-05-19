@@ -1,7 +1,6 @@
 //! VecDeque method implementations — shared by interpreter and VM.
 use crate::types::Value;
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::rc::Rc;
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {

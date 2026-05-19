@@ -246,8 +246,10 @@ struct Frame {
     /// Maximum slot index accessed + 1 (protects locals from Pop).
     max_slot: usize,
     /// Function entry IP (for looking up local variable names).
+    #[allow(dead_code)]
     fn_ip: usize,
     /// If this is a method call on a local, write self back to this slot on return.
+    #[allow(dead_code)]
     write_back_slot: Option<usize>,
 }
 
@@ -827,7 +829,7 @@ impl Vm {
                         span: blank_span,
                     };
                     // Build closure environment with captured outer variables
-                    let mut closure_env = crate::env::Environment::new();
+                    let closure_env = crate::env::Environment::new();
                     if !captured_vars.is_empty() {
                         let base = self.frame_base();
                         for (name, slot, is_mut) in &captured_vars {
@@ -1826,7 +1828,7 @@ impl Vm {
                         }],
                         span: blank_span,
                     };
-                    let mut closure_env = crate::env::Environment::new();
+                    let closure_env = crate::env::Environment::new();
                     for (name, slot, is_mut) in &captured_vars {
                         let idx = self.frame_base() + slot;
                         let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
@@ -1988,7 +1990,7 @@ impl Vm {
 
     fn dispatch_pathcall(&self, segments: &[String], args: &[Value]) -> Result<Value, String> {
         let segs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
-        let to_f64 = |v: &Value| match v {
+        let _to_f64 = |v: &Value| match v {
             Value::I64(n) => *n as f64,
             Value::F64(x) => *x,
             _ => 0.0,
@@ -2164,6 +2166,17 @@ impl Vm {
                     Vec::new(),
                 ))))
             }
+            // std::module::function routes (e.g. std::env::var, std::fs::read_to_string)
+            ["std", module, func] => match *module {
+                "fs" => call_stdlib(crate::stdlib::fs::call, func, args),
+                "env" => call_stdlib(crate::stdlib::env::call, func, args),
+                "process" => call_stdlib(crate::stdlib::process::call, func, args),
+                "regex" => call_stdlib(crate::stdlib::regex::call, func, args),
+                "net" => call_stdlib(crate::stdlib::net::call, func, args),
+                "time" => call_stdlib(crate::stdlib::time::call, func, args),
+                "rand" => call_stdlib(crate::stdlib::rand::call, func, args),
+                _ => Err(format!("unknown std module: std::{}", module)),
+            },
             _ => Err(format!("unknown built-in path: {}", segments.join("::"))),
         }
     }
@@ -2247,19 +2260,19 @@ fn http_call(method: &str, args: &[Value], body: Option<String>) -> Result<Value
 
 /// Map a binary op function to the corresponding method name for trait dispatch.
 fn method_name_from_op(f: fn(Value, Value) -> Result<Value, String>) -> &'static str {
-    if f as usize == vm_add as usize {
+    if f as usize == vm_add as *const () as usize {
         return "add";
     }
-    if f as usize == vm_sub as usize {
+    if f as usize == vm_sub as *const () as usize {
         return "sub";
     }
-    if f as usize == vm_mul as usize {
+    if f as usize == vm_mul as *const () as usize {
         return "mul";
     }
-    if f as usize == vm_div as usize {
+    if f as usize == vm_div as *const () as usize {
         return "div";
     }
-    if f as usize == vm_rem as usize {
+    if f as usize == vm_rem as *const () as usize {
         return "rem";
     }
     "add"
@@ -2464,23 +2477,6 @@ fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
         Ok(wrap_to(a.as_i64().wrapping_shr(shift), &a))
     } else {
         Err(format!("shift right requires integers"))
-    }
-}
-
-fn gcd(mut a: i64, mut b: i64) -> i64 {
-    while b != 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a.abs()
-}
-
-fn lcm(a: i64, b: i64) -> i64 {
-    if a == 0 || b == 0 {
-        0
-    } else {
-        (a / gcd(a, b)).abs() * b.abs()
     }
 }
 
