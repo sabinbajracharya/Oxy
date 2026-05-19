@@ -63,6 +63,28 @@ where
                 {
                     Ok(data.first().cloned().unwrap_or(Value::Unit))
                 }
+                Value::EnumVariant { data, .. } if is_option => call_closure(closure, &[]),
+                Value::EnumVariant { data, .. } if is_result => {
+                    let err_val = data.first().cloned().unwrap_or(Value::Unit);
+                    call_closure(closure, &[err_val])
+                }
+                _ => Err(format!("no method '{}' on this type", method)),
+            }
+        }
+        "or" if is_option => match &receiver {
+            Value::EnumVariant { variant, .. } if variant == "Some" => Ok(receiver.clone()),
+            _ => Ok(args.first().cloned().unwrap_or(Value::none())),
+        },
+        "or_else" => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, .. } if variant == "Some" || variant == "Ok" => {
+                    Ok(receiver.clone())
+                }
+                Value::EnumVariant { data, .. } if is_result => {
+                    let err_val = data.first().cloned().unwrap_or(Value::Unit);
+                    call_closure(closure, &[err_val])
+                }
                 _ => call_closure(closure, &[]),
             }
         }

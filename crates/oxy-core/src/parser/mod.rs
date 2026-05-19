@@ -1888,7 +1888,11 @@ impl Parser {
         if !self.check(&TokenKind::Pipe) {
             loop {
                 let pspan = self.current_span();
-                let name = self.expect_ident()?;
+                let name = if self.match_token(&TokenKind::Underscore) {
+                    "_".to_string()
+                } else {
+                    self.expect_ident()?
+                };
                 let type_ann = if self.match_token(&TokenKind::Colon) {
                     Some(self.parse_type_annotation()?)
                 } else {
