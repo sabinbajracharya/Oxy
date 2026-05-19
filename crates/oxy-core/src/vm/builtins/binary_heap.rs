@@ -1,9 +1,11 @@
 //! BinaryHeap method implementations — shared by interpreter and VM.
-use std::collections::BinaryHeap;
 use crate::types::Value;
+use std::collections::BinaryHeap;
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
-    let Value::BinaryHeap(rc) = &receiver else { unreachable!() };
+    let Value::BinaryHeap(rc) = &receiver else {
+        unreachable!()
+    };
     let h = rc.borrow();
     match method {
         "len" => Ok(Value::I64(h.len() as i64)),
@@ -14,7 +16,8 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         },
         "push" => {
             drop(h);
-            rc.borrow_mut().push(args.first().cloned().unwrap_or(Value::Unit));
+            rc.borrow_mut()
+                .push(args.first().cloned().unwrap_or(Value::Unit));
             Ok(Value::Unit)
         }
         "pop" => {

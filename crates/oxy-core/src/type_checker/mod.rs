@@ -14,9 +14,16 @@ use crate::lexer::{FloatSuffix, IntegerSuffix};
 /// Internal representation of an Oxy type.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeInfo {
-    I8, I16, I32, I64,
-    U8, U16, U32, U64,
-    F32, F64,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
     Bool,
     String,
     Char,
@@ -32,11 +39,16 @@ pub enum TypeInfo {
 impl TypeInfo {
     pub fn name(&self) -> &str {
         match self {
-            TypeInfo::I8 => "i8", TypeInfo::I16 => "i16",
-            TypeInfo::I32 => "i32", TypeInfo::I64 => "i64",
-            TypeInfo::U8 => "u8", TypeInfo::U16 => "u16",
-            TypeInfo::U32 => "u32", TypeInfo::U64 => "u64",
-            TypeInfo::F32 => "f32", TypeInfo::F64 => "f64",
+            TypeInfo::I8 => "i8",
+            TypeInfo::I16 => "i16",
+            TypeInfo::I32 => "i32",
+            TypeInfo::I64 => "i64",
+            TypeInfo::U8 => "u8",
+            TypeInfo::U16 => "u16",
+            TypeInfo::U32 => "u32",
+            TypeInfo::U64 => "u64",
+            TypeInfo::F32 => "f32",
+            TypeInfo::F64 => "f64",
             TypeInfo::Bool => "bool",
             TypeInfo::String => "String",
             TypeInfo::Char => "char",
@@ -60,11 +72,16 @@ impl TypeInfo {
 
     pub fn from_name(name: &str) -> TypeInfo {
         match name {
-            "i8" => TypeInfo::I8, "i16" => TypeInfo::I16,
-            "i32" => TypeInfo::I32, "i64" | "isize" => TypeInfo::I64,
-            "u8" => TypeInfo::U8, "u16" => TypeInfo::U16,
-            "u32" => TypeInfo::U32, "u64" | "usize" => TypeInfo::U64,
-            "f32" => TypeInfo::F32, "f64" => TypeInfo::F64,
+            "i8" => TypeInfo::I8,
+            "i16" => TypeInfo::I16,
+            "i32" => TypeInfo::I32,
+            "i64" | "isize" => TypeInfo::I64,
+            "u8" => TypeInfo::U8,
+            "u16" => TypeInfo::U16,
+            "u32" => TypeInfo::U32,
+            "u64" | "usize" => TypeInfo::U64,
+            "f32" => TypeInfo::F32,
+            "f64" => TypeInfo::F64,
             "bool" => TypeInfo::Bool,
             "String" | "str" => TypeInfo::String,
             "char" => TypeInfo::Char,
@@ -88,7 +105,8 @@ impl TypeInfo {
             return true;
         }
         // Integer promotion: narrower → wider (same sign)
-        matches!((self, other),
+        matches!(
+            (self, other),
             (TypeInfo::I16, TypeInfo::I8) | (TypeInfo::I32, TypeInfo::I8) | (TypeInfo::I64, TypeInfo::I8)
             | (TypeInfo::I32, TypeInfo::I16) | (TypeInfo::I64, TypeInfo::I16)
             | (TypeInfo::I64, TypeInfo::I32)
@@ -482,10 +500,14 @@ impl TypeChecker {
     fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, FerriError> {
         match expr {
             Expr::IntLiteral(_, suffix, _) => Ok(match suffix {
-                IntegerSuffix::I8 => TypeInfo::I8, IntegerSuffix::I16 => TypeInfo::I16,
-                IntegerSuffix::I32 => TypeInfo::I32, IntegerSuffix::I64 => TypeInfo::I64,
-                IntegerSuffix::U8 => TypeInfo::U8, IntegerSuffix::U16 => TypeInfo::U16,
-                IntegerSuffix::U32 => TypeInfo::U32, IntegerSuffix::U64 => TypeInfo::U64,
+                IntegerSuffix::I8 => TypeInfo::I8,
+                IntegerSuffix::I16 => TypeInfo::I16,
+                IntegerSuffix::I32 => TypeInfo::I32,
+                IntegerSuffix::I64 => TypeInfo::I64,
+                IntegerSuffix::U8 => TypeInfo::U8,
+                IntegerSuffix::U16 => TypeInfo::U16,
+                IntegerSuffix::U32 => TypeInfo::U32,
+                IntegerSuffix::U64 => TypeInfo::U64,
                 IntegerSuffix::None => TypeInfo::I64,
             }),
             Expr::FloatLiteral(_, suffix, _) => Ok(match suffix {
@@ -511,7 +533,9 @@ impl TypeChecker {
                 let lt = self.infer_expr(left)?;
                 let rt = self.infer_expr(right)?;
                 // Numeric ops: float wins, otherwise promote to wider integer
-                if matches!(lt, TypeInfo::F32 | TypeInfo::F64) || matches!(rt, TypeInfo::F32 | TypeInfo::F64) {
+                if matches!(lt, TypeInfo::F32 | TypeInfo::F64)
+                    || matches!(rt, TypeInfo::F32 | TypeInfo::F64)
+                {
                     Ok(TypeInfo::F64)
                 } else {
                     Ok(TypeInfo::I64)

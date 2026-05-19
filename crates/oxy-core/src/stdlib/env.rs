@@ -25,7 +25,9 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let map: std::collections::HashMap<Value, Value> = std::env::vars()
                 .map(|(k, v)| (Value::String(k), Value::String(v)))
                 .collect();
-            Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(map))))
+            Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(
+                map,
+            ))))
         }
         "current_dir" => {
             check_arg_count("std::env::current_dir", 0, args, span)?;

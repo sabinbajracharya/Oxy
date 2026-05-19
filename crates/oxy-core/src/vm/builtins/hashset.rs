@@ -70,9 +70,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 Err("HashSet::difference requires a HashSet argument".into())
             }
         }
-        "clone" => Ok(Value::HashSet(Rc::new(RefCell::new(
-            rc.borrow().clone(),
-        )))),
+        "clone" => Ok(Value::HashSet(Rc::new(RefCell::new(rc.borrow().clone())))),
         _ => Err(format!("no method '{}' on type HashSet", method)),
     }
 }

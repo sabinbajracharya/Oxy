@@ -294,7 +294,10 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("query".to_string(), Value::HashMap(Rc::new(RefCell::new(query_map))));
+    fields.insert(
+        "query".to_string(),
+        Value::HashMap(Rc::new(RefCell::new(query_map))),
+    );
 
     // Headers as HashMap
     let header_map: HashMap<Value, Value> = req
@@ -302,7 +305,10 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("headers".to_string(), Value::HashMap(Rc::new(RefCell::new(header_map))));
+    fields.insert(
+        "headers".to_string(),
+        Value::HashMap(Rc::new(RefCell::new(header_map))),
+    );
 
     // Params as HashMap
     let param_map: HashMap<Value, Value> = req
@@ -310,7 +316,10 @@ pub fn request_to_value(req: &HttpRequest) -> Value {
         .iter()
         .map(|(k, v)| (Value::String(k.clone()), Value::String(v.clone())))
         .collect();
-    fields.insert("params".to_string(), Value::HashMap(Rc::new(RefCell::new(param_map))));
+    fields.insert(
+        "params".to_string(),
+        Value::HashMap(Rc::new(RefCell::new(param_map))),
+    );
 
     Value::Struct {
         name: "Request".to_string(),

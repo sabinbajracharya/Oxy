@@ -698,7 +698,9 @@ impl<'src> Lexer<'src> {
         // Type suffix (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64)
         let mut suffix_str = String::new();
         if !self.is_at_end() && (self.peek() == 'i' || self.peek() == 'u' || self.peek() == 'f') {
-            if self.peek() == 'f' { is_float = true; }
+            if self.peek() == 'f' {
+                is_float = true;
+            }
             suffix_str.push(self.advance()); // consume letter
             while !self.is_at_end() && self.peek().is_ascii_digit() {
                 suffix_str.push(self.advance());
@@ -719,10 +721,14 @@ impl<'src> Lexer<'src> {
             Ok(TokenKind::FloatLiteral(val, fsuffix))
         } else {
             let isuffix = match suffix_str.as_str() {
-                "i8" => IntegerSuffix::I8, "i16" => IntegerSuffix::I16,
-                "i32" => IntegerSuffix::I32, "i64" => IntegerSuffix::I64,
-                "u8" => IntegerSuffix::U8, "u16" => IntegerSuffix::U16,
-                "u32" => IntegerSuffix::U32, "u64" => IntegerSuffix::U64,
+                "i8" => IntegerSuffix::I8,
+                "i16" => IntegerSuffix::I16,
+                "i32" => IntegerSuffix::I32,
+                "i64" => IntegerSuffix::I64,
+                "u8" => IntegerSuffix::U8,
+                "u16" => IntegerSuffix::U16,
+                "u32" => IntegerSuffix::U32,
+                "u64" => IntegerSuffix::U64,
                 _ => IntegerSuffix::None,
             };
             let val: i64 = num_str.parse().map_err(|_| FerriError::Lexer {
@@ -1300,7 +1306,10 @@ fn main() {
         assert_eq!(token_kinds[7], &TokenKind::Colon);
         assert_eq!(token_kinds[8], &TokenKind::Ident("i64".into()));
         assert_eq!(token_kinds[9], &TokenKind::Eq);
-        assert_eq!(token_kinds[10], &TokenKind::IntLiteral(42, IntegerSuffix::None));
+        assert_eq!(
+            token_kinds[10],
+            &TokenKind::IntLiteral(42, IntegerSuffix::None)
+        );
         assert_eq!(token_kinds[11], &TokenKind::Semicolon);
         // println is an identifier, ! is Bang
         assert_eq!(token_kinds[12], &TokenKind::Ident("println".into()));
@@ -1370,7 +1379,11 @@ fn main() {
         // `-42` should be Minus + IntLiteral (parser handles unary minus)
         assert_eq!(
             kinds("-42"),
-            vec![TokenKind::Minus, TokenKind::IntLiteral(42, IntegerSuffix::None), TokenKind::Eof,]
+            vec![
+                TokenKind::Minus,
+                TokenKind::IntLiteral(42, IntegerSuffix::None),
+                TokenKind::Eof,
+            ]
         );
     }
 

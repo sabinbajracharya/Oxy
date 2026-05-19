@@ -301,9 +301,7 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
             }
             drive_next(source)
         }
-        IteratorState::Chain { first, second } => {
-            drive_next(first).or_else(|| drive_next(second))
-        }
+        IteratorState::Chain { first, second } => drive_next(first).or_else(|| drive_next(second)),
         IteratorState::Zip { left, right } => {
             let l = drive_next(left)?;
             let r = drive_next(right)?;

@@ -59,9 +59,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             values.sort();
             Ok(Value::Vec(Rc::new(RefCell::new(values))))
         }
-        "clone" => Ok(Value::HashMap(Rc::new(RefCell::new(
-            rc.borrow().clone(),
-        )))),
+        "clone" => Ok(Value::HashMap(Rc::new(RefCell::new(rc.borrow().clone())))),
         _ => Err(format!("no method '{}' on type HashMap", method)),
     }
 }

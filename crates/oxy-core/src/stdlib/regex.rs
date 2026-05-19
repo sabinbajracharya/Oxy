@@ -33,7 +33,9 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
             let text = expect_string(&args[1], "std::regex::find_all(text)", span)?;
             let re = compile_regex(pattern, span)?;
             let matches: Vec<Value> = re.find_iter(text).map(match_to_value).collect();
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(matches))))
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                matches,
+            ))))
         }
         "captures" => {
             check_arg_count("std::regex::captures", 2, args, span)?;
@@ -62,7 +64,9 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                             );
                         }
                     }
-                    Ok(Value::some(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(map)))))
+                    Ok(Value::some(Value::HashMap(std::rc::Rc::new(
+                        std::cell::RefCell::new(map),
+                    ))))
                 }
                 None => Ok(Value::none()),
             }

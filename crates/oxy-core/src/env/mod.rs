@@ -114,8 +114,7 @@ mod tests {
     #[test]
     fn test_define_and_get() {
         let env = Environment::new();
-        env.borrow_mut()
-            .define("x".into(), Value::I64(42), false);
+        env.borrow_mut().define("x".into(), Value::I64(42), false);
         assert_eq!(env.borrow().get("x").unwrap(), Value::I64(42));
     }
 
@@ -128,14 +127,10 @@ mod tests {
     #[test]
     fn test_child_scope_lookup() {
         let parent = Environment::new();
-        parent
-            .borrow_mut()
-            .define("x".into(), Value::I64(1), false);
+        parent.borrow_mut().define("x".into(), Value::I64(1), false);
 
         let child = Environment::child(&parent);
-        child
-            .borrow_mut()
-            .define("y".into(), Value::I64(2), false);
+        child.borrow_mut().define("y".into(), Value::I64(2), false);
 
         // Child can see parent's variables
         assert_eq!(child.borrow().get("x").unwrap(), Value::I64(1));
@@ -156,8 +151,7 @@ mod tests {
     #[test]
     fn test_set_immutable_fails() {
         let env = Environment::new();
-        env.borrow_mut()
-            .define("x".into(), Value::I64(1), false);
+        env.borrow_mut().define("x".into(), Value::I64(1), false);
         let result = env.borrow_mut().set("x", Value::I64(2));
         assert!(result.is_err());
         assert!(result
@@ -169,9 +163,7 @@ mod tests {
     #[test]
     fn test_set_in_parent_scope() {
         let parent = Environment::new();
-        parent
-            .borrow_mut()
-            .define("x".into(), Value::I64(1), true);
+        parent.borrow_mut().define("x".into(), Value::I64(1), true);
 
         let child = Environment::child(&parent);
         child.borrow_mut().set("x", Value::I64(99)).unwrap();
@@ -182,9 +174,7 @@ mod tests {
     #[test]
     fn test_shadowing() {
         let parent = Environment::new();
-        parent
-            .borrow_mut()
-            .define("x".into(), Value::I64(1), false);
+        parent.borrow_mut().define("x".into(), Value::I64(1), false);
 
         let child = Environment::child(&parent);
         child

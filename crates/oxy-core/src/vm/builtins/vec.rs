@@ -171,7 +171,9 @@ where
             if v.is_empty() {
                 Ok(Value::none())
             } else {
-                let min = v.iter().min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let min = v
+                    .iter()
+                    .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 Ok(Value::some(min.cloned().unwrap_or(Value::Unit)))
             }
         }
@@ -180,7 +182,9 @@ where
             if v.is_empty() {
                 Ok(Value::none())
             } else {
-                let max = v.iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let max = v
+                    .iter()
+                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 Ok(Value::some(max.cloned().unwrap_or(Value::Unit)))
             }
         }

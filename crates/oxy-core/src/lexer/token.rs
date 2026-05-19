@@ -47,11 +47,25 @@ impl Token {
 
 /// Integer type suffix for width-annotated literals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IntegerSuffix { I8, I16, I32, I64, U8, U16, U32, U64, None }
+pub enum IntegerSuffix {
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    None,
+}
 
 /// Float type suffix for width-annotated literals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FloatSuffix { F32, F64, None }
+pub enum FloatSuffix {
+    F32,
+    F64,
+    None,
+}
 
 /// All possible token kinds in the Oxy language.
 #[derive(Debug, Clone, PartialEq)]
@@ -419,7 +433,10 @@ mod tests {
 
     #[test]
     fn test_token_kind_display() {
-        assert_eq!(format!("{}", TokenKind::IntLiteral(42, IntegerSuffix::None)), "42");
+        assert_eq!(
+            format!("{}", TokenKind::IntLiteral(42, IntegerSuffix::None)),
+            "42"
+        );
         assert_eq!(
             format!("{}", TokenKind::StringLiteral("hi".into())),
             "\"hi\""

@@ -35,15 +35,11 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 .split(&pat)
                 .map(|p| Value::String(p.to_string()))
                 .collect();
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                parts,
-            ))))
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
         }
         "chars" => {
             let chars: Vec<Value> = s.chars().map(Value::Char).collect();
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                chars,
-            ))))
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(chars))))
         }
         "repeat" => {
             let n = args

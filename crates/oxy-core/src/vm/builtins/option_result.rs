@@ -11,28 +11,20 @@ pub fn dispatch<F>(
 where
     F: FnMut(Value, &[Value]) -> Result<Value, String>,
 {
-    let is_option = matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Option");
-    let is_result = matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Result");
+    let is_option =
+        matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Option");
+    let is_result =
+        matches!(&receiver, Value::EnumVariant { enum_name, .. } if enum_name == "Result");
     let is_ok = receiver.is_ok_variant();
     let is_some = receiver.is_some_variant();
 
     match method {
-        "is_some" if is_option => {
-            Ok(Value::Bool(is_some))
-        }
-        "is_none" if is_option => {
-            Ok(Value::Bool(!is_some))
-        }
-        "is_ok" if is_result => {
-            Ok(Value::Bool(is_ok))
-        }
-        "is_err" if is_result => {
-            Ok(Value::Bool(!is_ok))
-        }
+        "is_some" if is_option => Ok(Value::Bool(is_some)),
+        "is_none" if is_option => Ok(Value::Bool(!is_some)),
+        "is_ok" if is_result => Ok(Value::Bool(is_ok)),
+        "is_err" if is_result => Ok(Value::Bool(!is_ok)),
         "unwrap" => match &receiver {
-            Value::EnumVariant { variant, data, .. }
-                if variant == "Some" || variant == "Ok" =>
-            {
+            Value::EnumVariant { variant, data, .. } if variant == "Some" || variant == "Ok" => {
                 Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
             Value::EnumVariant { variant, .. } if variant == "None" => {
@@ -58,9 +50,7 @@ where
             }
         }
         "unwrap_or" => match &receiver {
-            Value::EnumVariant { variant, data, .. }
-                if variant == "Some" || variant == "Ok" =>
-            {
+            Value::EnumVariant { variant, data, .. } if variant == "Some" || variant == "Ok" => {
                 Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
             _ => Ok(args.first().cloned().unwrap_or(Value::Unit)),
@@ -102,9 +92,7 @@ where
         "map_err" => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
-                Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
-                    Ok(receiver.clone())
-                }
+                Value::EnumVariant { variant, data, .. } if variant == "Ok" => Ok(receiver.clone()),
                 Value::EnumVariant { variant, data, .. } if variant == "Err" => {
                     let inner = data.first().cloned().unwrap_or(Value::Unit);
                     let result = call_closure(closure, &[inner])?;
@@ -125,13 +113,11 @@ where
                 _ => Ok(receiver.clone()),
             }
         }
-        "unwrap_err" if is_result => {
-            match &receiver {
-                Value::EnumVariant { variant, data, .. } if variant == "Err" => {
-                    Ok(data.first().cloned().unwrap_or(Value::Unit))
-                }
-                _ => Err("called `unwrap_err` on an `Ok` value".into()),
+        "unwrap_err" if is_result => match &receiver {
+            Value::EnumVariant { variant, data, .. } if variant == "Err" => {
+                Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
+            _ => Err("called `unwrap_err` on an `Ok` value".into()),
         },
         "ok" if is_result => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Ok" => {

@@ -7,8 +7,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
-use crate::lexer::{FloatSuffix, IntegerSuffix};
 use crate::errors::FerriError;
+use crate::lexer::{FloatSuffix, IntegerSuffix};
 use crate::types::{FloatWidth, IntegerWidth};
 use crate::vm::{Chunk, OpCode};
 
@@ -112,7 +112,14 @@ pub struct Compiler {
     /// Const/static values: name → value (inlined at reference sites).
     const_values: HashMap<String, crate::types::Value>,
     /// Function metadata for named function references: name → (params, body, return_type).
-    fn_meta: HashMap<String, (Vec<crate::ast::Param>, Box<crate::ast::Expr>, Option<crate::ast::TypeAnnotation>)>,
+    fn_meta: HashMap<
+        String,
+        (
+            Vec<crate::ast::Param>,
+            Box<crate::ast::Expr>,
+            Option<crate::ast::TypeAnnotation>,
+        ),
+    >,
     /// Per-function local variable names: function entry IP → slot_names.
     fn_local_names: HashMap<usize, Vec<String>>,
     /// Mutable variables captured by closures (for targeted Cell wrapping).
@@ -256,7 +263,10 @@ impl Compiler {
             Item::Struct(s) => {
                 self.struct_defs.insert(s.name.clone(), s.clone());
                 // Handle #[derive(Default)] by generating a default() constructor
-                if s.attributes.iter().any(|a| a.name == "derive" && a.args.iter().any(|arg| arg == "Default")) {
+                if s.attributes
+                    .iter()
+                    .any(|a| a.name == "derive" && a.args.iter().any(|arg| arg == "Default"))
+                {
                     self.compile_derive_default(s)?;
                 }
                 Ok(())
@@ -302,7 +312,8 @@ impl Compiler {
             }
             Item::Trait(t) => {
                 // Store trait default methods for inheritance in impl blocks
-                self.trait_defs.insert(t.name.clone(), t.default_methods.clone());
+                self.trait_defs
+                    .insert(t.name.clone(), t.default_methods.clone());
                 Ok(())
             }
             Item::Module(m) => {
@@ -317,9 +328,7 @@ impl Compiler {
                 self.type_aliases.insert(name.clone(), target.name.clone());
                 Ok(())
             }
-            Item::Const {
-                name, value, ..
-            } => {
+            Item::Const { name, value, .. } => {
                 // Evaluate at compile time and store for inlining
                 if let Some(val) = try_eval_const(&value) {
                     self.const_values.insert(name.clone(), val);
@@ -343,18 +352,10 @@ impl Compiler {
                 "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "usize" => {
                     Expr::IntLiteral(0, IntegerSuffix::None, default_span)
                 }
-                "f64" | "f32" | "Float" => {
-                    Expr::FloatLiteral(0.0, FloatSuffix::None, default_span)
-                }
-                "String" | "str" => {
-                    Expr::StringLiteral(String::new(), default_span)
-                }
-                "bool" => {
-                    Expr::BoolLiteral(false, default_span)
-                }
-                "char" => {
-                    Expr::CharLiteral('\0', default_span)
-                }
+                "f64" | "f32" | "Float" => Expr::FloatLiteral(0.0, FloatSuffix::None, default_span),
+                "String" | "str" => Expr::StringLiteral(String::new(), default_span),
+                "bool" => Expr::BoolLiteral(false, default_span),
+                "char" => Expr::CharLiteral('\0', default_span),
                 _ => {
                     // For unknown types, use a zero-ish default
                     Expr::IntLiteral(0, IntegerSuffix::None, default_span)
@@ -409,10 +410,19 @@ impl Compiler {
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
         }
         // Store metadata for function-reference-as-value support
-        let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
-            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-            _ => None,
-        }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, f.body.span));
+        let body_expr = f
+            .body
+            .stmts
+            .last()
+            .and_then(|stmt| match stmt {
+                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                _ => None,
+            })
+            .unwrap_or(crate::ast::Expr::IntLiteral(
+                0,
+                IntegerSuffix::None,
+                f.body.span,
+            ));
         let meta = (f.params.clone(), Box::new(body_expr), f.return_type.clone());
         self.fn_meta.insert(f.name.clone(), meta.clone());
         if let Some(tn) = type_name {
@@ -432,7 +442,13 @@ impl Compiler {
         // For methods with self parameter and no explicit tail expression,
         // implicitly return self so mutations propagate to caller.
         let has_tail_expr = f.body.stmts.last().map_or(false, |s| {
-            matches!(s, crate::ast::Stmt::Expr { has_semicolon: false, .. })
+            matches!(
+                s,
+                crate::ast::Stmt::Expr {
+                    has_semicolon: false,
+                    ..
+                }
+            )
         });
         if !has_tail_expr && f.params.first().map(|p| p.name.as_str()) == Some("self") {
             self.emit(OpCode::LoadLocal(0));
@@ -482,7 +498,8 @@ impl Compiler {
                 for (qualified_name, _ip) in &self.functions.clone() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
                         if !stripped.contains("::") {
-                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
@@ -490,14 +507,16 @@ impl Compiler {
                 for (qualified_name, _) in &self.struct_defs.clone() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
                         if !stripped.contains("::") {
-                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
                 for (qualified_name, _) in &self.enum_defs.clone() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
                         if !stripped.contains("::") {
-                            self.use_aliases.insert(stripped.to_string(), qualified_name.clone());
+                            self.use_aliases
+                                .insert(stripped.to_string(), qualified_name.clone());
                         }
                     }
                 }
@@ -515,11 +534,23 @@ impl Compiler {
                     let ip = self.code.len();
                     self.functions.insert(qualified.clone(), ip);
                     // Store metadata for function-reference-as-value
-                    let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
-                        crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                        _ => None,
-                    }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, f.body.span));
-                    self.fn_meta.insert(qualified, (f.params.clone(), Box::new(body_expr), f.return_type.clone()));
+                    let body_expr = f
+                        .body
+                        .stmts
+                        .last()
+                        .and_then(|stmt| match stmt {
+                            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or(crate::ast::Expr::IntLiteral(
+                            0,
+                            IntegerSuffix::None,
+                            f.body.span,
+                        ));
+                    self.fn_meta.insert(
+                        qualified,
+                        (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
+                    );
                     let saved_sym = self.sym.clone();
                     for param in &f.params {
                         self.sym.define(&param.name);
@@ -549,11 +580,27 @@ impl Compiler {
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
                         // Store fn_meta for arg count checking
-                        let body_expr = method.body.stmts.last().and_then(|stmt| match stmt {
-                            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                            _ => None,
-                        }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, method.body.span));
-                        self.fn_meta.insert(mname.clone(), (method.params.clone(), Box::new(body_expr), method.return_type.clone()));
+                        let body_expr = method
+                            .body
+                            .stmts
+                            .last()
+                            .and_then(|stmt| match stmt {
+                                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                                _ => None,
+                            })
+                            .unwrap_or(crate::ast::Expr::IntLiteral(
+                                0,
+                                IntegerSuffix::None,
+                                method.body.span,
+                            ));
+                        self.fn_meta.insert(
+                            mname.clone(),
+                            (
+                                method.params.clone(),
+                                Box::new(body_expr),
+                                method.return_type.clone(),
+                            ),
+                        );
                         // Register under both qualified and unqualified type names
                         self.method_ips
                             .insert((qualified_type.clone(), method.name.clone()), ip);
@@ -648,7 +695,10 @@ impl Compiler {
                 ..
             } => {
                 // Resolve enum_name via type aliases and use aliases
-                let resolved_enum = self.type_aliases.get(enum_name).cloned()
+                let resolved_enum = self
+                    .type_aliases
+                    .get(enum_name)
+                    .cloned()
                     .or_else(|| self.use_aliases.get(enum_name).cloned())
                     .unwrap_or_else(|| enum_name.clone());
                 self.emit(OpCode::EnumVariantEqual {
@@ -687,19 +737,19 @@ impl Compiler {
                         // so the stack always has at least 1 element. Storing at
                         // slot 0 overwrites a local but that's OK — it's the first
                         // local which we don't need after the pattern check.
-                        self.emit(OpCode::Dup);               // [s, s_copy]
+                        self.emit(OpCode::Dup); // [s, s_copy]
                         self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
-                        self.emit(OpCode::Ge);                // [s, lower]
-                        self.emit(OpCode::StoreLocal(0));     // store at slot 0 (always exists)
-                        self.emit(OpCode::Dup);               // [s, s]
+                        self.emit(OpCode::Ge); // [s, lower]
+                        self.emit(OpCode::StoreLocal(0)); // store at slot 0 (always exists)
+                        self.emit(OpCode::Dup); // [s, s]
                         self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
                         if *inclusive {
                             self.emit(OpCode::Le);
                         } else {
                             self.emit(OpCode::Lt);
-                        }                                     // [s, upper]
-                        self.emit(OpCode::LoadLocal(0));     // [s, upper, lower]
-                        self.emit(OpCode::And);               // [s, result]
+                        } // [s, upper]
+                        self.emit(OpCode::LoadLocal(0)); // [s, upper, lower]
+                        self.emit(OpCode::And); // [s, result]
                     }
                     (None, None) => {
                         self.emit(OpCode::ConstBool(true));
@@ -1186,10 +1236,14 @@ impl Compiler {
         match expr {
             Expr::IntLiteral(n, suffix, _) => {
                 let width = match suffix {
-                    IntegerSuffix::I8 => IntegerWidth::I8, IntegerSuffix::I16 => IntegerWidth::I16,
-                    IntegerSuffix::I32 => IntegerWidth::I32, IntegerSuffix::I64 => IntegerWidth::I64,
-                    IntegerSuffix::U8 => IntegerWidth::U8, IntegerSuffix::U16 => IntegerWidth::U16,
-                    IntegerSuffix::U32 => IntegerWidth::U32, IntegerSuffix::U64 => IntegerWidth::U64,
+                    IntegerSuffix::I8 => IntegerWidth::I8,
+                    IntegerSuffix::I16 => IntegerWidth::I16,
+                    IntegerSuffix::I32 => IntegerWidth::I32,
+                    IntegerSuffix::I64 => IntegerWidth::I64,
+                    IntegerSuffix::U8 => IntegerWidth::U8,
+                    IntegerSuffix::U16 => IntegerWidth::U16,
+                    IntegerSuffix::U32 => IntegerWidth::U32,
+                    IntegerSuffix::U64 => IntegerWidth::U64,
                     IntegerSuffix::None => IntegerWidth::I64,
                 };
                 self.emit(OpCode::ConstInt(*n, width));
@@ -1258,16 +1312,29 @@ impl Compiler {
                     self.emit(OpCode::LoadLocal(slot));
                     Ok(())
                 } else {
-                    let resolved = self.use_aliases.get(name).cloned().unwrap_or_else(|| name.clone());
+                    let resolved = self
+                        .use_aliases
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| name.clone());
                     if let Some(target) = self.functions.get(&resolved).copied() {
                         // Emit a function reference as a Value::Function pointing to the
                         // existing compiled function body at `target`.
                         let (params, body_expr, _return_type) =
                             self.fn_meta.get(&resolved).cloned().unwrap_or_else(|| {
-                                (vec![], Box::new(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, *span)), None)
+                                (
+                                    vec![],
+                                    Box::new(crate::ast::Expr::IntLiteral(
+                                        0,
+                                        IntegerSuffix::None,
+                                        *span,
+                                    )),
+                                    None,
+                                )
                             });
                         let meta_idx = self.closure_meta.len();
-                        let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                        let param_names: Vec<String> =
+                            params.iter().map(|p| p.name.clone()).collect();
                         self.closure_meta.push((param_names, *body_expr, vec![]));
                         self.emit(OpCode::Closure {
                             target_ip: target,
@@ -1286,9 +1353,7 @@ impl Compiler {
                             .filter(|(d, _)| *d <= 2)
                             .min_by_key(|(d, _)| *d);
                         let msg = if let Some((_, suggestion)) = suggestion {
-                            format!(
-                                "undefined variable '{name}'; did you mean '{suggestion}'?"
-                            )
+                            format!("undefined variable '{name}'; did you mean '{suggestion}'?")
                         } else {
                             format!("undefined variable '{name}'")
                         };
@@ -1361,9 +1426,7 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::Call {
-                callee, args, ..
-            } => {
+            Expr::Call { callee, args, .. } => {
                 // Handle bare enum constructors: Some(val), None, Ok(val), Err(val)
                 if let Expr::Ident(name, _) = callee.as_ref() {
                     let enum_info: Option<(&str, &str)> = match name.as_str() {
@@ -1416,8 +1479,16 @@ impl Compiler {
                 if let Some(target) = direct_target {
                     // Check argument count against function definition
                     if let Expr::Ident(name, _) = callee.as_ref() {
-                        let resolved = self.use_aliases.get(name).cloned().unwrap_or_else(|| name.clone());
-                        if let Some((params, _, _)) = self.fn_meta.get(&resolved).or_else(|| self.fn_meta.get(name)) {
+                        let resolved = self
+                            .use_aliases
+                            .get(name)
+                            .cloned()
+                            .unwrap_or_else(|| name.clone());
+                        if let Some((params, _, _)) = self
+                            .fn_meta
+                            .get(&resolved)
+                            .or_else(|| self.fn_meta.get(name))
+                        {
                             if args.len() != params.len() {
                                 return Err(FerriError::Runtime {
                                     message: format!(
@@ -1451,7 +1522,9 @@ impl Compiler {
                             for arg in args {
                                 self.compile_expr(arg)?;
                             }
-                            self.emit(OpCode::CallClosure { arg_count: args.len() });
+                            self.emit(OpCode::CallClosure {
+                                arg_count: args.len(),
+                            });
                             return Ok(());
                         }
                     }
@@ -1696,9 +1769,14 @@ impl Compiler {
             Expr::StructInit { name, fields, .. } => {
                 // Resolve `Self` to the current impl type name, then type aliases
                 let resolved_name = if name == "Self" {
-                    self.current_impl_type.clone().unwrap_or_else(|| name.clone())
+                    self.current_impl_type
+                        .clone()
+                        .unwrap_or_else(|| name.clone())
                 } else {
-                    self.type_aliases.get(name).cloned().unwrap_or_else(|| name.clone())
+                    self.type_aliases
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| name.clone())
                 };
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
                 for (_, expr) in fields {
@@ -1725,8 +1803,7 @@ impl Compiler {
                         // Only write back for &mut self methods (return_type is None
                         // and first param is "self").
                         self.fn_meta.get(method).map_or(false, |(params, _, ret)| {
-                            ret.is_none()
-                                && params.first().map_or(false, |p| p.name == "self")
+                            ret.is_none() && params.first().map_or(false, |p| p.name == "self")
                         })
                     })
                 } else {
@@ -1752,10 +1829,15 @@ impl Compiler {
                     let enum_name = &segments[0];
                     let variant = &segments[1];
                     // Resolve via type aliases and use aliases
-                    let resolved_enum = self.type_aliases.get(enum_name).cloned()
+                    let resolved_enum = self
+                        .type_aliases
+                        .get(enum_name)
+                        .cloned()
                         .or_else(|| self.use_aliases.get(enum_name).cloned())
                         .unwrap_or_else(|| enum_name.clone());
-                    let enum_key = self.enum_defs.get(enum_name)
+                    let enum_key = self
+                        .enum_defs
+                        .get(enum_name)
                         .or_else(|| self.enum_defs.get(&resolved_enum));
                     if let Some(ed) = enum_key {
                         for v in &ed.variants {
@@ -1772,7 +1854,10 @@ impl Compiler {
                     if enum_name == "math" {
                         match variant.as_str() {
                             "PI" => {
-                                self.emit(OpCode::ConstFloat(std::f64::consts::PI, FloatWidth::F64));
+                                self.emit(OpCode::ConstFloat(
+                                    std::f64::consts::PI,
+                                    FloatWidth::F64,
+                                ));
                                 return Ok(());
                             }
                             "E" => {
@@ -1803,17 +1888,26 @@ impl Compiler {
                     }
                     let qualified = format!("{}::{}", &path[0], &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
-                        self.emit(OpCode::Call { target, arg_count: args.len() });
+                        self.emit(OpCode::Call {
+                            target,
+                            arg_count: args.len(),
+                        });
                         return Ok(());
                     }
                     // Try type alias + use-aliased prefix
                     let prefix = &path[0];
-                    let resolved_prefix = self.type_aliases.get(prefix).cloned()
+                    let resolved_prefix = self
+                        .type_aliases
+                        .get(prefix)
+                        .cloned()
                         .or_else(|| self.use_aliases.get(prefix).cloned());
                     if let Some(rp) = resolved_prefix {
                         let aliased = format!("{}::{}", rp, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
-                            self.emit(OpCode::Call { target, arg_count: args.len() });
+                            self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
                             return Ok(());
                         }
                     }
@@ -1857,8 +1951,7 @@ impl Compiler {
                 // Pre-scan: find which outer variables the closure body references.
                 // Register them in the fresh sym at their outer slot positions so
                 // LoadLocal in the closure body emits the correct frame offset.
-                let param_names: Vec<String> =
-                    params.iter().map(|p| p.name.clone()).collect();
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
                 let captured_names = find_free_vars(body, &param_names);
                 let captured: Vec<(String, usize, bool)> = captured_names
                     .iter()
@@ -1885,11 +1978,8 @@ impl Compiler {
                 // Patch the skip jump to land after the Return
                 self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
                 let meta_idx = self.closure_meta.len();
-                self.closure_meta.push((
-                    param_names,
-                    *body.clone(),
-                    captured,
-                ));
+                self.closure_meta
+                    .push((param_names, *body.clone(), captured));
                 self.emit(OpCode::Closure {
                     target_ip,
                     param_count: params.len(),
@@ -1905,9 +1995,15 @@ impl Compiler {
             } => {
                 // Exhaustiveness check: require wildcard for integer literal matches.
                 // Enum variants, bool, and ident patterns are fine without catch-all.
-                let has_catch_all = arms.iter().any(|a| matches!(a.pattern, Pattern::Wildcard(_) | Pattern::Ident(..)));
-                let has_enum = arms.iter().any(|a| matches!(a.pattern, Pattern::EnumVariant { .. }));
-                let has_int_literal = arms.iter().any(|a| matches!(a.pattern, Pattern::Literal(Expr::IntLiteral(..))));
+                let has_catch_all = arms
+                    .iter()
+                    .any(|a| matches!(a.pattern, Pattern::Wildcard(_) | Pattern::Ident(..)));
+                let has_enum = arms
+                    .iter()
+                    .any(|a| matches!(a.pattern, Pattern::EnumVariant { .. }));
+                let has_int_literal = arms
+                    .iter()
+                    .any(|a| matches!(a.pattern, Pattern::Literal(Expr::IntLiteral(..))));
                 if !has_catch_all && !has_enum && has_int_literal {
                     return Err(FerriError::Runtime {
                         message: "non-exhaustive patterns: missing wildcard `_` arm".into(),
@@ -2032,9 +2128,7 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::Await { .. } => {
-                Err(self.not_yet_supported("await", expr.span()))
-            }
+            Expr::Await { .. } => Err(self.not_yet_supported("await", expr.span())),
 
             Expr::MacroCall { name, args, .. } => {
                 // For println!/print!/format! with simple {} format strings,
@@ -2051,8 +2145,12 @@ impl Compiler {
                     let parts: Vec<&str> = fmt.split("{}").collect();
                     // If there are {:?} placeholders, fall back to Format opcode
                     if fmt.contains("{:?}") {
-                        for arg in args { self.compile_expr(arg)?; }
-                        self.emit(OpCode::Format { arg_count: args.len() });
+                        for arg in args {
+                            self.compile_expr(arg)?;
+                        }
+                        self.emit(OpCode::Format {
+                            arg_count: args.len(),
+                        });
                     } else if parts.len() == args.len() {
                         // Interleave format parts and args: part0, arg1, part1, arg2, part2, ...
                         let mut concat_count = 0usize;
@@ -2070,12 +2168,18 @@ impl Compiler {
                             }
                         }
                         if concat_count > 1 {
-                            self.emit(OpCode::FStringConcat { count: concat_count });
+                            self.emit(OpCode::FStringConcat {
+                                count: concat_count,
+                            });
                         }
                     } else {
                         // Mismatched {} count — fall back to Format
-                        for arg in args { self.compile_expr(arg)?; }
-                        self.emit(OpCode::Format { arg_count: args.len() });
+                        for arg in args {
+                            self.compile_expr(arg)?;
+                        }
+                        self.emit(OpCode::Format {
+                            arg_count: args.len(),
+                        });
                     }
                     if is_println {
                         if name == "println" {
@@ -2094,13 +2198,21 @@ impl Compiler {
                     }
                     // format! with no args just returns the string
                 } else if name == "vec" {
-                    for arg in args { self.compile_expr(arg)?; }
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
                     self.emit(OpCode::MakeArray { count: args.len() });
                 } else if name == "format" {
-                    for arg in args { self.compile_expr(arg)?; }
-                    self.emit(OpCode::Format { arg_count: args.len() });
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    self.emit(OpCode::Format {
+                        arg_count: args.len(),
+                    });
                 } else if name == "panic" {
-                    for arg in args { self.compile_expr(arg)?; }
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
                     self.emit(OpCode::Panic);
                 } else if name == "assert" {
                     // assert!(cond) or assert!(cond, "message")
@@ -2149,7 +2261,9 @@ impl Compiler {
                     self.emit(OpCode::Dup);
                     self.emit(OpCode::PrintLn);
                 } else {
-                    for arg in args { self.compile_expr(arg)?; }
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
                     return Err(self.not_yet_supported("Unknown macro", expr.span()));
                 }
                 Ok(())
@@ -2162,8 +2276,8 @@ impl Compiler {
                 self.compile_expr(inner)?;
                 let target = match type_name.as_str() {
                     "f64" | "f32" | "Float" => 0,   // → float
-                    "i64" | "i32" | "Integer" => 1,  // → int
-                    "char" => 2,                      // → char
+                    "i64" | "i32" | "Integer" => 1, // → int
+                    "char" => 2,                    // → char
                     _ => return Ok(()),
                 };
                 self.emit(OpCode::Cast(target));
@@ -2181,29 +2295,51 @@ fn find_captured_mutable(block: &crate::ast::Block, params: &[String]) -> HashSe
     captured
 }
 
-fn collect_closure_free_vars_in_block(block: &crate::ast::Block, params: &[String], out: &mut HashSet<String>) {
+fn collect_closure_free_vars_in_block(
+    block: &crate::ast::Block,
+    params: &[String],
+    out: &mut HashSet<String>,
+) {
     for stmt in &block.stmts {
         match stmt {
             crate::ast::Stmt::Expr { expr, .. } => collect_closure_free_vars(expr, params, out),
             crate::ast::Stmt::Let { value, .. } => {
-                if let Some(v) = value { collect_closure_free_vars(v, params, out); }
+                if let Some(v) = value {
+                    collect_closure_free_vars(v, params, out);
+                }
             }
-            crate::ast::Stmt::While { condition, body, .. } => {
+            crate::ast::Stmt::While {
+                condition, body, ..
+            } => {
                 collect_closure_free_vars(condition, params, out);
                 collect_closure_free_vars_in_block(body, params, out);
             }
-            crate::ast::Stmt::Loop { body, .. } => collect_closure_free_vars_in_block(body, params, out),
+            crate::ast::Stmt::Loop { body, .. } => {
+                collect_closure_free_vars_in_block(body, params, out)
+            }
             _ => {}
         }
     }
 }
 
-fn collect_closure_free_vars(expr: &crate::ast::Expr, params: &[String], out: &mut HashSet<String>) {
+fn collect_closure_free_vars(
+    expr: &crate::ast::Expr,
+    params: &[String],
+    out: &mut HashSet<String>,
+) {
     match expr {
-        crate::ast::Expr::Closure { params: inner_params, body, .. } => {
+        crate::ast::Expr::Closure {
+            params: inner_params,
+            body,
+            ..
+        } => {
             let mut cp = params.to_vec();
-            for p in inner_params { cp.push(p.name.clone()); }
-            for v in find_free_vars(body, &cp) { out.insert(v); }
+            for p in inner_params {
+                cp.push(p.name.clone());
+            }
+            for v in find_free_vars(body, &cp) {
+                out.insert(v);
+            }
         }
         crate::ast::Expr::BinaryOp { left, right, .. } => {
             collect_closure_free_vars(left, params, out);
@@ -2211,9 +2347,13 @@ fn collect_closure_free_vars(expr: &crate::ast::Expr, params: &[String], out: &m
         }
         crate::ast::Expr::Call { callee, args, .. } => {
             collect_closure_free_vars(callee, params, out);
-            for a in args { collect_closure_free_vars(a, params, out); }
+            for a in args {
+                collect_closure_free_vars(a, params, out);
+            }
         }
-        crate::ast::Expr::UnaryOp { expr: inner, .. } => collect_closure_free_vars(inner, params, out),
+        crate::ast::Expr::UnaryOp { expr: inner, .. } => {
+            collect_closure_free_vars(inner, params, out)
+        }
         crate::ast::Expr::Assign { target, value, .. } => {
             collect_closure_free_vars(target, params, out);
             collect_closure_free_vars(value, params, out);
@@ -2231,11 +2371,7 @@ fn find_free_vars(expr: &crate::ast::Expr, params: &[String]) -> Vec<String> {
     vars
 }
 
-fn collect_free_vars(
-    expr: &crate::ast::Expr,
-    params: &[String],
-    vars: &mut Vec<String>,
-) {
+fn collect_free_vars(expr: &crate::ast::Expr, params: &[String], vars: &mut Vec<String>) {
     match expr {
         crate::ast::Expr::Ident(name, _) => {
             if !params.contains(name) {
@@ -2260,7 +2396,12 @@ fn collect_free_vars(
                 collect_free_vars_in_stmt(stmt, params, vars);
             }
         }
-        crate::ast::Expr::If { condition, then_block, else_block, .. } => {
+        crate::ast::Expr::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
             collect_free_vars(condition, params, vars);
             for stmt in &then_block.stmts {
                 collect_free_vars_in_stmt(stmt, params, vars);
@@ -2292,7 +2433,11 @@ fn collect_free_vars(
                 collect_free_vars(arg, params, vars);
             }
         }
-        crate::ast::Expr::Closure { params: inner_params, body, .. } => {
+        crate::ast::Expr::Closure {
+            params: inner_params,
+            body,
+            ..
+        } => {
             let mut new_params = params.to_vec();
             for p in inner_params {
                 new_params.push(p.name.clone());
@@ -2303,11 +2448,7 @@ fn collect_free_vars(
     }
 }
 
-fn collect_free_vars_in_stmt(
-    stmt: &crate::ast::Stmt,
-    params: &[String],
-    vars: &mut Vec<String>,
-) {
+fn collect_free_vars_in_stmt(stmt: &crate::ast::Stmt, params: &[String], vars: &mut Vec<String>) {
     match stmt {
         crate::ast::Stmt::Expr { expr, .. } => collect_free_vars(expr, params, vars),
         crate::ast::Stmt::Let { value, .. } => {
@@ -2315,7 +2456,9 @@ fn collect_free_vars_in_stmt(
                 collect_free_vars(val, params, vars);
             }
         }
-        crate::ast::Stmt::While { condition, body, .. } => {
+        crate::ast::Stmt::While {
+            condition, body, ..
+        } => {
             collect_free_vars(condition, params, vars);
             for s in &body.stmts {
                 collect_free_vars_in_stmt(s, params, vars);
@@ -2333,8 +2476,12 @@ fn collect_free_vars_in_stmt(
 /// Evaluate a simple constant expression at compile time.
 fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
     match expr {
-        crate::ast::Expr::IntLiteral(n, IntegerSuffix::None, _) => Some(crate::types::Value::I64(*n)),
-        crate::ast::Expr::FloatLiteral(n, FloatSuffix::None, _) => Some(crate::types::Value::F64(*n)),
+        crate::ast::Expr::IntLiteral(n, IntegerSuffix::None, _) => {
+            Some(crate::types::Value::I64(*n))
+        }
+        crate::ast::Expr::FloatLiteral(n, FloatSuffix::None, _) => {
+            Some(crate::types::Value::F64(*n))
+        }
         crate::ast::Expr::BoolLiteral(b, _) => Some(crate::types::Value::Bool(*b)),
         crate::ast::Expr::StringLiteral(s, _) => Some(crate::types::Value::String(s.clone())),
         crate::ast::Expr::CharLiteral(c, _) => Some(crate::types::Value::Char(*c)),
@@ -2398,7 +2545,6 @@ fn is_builtin_path(path: &[String]) -> bool {
             | ["float", "parse"]
     ) || matches!(
         module,
-        "fs" | "env" | "process" | "regex" | "net" | "time" | "rand"
-            | "http"
+        "fs" | "env" | "process" | "regex" | "net" | "time" | "rand" | "http"
     ) || segs.as_slice() == ["std", "env", "args"]
 }

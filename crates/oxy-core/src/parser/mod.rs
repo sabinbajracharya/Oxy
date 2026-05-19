@@ -2053,7 +2053,9 @@ impl Parser {
                 if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
                     let inclusive = self.check(&TokenKind::DotDotEq);
                     self.advance();
-                    let end = if let TokenKind::IntLiteral(m, IntegerSuffix::None) = self.peek_kind().clone() {
+                    let end = if let TokenKind::IntLiteral(m, IntegerSuffix::None) =
+                        self.peek_kind().clone()
+                    {
                         self.advance();
                         Some(m)
                     } else {
@@ -2066,7 +2068,11 @@ impl Parser {
                         span: start_span,
                     });
                 }
-                Ok(Pattern::Literal(Expr::IntLiteral(val, IntegerSuffix::None, start_span)))
+                Ok(Pattern::Literal(Expr::IntLiteral(
+                    val,
+                    IntegerSuffix::None,
+                    start_span,
+                )))
             }
             TokenKind::FloatLiteral(_, FloatSuffix::None)
             | TokenKind::True
@@ -2589,7 +2595,10 @@ mod tests {
             panic!("expected BinaryOp");
         };
         assert_eq!(*op, BinOp::Add);
-        assert!(matches!(**left, Expr::IntLiteral(1, IntegerSuffix::None, _)));
+        assert!(matches!(
+            **left,
+            Expr::IntLiteral(1, IntegerSuffix::None, _)
+        ));
         let Expr::BinaryOp { op: inner_op, .. } = right.as_ref() else {
             panic!("expected Mul on right");
         };
@@ -2621,7 +2630,10 @@ mod tests {
             panic!("expected UnaryOp");
         };
         assert_eq!(*op, UnaryOp::Neg);
-        assert!(matches!(**inner, Expr::IntLiteral(42, IntegerSuffix::None, _)));
+        assert!(matches!(
+            **inner,
+            Expr::IntLiteral(42, IntegerSuffix::None, _)
+        ));
     }
 
     #[test]

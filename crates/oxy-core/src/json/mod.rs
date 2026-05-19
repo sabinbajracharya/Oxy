@@ -22,10 +22,14 @@ fn serialize_value(value: &Value) -> Result<String, String> {
     match value {
         Value::I64(n) => Ok(n.to_string()),
         Value::F64(f) => Ok(format_float(*f)),
-        Value::I8(n) => Ok(n.to_string()), Value::I16(n) => Ok(n.to_string()),
-        Value::I32(n) => Ok(n.to_string()), Value::I64(n) => Ok(n.to_string()),
-        Value::U8(n) => Ok(n.to_string()), Value::U16(n) => Ok(n.to_string()),
-        Value::U32(n) => Ok(n.to_string()), Value::U64(n) => Ok(n.to_string()),
+        Value::I8(n) => Ok(n.to_string()),
+        Value::I16(n) => Ok(n.to_string()),
+        Value::I32(n) => Ok(n.to_string()),
+        Value::I64(n) => Ok(n.to_string()),
+        Value::U8(n) => Ok(n.to_string()),
+        Value::U16(n) => Ok(n.to_string()),
+        Value::U32(n) => Ok(n.to_string()),
+        Value::U64(n) => Ok(n.to_string()),
         Value::F32(x) => Ok(format_float(*x as f64)),
         Value::F64(x) => Ok(format_float(*x)),
         Value::Bool(b) => Ok(b.to_string()),
@@ -69,7 +73,8 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             Ok(format!("[{}]", items?.join(", ")))
         }
         Value::VecDeque(rc) => {
-            let items: Result<Vec<String>, String> = rc.borrow().iter().map(serialize_value).collect();
+            let items: Result<Vec<String>, String> =
+                rc.borrow().iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
         Value::Cell(rc) => serialize_value(&rc.borrow()),
@@ -82,10 +87,14 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
     match value {
         Value::I64(n) => Ok(n.to_string()),
         Value::F64(f) => Ok(format_float(*f)),
-        Value::I8(n) => Ok(n.to_string()), Value::I16(n) => Ok(n.to_string()),
-        Value::I32(n) => Ok(n.to_string()), Value::I64(n) => Ok(n.to_string()),
-        Value::U8(n) => Ok(n.to_string()), Value::U16(n) => Ok(n.to_string()),
-        Value::U32(n) => Ok(n.to_string()), Value::U64(n) => Ok(n.to_string()),
+        Value::I8(n) => Ok(n.to_string()),
+        Value::I16(n) => Ok(n.to_string()),
+        Value::I32(n) => Ok(n.to_string()),
+        Value::I64(n) => Ok(n.to_string()),
+        Value::U8(n) => Ok(n.to_string()),
+        Value::U16(n) => Ok(n.to_string()),
+        Value::U32(n) => Ok(n.to_string()),
+        Value::U64(n) => Ok(n.to_string()),
         Value::F32(x) => Ok(format_float(*x as f64)),
         Value::F64(x) => Ok(format_float(*x)),
         Value::Bool(b) => Ok(b.to_string()),
