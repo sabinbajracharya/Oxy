@@ -1,6 +1,6 @@
 //! Abstract Syntax Tree definitions for the Oxy language.
 
-use crate::lexer::Span;
+use crate::lexer::{FloatSuffix, IntegerSuffix, Span};
 
 /// Item visibility.
 #[derive(Debug, Clone, PartialEq)]
@@ -372,9 +372,9 @@ pub enum FStringPart {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Integer literal: `42`
-    IntLiteral(i64, Span),
+    IntLiteral(i64, crate::lexer::IntegerSuffix, Span),
     /// Float literal: `3.14`
-    FloatLiteral(f64, Span),
+    FloatLiteral(f64, crate::lexer::FloatSuffix, Span),
     /// Boolean literal: `true` / `false`
     BoolLiteral(bool, Span),
     /// String literal: `"hello"`
@@ -520,8 +520,8 @@ impl Expr {
     /// Returns the span of this expression.
     pub fn span(&self) -> Span {
         match self {
-            Expr::IntLiteral(_, s)
-            | Expr::FloatLiteral(_, s)
+            Expr::IntLiteral(.., s)
+            | Expr::FloatLiteral(.., s)
             | Expr::BoolLiteral(_, s)
             | Expr::StringLiteral(_, s)
             | Expr::CharLiteral(_, s)
@@ -1162,8 +1162,8 @@ impl Stmt {
 impl Expr {
     fn pretty_print(&self, out: &mut String, indent: usize) {
         match self {
-            Expr::IntLiteral(n, _) => out.push_str(&n.to_string()),
-            Expr::FloatLiteral(n, _) => out.push_str(&n.to_string()),
+            Expr::IntLiteral(n, _, _) => out.push_str(&n.to_string()),
+            Expr::FloatLiteral(n, _, _) => out.push_str(&n.to_string()),
             Expr::BoolLiteral(b, _) => out.push_str(&b.to_string()),
             Expr::StringLiteral(s, _) => out.push_str(&format!("\"{s}\"")),
             Expr::CharLiteral(c, _) => out.push_str(&format!("'{c}'")),
@@ -1458,7 +1458,7 @@ mod tests {
     #[test]
     fn test_expr_span() {
         let span = Span::new(0, 5, 1, 1);
-        let expr = Expr::IntLiteral(42, span);
+        let expr = Expr::IntLiteral(42, IntegerSuffix::None, span);
         assert_eq!(expr.span(), span);
     }
 }

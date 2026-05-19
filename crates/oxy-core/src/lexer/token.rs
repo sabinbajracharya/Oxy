@@ -45,14 +45,22 @@ impl Token {
     }
 }
 
+/// Integer type suffix for width-annotated literals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntegerSuffix { I8, I16, I32, I64, U8, U16, U32, U64, None }
+
+/// Float type suffix for width-annotated literals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatSuffix { F32, F64, None }
+
 /// All possible token kinds in the Oxy language.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // === Literals ===
     /// Integer literal, e.g. `42`, `0xFF`, `0b1010`, `1_000`
-    IntLiteral(i64),
+    IntLiteral(i64, IntegerSuffix),
     /// Float literal, e.g. `3.14`, `1e10`, `2.5f64`
-    FloatLiteral(f64),
+    FloatLiteral(f64, FloatSuffix),
     /// String literal, e.g. `"hello"`
     StringLiteral(String),
     /// Character literal, e.g. `'a'`
@@ -282,8 +290,8 @@ impl TokenKind {
     /// Returns a human-readable description for error messages.
     pub fn description(&self) -> &'static str {
         match self {
-            Self::IntLiteral(_) => "integer literal",
-            Self::FloatLiteral(_) => "float literal",
+            Self::IntLiteral(_, _) => "integer literal",
+            Self::FloatLiteral(_, _) => "float literal",
             Self::StringLiteral(_) => "string literal",
             Self::CharLiteral(_) => "character literal",
             Self::FStringLiteral(_) => "f-string literal",
@@ -376,8 +384,8 @@ impl TokenKind {
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IntLiteral(n) => write!(f, "{n}"),
-            Self::FloatLiteral(n) => write!(f, "{n}"),
+            Self::IntLiteral(n, _) => write!(f, "{n}"),
+            Self::FloatLiteral(n, _) => write!(f, "{n}"),
             Self::StringLiteral(s) => write!(f, "\"{s}\""),
             Self::CharLiteral(c) => write!(f, "'{c}'"),
             Self::FStringLiteral(s) => write!(f, "f\"{s}\""),
@@ -411,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_token_kind_display() {
-        assert_eq!(format!("{}", TokenKind::IntLiteral(42)), "42");
+        assert_eq!(format!("{}", TokenKind::IntLiteral(42, IntegerSuffix::None)), "42");
         assert_eq!(
             format!("{}", TokenKind::StringLiteral("hi".into())),
             "\"hi\""

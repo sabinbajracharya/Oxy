@@ -4,7 +4,7 @@
 
 mod token;
 
-pub use token::{Span, Token, TokenKind};
+pub use token::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind};
 
 use crate::errors::FerriError;
 
@@ -614,7 +614,7 @@ impl<'src> Lexer<'src> {
                         line: self.line,
                         column: self.column,
                     })?;
-                    return Ok(TokenKind::IntLiteral(val));
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 'o' | 'O' => {
                     num_str.push(self.advance());
@@ -630,7 +630,7 @@ impl<'src> Lexer<'src> {
                         line: self.line,
                         column: self.column,
                     })?;
-                    return Ok(TokenKind::IntLiteral(val));
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 'b' | 'B' => {
                     num_str.push(self.advance());
@@ -648,7 +648,7 @@ impl<'src> Lexer<'src> {
                         line: self.line,
                         column: self.column,
                     })?;
-                    return Ok(TokenKind::IntLiteral(val));
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 _ => {}
             }
@@ -695,16 +695,13 @@ impl<'src> Lexer<'src> {
             }
         }
 
-        // Type suffix (consume and ignore for now: i32, u64, f64, etc.)
+        // Type suffix (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64)
+        let mut suffix_str = String::new();
         if !self.is_at_end() && (self.peek() == 'i' || self.peek() == 'u' || self.peek() == 'f') {
-            let _suffix_start = self.pos;
-            self.advance(); // consume letter
-            if self.peek() == 'f' && !self.is_at_end() {
-                // Could be f32/f64
-                is_float = true;
-            }
+            if self.peek() == 'f' { is_float = true; }
+            suffix_str.push(self.advance()); // consume letter
             while !self.is_at_end() && self.peek().is_ascii_digit() {
-                self.advance();
+                suffix_str.push(self.advance());
             }
         }
 
@@ -714,14 +711,26 @@ impl<'src> Lexer<'src> {
                 line: self.line,
                 column: self.column,
             })?;
-            Ok(TokenKind::FloatLiteral(val))
+            let fsuffix = match suffix_str.as_str() {
+                "f32" => FloatSuffix::F32,
+                "f64" => FloatSuffix::F64,
+                _ => FloatSuffix::None,
+            };
+            Ok(TokenKind::FloatLiteral(val, fsuffix))
         } else {
+            let isuffix = match suffix_str.as_str() {
+                "i8" => IntegerSuffix::I8, "i16" => IntegerSuffix::I16,
+                "i32" => IntegerSuffix::I32, "i64" => IntegerSuffix::I64,
+                "u8" => IntegerSuffix::U8, "u16" => IntegerSuffix::U16,
+                "u32" => IntegerSuffix::U32, "u64" => IntegerSuffix::U64,
+                _ => IntegerSuffix::None,
+            };
             let val: i64 = num_str.parse().map_err(|_| FerriError::Lexer {
                 message: format!("invalid integer literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
             })?;
-            Ok(TokenKind::IntLiteral(val))
+            Ok(TokenKind::IntLiteral(val, isuffix))
         }
     }
 
@@ -978,9 +987,9 @@ mod tests {
         assert_eq!(
             kinds("0 42 1_000_000"),
             vec![
-                TokenKind::IntLiteral(0),
-                TokenKind::IntLiteral(42),
-                TokenKind::IntLiteral(1_000_000),
+                TokenKind::IntLiteral(0, IntegerSuffix::None),
+                TokenKind::IntLiteral(42, IntegerSuffix::None),
+                TokenKind::IntLiteral(1_000_000, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -991,8 +1000,8 @@ mod tests {
         assert_eq!(
             kinds("0xFF 0x1A_2B"),
             vec![
-                TokenKind::IntLiteral(0xFF),
-                TokenKind::IntLiteral(0x1A2B),
+                TokenKind::IntLiteral(0xFF, IntegerSuffix::None),
+                TokenKind::IntLiteral(0x1A2B, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1003,8 +1012,8 @@ mod tests {
         assert_eq!(
             kinds("0b1010 0b1111_0000"),
             vec![
-                TokenKind::IntLiteral(0b1010),
-                TokenKind::IntLiteral(0b11110000),
+                TokenKind::IntLiteral(0b1010, IntegerSuffix::None),
+                TokenKind::IntLiteral(0b11110000, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1015,8 +1024,8 @@ mod tests {
         assert_eq!(
             kinds("0o77 0o755"),
             vec![
-                TokenKind::IntLiteral(0o77),
-                TokenKind::IntLiteral(0o755),
+                TokenKind::IntLiteral(0o77, IntegerSuffix::None),
+                TokenKind::IntLiteral(0o755, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1029,9 +1038,9 @@ mod tests {
         assert_eq!(
             kinds("3.25 1.0 0.5"),
             vec![
-                TokenKind::FloatLiteral(3.25),
-                TokenKind::FloatLiteral(1.0),
-                TokenKind::FloatLiteral(0.5),
+                TokenKind::FloatLiteral(3.25, FloatSuffix::None),
+                TokenKind::FloatLiteral(1.0, FloatSuffix::None),
+                TokenKind::FloatLiteral(0.5, FloatSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1042,8 +1051,8 @@ mod tests {
         assert_eq!(
             kinds("1e10 2.5E-3"),
             vec![
-                TokenKind::FloatLiteral(1e10),
-                TokenKind::FloatLiteral(2.5e-3),
+                TokenKind::FloatLiteral(1e10, FloatSuffix::None),
+                TokenKind::FloatLiteral(2.5e-3, FloatSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1291,7 +1300,7 @@ fn main() {
         assert_eq!(token_kinds[7], &TokenKind::Colon);
         assert_eq!(token_kinds[8], &TokenKind::Ident("i64".into()));
         assert_eq!(token_kinds[9], &TokenKind::Eq);
-        assert_eq!(token_kinds[10], &TokenKind::IntLiteral(42));
+        assert_eq!(token_kinds[10], &TokenKind::IntLiteral(42, IntegerSuffix::None));
         assert_eq!(token_kinds[11], &TokenKind::Semicolon);
         // println is an identifier, ! is Bang
         assert_eq!(token_kinds[12], &TokenKind::Ident("println".into()));
@@ -1335,9 +1344,9 @@ fn main() {
         assert_eq!(
             kinds("0..10"),
             vec![
-                TokenKind::IntLiteral(0),
+                TokenKind::IntLiteral(0, IntegerSuffix::None),
                 TokenKind::DotDot,
-                TokenKind::IntLiteral(10),
+                TokenKind::IntLiteral(10, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1348,9 +1357,9 @@ fn main() {
         assert_eq!(
             kinds("0..=10"),
             vec![
-                TokenKind::IntLiteral(0),
+                TokenKind::IntLiteral(0, IntegerSuffix::None),
                 TokenKind::DotDotEq,
-                TokenKind::IntLiteral(10),
+                TokenKind::IntLiteral(10, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );
@@ -1361,7 +1370,7 @@ fn main() {
         // `-42` should be Minus + IntLiteral (parser handles unary minus)
         assert_eq!(
             kinds("-42"),
-            vec![TokenKind::Minus, TokenKind::IntLiteral(42), TokenKind::Eof,]
+            vec![TokenKind::Minus, TokenKind::IntLiteral(42, IntegerSuffix::None), TokenKind::Eof,]
         );
     }
 
@@ -1396,7 +1405,7 @@ fn main() {
                 TokenKind::Pipe,
                 TokenKind::Ident("x".into()),
                 TokenKind::Plus,
-                TokenKind::IntLiteral(1),
+                TokenKind::IntLiteral(1, IntegerSuffix::None),
                 TokenKind::Eof,
             ]
         );

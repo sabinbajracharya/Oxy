@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
+use crate::lexer::IntegerSuffix;
 use crate::types::Value;
 
 /// Bytecode instructions for the Oxy VM.
@@ -745,7 +746,7 @@ impl Vm {
                             || {
                                 (
                                     (0..param_count).map(|i| format!("_{i}")).collect(),
-                                    crate::ast::Expr::IntLiteral(0, blank_span),
+                                    crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, blank_span),
                                     Vec::new(),
                                 )
                             },
@@ -1475,7 +1476,7 @@ impl Vm {
                 }
                 OpCode::Closure { target_ip: ct, param_count, meta_idx } => {
                     let blank_span = crate::lexer::Span { start: 0, end: 0, line: 0, column: 0 };
-                    let (param_names, body_expr, captured_vars) = self.chunk.closure_meta.get(meta_idx).cloned().unwrap_or_else(|| ((0..param_count).map(|i| format!("_{i}")).collect(), crate::ast::Expr::IntLiteral(0, blank_span), Vec::new()));
+                    let (param_names, body_expr, captured_vars) = self.chunk.closure_meta.get(meta_idx).cloned().unwrap_or_else(|| ((0..param_count).map(|i| format!("_{i}")).collect(), crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, blank_span), Vec::new()));
                     let params: Vec<crate::ast::Param> = param_names.into_iter().map(|name| crate::ast::Param { name, type_ann: crate::ast::TypeAnnotation { name: "_".into(), span: blank_span }, span: blank_span }).collect();
                     let body_block = crate::ast::Block { stmts: vec![crate::ast::Stmt::Expr { expr: body_expr, has_semicolon: false }], span: blank_span };
                     let mut closure_env = crate::env::Environment::new();

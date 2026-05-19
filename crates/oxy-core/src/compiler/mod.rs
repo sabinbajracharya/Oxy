@@ -7,6 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
+use crate::lexer::{FloatSuffix, IntegerSuffix};
 use crate::errors::FerriError;
 use crate::vm::{Chunk, OpCode};
 
@@ -339,10 +340,10 @@ impl Compiler {
         for field in fields {
             let default_val = match field.type_ann.name.as_str() {
                 "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "usize" => {
-                    Expr::IntLiteral(0, default_span)
+                    Expr::IntLiteral(0, IntegerSuffix::None, default_span)
                 }
                 "f64" | "f32" | "Float" => {
-                    Expr::FloatLiteral(0.0, default_span)
+                    Expr::FloatLiteral(0.0, FloatSuffix::None, default_span)
                 }
                 "String" | "str" => {
                     Expr::StringLiteral(String::new(), default_span)
@@ -355,7 +356,7 @@ impl Compiler {
                 }
                 _ => {
                     // For unknown types, use a zero-ish default
-                    Expr::IntLiteral(0, default_span)
+                    Expr::IntLiteral(0, IntegerSuffix::None, default_span)
                 }
             };
             field_exprs.push((field.name.clone(), default_val));
@@ -410,7 +411,7 @@ impl Compiler {
         let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
             crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
             _ => None,
-        }).unwrap_or(crate::ast::Expr::IntLiteral(0, f.body.span));
+        }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, f.body.span));
         let meta = (f.params.clone(), Box::new(body_expr), f.return_type.clone());
         self.fn_meta.insert(f.name.clone(), meta.clone());
         if let Some(tn) = type_name {
@@ -516,7 +517,7 @@ impl Compiler {
                     let body_expr = f.body.stmts.last().and_then(|stmt| match stmt {
                         crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
                         _ => None,
-                    }).unwrap_or(crate::ast::Expr::IntLiteral(0, f.body.span));
+                    }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, f.body.span));
                     self.fn_meta.insert(qualified, (f.params.clone(), Box::new(body_expr), f.return_type.clone()));
                     let saved_sym = self.sym.clone();
                     for param in &f.params {
@@ -550,7 +551,7 @@ impl Compiler {
                         let body_expr = method.body.stmts.last().and_then(|stmt| match stmt {
                             crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
                             _ => None,
-                        }).unwrap_or(crate::ast::Expr::IntLiteral(0, method.body.span));
+                        }).unwrap_or(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, method.body.span));
                         self.fn_meta.insert(mname.clone(), (method.params.clone(), Box::new(body_expr), method.return_type.clone()));
                         // Register under both qualified and unqualified type names
                         self.method_ips
@@ -1182,11 +1183,11 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), FerriError> {
         match expr {
-            Expr::IntLiteral(n, _) => {
+            Expr::IntLiteral(n, _, _) => {
                 self.emit(OpCode::ConstInt(*n));
                 Ok(())
             }
-            Expr::FloatLiteral(n, _) => {
+            Expr::FloatLiteral(n, _, _) => {
                 self.emit(OpCode::ConstFloat(*n));
                 Ok(())
             }
@@ -1250,7 +1251,7 @@ impl Compiler {
                         // existing compiled function body at `target`.
                         let (params, body_expr, _return_type) =
                             self.fn_meta.get(&resolved).cloned().unwrap_or_else(|| {
-                                (vec![], Box::new(crate::ast::Expr::IntLiteral(0, *span)), None)
+                                (vec![], Box::new(crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, *span)), None)
                             });
                         let meta_idx = self.closure_meta.len();
                         let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
@@ -2319,8 +2320,8 @@ fn collect_free_vars_in_stmt(
 /// Evaluate a simple constant expression at compile time.
 fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
     match expr {
-        crate::ast::Expr::IntLiteral(n, _) => Some(crate::types::Value::Integer(*n)),
-        crate::ast::Expr::FloatLiteral(n, _) => Some(crate::types::Value::Float(*n)),
+        crate::ast::Expr::IntLiteral(n, IntegerSuffix::None, _) => Some(crate::types::Value::Integer(*n)),
+        crate::ast::Expr::FloatLiteral(n, FloatSuffix::None, _) => Some(crate::types::Value::Float(*n)),
         crate::ast::Expr::BoolLiteral(b, _) => Some(crate::types::Value::Bool(*b)),
         crate::ast::Expr::StringLiteral(s, _) => Some(crate::types::Value::String(s.clone())),
         crate::ast::Expr::CharLiteral(c, _) => Some(crate::types::Value::Char(*c)),

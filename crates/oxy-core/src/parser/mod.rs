@@ -4,7 +4,7 @@
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::{Span, Token, TokenKind};
+use crate::lexer::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind};
 use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
 
 /// Parser for the Oxy language.
@@ -1193,15 +1193,15 @@ impl Parser {
     fn parse_prefix(&mut self) -> Result<Expr, FerriError> {
         match self.peek_kind().clone() {
             // Literals
-            TokenKind::IntLiteral(n) => {
+            TokenKind::IntLiteral(n, IntegerSuffix::None) => {
                 let span = self.current_span();
                 self.advance();
-                Ok(Expr::IntLiteral(n, span))
+                Ok(Expr::IntLiteral(n, IntegerSuffix::None, span))
             }
-            TokenKind::FloatLiteral(n) => {
+            TokenKind::FloatLiteral(n, FloatSuffix::None) => {
                 let span = self.current_span();
                 self.advance();
-                Ok(Expr::FloatLiteral(n, span))
+                Ok(Expr::FloatLiteral(n, FloatSuffix::None, span))
             }
             TokenKind::True => {
                 let span = self.current_span();
@@ -1648,7 +1648,7 @@ impl Parser {
             }
 
             // Check for tuple index: `.0`, `.1` etc.
-            if let TokenKind::IntLiteral(n) = self.peek_kind() {
+            if let TokenKind::IntLiteral(n, IntegerSuffix::None) = self.peek_kind() {
                 let n = *n;
                 let end_span = self.current_span();
                 self.advance();
@@ -2032,7 +2032,7 @@ impl Parser {
                 let inclusive = self.check(&TokenKind::DotDotEq);
                 let span = self.current_span();
                 self.advance();
-                if let TokenKind::IntLiteral(end) = self.peek_kind().clone() {
+                if let TokenKind::IntLiteral(end, IntegerSuffix::None) = self.peek_kind().clone() {
                     self.advance();
                     return Ok(Pattern::Range {
                         start: None,
@@ -2046,14 +2046,14 @@ impl Parser {
                 }
                 Ok(Pattern::Rest(span))
             }
-            TokenKind::IntLiteral(n) => {
+            TokenKind::IntLiteral(n, IntegerSuffix::None) => {
                 let val = n;
                 let start_span = self.current_span();
                 self.advance(); // consume the int literal
                 if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
                     let inclusive = self.check(&TokenKind::DotDotEq);
                     self.advance();
-                    let end = if let TokenKind::IntLiteral(m) = self.peek_kind().clone() {
+                    let end = if let TokenKind::IntLiteral(m, IntegerSuffix::None) = self.peek_kind().clone() {
                         self.advance();
                         Some(m)
                     } else {
@@ -2066,9 +2066,9 @@ impl Parser {
                         span: start_span,
                     });
                 }
-                Ok(Pattern::Literal(Expr::IntLiteral(val, start_span)))
+                Ok(Pattern::Literal(Expr::IntLiteral(val, IntegerSuffix::None, start_span)))
             }
-            TokenKind::FloatLiteral(_)
+            TokenKind::FloatLiteral(_, FloatSuffix::None)
             | TokenKind::True
             | TokenKind::False
             | TokenKind::StringLiteral(_)
@@ -2589,7 +2589,7 @@ mod tests {
             panic!("expected BinaryOp");
         };
         assert_eq!(*op, BinOp::Add);
-        assert!(matches!(**left, Expr::IntLiteral(1, _)));
+        assert!(matches!(**left, Expr::IntLiteral(1, IntegerSuffix::None, _)));
         let Expr::BinaryOp { op: inner_op, .. } = right.as_ref() else {
             panic!("expected Mul on right");
         };
@@ -2621,7 +2621,7 @@ mod tests {
             panic!("expected UnaryOp");
         };
         assert_eq!(*op, UnaryOp::Neg);
-        assert!(matches!(**inner, Expr::IntLiteral(42, _)));
+        assert!(matches!(**inner, Expr::IntLiteral(42, IntegerSuffix::None, _)));
     }
 
     #[test]
