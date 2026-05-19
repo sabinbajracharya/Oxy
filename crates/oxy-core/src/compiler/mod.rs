@@ -133,6 +133,8 @@ pub struct Compiler {
     trait_defs: HashMap<String, Vec<FnDef>>,
     /// Type aliases: alias_name → actual_type_name (e.g., P → Point).
     type_aliases: HashMap<String, String>,
+    /// Forward calls that need target patching: (bytecode_index, function_name).
+    forward_calls: Vec<(usize, String)>,
 }
 
 impl Compiler {
@@ -185,6 +187,7 @@ impl Default for Compiler {
             current_impl_type: None,
             trait_defs: HashMap::new(),
             type_aliases: HashMap::new(),
+            forward_calls: Vec::new(),
         }
     }
 }
@@ -192,9 +195,46 @@ impl Default for Compiler {
 impl Compiler {
     /// Compile a full program. Returns a [`Chunk`] ready for the VM.
     pub fn compile(mut self, program: &Program) -> Result<Chunk, FerriError> {
+        // Pre-scan: register all function names so forward references resolve.
+        // Sentinel IP usize::MAX marks functions not yet compiled.
+        for item in &program.items {
+            if let Item::Function(f) = item {
+                self.functions.insert(f.name.clone(), usize::MAX);
+                let body_expr = f
+                    .body
+                    .stmts
+                    .last()
+                    .and_then(|stmt| match stmt {
+                        crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or(crate::ast::Expr::IntLiteral(
+                        0,
+                        crate::lexer::IntegerSuffix::None,
+                        f.body.span,
+                    ));
+                self.fn_meta.insert(
+                    f.name.clone(),
+                    (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
+                );
+            }
+        }
+
         // Compile function bodies
         for item in &program.items {
             self.compile_item(item)?;
+        }
+
+        // Patch forward calls: replace sentinel targets with actual function IPs
+        for (call_idx, fn_name) in &self.forward_calls {
+            let actual_ip = self.functions.get(fn_name).copied().unwrap_or(0);
+            self.code[*call_idx] = match &self.code[*call_idx] {
+                OpCode::Call { arg_count, .. } => OpCode::Call {
+                    target: actual_ip,
+                    arg_count: *arg_count,
+                },
+                _ => continue,
+            };
         }
 
         // Check if any function has #[test] attribute (test runner mode)
@@ -1501,10 +1541,21 @@ impl Compiler {
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
-                    self.emit(OpCode::Call {
+                    let call_idx = self.emit(OpCode::Call {
                         target,
                         arg_count: args.len(),
                     });
+                    // Forward reference: record for patching after all functions compiled
+                    if target == usize::MAX {
+                        if let Expr::Ident(name, _) = callee.as_ref() {
+                            let resolved = self
+                                .use_aliases
+                                .get(name)
+                                .cloned()
+                                .unwrap_or_else(|| name.clone());
+                            self.forward_calls.push((call_idx, resolved));
+                        }
+                    }
                 } else {
                     // Check if callee is a local variable (closure/function value)
                     if let Expr::Ident(name, _) = callee.as_ref() {
