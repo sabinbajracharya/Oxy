@@ -1899,132 +1899,111 @@ fn method_name_from_op(f: fn(Value, Value) -> Result<Value, String>) -> &'static
 // --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
 
 fn vm_add(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a + *b as f64)),
-        (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{a}{b}"))),
-        (Value::String(a), other) => Ok(Value::String(format!("{a}{other}"))),
-        (other, Value::String(b)) => Ok(Value::String(format!("{other}{b}"))),
-        _ => Err(format!(
-            "cannot add {} and {}",
-            a.type_name(),
-            b.type_name()
-        )),
+    // String concatenation
+    if let (Value::String(sa), Value::String(sb)) = (&a, &b) {
+        return Ok(Value::String(format!("{sa}{sb}")));
+    }
+    if let Value::String(s) = &a { return Ok(Value::String(format!("{s}{b}"))); }
+    if let Value::String(s) = &b { return Ok(Value::String(format!("{a}{s}"))); }
+    // Numeric: use to_f64 if either is float, otherwise as_i64
+    if a.is_float() || b.is_float() {
+        Ok(Value::Float(a.to_f64() + b.to_f64()))
+    } else if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64().wrapping_add(b.as_i64())))
+    } else {
+        Err(format!("cannot add {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a - b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a - *b as f64)),
-        _ => Err(format!(
-            "cannot subtract {} and {}",
-            a.type_name(),
-            b.type_name()
-        )),
+    if a.is_float() || b.is_float() {
+        Ok(Value::Float(a.to_f64() - b.to_f64()))
+    } else if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64().wrapping_sub(b.as_i64())))
+    } else {
+        Err(format!("cannot subtract {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a * b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a * *b as f64)),
-        _ => Err(format!(
-            "cannot multiply {} and {}",
-            a.type_name(),
-            b.type_name()
-        )),
+    if a.is_float() || b.is_float() {
+        Ok(Value::Float(a.to_f64() * b.to_f64()))
+    } else if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64().wrapping_mul(b.as_i64())))
+    } else {
+        Err(format!("cannot multiply {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_div(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            if *b == 0 {
-                return Err("division by zero".into());
-            }
-            Ok(Value::Integer(a / b))
-        }
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a / *b as f64)),
-        _ => Err(format!(
-            "cannot divide {} and {}",
-            a.type_name(),
-            b.type_name()
-        )),
+    if b.as_i64() == 0 || b.to_f64() == 0.0 {
+        return Err("division by zero".into());
+    }
+    if a.is_float() || b.is_float() {
+        Ok(Value::Float(a.to_f64() / b.to_f64()))
+    } else if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64() / b.as_i64()))
+    } else {
+        Err(format!("cannot divide {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            if *b == 0 {
-                return Err("modulo by zero".into());
-            }
-            Ok(Value::Integer(a % b))
-        }
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f64 % b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a % *b as f64)),
-        _ => Err(format!(
-            "cannot compute modulo of {} and {}",
-            a.type_name(),
-            b.type_name()
-        )),
+    if b.as_i64() == 0 || b.to_f64() == 0.0 {
+        return Err("modulo by zero".into());
+    }
+    if a.is_float() || b.is_float() {
+        Ok(Value::Float(a.to_f64() % b.to_f64()))
+    } else if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64() % b.as_i64()))
+    } else {
+        Err(format!("cannot compute modulo of {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_neg(v: Value) -> Value {
-    match v {
-        Value::Integer(n) => Value::Integer(-n),
-        Value::Float(n) => Value::Float(-n),
-        v => v,
-    }
+    if v.is_integer() { Value::Integer(-v.as_i64()) }
+    else if v.is_float() { Value::Float(-v.to_f64()) }
+    else { v }
 }
 
 fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a & b)),
-        _ => Err(format!("bitwise AND requires integers, got {} and {}", a.type_name(), b.type_name())),
+    if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64() & b.as_i64()))
+    } else {
+        Err(format!("bitwise AND requires integers, got {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a | b)),
-        _ => Err(format!("bitwise OR requires integers, got {} and {}", a.type_name(), b.type_name())),
+    if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64() | b.as_i64()))
+    } else {
+        Err(format!("bitwise OR requires integers, got {} and {}", a.type_name(), b.type_name()))
     }
 }
 
 fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a ^ b)),
-        _ => Err(format!("bitwise XOR requires integers, got {} and {}", a.type_name(), b.type_name())),
+    if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64() ^ b.as_i64()))
+    } else {
+        Err(format!("bitwise XOR requires integers",))
     }
 }
 
 fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            Ok(Value::Integer(a.wrapping_shl(*b as u32)))
-        }
-        _ => Err(format!("shift left requires integers, got {} and {}", a.type_name(), b.type_name())),
+    if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64().wrapping_shl(b.as_u64() as u32)))
+    } else {
+        Err(format!("shift left requires integers",))
     }
 }
 
 fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
-    match (&a, &b) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            Ok(Value::Integer(a.wrapping_shr(*b as u32)))
-        }
-        _ => Err(format!("shift right requires integers, got {} and {}", a.type_name(), b.type_name())),
+    if a.is_integer() && b.is_integer() {
+        Ok(Value::Integer(a.as_i64().wrapping_shr(b.as_u64() as u32)))
+    } else {
+        Err(format!("shift right requires integers",))
     }
 }
 
