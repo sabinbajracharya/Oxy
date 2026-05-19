@@ -2,13 +2,12 @@
 
 **Rust syntax, scripting freedom.**
 
-Oxy is an interpreted programming language written in Rust that replicates Rust's syntax as closely as possible — but **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly.
+Oxy is a bytecode-compiled programming language written in Rust that replicates Rust's syntax — **without the borrow checker or ownership rules**. Write Rust-like code, run it instantly on a stack-based VM.
 
 ## Why Oxy?
 
 - **Learn Rust syntax** without fighting the borrow checker
 - **Rapid prototyping** with Rust ergonomics in a scripting environment
-- **Gradual migration** — write in Oxy first, port to Rust when ready
 - **Familiar syntax** — if you know Rust, you already know Oxy
 
 ## Hello World
@@ -25,48 +24,67 @@ fn main() {
 
 | Feature | Status |
 |---|---|
-| Variables (`let`, `let mut`) | ✅ |
-| Functions, closures (with mutable captures), higher-order functions | ✅ |
-| Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`, labeled break/continue) | ✅ |
-| Structs, enums, `impl` blocks (both structs and enums) | ✅ |
-| Traits with default methods, operator overloading | ✅ |
-| Generics with trait bounds and `where` clauses | ✅ |
-| Error handling (`Result`, `Option`, `?` operator) | ✅ |
-| Type aliases (`type Pos = Point`) | ✅ |
-| Modules (`mod`, `use`) | ✅ |
-| Collections (`Vec`, `HashMap`, `HashSet`, `BinaryHeap`, tuples, ranges) | ✅ |
-| Iterator methods (`map`, `filter`, `zip`, `chain`, `sum`, `flatten`, …) | ✅ |
-| Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`) | ✅ |
-| Static type checking (optional `: Type` annotations) | ✅ |
-| String operations, f-string interpolation | ✅ |
-| `#[derive(Debug, Clone, PartialEq, Default)]` | ✅ |
-| `#[test]` + built-in test runner (`oxy test`) | ✅ |
-| Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | ✅ |
-| JSON serialization/deserialization | ✅ |
-| HTTP client (GET, POST, PUT, DELETE, PATCH) | ✅ |
-| HTTP server (routing, path params, static files) | ✅ |
-| SQLite database (queries, params, in-memory) | ✅ |
-| Async/await, `spawn`, `sleep` | ✅ |
-| File I/O (`std::fs` — read, write, dirs, metadata) | ✅ |
-| Environment (`std::env` — vars, current_dir) | ✅ |
-| Process/commands (`std::process` — run programs) | ✅ |
-| Regular expressions (`std::regex`) | ✅ |
-| Networking (`std::net` — TCP, UDP, DNS) | ✅ |
-| Math, random, time stdlib | ✅ |
-| CLI args (`std::env::args`) | ✅ |
-| REPL (interactive shell with history) | ✅ |
-| Colored error messages with suggestions | ✅ |
+| Variables (`let`, `let mut`) | working |
+| Functions, closures (with mutable captures), higher-order functions | working |
+| Control flow (`if`/`else`, `while`, `loop`, `for..in`, `match`, labeled break/continue) | working |
+| Short-circuit `&&` and `\|\|` | working |
+| Structs, enums, `impl` blocks (struct and enum) | working |
+| Traits with default methods, operator overloading (`+`, `-`, `*`, `/`, `%`, `==`, `<`, etc.) | working |
+| Generics on structs, enums, and functions | working |
+| Error handling (`Result`, `Option`, `?` operator) | working |
+| Type aliases (`type Pos = Point`) | working |
+| Modules (`mod`, `use`, `use` groups, `use` globs) | working |
+| Integer types: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64` with wrapping arithmetic | working |
+| Float types: `f32`, `f64` | working |
+| Type suffixes: `42i32`, `0xFFu8`, `3.14f32` | working |
+| Collections: `Vec`, `HashMap`, `HashSet`, `BinaryHeap`, `VecDeque`, tuples, ranges | working |
+| Iterator adapters: `map`, `filter`, `enumerate`, `zip`, `chain`, `take`, `skip`, `flatten` | working |
+| Iterator consumers: `collect`, `sum`, `count`, `nth`, `find`, `position`, `any`, `all`, `fold`, `for_each` | working |
+| Vec methods: `sort`, `sort_by`, `reverse`, `dedup`, `chunks`, `windows`, `min`, `max` | working |
+| Pattern destructuring (`let (a, b) = …`, `let [x, y] = …`, `Some((i, j))`) | working |
+| Match guards (`if` conditions on match arms) | working |
+| Static type checking (optional `: Type` annotations) | working |
+| String operations, f-string interpolation (`f"Hello {name}"`) | working |
+| `#[derive(Debug, Clone, PartialEq, Default)]` | working |
+| `#[test]` + built-in test runner (`oxy test`) | working |
+| Visibility modifiers (`pub fn`, `pub struct`, `pub` fields) | working |
+| JSON serialization/deserialization (`json::parse`, `json::serialize`, `json::deserialize`) | working |
+| File I/O (`std::fs` — read, write, dirs, metadata) | working |
+| Environment (`std::env` — vars, current_dir, home_dir) | working |
+| Processes (`std::process` — run commands, exit codes) | working |
+| Regular expressions (`std::regex` — match, find, replace, split) | working |
+| Networking (`std::net` — TCP, UDP, DNS lookup) | working |
+| Math (`math::sqrt`, `math::sin`, `math::cos`, `math::PI`, `math::E`, etc.) | working |
+| Random (`rand::random`, `rand::range`, `rand::bool`) | working |
+| Time (`time::now`, `time::millis`, `time::elapsed`) | working |
+| CLI args (`std::env::args`) | working |
+| REPL (interactive shell with history) | working |
+| Colored error messages with suggestions | working |
+| VS Code extension (syntax highlighting, LSP diagnostics, completions, hover, go-to-def) | working |
+| Package manager (`oxy install`) | working |
+| LeetCode solutions (106 benchmark problems passing) | working |
+
+### Deferred (coming soon)
+
+| Feature | Status |
+|---|---|
+| `async`/`await`, `spawn`, `sleep` | deferred |
+| HTTP client request builder (`http::request()`) | deferred |
+| HTTP server (`Server::new()`, routing, path params, static files) | deferred |
+| DB struct methods (`db.query_row()` returning structs) | deferred |
 
 ## What Works Differently from Rust
 
 | Rust Feature | Oxy Behavior |
 |---|---|
-| Ownership / Move | Values are reference-counted. Collections (Vec, HashMap, HashSet) use `Rc<RefCell<>>` — assignment shares data, mutations propagate. Use `.clone()` for an independent deep copy |
-| `&` and `&mut` | Syntax accepted, semantically ignored |
-| Lifetimes (`'a`) | Syntax accepted, ignored. `'label` used for labeled break/continue |
-| `unsafe` | Not supported |
-| Macros (`macro_rules!`) | Not supported (built-in pseudo-macros like `println!` work) |
-| Type inference | Dynamic with optional static checking — type annotations on `let`, `fn`, and `const` are validated before execution |
+| Ownership / Move | Values are reference-counted. Collections (Vec, HashMap, HashSet, etc.) use `Rc<RefCell<>>` — assignment shares data, mutations propagate. Use `.clone()` for an independent deep copy. |
+| `&` and `&mut` | Syntax accepted but semantically ignored — no borrow checking. |
+| Lifetimes (`'a`) | Syntax accepted but ignored. `'label` used for labeled break/continue. |
+| `unsafe` | Not supported. |
+| Macros (`macro_rules!`) | Not supported. Built-in pseudo-macros like `println!`, `format!`, `vec!`, `assert!`, `assert_eq!`, `assert_ne!`, `panic!` work. |
+| Type inference | Dynamic with optional static checking — type annotations on `let`, `fn`, and `const` are validated before execution. |
+| `as` casts | Supported for numeric types (`val as i64`, `val as f64`). |
+| Iterator laziness | Iterator adapters (`map`, `filter`) are eager — they produce `Vec` immediately rather than lazy chains. Consumers like `collect`, `sum`, `fold` work on Vec values. |
 
 ---
 
@@ -81,77 +99,36 @@ You only need **one** of these:
 
 ### Option A: Using Docker (Recommended)
 
-This is the easiest way. You don't need Rust, Node.js, or anything else installed — just Docker.
-
-#### 1. Clone the repository
-
 ```bash
+# 1. Clone
 git clone https://github.com/sabinbajracharya/Oxy.git
 cd Oxy
-```
 
-#### 2. Run first-time setup
-
-This builds the Docker dev image (with Rust + Node.js) and installs VS Code extension dependencies:
-
-```bash
+# 2. First-time setup (builds dev image + VS Code extension deps)
 docker compose run --rm setup
-```
 
-#### 3. Build the Oxy interpreter
-
-```bash
+# 3. Build
 docker compose run --rm dev bash -c "cargo build --release"
-```
 
-This creates the binaries inside the Docker volume at `target/release/`.
-
-#### 4. Run a Oxy program
-
-```bash
-# Run the hello world example
+# 4. Run a program
 docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
 
-# Run any .ox file
-docker compose run --rm dev bash -c "cargo run -- run examples/fibonacci.ox"
-```
-
-#### 5. Start the interactive REPL
-
-```bash
+# 5. Start the REPL
 docker compose run --rm dev bash -c "cargo run -- repl"
-```
 
-Type Oxy code interactively. Press `Ctrl+D` to exit.
-
-#### 6. Run the test suite
-
-```bash
-# Run all tests
+# 6. Run tests
 docker compose run --rm dev bash -c "cargo test"
-
-# Or run the full CI checks (format + lint + tests)
-docker compose run --rm test
 ```
 
 ### Option B: Using Cargo (Native)
 
-If you have Rust installed locally:
-
 ```bash
 git clone https://github.com/sabinbajracharya/Oxy.git
 cd Oxy
 
-# Build
 cargo build --release
-
-# Run a program
 cargo run -- run examples/hello.ox
-
-# Start the REPL
 cargo run -- repl
-
-# Run tests
 cargo test
 ```
 
@@ -175,22 +152,6 @@ Options:
   --dump-ast <file>      Show parser AST output (debugging)
 ```
 
-### Examples
-
-```bash
-# Via Docker
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
-docker compose run --rm dev bash -c "cargo run -- test examples/tests.ox"
-docker compose run --rm dev bash -c "cargo run -- repl"
-docker compose run --rm dev bash -c "cargo run -- --dump-ast examples/hello.ox"
-docker compose run --rm dev bash -c "cargo run -- install ./my-package"
-
-# Via Cargo (if Rust is installed)
-cargo run -- run examples/hello.ox
-cargo run -- test examples/tests.ox
-cargo run -- repl
-```
-
 ---
 
 ## Language Examples
@@ -208,6 +169,26 @@ fn main() {
         a + b
     }
     println!("{}", add(3, 4));
+}
+```
+
+### Integer and Float Types
+
+Oxy supports Rust's full set of integer and float types with proper widths and wrapping behavior:
+
+```rust
+fn main() {
+    let a: i8 = 127;
+    let b = a + 1i8;       // -128 (wrapping)
+    let c = 255u8;
+    let d = c + 1u8;       // 0 (wrapping)
+    let e = 42i32;         // type suffix
+    let f = 3.14f32;       // float suffix
+    let g = 0xFFu8;        // hex with suffix
+
+    // Cross-type arithmetic promotes to wider type
+    let h: i64 = 5i8 + 10i32;   // promoted to i64
+    let i: f64 = 5i8 + 1.5f32;  // promoted to f64
 }
 ```
 
@@ -278,52 +259,31 @@ fn main() {
 }
 ```
 
-### Closures and Higher-Order Functions
+### Closures and Iterators
 
 ```rust
 fn main() {
     let numbers = vec![1, 2, 3, 4, 5];
 
-    let doubled: Vec<i64> = numbers.iter().map(|x| x * 2).collect();
+    // Iterator adapters are eager (return Vec)
+    let doubled = numbers.iter().map(|x| x * 2);
     println!("{:?}", doubled);
 
-    let evens: Vec<i64> = numbers.iter().filter(|x| x % 2 == 0).collect();
+    let evens = numbers.iter().filter(|x| x % 2 == 0);
     println!("{:?}", evens);
 
-    let sum = numbers.iter().fold(0, |acc, x| acc + x);
+    // Consumers work on Vec
+    let sum = numbers.iter().sum();
     println!("Sum: {}", sum);
+
+    let found = numbers.iter().find(|x| x > 3);
+    println!("First > 3: {:?}", found);
+
+    // Chain, enumerate, zip
+    let pairs = numbers.iter().enumerate().collect();
+    println!("{:?}", pairs);
 }
 ```
-
-### Iterator Chaining
-
-Oxy supports Rust-style iterator chaining on `Vec`:
-
-```rust
-fn main() {
-    let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-    // Chain operations together
-    let result = data.filter(|x| x % 2 == 0)
-                     .map(|x| x * 10)
-                     .take(3)
-                     .sum();
-    println!("{}", result);  // 60
-
-    // Zip, flatten, sort, etc.
-    let a = vec![1, 3, 2];
-    let b = vec!["one", "three", "two"];
-    println!("{:?}", a.zip(b));       // [(1, "one"), (3, "three"), (2, "two")]
-    println!("{:?}", a.sort());       // [1, 2, 3]
-    println!("{:?}", a.rev());        // [2, 3, 1]
-    println!("{:?}", a.min());        // Some(1)
-
-    let nested = vec![vec![1, 2], vec![3, 4]];
-    println!("{:?}", nested.flatten()); // [1, 2, 3, 4]
-}
-```
-
-**Available methods:** `map`, `filter`, `fold`, `any`, `all`, `find`, `position`, `enumerate`, `flat_map`, `collect`, `for_each`, `zip`, `take`, `skip`, `chain`, `flatten`, `sum`, `count`, `rev`, `sort`, `dedup`, `windows`, `chunks`, `min`, `max`
 
 ### Pattern Destructuring
 
@@ -339,19 +299,29 @@ fn main() {
     let [a, b, c] = coords;
     println!("{} {} {}", a, b, c);
 
-    // Or-patterns in match
-    let n = 3;
+    // Nested destructuring in match
+    let val = Some((1, 2));
+    match val {
+        Some((x, y)) => println!("({}, {})", x, y),
+        None => println!("nothing"),
+    }
+}
+```
+
+### Match Guards
+
+```rust
+fn main() {
+    let n = 5;
     match n {
-        1 | 2 => println!("one or two"),
-        3 | 4 => println!("three or four"),
-        _ => println!("other"),
+        x if x < 0 => println!("negative"),
+        x if x % 2 == 0 => println!("even"),
+        _ => println!("odd"),
     }
 }
 ```
 
 ### Testing
-
-Oxy has a built-in test runner, just like Rust. Mark functions with `#[test]` and use `assert!`, `assert_eq!`, and `assert_ne!` macros:
 
 ```rust
 // math_tests.ox
@@ -375,34 +345,16 @@ fn test_factorial() {
     assert_eq!(factorial(0), 1);
     assert_eq!(factorial(5), 120);
 }
-
-#[test]
-fn test_negative() {
-    assert_ne!(add(1, 1), 3);
-    assert!(add(1, 1) > 0, "sum should be positive");
-}
 ```
 
-Run your tests:
-
-```bash
-# Via Docker
-docker compose run --rm dev bash -c "cargo run -- test math_tests.ox"
-
-# Via Cargo
-cargo run -- test math_tests.ox
 ```
-
-Output:
-
-```
+$ oxy test math_tests.ox
 running tests in math_tests.ox
 
   test_add ... ok
   test_factorial ... ok
-  test_negative ... ok
 
-test result: ok. 3 passed
+test result: ok. 2 passed
 ```
 
 #### Assert Macros
@@ -418,174 +370,37 @@ test result: ok. 3 passed
 
 ```rust
 fn main() {
-    struct User {
-        name: String,
-        age: i64,
-    }
+    let data = json::parse(r#"{"name": "Alice", "age": 30}"#).unwrap();
+    println!("{}", data.name);
+    println!("{}", data.age);
 
-    let user = User { name: "Alice".to_string(), age: 30 };
-    let json_str = json::serialize(user);
-    println!("{}", json_str);
-
-    let parsed = json::deserialize(&json_str);
-    println!("Name: {}", parsed.name);
+    let output = json::serialize(data);
+    println!("{}", output);
 }
 ```
-
-### HTTP Requests
-
-```rust
-fn main() {
-    let response = http::get("https://httpbin.org/get");
-    println!("Status: {}", response.status);
-    println!("Body: {}", response.body);
-}
-```
-
-### Web Server
-
-Oxy includes a built-in HTTP server with Express-like routing, path parameters, query strings, and static file serving:
-
-```rust
-fn main() {
-    let app = Server::new();
-
-    // Simple routes
-    app.get("/", |req| {
-        Response::html("<h1>Hello, Oxy!</h1>")
-    });
-
-    // Path parameters
-    app.get("/users/:id", |req| {
-        let id = req.params.get("id").unwrap_or("unknown");
-        Response::json(format!("{{\"id\": \"{}\"}}", id))
-    });
-
-    // POST with request body
-    app.post("/echo", |req| {
-        Response::text(req.body)
-    });
-
-    // Custom status codes
-    app.get("/not-found", |req| {
-        Response::status(404, "Not Found")
-    });
-
-    // Static files
-    app.static_files("./public");
-
-    // Start listening
-    app.listen("127.0.0.1:8080");
-}
-```
-
-**Request object fields:** `method`, `path`, `body`, `params` (HashMap), `query` (HashMap), `headers` (HashMap)
-
-**Response helpers:**
-| Function | Description |
-|----------|-------------|
-| `Response::text(body)` | 200 plain text response |
-| `Response::json(body)` | 200 JSON response with `application/json` content type |
-| `Response::html(body)` | 200 HTML response with `text/html` content type |
-| `Response::status(code, body)` | Response with custom status code |
-
-**Supported HTTP methods:** `app.get()`, `app.post()`, `app.put()`, `app.delete()`, `app.patch()`
-
-### Database (SQLite)
-
-Oxy includes a built-in SQLite database with parameterized queries:
-
-```rust
-fn main() {
-    let db = Db::memory();  // or Db::open("app.db") for a file
-
-    db.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
-    db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Alice", 30]);
-    db.execute("INSERT INTO users (name, age) VALUES (?1, ?2)", vec!["Bob", 25]);
-
-    // Query returns Vec of HashMaps
-    let rows = db.query("SELECT name, age FROM users WHERE age > ?1", vec![20]);
-    for row in rows {
-        println!("{} is {}", row.get("name").unwrap(), row.get("age").unwrap());
-    }
-
-    // Single row lookup (returns Option)
-    let user = db.query_row("SELECT * FROM users WHERE id = ?1", vec![1]);
-
-    println!("Last ID: {}", db.last_insert_id());
-    db.close();
-}
-```
-
-**Methods:**
-| Method | Description |
-|--------|-------------|
-| `Db::open(path)` | Open or create a SQLite database file |
-| `Db::memory()` | Open an in-memory database |
-| `db.execute(sql)` / `db.execute(sql, params)` | Execute a statement, returns rows affected |
-| `db.query(sql)` / `db.query(sql, params)` | Query rows, returns `Vec<HashMap>` |
-| `db.query_row(sql, params)` | Query a single row, returns `Option<HashMap>` |
-| `db.last_insert_id()` | Get the last auto-increment ID |
-| `db.close()` | Close the database connection |
-
-### Package Manager
-
-Oxy has a built-in package manager. Packages are directories of `.ox` files with a `package.ox` manifest, installed to `~/.oxy/packages/`.
-
-**Package manifest (`package.ox`):**
-```rust
-name = "my-package"
-version = "0.1.0"
-entry = "lib.ox"
-```
-
-**Install and use a package:**
-```bash
-# Install from a local path
-oxy install ./my-package
-
-# Install from a git URL
-oxy install https://github.com/user/my-package
-```
-
-```rust
-// Use the installed package in your code
-mod my_package;
-fn main() {
-    my_package::greet();
-}
-```
-
-Module resolution automatically searches installed packages — no extra configuration needed.
-
-> 📁 See the `examples/` directory for more complete examples covering all features.
 
 ---
 
 ## Standard Library
 
-Oxy includes a comprehensive standard library accessible via `std::` paths:
+Oxy includes a standard library accessible via `std::` paths (or directly for `math`, `json`):
 
 | Module | Functions | Description |
 |--------|-----------|-------------|
-| `math` | `sqrt`, `sin`, `cos`, `tan`, `abs`, `pow`, `floor`, `ceil`, `round`, `log`, `min`, `max`, `gcd`, `lcm`, `PI`, `E` | Math functions and constants |
+| `math` | `sqrt`, `sin`, `cos`, `tan`, `abs`, `pow`, `floor`, `ceil`, `round`, `log`, `log2`, `log10`, `min`, `max`, `gcd`, `lcm`, `PI`, `E` | Math functions and constants |
 | `rand` | `random`, `range`, `bool` | Pseudo-random number generation |
 | `time` | `now`, `millis`, `elapsed` | Wall-clock time and duration |
 | `std::fs` | `read_to_string`, `write`, `append`, `exists`, `is_file`, `is_dir`, `create_dir`, `create_dir_all`, `read_dir`, `remove_file`, `remove_dir`, `rename`, `copy`, `canonicalize`, `metadata` | File system operations |
-| `std::env` | `args`, `var`, `vars`, `current_dir`, `set_current_dir`, `home_dir` | Environment variables |
-| `std::process` | `exit`, `command`, `command_with_args` | Process control and command execution |
+| `std::env` | `args`, `var`, `vars`, `current_dir`, `home_dir` | Environment variables |
+| `std::process` | `command`, `command_with_args` | Process/command execution |
 | `std::regex` | `is_match`, `find`, `find_all`, `captures`, `replace`, `replace_all`, `split` | Regular expressions |
 | `std::net` | `tcp_connect`, `tcp_send`, `tcp_listen`, `udp_bind`, `udp_send_to`, `lookup_host` | TCP/UDP networking |
-| `json` | `serialize`, `deserialize`, `parse`, `to_string_pretty` | JSON serialization |
-| `http` | `get`, `post`, `put`, `delete`, `patch`, `get_json`, `post_json` | HTTP client |
-| `Server` | `new`, `get`, `post`, `put`, `delete`, `patch`, `static_files`, `listen` | HTTP server with routing |
-| `Response` | `text`, `json`, `html`, `status` | HTTP response builders |
-| `Db` | `open`, `memory`, `execute`, `query`, `query_row`, `last_insert_id`, `close` | SQLite database |
+| `json` | `parse`, `serialize`, `deserialize`, `to_string_pretty` | JSON serialization |
 
 ```rust
 fn main() {
     // File I/O
-    let _ = std::fs::write("hello.txt", "Hello from Oxy!");
+    std::fs::write("hello.txt", "Hello from Oxy!");
     let content = std::fs::read_to_string("hello.txt").unwrap();
     println!("{}", content);
 
@@ -593,16 +408,12 @@ fn main() {
     let has_email = std::regex::is_match(r"\w+@\w+\.\w+", "user@example.com");
     println!("Has email: {}", has_email);
 
-    // Run a command
-    let output = std::process::command_with_args("echo", vec!["Hello!"]).unwrap();
-    println!("Output: {}", output.stdout);
-
     // Math
     println!("PI = {}", math::PI);
     println!("sqrt(2) = {}", math::sqrt(2.0));
 
     // Cleanup
-    let _ = std::fs::remove_file("hello.txt");
+    std::fs::remove_file("hello.txt");
 }
 ```
 
@@ -610,72 +421,22 @@ fn main() {
 
 ## VS Code Extension
 
-Oxy has a VS Code extension with syntax highlighting and a built-in Language Server (LSP) for a full IDE experience.
+Oxy has a VS Code extension with syntax highlighting and a Language Server (LSP):
 
-### Features
-
-- 🎨 **Syntax highlighting** — keywords, types, strings, comments, macros
-- ⚠️ **Real-time diagnostics** — parse errors and type errors shown as you type
-- 💡 **Autocompletion** — keywords, types, functions, snippets, and dot-completions (method suggestions after `.`)
-- 📝 **Hover info** — rich signatures with types for functions, structs, enums
-- 🗂️ **Document symbols** — outline view (functions, structs, enums, traits)
-- 🔗 **Go-to definition** — jump to definitions in the same file
-
-### Option A: Install from source (symlink)
-
-Best for development — changes to the extension are reflected immediately.
+- Syntax highlighting — keywords, types, strings, comments, macros
+- Real-time diagnostics — parse and type errors shown as you type
+- Autocompletion — keywords, types, functions, snippets, dot-completions
+- Hover info — signatures with types for functions, structs, enums
+- Document symbols — outline view
+- Go-to definition — jump to definitions in the same file
 
 ```bash
-# 1. Install extension dependencies (one-time)
-docker compose run --rm setup
-
-# 2. Symlink into VS Code extensions
+# Install from source (symlink)
 ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/oxy-lang
 
-# 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
-```
-
-### Option B: Build and install as .vsix
-
-Best for distribution — produces a standalone installable package.
-
-```bash
-# 1. Build the .vsix package
+# Or build as .vsix
 docker compose run --rm build-ext
-
-# 2. Install in VS Code
 code --install-extension editors/vscode/oxy-lang-0.1.0.vsix
-
-# 3. Reload VS Code: Cmd+Shift+P → "Reload Window"
-```
-
-### How the LSP works
-
-When you open a `.ox` file, the extension automatically starts the Oxy Language Server via Docker:
-
-```
-VS Code ←→ docker compose run --rm -T dev cargo run --release -p oxy-lsp ←→ stdin/stdout
-```
-
-- Docker starts **once** and the LSP stays running for your entire VS Code session
-- No local Rust installation needed — everything runs inside the container
-- First launch takes ~5-10 seconds (Docker + compile), subsequent opens are instant
-
-### Advanced: Using a native binary
-
-If you have Rust installed locally and want instant LSP startup:
-
-```bash
-cargo build --release -p oxy-lsp
-```
-
-Then in VS Code settings (`Cmd+,`):
-
-```json
-{
-    "oxy.lsp.mode": "native",
-    "oxy.lsp.path": "/absolute/path/to/project-oxy/target/release/oxy-lsp"
-}
 ```
 
 ### Extension Settings
@@ -688,60 +449,71 @@ Then in VS Code settings (`Cmd+,`):
 
 ---
 
+## Package Manager
+
+```bash
+# Install from a local path
+oxy install ./my-package
+
+# Install from a git URL
+oxy install https://github.com/user/my-package
+```
+
+Package manifest (`package.ox`):
+```rust
+name = "my-package"
+version = "0.1.0"
+entry = "lib.ox"
+```
+
+---
+
 ## Project Structure
 
 ```
 oxy/
 ├── crates/
-│   ├── oxy-core/       # Language engine (lexer, parser, AST, interpreter, type checker, stdlib)
+│   ├── oxy-core/       # Language engine (lexer, parser, compiler, VM, type checker, stdlib)
 │   │   └── src/
-│   │       ├── compiler/     # Bytecode compiler (single-pass, 40+ opcodes)
-│   │       ├── vm/           # Stack-based bytecode VM (default execution engine)
-│   │       ├── interpreter/  # Tree-walking evaluator (fallback for dynamic paths)
+│   │       ├── compiler/     # Bytecode compiler (AST → stack-based VM opcodes)
+│   │       ├── vm/           # Stack-based bytecode VM with 40+ opcodes
 │   │       ├── type_checker/ # Static type validation before execution
 │   │       ├── package/      # Package manager (install, manifest parsing)
 │   │       ├── parser/       # Pratt parser (15 precedence levels)
 │   │       ├── lexer/        # Tokenizer (~60 token kinds)
-│   │       └── ast/          # AST nodes (30 expr + 12 stmt + 10 item variants)
+│   │       └── ast/          # AST node definitions
 │   ├── oxy-cli/        # CLI binary (run, repl, test, install)
-│   └── oxy-lsp/        # Language Server Protocol server (diagnostics, completions, hover)
+│   └── oxy-lsp/        # LSP server (diagnostics, completions, hover)
 ├── editors/
 │   └── vscode/             # VS Code extension (syntax + LSP client)
-├── examples/               # Example .ox programs (15+ examples)
-├── tests/                  # Integration tests
+├── examples/               # Example .ox programs including 106 LeetCode solutions
+├── playground/wasm/        # WebAssembly playground
 ├── Dockerfile              # Multi-stage: builder, runtime, dev
-├── docker-compose.yml      # Dev, test, setup, build services
-├── CLAUDE.md               # AI assistant context
-├── CONTRIBUTING.md         # Contribution guidelines + architecture overview
+├── docker-compose.yml      # Dev, test, setup, build-ext services
 └── LICENSE                 # MIT license
 ```
 
-## Docker Services
-
-| Service | Command | Purpose |
-|---------|---------|---------|
-| `setup` | `docker compose run --rm setup` | One-time: install npm deps for VS Code extension |
-| `dev` | `docker compose run --rm dev bash` | Interactive dev shell with Rust + Node.js |
-| `test` | `docker compose run --rm test` | Run full CI checks (fmt + clippy + tests) |
-| `build-ext` | `docker compose run --rm build-ext` | Package VS Code extension as `.vsix` |
-| `build` | `docker compose build build` | Build release Docker image |
+---
 
 ## Development
 
 All commands via Docker (no local Rust needed):
 
 ```bash
-# Run all tests (670+ tests)
+# Run all tests
 docker compose run --rm dev bash -c "cargo test --workspace"
 
 # Check formatting
 docker compose run --rm dev bash -c "cargo fmt --all --check"
 
 # Run linter
-docker compose run --rm dev bash -c "cargo clippy -- -D warnings"
+docker compose run --rm dev bash -c "cargo clippy --all-targets --all-features -- -D warnings"
 
 # Run a specific test
 docker compose run --rm dev bash -c "cargo test -p oxy-core test_name"
+
+# Full CI check
+docker compose run --rm test
 ```
 
 ## Contributing
