@@ -2115,22 +2115,17 @@ impl Compiler {
                         }
                     }
                 } else {
-                    // Check if callee is a local variable (closure/function value)
-                    if let Expr::Ident(name, _) = callee.as_ref() {
-                        if self.sym.get(name).is_some() {
-                            // Native CallClosure for indirect calls
-                            self.compile_expr(callee)?;
-                            for arg in args {
-                                self.compile_expr(arg)?;
-                            }
-                            self.emit(OpCode::CallClosure {
-                                arg_count: args.len(),
-                            });
-                            return Ok(());
-                        }
+                    // Unknown at compile time — emit dynamic call via CallClosure.
+                    // This handles closures from variables (|x|), array indexing (arr[0]),
+                    // field access (obj.func), and other dynamic expressions.
+                    self.compile_expr(callee)?;
+                    for arg in args {
+                        self.compile_expr(arg)?;
                     }
-                    // Unknown function — not yet supported in native bytecode
-                    return Err(self.not_yet_supported("Call to unknown function", expr.span()));
+                    self.emit(OpCode::CallClosure {
+                        arg_count: args.len(),
+                    });
+                    return Ok(());
                 }
                 Ok(())
             }

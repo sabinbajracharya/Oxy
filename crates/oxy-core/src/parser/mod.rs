@@ -521,6 +521,35 @@ impl Parser {
                 self.advance();
             }
         }
+        // Accept `fn(T1, T2) -> Ret` function type syntax
+        if self.check(&TokenKind::Fn) {
+            self.advance();
+            self.expect(TokenKind::LParen)?;
+            let mut param_types = Vec::new();
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    param_types.push(self.parse_type_annotation()?.name);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.expect(TokenKind::RParen)?;
+            let mut name = String::from("fn(");
+            for (i, p) in param_types.iter().enumerate() {
+                if i > 0 {
+                    name.push_str(", ");
+                }
+                name.push_str(p);
+            }
+            name.push(')');
+            if self.match_token(&TokenKind::Arrow) {
+                let ret = self.parse_type_annotation()?;
+                name.push_str(" -> ");
+                name.push_str(&ret.name);
+            }
+            return Ok(TypeAnnotation { name, span });
+        }
         let name = self.expect_ident()?;
         // Skip generic type args: `Vec<i64>`, `HashMap<K, V>`
         if self.check(&TokenKind::Lt) {
