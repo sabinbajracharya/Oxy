@@ -1637,6 +1637,20 @@ impl Compiler {
                 args,
                 ..
             } => {
+                // If the receiver is a local variable, check if this is an
+                // &mut self method so we can write the result back.
+                let receiver_slot = if let Expr::Ident(name, _) = object.as_ref() {
+                    self.sym.get(name).filter(|_| {
+                        // Only write back for &mut self methods (return_type is None
+                        // and first param is "self").
+                        self.fn_meta.get(method).map_or(false, |(params, _, ret)| {
+                            ret.is_none()
+                                && params.first().map_or(false, |p| p.name == "self")
+                        })
+                    })
+                } else {
+                    None
+                };
                 self.compile_expr(object)?;
                 for arg in args {
                     self.compile_expr(arg)?;
@@ -1645,6 +1659,10 @@ impl Compiler {
                     method_name: method.clone(),
                     arg_count: args.len(),
                 });
+                if let Some(slot) = receiver_slot {
+                    self.emit(OpCode::Dup);
+                    self.emit(OpCode::StoreLocal(slot));
+                }
                 Ok(())
             }
 
