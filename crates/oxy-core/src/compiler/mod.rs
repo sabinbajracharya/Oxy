@@ -813,7 +813,7 @@ impl Compiler {
                 Pattern::Ident(name, _) => {
                     self.sym.define(name);
                 }
-                Pattern::EnumVariant { fields, .. } => {
+                Pattern::EnumVariant { fields, .. } | Pattern::Tuple(fields, _) => {
                     self.define_pattern_slots(fields);
                 }
                 _ => {}
@@ -842,7 +842,19 @@ impl Compiler {
                 Ok(())
             }
             Pattern::Literal(_) => Ok(()), // no binding needed
-            _ => Ok(()),                   // other patterns defer to Eval or not yet supported
+            Pattern::Tuple(patterns, _) => {
+                // Stack: [Tuple_value]. Extract elements by index and bind sub-patterns.
+                let temp = self.sym.define("__tuple_tmp");
+                self.emit(OpCode::StoreLocal(temp));
+                for (i, pat) in patterns.iter().enumerate() {
+                    self.emit(OpCode::LoadLocal(temp));
+                    self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
+                    self.emit(OpCode::VecIndex);
+                    self.bind_pattern_data(pat)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()), // other patterns defer to Eval or not yet supported
         }
     }
 
