@@ -122,6 +122,8 @@ pub struct Compiler {
     current_impl_type: Option<String>,
     /// Trait definitions: trait_name → methods (for default method inheritance).
     trait_defs: HashMap<String, Vec<FnDef>>,
+    /// Type aliases: alias_name → actual_type_name (e.g., P → Point).
+    type_aliases: HashMap<String, String>,
 }
 
 impl Compiler {
@@ -173,6 +175,7 @@ impl Default for Compiler {
             require_main: true,
             current_impl_type: None,
             trait_defs: HashMap::new(),
+            type_aliases: HashMap::new(),
         }
     }
 }
@@ -304,7 +307,10 @@ impl Compiler {
                 self.compile_use(u)?;
                 Ok(())
             }
-            Item::TypeAlias { .. } => Ok(()),
+            Item::TypeAlias { name, target, .. } => {
+                self.type_aliases.insert(name.clone(), target.name.clone());
+                Ok(())
+            }
             Item::Const {
                 name, value, ..
             } => {
@@ -572,8 +578,10 @@ impl Compiler {
                 fields,
                 ..
             } => {
-                // Resolve enum_name via use aliases (e.g. Color → colors::Color)
-                let resolved_enum = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
+                // Resolve enum_name via type aliases and use aliases
+                let resolved_enum = self.type_aliases.get(enum_name).cloned()
+                    .or_else(|| self.use_aliases.get(enum_name).cloned())
+                    .unwrap_or_else(|| enum_name.clone());
                 self.emit(OpCode::EnumVariantEqual {
                     enum_name: resolved_enum,
                     variant: variant.clone(),
@@ -1571,11 +1579,11 @@ impl Compiler {
             }
 
             Expr::StructInit { name, fields, .. } => {
-                // Resolve `Self` to the current impl type name
+                // Resolve `Self` to the current impl type name, then type aliases
                 let resolved_name = if name == "Self" {
                     self.current_impl_type.clone().unwrap_or_else(|| name.clone())
                 } else {
-                    name.clone()
+                    self.type_aliases.get(name).cloned().unwrap_or_else(|| name.clone())
                 };
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
                 for (_, expr) in fields {
@@ -1610,15 +1618,17 @@ impl Compiler {
                 if segments.len() == 2 {
                     let enum_name = &segments[0];
                     let variant = &segments[1];
-                    // Check enum_defs with original name and use-aliased name
-                    let lookup_name = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
-                    let enum_key = self.enum_defs.get(enum_name).or_else(|| self.enum_defs.get(&lookup_name));
+                    // Resolve via type aliases and use aliases
+                    let resolved_enum = self.type_aliases.get(enum_name).cloned()
+                        .or_else(|| self.use_aliases.get(enum_name).cloned())
+                        .unwrap_or_else(|| enum_name.clone());
+                    let enum_key = self.enum_defs.get(enum_name)
+                        .or_else(|| self.enum_defs.get(&resolved_enum));
                     if let Some(ed) = enum_key {
                         for v in &ed.variants {
                             if &v.name == variant {
-                                let emit_name = self.use_aliases.get(enum_name).cloned().unwrap_or_else(|| enum_name.clone());
                                 self.emit(OpCode::ConstEnumVariant {
-                                    enum_name: emit_name,
+                                    enum_name: resolved_enum.clone(),
                                     variant: variant.clone(),
                                     data: vec![],
                                 });
@@ -1663,9 +1673,12 @@ impl Compiler {
                         self.emit(OpCode::Call { target, arg_count: args.len() });
                         return Ok(());
                     }
-                    // Try use-aliased prefix (e.g. `use geometry::Point` → `geometry::Point::new`)
-                    if let Some(aliased_prefix) = self.use_aliases.get(&path[0]) {
-                        let aliased = format!("{}::{}", aliased_prefix, &path[1]);
+                    // Try type alias + use-aliased prefix
+                    let prefix = &path[0];
+                    let resolved_prefix = self.type_aliases.get(prefix).cloned()
+                        .or_else(|| self.use_aliases.get(prefix).cloned());
+                    if let Some(rp) = resolved_prefix {
+                        let aliased = format!("{}::{}", rp, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
                             self.emit(OpCode::Call { target, arg_count: args.len() });
                             return Ok(());
