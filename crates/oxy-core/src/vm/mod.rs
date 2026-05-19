@@ -9,14 +9,14 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
 use crate::lexer::IntegerSuffix;
-use crate::types::Value;
+use crate::types::{FloatWidth, IntegerWidth, Value};
 
 /// Bytecode instructions for the Oxy VM.
 #[derive(Debug, Clone)]
 pub enum OpCode {
     // --- Constants ---
-    ConstInt(i64),
-    ConstFloat(f64),
+    ConstInt(i64, crate::types::IntegerWidth),
+    ConstFloat(f64, crate::types::FloatWidth),
     ConstBool(bool),
     ConstString(String),
     ConstChar(char),
@@ -304,8 +304,17 @@ impl Vm {
             };
 
             match op {
-                OpCode::ConstInt(n) => self.stack.push(Value::Integer(n)),
-                OpCode::ConstFloat(n) => self.stack.push(Value::Float(n)),
+                OpCode::ConstInt(n, w) => self.stack.push(match w {
+                    IntegerWidth::I64 => Value::Integer(n), // legacy compat
+                    IntegerWidth::I8 => Value::I8(n as i8), IntegerWidth::I16 => Value::I16(n as i16),
+                    IntegerWidth::I32 => Value::I32(n as i32),
+                    IntegerWidth::U8 => Value::U8(n as u8), IntegerWidth::U16 => Value::U16(n as u16),
+                    IntegerWidth::U32 => Value::U32(n as u32), IntegerWidth::U64 => Value::U64(n as u64),
+                }),
+                OpCode::ConstFloat(n, w) => self.stack.push(match w {
+                    FloatWidth::F64 => Value::Float(n), // legacy compat
+                    FloatWidth::F32 => Value::F32(n as f32),
+                }),
                 OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
                 OpCode::ConstString(s) => self.stack.push(Value::String(s.clone())),
                 OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
@@ -1299,8 +1308,17 @@ impl Vm {
         match op {
             OpCode::ConstUnit => self.stack.push(Value::Unit),
             OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
-            OpCode::ConstInt(n) => self.stack.push(Value::Integer(n)),
-            OpCode::ConstFloat(f) => self.stack.push(Value::Float(f)),
+            OpCode::ConstInt(n, w) => self.stack.push(match w {
+                IntegerWidth::I64 => Value::Integer(n), // legacy compat
+                IntegerWidth::I8 => Value::I8(n as i8), IntegerWidth::I16 => Value::I16(n as i16),
+                IntegerWidth::I32 => Value::I32(n as i32),
+                IntegerWidth::U8 => Value::U8(n as u8), IntegerWidth::U16 => Value::U16(n as u16),
+                IntegerWidth::U32 => Value::U32(n as u32), IntegerWidth::U64 => Value::U64(n as u64),
+            }),
+            OpCode::ConstFloat(f, w) => self.stack.push(match w {
+                FloatWidth::F64 => Value::Float(f), // legacy compat
+                FloatWidth::F32 => Value::F32(f as f32),
+            }),
             OpCode::ConstString(s) => self.stack.push(Value::String(s)),
             OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
             OpCode::Pop => { self.stack.pop(); }

@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::lexer::{FloatSuffix, IntegerSuffix};
 use crate::errors::FerriError;
+use crate::types::{FloatWidth, IntegerWidth};
 use crate::vm::{Chunk, OpCode};
 
 /// Symbol table tracking local variables in the current scope.
@@ -668,12 +669,12 @@ impl Compiler {
                 match (start, end) {
                     (Some(s), None) => {
                         self.emit(OpCode::Dup);
-                        self.emit(OpCode::ConstInt(*s));
+                        self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
                         self.emit(OpCode::Ge);
                     }
                     (None, Some(e)) => {
                         self.emit(OpCode::Dup);
-                        self.emit(OpCode::ConstInt(*e));
+                        self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
                         if *inclusive {
                             self.emit(OpCode::Le);
                         } else {
@@ -687,11 +688,11 @@ impl Compiler {
                         // slot 0 overwrites a local but that's OK — it's the first
                         // local which we don't need after the pattern check.
                         self.emit(OpCode::Dup);               // [s, s_copy]
-                        self.emit(OpCode::ConstInt(*s));
+                        self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
                         self.emit(OpCode::Ge);                // [s, lower]
                         self.emit(OpCode::StoreLocal(0));     // store at slot 0 (always exists)
                         self.emit(OpCode::Dup);               // [s, s]
-                        self.emit(OpCode::ConstInt(*e));
+                        self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
                         if *inclusive {
                             self.emit(OpCode::Le);
                         } else {
@@ -768,7 +769,7 @@ impl Compiler {
         for (i, pat) in patterns.iter().enumerate() {
             if let Pattern::Ident(name, _) = pat {
                 self.emit(OpCode::LoadLocal(temp_slot));
-                self.emit(OpCode::ConstInt(i as i64));
+                self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
                 self.emit(OpCode::VecIndex);
                 let slot = self.sym.define(name);
                 self.emit(OpCode::BindIdent(slot));
@@ -933,7 +934,7 @@ impl Compiler {
                 self.compile_expr(iterable)?;
                 self.emit(OpCode::MakeIter);
                 self.emit(OpCode::StoreLocal(vec_slot));
-                self.emit(OpCode::ConstInt(0));
+                self.emit(OpCode::ConstInt(0, IntegerWidth::I64));
                 self.emit(OpCode::StoreLocal(idx_slot));
 
                 // Jump to condition check on first iteration
@@ -961,7 +962,7 @@ impl Compiler {
                 // --- Advance: increment index (continue jumps here) ---
                 let advance_start = self.code.len();
                 self.emit(OpCode::LoadLocal(idx_slot));
-                self.emit(OpCode::ConstInt(1));
+                self.emit(OpCode::ConstInt(1, IntegerWidth::I64));
                 self.emit(OpCode::Add);
                 self.emit(OpCode::StoreLocal(idx_slot));
 
@@ -1060,7 +1061,7 @@ impl Compiler {
                 self.compile_expr(iterable)?;
                 self.emit(OpCode::MakeIter);
                 self.emit(OpCode::StoreLocal(vec_slot));
-                self.emit(OpCode::ConstInt(0));
+                self.emit(OpCode::ConstInt(0, IntegerWidth::I64));
                 self.emit(OpCode::StoreLocal(idx_slot));
                 let jump_to_check = self.emit(OpCode::Jump(0));
 
@@ -1072,7 +1073,7 @@ impl Compiler {
                 self.emit(OpCode::StoreLocal(tmp_slot));
                 for (i, &slot) in name_slots.iter().enumerate() {
                     self.emit(OpCode::LoadLocal(tmp_slot));
-                    self.emit(OpCode::ConstInt(i as i64));
+                    self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
                     self.emit(OpCode::VecIndex);
                     self.emit(OpCode::StoreLocal(slot));
                 }
@@ -1088,7 +1089,7 @@ impl Compiler {
 
                 let advance_start = self.code.len();
                 self.emit(OpCode::LoadLocal(idx_slot));
-                self.emit(OpCode::ConstInt(1));
+                self.emit(OpCode::ConstInt(1, IntegerWidth::I64));
                 self.emit(OpCode::Add);
                 self.emit(OpCode::StoreLocal(idx_slot));
 
@@ -1183,12 +1184,24 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), FerriError> {
         match expr {
-            Expr::IntLiteral(n, _, _) => {
-                self.emit(OpCode::ConstInt(*n));
+            Expr::IntLiteral(n, suffix, _) => {
+                let width = match suffix {
+                    IntegerSuffix::I8 => IntegerWidth::I8, IntegerSuffix::I16 => IntegerWidth::I16,
+                    IntegerSuffix::I32 => IntegerWidth::I32, IntegerSuffix::I64 => IntegerWidth::I64,
+                    IntegerSuffix::U8 => IntegerWidth::U8, IntegerSuffix::U16 => IntegerWidth::U16,
+                    IntegerSuffix::U32 => IntegerWidth::U32, IntegerSuffix::U64 => IntegerWidth::U64,
+                    IntegerSuffix::None => IntegerWidth::I64,
+                };
+                self.emit(OpCode::ConstInt(*n, width));
                 Ok(())
             }
-            Expr::FloatLiteral(n, _, _) => {
-                self.emit(OpCode::ConstFloat(*n));
+            Expr::FloatLiteral(n, suffix, _) => {
+                let width = match suffix {
+                    FloatSuffix::F32 => FloatWidth::F32,
+                    FloatSuffix::F64 => FloatWidth::F64,
+                    FloatSuffix::None => FloatWidth::F64,
+                };
+                self.emit(OpCode::ConstFloat(*n, width));
                 Ok(())
             }
             Expr::BoolLiteral(b, _) => {
@@ -1221,10 +1234,10 @@ impl Compiler {
                 if let Some(val) = self.const_values.get(name) {
                     match val {
                         crate::types::Value::Integer(n) => {
-                            self.emit(OpCode::ConstInt(*n));
+                            self.emit(OpCode::ConstInt(*n, IntegerWidth::I64));
                         }
                         crate::types::Value::Float(n) => {
-                            self.emit(OpCode::ConstFloat(*n));
+                            self.emit(OpCode::ConstFloat(*n, FloatWidth::F64));
                         }
                         crate::types::Value::Bool(b) => {
                             self.emit(OpCode::ConstBool(*b));
@@ -1602,15 +1615,15 @@ impl Compiler {
                 if let Some(s) = start {
                     self.compile_expr(s)?;
                 } else {
-                    self.emit(OpCode::ConstInt(i64::MIN));
+                    self.emit(OpCode::ConstInt(i64::MIN, IntegerWidth::I64));
                 }
                 if let Some(e) = end {
                     self.compile_expr(e)?;
                 } else {
-                    self.emit(OpCode::ConstInt(i64::MAX));
+                    self.emit(OpCode::ConstInt(i64::MAX, IntegerWidth::I64));
                 }
                 if *inclusive {
-                    self.emit(OpCode::ConstInt(1));
+                    self.emit(OpCode::ConstInt(1, IntegerWidth::I64));
                     self.emit(OpCode::Add);
                 }
                 self.emit(OpCode::MakeRange);
@@ -1645,7 +1658,7 @@ impl Compiler {
             Expr::FieldAccess { object, field, .. } => {
                 self.compile_expr(object)?;
                 if let Ok(idx) = field.parse::<i64>() {
-                    self.emit(OpCode::ConstInt(idx));
+                    self.emit(OpCode::ConstInt(idx, IntegerWidth::I64));
                     self.emit(OpCode::VecIndex);
                 } else {
                     self.emit(OpCode::FieldAccess {
@@ -1759,11 +1772,11 @@ impl Compiler {
                     if enum_name == "math" {
                         match variant.as_str() {
                             "PI" => {
-                                self.emit(OpCode::ConstFloat(std::f64::consts::PI));
+                                self.emit(OpCode::ConstFloat(std::f64::consts::PI, FloatWidth::F64));
                                 return Ok(());
                             }
                             "E" => {
-                                self.emit(OpCode::ConstFloat(std::f64::consts::E));
+                                self.emit(OpCode::ConstFloat(std::f64::consts::E, FloatWidth::F64));
                                 return Ok(());
                             }
                             _ => {}
