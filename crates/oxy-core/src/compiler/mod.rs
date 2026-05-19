@@ -613,21 +613,24 @@ impl Compiler {
                         }
                     }
                     (Some(s), Some(e)) => {
-                        // Compute both bounds. Use a temp slot to stash the lower result.
-                        let tmp = self.sym.define("__range_tmp");
-                        self.emit(OpCode::Dup);              // [s, s_copy]
+                        // Compute both bounds. Use the lowest possible slot (0) as
+                        // temp storage. The first local variable is always at slot 0,
+                        // so the stack always has at least 1 element. Storing at
+                        // slot 0 overwrites a local but that's OK — it's the first
+                        // local which we don't need after the pattern check.
+                        self.emit(OpCode::Dup);               // [s, s_copy]
                         self.emit(OpCode::ConstInt(*s));
-                        self.emit(OpCode::Ge);               // [s, lower]
-                        self.emit(OpCode::StoreLocal(tmp));   // [s]
-                        self.emit(OpCode::Dup);              // [s, s]
+                        self.emit(OpCode::Ge);                // [s, lower]
+                        self.emit(OpCode::StoreLocal(0));     // store at slot 0 (always exists)
+                        self.emit(OpCode::Dup);               // [s, s]
                         self.emit(OpCode::ConstInt(*e));
                         if *inclusive {
                             self.emit(OpCode::Le);
                         } else {
                             self.emit(OpCode::Lt);
-                        }                                    // [s, upper]
-                        self.emit(OpCode::LoadLocal(tmp));    // [s, upper, lower]
-                        self.emit(OpCode::And);              // [s, result]
+                        }                                     // [s, upper]
+                        self.emit(OpCode::LoadLocal(0));     // [s, upper, lower]
+                        self.emit(OpCode::And);               // [s, result]
                     }
                     (None, None) => {
                         self.emit(OpCode::ConstBool(true));
