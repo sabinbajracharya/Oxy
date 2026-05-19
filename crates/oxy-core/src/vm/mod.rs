@@ -1896,6 +1896,49 @@ fn method_name_from_op(f: fn(Value, Value) -> Result<Value, String>) -> &'static
 
 // --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
 
+// --- Width-aware integer helpers ---
+
+/// Returns the bit-width of an integer type (for promotion decisions).
+fn integer_rank(v: &Value) -> Option<u32> {
+    match v {
+        Value::I8(_) | Value::U8(_) => Some(8),
+        Value::I16(_) | Value::U16(_) => Some(16),
+        Value::I32(_) | Value::U32(_) => Some(32),
+        Value::I64(_) | Value::U64(_) => Some(64),
+        _ => None,
+    }
+}
+
+/// Promote two integers to a common type, returning (widened_a, widened_b, result_width).
+/// Same-width stays same-width. Cross-width promotes to the wider signed type.
+fn promote_ints(a: Value, b: Value) -> (Value, Value) {
+    let ra = integer_rank(&a).unwrap_or(64);
+    let rb = integer_rank(&b).unwrap_or(64);
+    if ra == rb && std::mem::discriminant(&a) == std::mem::discriminant(&b) {
+        (a, b) // same type, no promotion needed
+    } else {
+        // Promote both to I64 for simplicity (widest signed type)
+        (Value::I64(a.as_i64()), Value::I64(b.as_i64()))
+    }
+}
+
+/// Wrap an i64 result back to the target integer variant.
+fn wrap_to(v: i64, target: &Value) -> Value {
+    match target {
+        Value::I8(_) => Value::I8(v as i8),
+        Value::I16(_) => Value::I16(v as i16),
+        Value::I32(_) => Value::I32(v as i32),
+        Value::I64(_) => Value::I64(v),
+        Value::U8(_) => Value::U8(v as u8),
+        Value::U16(_) => Value::U16(v as u16),
+        Value::U32(_) => Value::U32(v as u32),
+        Value::U64(_) => Value::U64(v as u64),
+        _ => Value::I64(v),
+    }
+}
+
+// --- Arithmetic ---
+
 fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     // String concatenation
     if let (Value::String(sa), Value::String(sb)) = (&a, &b) {
@@ -1903,34 +1946,37 @@ fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     }
     if let Value::String(s) = &a { return Ok(Value::String(format!("{s}{b}"))); }
     if let Value::String(s) = &b { return Ok(Value::String(format!("{a}{s}"))); }
-    // Numeric: use to_f64 if either is float, otherwise as_i64
+    // Float wins
     if a.is_float() || b.is_float() {
-        Ok(Value::F64(a.to_f64() + b.to_f64()))
-    } else if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64().wrapping_add(b.as_i64())))
-    } else {
-        Err(format!("cannot add {} and {}", a.type_name(), b.type_name()))
+        return Ok(Value::F64(a.to_f64() + b.to_f64()));
     }
+    if a.is_integer() && b.is_integer() {
+        let (a, b) = promote_ints(a, b);
+        return Ok(wrap_to(a.as_i64().wrapping_add(b.as_i64()), &a));
+    }
+    Err(format!("cannot add {} and {}", a.type_name(), b.type_name()))
 }
 
 fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
-        Ok(Value::F64(a.to_f64() - b.to_f64()))
-    } else if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64().wrapping_sub(b.as_i64())))
-    } else {
-        Err(format!("cannot subtract {} and {}", a.type_name(), b.type_name()))
+        return Ok(Value::F64(a.to_f64() - b.to_f64()));
     }
+    if a.is_integer() && b.is_integer() {
+        let (a, b) = promote_ints(a, b);
+        return Ok(wrap_to(a.as_i64().wrapping_sub(b.as_i64()), &a));
+    }
+    Err(format!("cannot subtract {} and {}", a.type_name(), b.type_name()))
 }
 
 fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
-        Ok(Value::F64(a.to_f64() * b.to_f64()))
-    } else if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64().wrapping_mul(b.as_i64())))
-    } else {
-        Err(format!("cannot multiply {} and {}", a.type_name(), b.type_name()))
+        return Ok(Value::F64(a.to_f64() * b.to_f64()));
     }
+    if a.is_integer() && b.is_integer() {
+        let (a, b) = promote_ints(a, b);
+        return Ok(wrap_to(a.as_i64().wrapping_mul(b.as_i64()), &a));
+    }
+    Err(format!("cannot multiply {} and {}", a.type_name(), b.type_name()))
 }
 
 fn vm_div(a: Value, b: Value) -> Result<Value, String> {
@@ -1938,12 +1984,15 @@ fn vm_div(a: Value, b: Value) -> Result<Value, String> {
         return Err("division by zero".into());
     }
     if a.is_float() || b.is_float() {
-        Ok(Value::F64(a.to_f64() / b.to_f64()))
-    } else if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64() / b.as_i64()))
-    } else {
-        Err(format!("cannot divide {} and {}", a.type_name(), b.type_name()))
+        return Ok(Value::F64(a.to_f64() / b.to_f64()));
     }
+    if a.is_integer() && b.is_integer() {
+        let (a, b) = promote_ints(a, b);
+        let divisor = b.as_i64();
+        if divisor == 0 { return Err("division by zero".into()); }
+        return Ok(wrap_to(a.as_i64() / divisor, &a));
+    }
+    Err(format!("cannot divide {} and {}", a.type_name(), b.type_name()))
 }
 
 fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
@@ -1951,57 +2000,71 @@ fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
         return Err("modulo by zero".into());
     }
     if a.is_float() || b.is_float() {
-        Ok(Value::F64(a.to_f64() % b.to_f64()))
-    } else if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64() % b.as_i64()))
-    } else {
-        Err(format!("cannot compute modulo of {} and {}", a.type_name(), b.type_name()))
+        return Ok(Value::F64(a.to_f64() % b.to_f64()));
     }
+    if a.is_integer() && b.is_integer() {
+        let (a, b) = promote_ints(a, b);
+        let divisor = b.as_i64();
+        if divisor == 0 { return Err("modulo by zero".into()); }
+        return Ok(wrap_to(a.as_i64() % divisor, &a));
+    }
+    Err(format!("cannot compute modulo of {} and {}", a.type_name(), b.type_name()))
 }
 
 fn vm_neg(v: Value) -> Value {
-    if v.is_integer() { Value::I64(-v.as_i64()) }
-    else if v.is_float() { Value::F64(-v.to_f64()) }
-    else { v }
+    match v {
+        Value::I8(n) => Value::I8(n.wrapping_neg()),
+        Value::I16(n) => Value::I16(n.wrapping_neg()),
+        Value::I32(n) => Value::I32(n.wrapping_neg()),
+        Value::I64(n) => Value::I64(n.wrapping_neg()),
+        Value::F32(n) => Value::F32(-n),
+        Value::F64(n) => Value::F64(-n),
+        v => v,
+    }
 }
 
 fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64() & b.as_i64()))
+        let (a, b) = promote_ints(a, b);
+        Ok(wrap_to(a.as_i64() & b.as_i64(), &a))
     } else {
-        Err(format!("bitwise AND requires integers, got {} and {}", a.type_name(), b.type_name()))
+        Err(format!("bitwise AND requires integers"))
     }
 }
 
 fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64() | b.as_i64()))
+        let (a, b) = promote_ints(a, b);
+        Ok(wrap_to(a.as_i64() | b.as_i64(), &a))
     } else {
-        Err(format!("bitwise OR requires integers, got {} and {}", a.type_name(), b.type_name()))
+        Err(format!("bitwise OR requires integers"))
     }
 }
 
 fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64() ^ b.as_i64()))
+        let (a, b) = promote_ints(a, b);
+        Ok(wrap_to(a.as_i64() ^ b.as_i64(), &a))
     } else {
-        Err(format!("bitwise XOR requires integers",))
+        Err(format!("bitwise XOR requires integers"))
     }
 }
 
 fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64().wrapping_shl(b.as_u64() as u32)))
+        let shift = b.as_u64() as u32;
+        Ok(wrap_to(a.as_i64().wrapping_shl(shift), &a))
     } else {
-        Err(format!("shift left requires integers",))
+        Err(format!("shift left requires integers"))
     }
 }
 
 fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
-        Ok(Value::I64(a.as_i64().wrapping_shr(b.as_u64() as u32)))
+        let shift = b.as_u64() as u32;
+        Ok(wrap_to(a.as_i64().wrapping_shr(shift), &a))
     } else {
-        Err(format!("shift right requires integers",))
+        Err(format!("shift right requires integers"))
     }
 }
 
