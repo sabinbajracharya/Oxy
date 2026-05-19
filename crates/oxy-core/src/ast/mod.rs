@@ -530,6 +530,11 @@ pub enum Expr {
     Await { expr: Box<Expr>, span: Span },
     /// F-string expression: `f"Hello {name}!"`
     FString { parts: Vec<FStringPart>, span: Span },
+    /// Return expression (diverges): `return expr` or `return`
+    Return {
+        value: Option<Box<Expr>>,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -566,7 +571,8 @@ impl Expr {
             | Expr::Try { span: s, .. }
             | Expr::Closure { span: s, .. }
             | Expr::Await { span: s, .. }
-            | Expr::FString { span: s, .. } => *s,
+            | Expr::FString { span: s, .. }
+            | Expr::Return { span: s, .. } => *s,
             Expr::Block(block) => block.span,
         }
     }
@@ -1471,6 +1477,13 @@ impl Expr {
                     }
                 }
                 out.push('"');
+            }
+            Expr::Return { value, .. } => {
+                out.push_str("return");
+                if let Some(expr) = value {
+                    out.push(' ');
+                    expr.pretty_print(out, indent);
+                }
             }
             Expr::As {
                 expr, type_name, ..

@@ -1488,6 +1488,30 @@ impl Parser {
                 }))
             }
 
+            // Return as expression (for `match x { 0 => return 42, _ => 0 }`)
+            TokenKind::Return => {
+                let span = self.current_span();
+                self.advance();
+                // Parse optional return value
+                let value = if self.is_at_end()
+                    || matches!(
+                        self.peek_kind(),
+                        TokenKind::Semicolon
+                            | TokenKind::RBrace
+                            | TokenKind::Comma
+                            | TokenKind::RParen
+                            | TokenKind::RBracket
+                    ) {
+                    None
+                } else {
+                    Some(Box::new(self.parse_expr(Precedence::None)?))
+                };
+                Ok(Expr::Return {
+                    value,
+                    span: self.merge_spans(span, self.current_span()),
+                })
+            }
+
             // Unary operators
             TokenKind::Minus => {
                 let span = self.current_span();

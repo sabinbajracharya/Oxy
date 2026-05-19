@@ -761,6 +761,12 @@ impl TypeChecker {
                     _ => Ok(TypeInfo::Unknown),
                 }
             }
+            Expr::Return { value, .. } => {
+                if let Some(expr) = value {
+                    let _ = self.infer_expr(expr)?;
+                }
+                Ok(TypeInfo::Unknown) // diverging expression
+            }
             Expr::CompoundAssign {
                 target: _, value, ..
             } => {

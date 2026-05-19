@@ -2941,6 +2941,15 @@ impl Compiler {
                 };
                 Ok(())
             }
+            Expr::Return { value, .. } => {
+                if let Some(expr) = value {
+                    self.compile_expr(expr)?;
+                } else {
+                    self.emit(OpCode::ConstUnit);
+                }
+                self.emit(OpCode::Return);
+                Ok(())
+            }
         }
     }
 }
