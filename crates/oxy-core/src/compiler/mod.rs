@@ -869,19 +869,25 @@ impl Compiler {
         let temp_slot = self.sym.define("__destructure_tmp");
         self.emit(OpCode::StoreLocal(temp_slot));
         for (i, pat) in patterns.iter().enumerate() {
-            if let Pattern::Ident(name, _) = pat {
-                self.emit(OpCode::LoadLocal(temp_slot));
-                self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
-                self.emit(OpCode::VecIndex);
-                let slot = self.sym.define(name);
-                self.emit(OpCode::BindIdent(slot));
-            } else {
-                // Nested or rest/wildcard pattern — not supported yet
-                return Err(FerriError::Runtime {
-                    message: "complex destructure patterns not yet supported natively".into(),
-                    line: span.line,
-                    column: span.column,
-                });
+            match pat {
+                Pattern::Ident(name, _) => {
+                    self.emit(OpCode::LoadLocal(temp_slot));
+                    self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
+                    self.emit(OpCode::VecIndex);
+                    let slot = self.sym.define(name);
+                    self.emit(OpCode::BindIdent(slot));
+                }
+                Pattern::Wildcard(_) | Pattern::Rest(_) => {
+                    // Skip — no binding needed
+                }
+                _ => {
+                    // Nested pattern — not supported yet
+                    return Err(FerriError::Runtime {
+                        message: "complex destructure patterns not yet supported natively".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
             }
         }
         Ok(())

@@ -4,7 +4,7 @@
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind};
+use crate::lexer::{Span, Token, TokenKind};
 use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
 
 /// Parser for the Oxy language.
@@ -1193,15 +1193,15 @@ impl Parser {
     fn parse_prefix(&mut self) -> Result<Expr, FerriError> {
         match self.peek_kind().clone() {
             // Literals
-            TokenKind::IntLiteral(n, IntegerSuffix::None) => {
+            TokenKind::IntLiteral(n, suffix) => {
                 let span = self.current_span();
                 self.advance();
-                Ok(Expr::IntLiteral(n, IntegerSuffix::None, span))
+                Ok(Expr::IntLiteral(n, suffix, span))
             }
-            TokenKind::FloatLiteral(n, FloatSuffix::None) => {
+            TokenKind::FloatLiteral(n, suffix) => {
                 let span = self.current_span();
                 self.advance();
-                Ok(Expr::FloatLiteral(n, FloatSuffix::None, span))
+                Ok(Expr::FloatLiteral(n, suffix, span))
             }
             TokenKind::True => {
                 let span = self.current_span();
@@ -1648,7 +1648,7 @@ impl Parser {
             }
 
             // Check for tuple index: `.0`, `.1` etc.
-            if let TokenKind::IntLiteral(n, IntegerSuffix::None) = self.peek_kind() {
+            if let TokenKind::IntLiteral(n, _) = self.peek_kind() {
                 let n = *n;
                 let end_span = self.current_span();
                 self.advance();
@@ -2032,7 +2032,7 @@ impl Parser {
                 let inclusive = self.check(&TokenKind::DotDotEq);
                 let span = self.current_span();
                 self.advance();
-                if let TokenKind::IntLiteral(end, IntegerSuffix::None) = self.peek_kind().clone() {
+                if let TokenKind::IntLiteral(end, _) = self.peek_kind().clone() {
                     self.advance();
                     return Ok(Pattern::Range {
                         start: None,
@@ -2046,16 +2046,14 @@ impl Parser {
                 }
                 Ok(Pattern::Rest(span))
             }
-            TokenKind::IntLiteral(n, IntegerSuffix::None) => {
+            TokenKind::IntLiteral(n, suffix) => {
                 let val = n;
                 let start_span = self.current_span();
                 self.advance(); // consume the int literal
                 if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
                     let inclusive = self.check(&TokenKind::DotDotEq);
                     self.advance();
-                    let end = if let TokenKind::IntLiteral(m, IntegerSuffix::None) =
-                        self.peek_kind().clone()
-                    {
+                    let end = if let TokenKind::IntLiteral(m, _) = self.peek_kind().clone() {
                         self.advance();
                         Some(m)
                     } else {
@@ -2068,13 +2066,9 @@ impl Parser {
                         span: start_span,
                     });
                 }
-                Ok(Pattern::Literal(Expr::IntLiteral(
-                    val,
-                    IntegerSuffix::None,
-                    start_span,
-                )))
+                Ok(Pattern::Literal(Expr::IntLiteral(val, suffix, start_span)))
             }
-            TokenKind::FloatLiteral(_, FloatSuffix::None)
+            TokenKind::FloatLiteral(_, _)
             | TokenKind::True
             | TokenKind::False
             | TokenKind::StringLiteral(_)
@@ -2494,6 +2488,7 @@ pub fn parse(source: &str) -> Result<Program, FerriError> {
 #[allow(irrefutable_let_patterns)] // Item only has Function for now; more variants coming
 mod tests {
     use super::*;
+    use crate::lexer::IntegerSuffix;
 
     /// Extract the function body statements from a single-function program.
     fn parse_fn_body(src: &str) -> Vec<Stmt> {
