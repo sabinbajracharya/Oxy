@@ -7,7 +7,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         unreachable!()
     };
     match method {
-        "len" => Ok(Value::I64(s.len() as i64)),
+        "len" => Ok(Value::I64(s.chars().count() as i64)),
         "is_empty" => Ok(Value::Bool(s.is_empty())),
         "to_uppercase" => Ok(Value::String(s.to_uppercase())),
         "to_lowercase" => Ok(Value::String(s.to_lowercase())),

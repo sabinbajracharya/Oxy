@@ -244,8 +244,10 @@ impl<'src> Lexer<'src> {
                 if c == 'f' && !self.is_at_end() && self.peek() == '"' {
                     self.advance();
                     self.scan_fstring(start_offset)?
-                } else if c == 'r' && !self.is_at_end() && self.peek() == '"' {
-                    self.advance();
+                } else if c == 'r'
+                    && !self.is_at_end()
+                    && (self.peek() == '"' || self.peek() == '#')
+                {
                     self.scan_raw_string(start_offset)?
                 } else {
                     self.scan_identifier(c, start_offset)
