@@ -253,6 +253,10 @@ impl Compiler {
             }
             Item::Struct(s) => {
                 self.struct_defs.insert(s.name.clone(), s.clone());
+                // Handle #[derive(Default)] by generating a default() constructor
+                if s.attributes.iter().any(|a| a.name == "derive" && a.args.iter().any(|arg| arg == "Default")) {
+                    self.compile_derive_default(s)?;
+                }
                 Ok(())
             }
             Item::Enum(e) => {
@@ -321,6 +325,69 @@ impl Compiler {
                 Ok(())
             }
         }
+    }
+
+    /// Generate a `fn default() -> Self` for #[derive(Default)] structs.
+    fn compile_derive_default(&mut self, s: &StructDef) -> Result<(), FerriError> {
+        let fields = match &s.kind {
+            StructKind::Named(fields) => fields,
+            _ => return Ok(()), // tuple/unit structs: skip for now
+        };
+        // Build default field expressions
+        let default_span = s.span;
+        let mut field_exprs: Vec<(String, Expr)> = Vec::new();
+        for field in fields {
+            let default_val = match field.type_ann.name.as_str() {
+                "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "usize" => {
+                    Expr::IntLiteral(0, default_span)
+                }
+                "f64" | "f32" | "Float" => {
+                    Expr::FloatLiteral(0.0, default_span)
+                }
+                "String" | "str" => {
+                    Expr::StringLiteral(String::new(), default_span)
+                }
+                "bool" => {
+                    Expr::BoolLiteral(false, default_span)
+                }
+                "char" => {
+                    Expr::CharLiteral('\0', default_span)
+                }
+                _ => {
+                    // For unknown types, use a zero-ish default
+                    Expr::IntLiteral(0, default_span)
+                }
+            };
+            field_exprs.push((field.name.clone(), default_val));
+        }
+        // Build the struct init expression: StructName { field1: val1, ... }
+        let body_expr = Expr::StructInit {
+            name: s.name.clone(),
+            fields: field_exprs,
+            span: default_span,
+        };
+        // Build synthetic FnDef
+        let fn_def = FnDef {
+            name: "default".to_string(),
+            is_async: false,
+            generic_params: vec![],
+            params: vec![],
+            return_type: Some(TypeAnnotation {
+                name: "Self".to_string(),
+                span: default_span,
+            }),
+            body: Block {
+                stmts: vec![Stmt::Expr {
+                    expr: body_expr,
+                    has_semicolon: false,
+                }],
+                span: default_span,
+            },
+            attributes: vec![],
+            is_pub: false,
+            span: default_span,
+        };
+        self.compile_fn_item(&fn_def, Some(&s.name))
     }
 
     /// Compile a function or method body.

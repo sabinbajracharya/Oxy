@@ -4379,9 +4379,9 @@ fn main() {
         assert_eq!(out, vec!["Color { b: 0, g: 0, r: 255 }\n", "true\n"]);
     }
 
-    // #[test] DEFERRED: #[derive(Default)] not yet implemented in native compiler
+    #[test]
     fn test_derive_default() {
-        let _out = run_and_capture(
+        let out = run_and_capture(
             r#"
 #[derive(Default, Debug)]
 struct Config { width: i64, height: i64, title: String }
@@ -4392,7 +4392,9 @@ fn main() {
 }
 "#,
         );
-        // assert_eq!(out, vec!["Config { height: 0, title: \"\", width: 0 }\n"]);
+        assert!(out[0].contains("width: 0"));
+        assert!(out[0].contains("height: 0"));
+        assert!(out[0].contains("title: \"\""));
     }
 
     #[test]
