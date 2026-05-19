@@ -2919,6 +2919,233 @@ fn main() {
     assert_eq!(output, vec!["255\n"]);
 }
 
+// === Number width and cast tests ===
+
+#[test]
+fn test_suffixed_literal_all_widths() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    println!("{}", 42i8);
+    println!("{}", 1000i16);
+    println!("{}", 50000i32);
+    println!("{}", 1000000i64);
+    println!("{}", 255u8);
+    println!("{}", 60000u16);
+    println!("{}", 3000000000u32);
+    println!("{}", 123123123123u64);
+    println!("{}", 3.14f32);
+    println!("{}", 2.718f64);
+}"#,
+    );
+    assert_eq!(
+        output,
+        vec![
+            "42\n",
+            "1000\n",
+            "50000\n",
+            "1000000\n",
+            "255\n",
+            "60000\n",
+            "3000000000\n",
+            "123123123123\n",
+            "3.140000104904175\n",
+            "2.718\n"
+        ]
+    );
+}
+
+#[test]
+fn test_type_annotation_narrowing() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: i8 = 127;
+    let b: i16 = 32767;
+    let c: i32 = 100000;
+    let d: u8 = 255;
+    let e: u16 = 60000;
+    let f: u32 = 3000000000;
+    println!("{} {} {} {} {} {}", a, b, c, d, e, f);
+}"#,
+    );
+    assert_eq!(output, vec!["127 32767 100000 255 60000 3000000000\n"]);
+}
+
+#[test]
+fn test_wrapping_add_all_widths() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: i8 = 127;
+    println!("{}", a + 1i8);
+    let b: u8 = 255;
+    println!("{}", b + 1u8);
+    let c: i16 = 32767;
+    println!("{}", c + 1i16);
+    let d: u16 = 65535;
+    println!("{}", d + 1u16);
+}"#,
+    );
+    assert_eq!(output, vec!["-128\n", "0\n", "-32768\n", "0\n"]);
+}
+
+#[test]
+fn test_wrapping_sub_all_widths() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: i8 = -128;
+    println!("{}", a - 1i8);
+    let b: u8 = 0;
+    println!("{}", b - 1u8);
+    let c: u32 = 0;
+    println!("{}", c - 1u32);
+}"#,
+    );
+    assert_eq!(output, vec!["127\n", "255\n", "4294967295\n"]);
+}
+
+#[test]
+fn test_wrapping_mul() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: u8 = 16;
+    println!("{}", a * 16u8);
+    let b: i8 = 64;
+    println!("{}", b * 2i8);
+}"#,
+    );
+    assert_eq!(output, vec!["0\n", "-128\n"]);
+}
+
+#[test]
+fn test_as_cast_narrowing() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    println!("{}", 300u16 as u8);
+    println!("{}", 1000i16 as i8);
+    println!("{}", 50000u32 as u16);
+    println!("{}", (-1i32) as u32);
+}"#,
+    );
+    assert_eq!(output, vec!["44\n", "-24\n", "50000\n", "4294967295\n"]);
+}
+
+#[test]
+fn test_as_cast_widening() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    println!("{}", 42i8 as i64);
+    println!("{}", 255u8 as u64);
+    println!("{}", 1i8 as f64);
+    println!("{}", 1.5f32 as i64);
+}"#,
+    );
+    assert_eq!(output, vec!["42\n", "255\n", "1.0\n", "1\n"]);
+}
+
+#[test]
+fn test_cross_type_arithmetic_promotion() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    println!("{}", 5i8 + 10i32);
+    println!("{}", 255u8 + 1000u32);
+    println!("{}", 5i8 + 1.5f32);
+    println!("{}", 10u16 + 20i64);
+}"#,
+    );
+    assert_eq!(output, vec!["15\n", "1255\n", "6.5\n", "30\n"]);
+}
+
+#[test]
+fn test_unsigned_wrapping_at_boundaries() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: u8 = 255;
+    let b: u8 = 0;
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", a + 1u8);
+    println!("{}", b - 1u8);
+}"#,
+    );
+    assert_eq!(output, vec!["255\n", "0\n", "0\n", "255\n"]);
+}
+
+#[test]
+fn test_signed_wrapping_at_boundaries() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: i8 = 127;
+    let b: i8 = -128;
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", a + a);
+    println!("{}", b + b);
+}"#,
+    );
+    assert_eq!(output, vec!["127\n", "-128\n", "-2\n", "0\n"]);
+}
+
+#[test]
+fn test_negation_wrapping() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let x: i8 = -128;
+    println!("{}", -x);
+    let y: i16 = -32768;
+    println!("{}", -y);
+}"#,
+    );
+    assert_eq!(output, vec!["-128\n", "-32768\n"]);
+}
+
+#[test]
+fn test_large_hex_literal_with_suffix() {
+    let output = run_and_capture(
+        r#"
+fn main() {
+    println!("{}", 0xFFu8);
+    println!("{}", 0xFFFFu16);
+    println!("{}", 0xFFFFFFFFu32);
+    println!("{}", 0xFFFFFFFFFFFFFFFFu64 as u64);
+}"#,
+    );
+    assert_eq!(
+        output,
+        vec!["255\n", "65535\n", "4294967295\n", "18446744073709551615\n"]
+    );
+}
+
+#[test]
+fn test_literal_coercion_to_all_types() {
+    // Unsuffixed literal should be assignable to any integer type
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let a: i8 = 42;
+    let b: i16 = 42;
+    let c: i32 = 42;
+    let d: i64 = 42;
+    let e: u8 = 42;
+    let f: u16 = 42;
+    let g: u32 = 42;
+    let h: u64 = 42;
+    let sum = a as i64 + b as i64 + c as i64 + d + e as i64 + f as i64 + g as i64 + h as i64;
+    println!("{}", sum);
+}"#,
+    );
+    assert_eq!(output, vec!["336\n"]);
+}
+
 // === Phase 12: Type Aliases ===
 
 #[test]

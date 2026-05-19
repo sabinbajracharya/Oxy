@@ -1427,11 +1427,16 @@ impl Compiler {
             Stmt::Let {
                 name,
                 mutable,
+                type_ann,
                 value,
                 ..
             } => {
                 if let Some(expr) = value {
                     self.compile_expr(expr)?;
+                    // Narrow to the annotated type if it specifies a width
+                    if let Some(ann) = type_ann {
+                        emit_narrowing_cast(self, &ann.name);
+                    }
                 } else {
                     self.emit(OpCode::ConstUnit);
                 }
@@ -2911,13 +2916,20 @@ impl Compiler {
                 ..
             } => {
                 self.compile_expr(inner)?;
-                let target = match type_name.as_str() {
-                    "f64" | "f32" | "Float" => 0,   // → float
-                    "i64" | "i32" | "Integer" => 1, // → int
-                    "char" => 2,                    // → char
+                match type_name.as_str() {
+                    "i8" => self.emit(OpCode::CastInt(IntegerWidth::I8)),
+                    "i16" => self.emit(OpCode::CastInt(IntegerWidth::I16)),
+                    "i32" => self.emit(OpCode::CastInt(IntegerWidth::I32)),
+                    "i64" | "Integer" => self.emit(OpCode::CastInt(IntegerWidth::I64)),
+                    "u8" => self.emit(OpCode::CastInt(IntegerWidth::U8)),
+                    "u16" => self.emit(OpCode::CastInt(IntegerWidth::U16)),
+                    "u32" => self.emit(OpCode::CastInt(IntegerWidth::U32)),
+                    "u64" => self.emit(OpCode::CastInt(IntegerWidth::U64)),
+                    "f32" => self.emit(OpCode::CastFloat(FloatWidth::F32)),
+                    "f64" | "Float" => self.emit(OpCode::CastFloat(FloatWidth::F64)),
+                    "char" => self.emit(OpCode::CastToChar),
                     _ => return Ok(()),
                 };
-                self.emit(OpCode::Cast(target));
                 Ok(())
             }
         }
@@ -3136,6 +3148,26 @@ fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Value> {
 }
 
 /// Known built-in paths that the VM can dispatch natively.
+/// Emit a narrowing cast if the type annotation specifies an integer or float width.
+fn emit_narrowing_cast(compiler: &mut Compiler, type_name: &str) {
+    let op = match type_name {
+        "i8" => Some(OpCode::CastInt(IntegerWidth::I8)),
+        "i16" => Some(OpCode::CastInt(IntegerWidth::I16)),
+        "i32" => Some(OpCode::CastInt(IntegerWidth::I32)),
+        "i64" | "isize" => Some(OpCode::CastInt(IntegerWidth::I64)),
+        "u8" => Some(OpCode::CastInt(IntegerWidth::U8)),
+        "u16" => Some(OpCode::CastInt(IntegerWidth::U16)),
+        "u32" => Some(OpCode::CastInt(IntegerWidth::U32)),
+        "u64" | "usize" => Some(OpCode::CastInt(IntegerWidth::U64)),
+        "f32" => Some(OpCode::CastFloat(FloatWidth::F32)),
+        "f64" => Some(OpCode::CastFloat(FloatWidth::F64)),
+        _ => None,
+    };
+    if let Some(o) = op {
+        compiler.emit(o);
+    }
+}
+
 fn is_builtin_path(path: &[String]) -> bool {
     let segs: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
     let module = segs.first().copied().unwrap_or("");

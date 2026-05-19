@@ -168,9 +168,12 @@ pub enum OpCode {
     /// Try operator `?`: pop value; if Err(e) or None, return early with that value;
     /// otherwise push unwrapped inner value.
     TryPop,
-    /// Type cast: pop value, push converted value. Target: 0=int→float, 1=float→int,
-    /// 2=int→char, 3=char→int.
-    Cast(u8),
+    /// Cast the top of stack to a specific integer width (wrapping).
+    CastInt(IntegerWidth),
+    /// Cast the top of stack to a specific float width.
+    CastFloat(FloatWidth),
+    /// Cast the top of stack to char.
+    CastToChar,
 
     // --- Pattern matching ---
     /// Pop a value and store it in the given local slot (for pattern binding).
@@ -957,30 +960,21 @@ impl Vm {
                     }
                 }
 
-                OpCode::Cast(target) => {
+                OpCode::CastInt(target_width) => {
                     let val = self.stack.pop().unwrap_or(Value::Unit);
-                    let result = match target {
-                        0 => match val {
-                            Value::I64(n) => Value::F64(n as f64),
-                            Value::Char(c) => Value::F64(c as u32 as f64),
-                            v => v,
-                        },
-                        1 => match val {
-                            Value::F64(n) => Value::I64(n as i64),
-                            Value::Char(c) => Value::I64(c as u32 as i64),
-                            v => v,
-                        },
-                        2 => match val {
-                            Value::I64(n) => Value::Char(char::from_u32(n as u32).unwrap_or('\0')),
-                            v => v,
-                        },
-                        3 => match val {
-                            Value::Char(c) => Value::I64(c as i64),
-                            v => v,
-                        },
-                        _ => val,
-                    };
+                    let result = cast_to_int(&val, target_width.clone());
                     self.stack.push(result);
+                }
+                OpCode::CastFloat(target_width) => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let result = cast_to_float(&val, target_width.clone());
+                    self.stack.push(result);
+                }
+                OpCode::CastToChar => {
+                    let val = self.stack.pop().unwrap_or(Value::Unit);
+                    let n = value_to_i64(&val);
+                    let c = char::from_u32(n as u32).unwrap_or('\0');
+                    self.stack.push(Value::Char(c));
                 }
 
                 OpCode::FieldAccess { field_name } => {
@@ -1652,26 +1646,19 @@ impl Vm {
                 let p: Vec<String> = self.stack.drain(s..).map(|v| v.to_string()).collect();
                 self.stack.push(Value::String(p.concat()));
             }
-            OpCode::Cast(target) => {
-                let v = self.stack.pop().unwrap_or(Value::Unit);
-                let r = match target {
-                    0 => match v {
-                        Value::I64(n) => Value::F64(n as f64),
-                        Value::Char(c) => Value::F64(c as u32 as f64),
-                        v => v,
-                    },
-                    1 => match v {
-                        Value::F64(n) => Value::I64(n as i64),
-                        Value::Char(c) => Value::I64(c as u32 as i64),
-                        v => v,
-                    },
-                    2 => match v {
-                        Value::I64(n) => Value::Char(char::from_u32(n as u32).unwrap_or('\0')),
-                        v => v,
-                    },
-                    _ => v,
-                };
-                self.stack.push(r);
+            OpCode::CastInt(target_width) => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                self.stack.push(cast_to_int(&val, target_width));
+            }
+            OpCode::CastFloat(target_width) => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                self.stack.push(cast_to_float(&val, target_width));
+            }
+            OpCode::CastToChar => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                let n = value_to_i64(&val);
+                let c = char::from_u32(n as u32).unwrap_or('\0');
+                self.stack.push(Value::Char(c));
             }
             OpCode::TryPop => {
                 let v = self.stack.pop().unwrap_or(Value::Unit);
@@ -2643,6 +2630,53 @@ pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::err
         }
     }
     Ok(results)
+}
+
+/// Extract an i64 from any Value type (for cast/conversion purposes).
+fn value_to_i64(val: &Value) -> i64 {
+    match val {
+        Value::I8(n) => *n as i64,
+        Value::I16(n) => *n as i64,
+        Value::I32(n) => *n as i64,
+        Value::I64(n) => *n,
+        Value::U8(n) => *n as i64,
+        Value::U16(n) => *n as i64,
+        Value::U32(n) => *n as i64,
+        Value::U64(n) => *n as i64,
+        Value::F32(n) => *n as i64,
+        Value::F64(n) => *n as i64,
+        Value::Char(c) => *c as u32 as i64,
+        _ => 0,
+    }
+}
+
+/// Cast a Value to a specific integer width with wrapping.
+fn cast_to_int(val: &Value, width: IntegerWidth) -> Value {
+    let bits = value_to_i64(val);
+    match width {
+        IntegerWidth::I8 => Value::I8(bits as i8),
+        IntegerWidth::I16 => Value::I16(bits as i16),
+        IntegerWidth::I32 => Value::I32(bits as i32),
+        IntegerWidth::I64 => Value::I64(bits),
+        IntegerWidth::U8 => Value::U8(bits as u8),
+        IntegerWidth::U16 => Value::U16(bits as u16),
+        IntegerWidth::U32 => Value::U32(bits as u32),
+        IntegerWidth::U64 => Value::U64(bits as u64),
+    }
+}
+
+/// Cast a Value to a specific float width.
+fn cast_to_float(val: &Value, width: FloatWidth) -> Value {
+    let f = match val {
+        Value::F32(n) => *n as f64,
+        Value::F64(n) => *n,
+        Value::Char(c) => *c as u32 as f64,
+        _ => value_to_i64(val) as f64,
+    };
+    match width {
+        FloatWidth::F32 => Value::F32(f as f32),
+        FloatWidth::F64 => Value::F64(f),
+    }
 }
 
 pub mod builtins;
