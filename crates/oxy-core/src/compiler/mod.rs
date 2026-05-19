@@ -1049,14 +1049,45 @@ impl Compiler {
                 label,
                 span,
             } => {
-                let stmt = Stmt::WhileLet {
-                    pattern: pattern.clone(),
-                    expr: expr.clone(),
-                    body: body.clone(),
+                let loop_start = self.code.len();
+                // Evaluate expression, store in temp
+                self.compile_expr(expr)?;
+                let scrut_slot = self.sym.define("__whilelet_scrutinee");
+                let current_slot = self.sym.next_slot;
+                self.emit(OpCode::StoreLocal(scrut_slot));
+                // Pattern check
+                self.emit(OpCode::LoadLocal(scrut_slot));
+                let consumes = matches!(pattern.as_ref(), Pattern::EnumVariant { .. });
+                self.compile_pattern(pattern, &mut vec![], true)?;
+                let jump_to_end = self.emit(OpCode::JumpIfFalse(0));
+                // Matched: clean up, bind, compile body
+                if !consumes {
+                    self.emit(OpCode::Pop);
+                }
+                self.bind_pattern_data(pattern)?;
+                // Loop context for break/continue
+                self.loop_stack.push(LoopContext {
                     label: label.clone(),
-                    span: *span,
-                };
-                Err(self.not_yet_supported("while-let", *span))
+                    continue_target: loop_start,
+                    break_patches: vec![],
+                    continue_patches: vec![],
+                });
+                self.compile_block(body)?;
+                let ctx = self.loop_stack.pop().unwrap();
+                // Jump back to loop start
+                self.emit(OpCode::Jump(loop_start));
+                // End: patch exit jump
+                let loop_end = self.code.len();
+                self.patch(jump_to_end, OpCode::JumpIfFalse(loop_end));
+                // Patch break/continue
+                for idx in &ctx.break_patches {
+                    self.patch(*idx, OpCode::Jump(loop_end));
+                }
+                for idx in &ctx.continue_patches {
+                    self.patch(*idx, OpCode::Jump(loop_start));
+                }
+                self.sym.next_slot = current_slot;
+                Ok(())
             }
             Stmt::LetPattern {
                 pattern,
