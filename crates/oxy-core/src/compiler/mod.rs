@@ -1801,12 +1801,6 @@ impl Compiler {
                 arms,
                 ..
             } => {
-                // If any arm uses a range pattern, fall back to interpreter
-                let has_range = arms.iter().any(|arm| matches!(arm.pattern, Pattern::Range { .. }));
-                if has_range {
-                    return Err(self.not_yet_supported("Range patterns in match", expr.span()));
-                }
-
                 // Evaluate scrutinee once, store in temp slot
                 self.compile_expr(scrutinee)?;
                 let scrutinee_slot = self.sym.define("__match_scrutinee");
