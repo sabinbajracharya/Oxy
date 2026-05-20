@@ -1052,10 +1052,30 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
 
-            Expr::MethodCall { object, args, .. } => {
-                let _ = self.infer_expr(object)?;
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                ..
+            } => {
+                let obj_ty = self.infer_expr(object)?;
                 for arg in args {
                     self.infer_expr(arg)?;
+                }
+                if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                    let resolved = self.resolve_struct_name(struct_name);
+                    let qualified = format!("{}::{}", resolved, method);
+                    if let Some(ret_ty) = self.fn_return_types.get(&qualified) {
+                        return Ok(ret_ty.clone());
+                    }
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let module_qualified =
+                            format!("{}::{}::{}", module_prefix, resolved, method);
+                        if let Some(ret_ty) = self.fn_return_types.get(&module_qualified) {
+                            return Ok(ret_ty.clone());
+                        }
+                    }
                 }
                 Ok(TypeInfo::Unknown)
             }
