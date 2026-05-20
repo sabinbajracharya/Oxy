@@ -356,6 +356,8 @@ pub enum Stmt {
         value: Expr,
         span: Span,
     },
+    /// `use path::to::item;` — local import within a function body
+    Use(UseDef),
 }
 
 impl Stmt {
@@ -372,6 +374,7 @@ impl Stmt {
             | Stmt::WhileLet { span, .. }
             | Stmt::ForDestructure { span, .. }
             | Stmt::LetPattern { span, .. } => *span,
+            Stmt::Use(use_def) => use_def.span,
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -1208,6 +1211,34 @@ impl Stmt {
                 out.push_str(" = ");
                 value.pretty_print(out, 0);
                 out.push_str(";\n");
+            }
+            Stmt::Use(use_def) => {
+                let path = use_def.path.join("::");
+                match &use_def.tree {
+                    UseTree::Simple(alias) => {
+                        if let Some(alias) = alias {
+                            out.push_str(&format!("{pad}use {} as {};\n", path, alias));
+                        } else {
+                            out.push_str(&format!("{pad}use {};\n", path));
+                        }
+                    }
+                    UseTree::Glob => {
+                        out.push_str(&format!("{pad}use {}::*;\n", path));
+                    }
+                    UseTree::Group(items) => {
+                        let names: Vec<String> = items
+                            .iter()
+                            .map(|(n, a)| {
+                                if let Some(alias) = a {
+                                    format!("{} as {}", n, alias)
+                                } else {
+                                    n.clone()
+                                }
+                            })
+                            .collect();
+                        out.push_str(&format!("{pad}use {}::{{{}}};\n", path, names.join(", ")));
+                    }
+                }
             }
         }
     }

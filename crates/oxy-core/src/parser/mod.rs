@@ -971,6 +971,10 @@ impl Parser {
             TokenKind::For => self.parse_for_stmt(None),
             TokenKind::Break => self.parse_break_stmt(),
             TokenKind::Continue => self.parse_continue_stmt(),
+            TokenKind::Use => {
+                let use_def = self.parse_use_def(Visibility::Private)?;
+                Ok(Stmt::Use(use_def))
+            }
             _ => self.parse_expr_stmt(),
         }
     }
@@ -1344,11 +1348,108 @@ impl Parser {
                 Ok(Expr::CharLiteral(c, span))
             }
 
-            // `self` keyword
+            // `self` keyword — could be self value or `self::path`
             TokenKind::SelfLower => {
                 let span = self.current_span();
                 self.advance();
+
+                // Check for path: `self::Name::...`
+                if self.check(&TokenKind::ColonColon) {
+                    self.advance();
+                    let mut segments = vec!["self".to_string()];
+                    segments.push(self.expect_path_segment()?);
+
+                    while self.check(&TokenKind::ColonColon) {
+                        self.advance();
+                        // Skip turbofish mid-path
+                        if self.check(&TokenKind::Lt) {
+                            let _ = self.parse_turbofish()?;
+                            continue;
+                        }
+                        segments.push(self.expect_path_segment()?);
+                    }
+
+                    if self.check(&TokenKind::LParen) {
+                        self.advance();
+                        let args = self.parse_arg_list()?;
+                        let end_span = self.current_span();
+                        self.expect(TokenKind::RParen)?;
+                        return Ok(Expr::PathCall {
+                            path: segments,
+                            turbofish: None,
+                            args,
+                            span: self.merge_spans(span, end_span),
+                        });
+                    }
+
+                    return Ok(Expr::Ident("self".to_string(), span));
+                }
+
                 Ok(Expr::SelfRef(span))
+            }
+
+            // `super` keyword — `super::path` in expression position
+            TokenKind::Super => {
+                let span = self.current_span();
+                self.advance();
+                self.expect(TokenKind::ColonColon)?;
+                let mut segments = vec!["super".to_string(), self.expect_path_segment()?];
+
+                while self.check(&TokenKind::ColonColon) {
+                    self.advance();
+                    if self.check(&TokenKind::Lt) {
+                        let _ = self.parse_turbofish()?;
+                        continue;
+                    }
+                    segments.push(self.expect_path_segment()?);
+                }
+
+                if self.check(&TokenKind::LParen) {
+                    self.advance();
+                    let args = self.parse_arg_list()?;
+                    let end_span = self.current_span();
+                    self.expect(TokenKind::RParen)?;
+                    return Ok(Expr::PathCall {
+                        path: segments,
+                        turbofish: None,
+                        args,
+                        span: self.merge_spans(span, end_span),
+                    });
+                }
+
+                Ok(Expr::Ident("super".to_string(), span))
+            }
+
+            // `crate` keyword — `crate::path` in expression position
+            TokenKind::Crate => {
+                let span = self.current_span();
+                self.advance();
+                self.expect(TokenKind::ColonColon)?;
+                let mut segments = vec!["crate".to_string(), self.expect_path_segment()?];
+
+                while self.check(&TokenKind::ColonColon) {
+                    self.advance();
+                    if self.check(&TokenKind::Lt) {
+                        let _ = self.parse_turbofish()?;
+                        continue;
+                    }
+                    segments.push(self.expect_path_segment()?);
+                }
+
+                if self.check(&TokenKind::LParen) {
+                    self.advance();
+                    let args = self.parse_arg_list()?;
+                    let end_span = self.current_span();
+                    self.expect(TokenKind::RParen)?;
+                    return Ok(Expr::PathCall {
+                        path: segments,
+                        turbofish: None,
+                        args,
+                        span: self.merge_spans(span, end_span),
+                    });
+                }
+
+                Ok(Expr::Ident("crate".to_string(), span))
             }
 
             // Identifiers (could be followed by `!` for macro, `::` for path, `{` for struct init)
@@ -1421,7 +1522,7 @@ impl Parser {
 
                     let mut segments = vec![name];
                     if turbofish.is_none() {
-                        segments.push(self.expect_ident()?);
+                        segments.push(self.expect_path_segment()?);
                     }
 
                     // Continue collecting path segments
@@ -1432,7 +1533,7 @@ impl Parser {
                             let _ = self.parse_turbofish()?;
                             continue;
                         }
-                        segments.push(self.expect_ident()?);
+                        segments.push(self.expect_path_segment()?);
                     }
 
                     // Check if followed by `(` → PathCall
@@ -2565,6 +2666,36 @@ impl Parser {
             }
             other => Err(self.error(format!(
                 "expected identifier, found {}",
+                other.description()
+            ))),
+        }
+    }
+
+    /// Like `expect_ident` but also accepts `self`, `super`, `crate`, `Self` as path segments.
+    fn expect_path_segment(&mut self) -> Result<String, FerriError> {
+        match self.peek_kind().clone() {
+            TokenKind::Ident(name) => {
+                self.advance();
+                Ok(name)
+            }
+            TokenKind::SelfUpper => {
+                self.advance();
+                Ok("Self".to_string())
+            }
+            TokenKind::SelfLower => {
+                self.advance();
+                Ok("self".to_string())
+            }
+            TokenKind::Super => {
+                self.advance();
+                Ok("super".to_string())
+            }
+            TokenKind::Crate => {
+                self.advance();
+                Ok("crate".to_string())
+            }
+            other => Err(self.error(format!(
+                "expected identifier or path segment, found {}",
                 other.description()
             ))),
         }

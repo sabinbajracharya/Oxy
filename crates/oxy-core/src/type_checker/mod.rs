@@ -488,7 +488,7 @@ impl TypeChecker {
                 self.infer_expr(value)?;
                 Ok(())
             }
-            Stmt::Break { .. } | Stmt::Continue { .. } => Ok(()),
+            Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Use(_) => Ok(()),
         }
     }
 

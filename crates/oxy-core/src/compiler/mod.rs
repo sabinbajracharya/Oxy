@@ -1472,13 +1472,23 @@ impl Compiler {
                 fields,
                 ..
             } => {
-                // Resolve enum_name via type aliases and use aliases
+                // Resolve enum_name via type aliases, use aliases, and module prefix
                 let resolved_enum = self
                     .type_aliases
                     .get(enum_name)
                     .cloned()
                     .or_else(|| self.use_aliases.get(enum_name).cloned())
-                    .unwrap_or_else(|| enum_name.clone());
+                    .unwrap_or_else(|| {
+                        // Try qualifying with module prefix
+                        let module_prefix = self.module_stack.join("::");
+                        if !module_prefix.is_empty() {
+                            let qualified = format!("{}::{}", module_prefix, enum_name);
+                            if self.enum_defs.contains_key(&qualified) {
+                                return qualified;
+                            }
+                        }
+                        enum_name.clone()
+                    });
                 self.emit(OpCode::EnumVariantEqual {
                     enum_name: resolved_enum,
                     variant: variant.clone(),
@@ -2041,6 +2051,7 @@ impl Compiler {
                 // For other patterns, not yet supported natively
                 self.compile_letpattern_unsupported(pattern, value, *span, *mutable)
             }
+            Stmt::Use(use_def) => self.compile_use(use_def),
         }
     }
 
@@ -2322,10 +2333,20 @@ impl Compiler {
                         }
                         resolved = alias_target.clone();
                     }
-                    self.functions
+                    let result = self
+                        .functions
                         .get(&resolved)
                         .copied()
-                        .or_else(|| self.functions.get(name).copied())
+                        .or_else(|| self.functions.get(name).copied());
+                    // If not found directly, try module-qualified name
+                    result.or_else(|| {
+                        let module_prefix = self.module_stack.join("::");
+                        if module_prefix.is_empty() {
+                            return None;
+                        }
+                        let qualified = format!("{}::{}", module_prefix, name);
+                        self.functions.get(&qualified).copied()
+                    })
                 } else {
                     None
                 };
@@ -2898,6 +2919,13 @@ impl Compiler {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
+                // Resolve self/super/crate in path prefix
+                let resolved_path = Self::resolve_use_path(path, &self.module_stack);
+                let path = if resolved_path != *path {
+                    &resolved_path
+                } else {
+                    path
+                };
                 if path.len() == 2 {
                     let enum_name = &path[0];
                     let variant = &path[1];
@@ -2997,6 +3025,35 @@ impl Compiler {
                             "{}::{}::{}::{}",
                             module_prefix, &path[0], &path[1], &path[2]
                         );
+                        if let Some(&target) = self.functions.get(&module_qualified) {
+                            let call_idx = self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            if target == usize::MAX {
+                                self.forward_calls.push((call_idx, module_qualified));
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+                // General path resolution for any length > 2
+                if path.len() > 3 {
+                    let qualified = path.join("::");
+                    if let Some(&target) = self.functions.get(&qualified) {
+                        let call_idx = self.emit(OpCode::Call {
+                            target,
+                            arg_count: args.len(),
+                        });
+                        if target == usize::MAX {
+                            self.forward_calls.push((call_idx, qualified));
+                        }
+                        return Ok(());
+                    }
+                    // Try with module prefix
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let module_qualified = format!("{}::{}", module_prefix, qualified);
                         if let Some(&target) = self.functions.get(&module_qualified) {
                             let call_idx = self.emit(OpCode::Call {
                                 target,
