@@ -50,9 +50,9 @@ For functions that return \`()\` (unit), a bare \`return;\` exits immediately.
       ],
       initialCode: `fn safe_divide(a: f64, b: f64) -> Option<f64> {
     if b == 0.0 {
-        return Option::none();
+        return None();
     }
-    Option::some(a / b)
+    Some(a / b)
 }
 
 fn main() {
