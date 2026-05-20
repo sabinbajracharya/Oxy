@@ -25,12 +25,12 @@ Access JSON fields with \`value["key"]\` and \`value[index]\`.
         "{\\"name\\": \\"Oxy\\", \\"year\\": 2024, \\"stable\\": true}"
     );
     match data {
-        Result::ok(v) => {
+        Ok(v) => {
             println!("name: {}", v["name"]);
             println!("year: {}", v["year"]);
             println!("{}", f"{} is stable: {}");
         },
-        Result::err(e) => println!("parse error: {}", e),
+        Err(e) => println!("parse error: {}", e),
     }
 
     let out = json::to_string([1, 2, 3]);
@@ -55,15 +55,15 @@ Use \`http::\` to make HTTP requests. \`http::get(url)\` fetches a URL and retur
       initialCode: `fn main() {
     let response = http::get("https://httpbin.org/json");
     match response {
-        Result::ok(body) => {
+        Ok(body) => {
             println!("got response: {} bytes", body.len());
             let json = json::parse(body);
             match json {
-                Result::ok(v) => println!("parsed JSON"),
-                Result::err(_) => println!("not JSON"),
+                Ok(v) => println!("parsed JSON"),
+                Err(_) => println!("not JSON"),
             }
         },
-        Result::err(e) => println!("HTTP error: {}", e),
+        Err(e) => println!("HTTP error: {}", e),
     }
 }
 `,
@@ -93,8 +93,8 @@ All return \`Result\` to handle I/O errors.
 
     if std::fs::exists(path) {
         match std::fs::read_to_string(path) {
-            Result::ok(content) => println!("read:\\n{}", content),
-            Result::err(e) => println!("read error: {}", e),
+            Ok(content) => println!("read:\\n{}", content),
+            Err(e) => println!("read error: {}", e),
         }
     }
 }

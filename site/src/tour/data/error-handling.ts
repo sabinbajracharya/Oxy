@@ -10,8 +10,8 @@ export const errorHandling: Chapter = {
       instructions: `## Option — Maybe a Value
 
 \`Option<T>\` represents a value that may or may not be present:
-- \`Option::some(value)\` — has a value
-- \`Option::none()\` — no value
+- \`Some(value)\` — has a value
+- \`None\` — no value
 
 Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`map(f)\`, \`and_then(f)\`.
 
@@ -23,17 +23,17 @@ Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`m
       initialCode: `fn find_even(nums: &[i64]) -> Option<i64> {
     for n in nums {
         if n % 2 == 0 {
-            return Option::some(n);
+            return Some(n);
         }
     }
-    Option::none()
+    None
 }
 
 fn main() {
     let result = find_even([1, 3, 6, 7]);
     match result {
-        Option::some(n) => println!("found: {}", n),
-        Option::none() => println!("no even found"),
+        Some(n) => println!("found: {}", n),
+        None => println!("no even found"),
     }
 
     println!("is some: {}", result.is_some());
@@ -47,28 +47,28 @@ fn main() {
       instructions: `## Result — Success or Error
 
 \`Result<T, E>\` is either:
-- \`Result::ok(value)\` — success
-- \`Result::err(error)\` — failure
+- \`Ok(value)\` — success
+- \`Err(error)\` — failure
 
 Methods: \`is_ok()\`, \`is_err()\`, \`unwrap()\`, \`unwrap_err()\`, \`map()\`, \`map_err()\`, \`and_then()\`, \`ok()\`.
 
 **Try it:** Add another function that parses and multiplies two numbers, propagating errors.`,
       hints: [
-        '`Result::ok` and `Result::err` are the constructors.',
+        '`Ok` and `Err` are the constructors.',
         'Match on Result to handle both success and failure paths.',
       ],
       initialCode: `fn divide(a: f64, b: f64) -> Result<f64, String> {
     if b == 0.0 {
-        return Result::err("division by zero".to_string());
+        return Err("division by zero".to_string());
     }
-    Result::ok(a / b)
+    Ok(a / b)
 }
 
 fn main() {
     let ok = divide(10.0, 2.0);
     match ok {
-        Result::ok(v) => println!("result: {}", v),
-        Result::err(e) => println!("error: {}", e),
+        Ok(v) => println!("result: {}", v),
+        Err(e) => println!("error: {}", e),
     }
 
     let bad = divide(1.0, 0.0);
@@ -82,7 +82,7 @@ fn main() {
       title: 'Try Operator ?',
       instructions: `## The Try Operator
 
-The \`?\` operator propagates errors upward. If the value is \`Result::ok(v)\`, it unwraps to \`v\`. If it's \`Result::err(e)\`, it returns early with that error.
+The \`?\` operator propagates errors upward. If the value is \`Ok(v)\`, it unwraps to \`v\`. If it's \`Err(e)\`, it returns early with that error.
 
 This works with both \`Option\` and \`Result\`. The enclosing function must return a compatible type.
 
@@ -95,15 +95,15 @@ This works with both \`Option\` and \`Result\`. The enclosing function must retu
     let a = a_str.parse_float().map_err(|e| f"parse error: {}")?;
     let b = b_str.parse_float().map_err(|e| f"parse error: {}")?;
     if b == 0.0 {
-        return Result::err("division by zero".to_string());
+        return Err("division by zero".to_string());
     }
-    Result::ok(a / b)
+    Ok(a / b)
 }
 
 fn main() {
     match parse_and_divide("10.5".to_string(), "2.0".to_string()) {
-        Result::ok(v) => println!("result: {}", v),
-        Result::err(e) => println!("error: {}", e),
+        Ok(v) => println!("result: {}", v),
+        Err(e) => println!("error: {}", e),
     }
 }
 `,
@@ -158,8 +158,8 @@ fn main() {
         '`while let` is great with iterators and queues.',
       ],
       initialCode: `fn main() {
-    let opt = Option::some(42);
-    if let Option::some(n) = opt {
+    let opt = Some(42);
+    if let Some(n) = opt {
         println!("got {}", n);
     }
 
