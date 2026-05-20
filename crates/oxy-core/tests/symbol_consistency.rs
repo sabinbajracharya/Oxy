@@ -286,10 +286,7 @@ fn test_symbols_types_have_dispatch() {
 
     for ty in symbols::ALL_TYPES {
         // Map symbols name back to dispatch name
-        let disp = match ty.name {
-            "char" => "char",
-            other => other,
-        };
+        let disp = ty.name;
         let found = dispatched.contains(&disp) || generic_type_names.contains(&ty.name);
         assert!(
             found,

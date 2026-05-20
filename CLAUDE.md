@@ -15,7 +15,7 @@ docker compose run --rm dev bash -c "cargo test"                    # All tests
 docker compose run --rm dev bash -c "cargo test -p oxy-core"        # Core only
 docker compose run --rm dev bash -c "cargo test -p oxy-lsp"         # LSP only
 docker compose run --rm dev bash -c "cargo fmt --all"               # Format
-docker compose run --rm dev bash -c "cargo clippy -- -D warnings"   # Lint
+docker compose run --rm dev bash -c "cargo clippy --all-targets -- -D warnings"   # Lint
 docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"  # Run
 docker compose run --rm test                                        # Full CI
 docker compose run --rm setup                                       # npm deps
@@ -25,8 +25,8 @@ docker compose run --rm build-ext                                   # Package .v
 ### Pre-Commit Checklist (run before every commit)
 
 ```bash
-docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"
-docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp -- -D warnings && cargo test -p oxy-lsp"
+docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test -p oxy-core"
+docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp --all-targets -- -D warnings && cargo test -p oxy-lsp"
 ```
 
 All must pass. No exceptions.
