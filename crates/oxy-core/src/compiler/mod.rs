@@ -120,6 +120,8 @@ pub struct Compiler {
             Option<crate::ast::TypeAnnotation>,
         ),
     >,
+    /// Generic param names for functions: function_name → generic_param_names.
+    fn_generic_names: HashMap<String, Vec<String>>,
     /// Per-function local variable names: function entry IP → slot_names.
     fn_local_names: HashMap<usize, Vec<String>>,
     /// Mutable variables captured by closures (for targeted Cell wrapping).
@@ -135,6 +137,8 @@ pub struct Compiler {
     trait_defs: HashMap<String, Vec<FnDef>>,
     /// Trait method signatures: trait_name → method names (for resolving T::method()).
     trait_method_names: HashMap<String, Vec<String>>,
+    /// Monomorphized function instances: mangled_name → instruction index.
+    monomorphized_fns: HashMap<String, usize>,
     /// Type aliases: alias_name → actual_type_name (e.g., P → Point).
     type_aliases: HashMap<String, String>,
     /// Forward calls that need target patching: (bytecode_index, function_name).
@@ -196,6 +200,7 @@ impl Default for Compiler {
             use_aliases: HashMap::new(),
             const_values: HashMap::new(),
             fn_meta: HashMap::new(),
+            fn_generic_names: HashMap::new(),
             fn_local_names: HashMap::new(),
             captured_mutable: HashSet::new(),
             require_main: true,
@@ -203,6 +208,7 @@ impl Default for Compiler {
             current_generic_params: Vec::new(),
             trait_defs: HashMap::new(),
             trait_method_names: HashMap::new(),
+            monomorphized_fns: HashMap::new(),
             type_aliases: HashMap::new(),
             forward_calls: Vec::new(),
             module_stack: Vec::new(),
@@ -579,6 +585,12 @@ impl Compiler {
         if let Some(tn) = type_name {
             self.fn_meta.insert(format!("{}::{}", tn, f.name), meta);
         }
+        // Store generic param names for monomorphization
+        if !f.generic_params.is_empty() {
+            let generic_names: Vec<String> =
+                f.generic_params.iter().map(|p| p.name.clone()).collect();
+            self.fn_generic_names.insert(f.name.clone(), generic_names);
+        }
 
         let saved_sym = self.sym.clone();
         for param in &f.params {
@@ -619,6 +631,215 @@ impl Compiler {
         self.current_impl_type = saved_impl_type;
         self.current_generic_params = saved_generic_params;
         Ok(())
+    }
+
+    /// Substitute generic type param names with concrete types in an expression tree.
+    /// Used by monomorphization to replace `T` with `i64` etc. in path calls and annotations.
+    fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(String, String)]) {
+        match expr {
+            crate::ast::Expr::PathCall { path, args, .. } => {
+                if let Some(concrete) = subst.iter().find(|(p, _)| **p == path[0]).map(|(_, c)| c) {
+                    path[0] = concrete.clone();
+                }
+                for arg in args {
+                    Self::substitute_type_params(arg, subst);
+                }
+            }
+            crate::ast::Expr::Call { callee, args, .. } => {
+                Self::substitute_type_params(callee, subst);
+                for arg in args {
+                    Self::substitute_type_params(arg, subst);
+                }
+            }
+            crate::ast::Expr::MethodCall { object, args, .. } => {
+                Self::substitute_type_params(object, subst);
+                for arg in args {
+                    Self::substitute_type_params(arg, subst);
+                }
+            }
+            crate::ast::Expr::BinaryOp { left, right, .. } => {
+                Self::substitute_type_params(left, subst);
+                Self::substitute_type_params(right, subst);
+            }
+            crate::ast::Expr::UnaryOp { expr: inner, .. } => {
+                Self::substitute_type_params(inner, subst);
+            }
+            crate::ast::Expr::Block(block) => {
+                for stmt in &mut block.stmts {
+                    match stmt {
+                        crate::ast::Stmt::Expr { expr, .. } => {
+                            Self::substitute_type_params(expr, subst);
+                        }
+                        crate::ast::Stmt::Let { value, .. } => {
+                            if let Some(val) = value {
+                                Self::substitute_type_params(val, subst);
+                            }
+                        }
+                        crate::ast::Stmt::Return { value, .. } => {
+                            if let Some(val) = value {
+                                Self::substitute_type_params(val, subst);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            crate::ast::Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::substitute_type_params(condition, subst);
+                for stmt in &mut then_block.stmts {
+                    if let crate::ast::Stmt::Expr { expr, .. } = stmt {
+                        Self::substitute_type_params(expr, subst);
+                    }
+                }
+                if let Some(else_expr) = else_block {
+                    Self::substitute_type_params(else_expr, subst);
+                }
+            }
+            crate::ast::Expr::Assign { target, value, .. } => {
+                Self::substitute_type_params(target, subst);
+                Self::substitute_type_params(value, subst);
+            }
+            crate::ast::Expr::CompoundAssign { target, value, .. } => {
+                Self::substitute_type_params(target, subst);
+                Self::substitute_type_params(value, subst);
+            }
+            crate::ast::Expr::Match { expr, arms, .. } => {
+                Self::substitute_type_params(expr, subst);
+                for arm in arms {
+                    Self::substitute_type_params(&mut arm.body, subst);
+                }
+            }
+            crate::ast::Expr::Array { elements, .. } => {
+                for elem in elements {
+                    Self::substitute_type_params(elem, subst);
+                }
+            }
+            crate::ast::Expr::StructInit { fields, .. } => {
+                for (_, field_expr) in fields {
+                    Self::substitute_type_params(field_expr, subst);
+                }
+            }
+            crate::ast::Expr::FieldAccess { object, .. } => {
+                Self::substitute_type_params(object, subst);
+            }
+            crate::ast::Expr::Index { object, index, .. } => {
+                Self::substitute_type_params(object, subst);
+                Self::substitute_type_params(index, subst);
+            }
+            crate::ast::Expr::MacroCall { args, .. } => {
+                for arg in args {
+                    Self::substitute_type_params(arg, subst);
+                }
+            }
+            // Ident, literals — no generic type params to substitute
+            _ => {}
+        }
+    }
+
+    /// Monomorphize a generic function call: compile a copy with concrete types substituted
+    /// for the generic params. Returns the new function's entry IP.
+    fn monomorphize_call(
+        &mut self,
+        fn_name: &str,
+        type_args: &[String],
+        err_line: usize,
+        err_col: usize,
+    ) -> Result<usize, FerriError> {
+        // Generate mangled name for dedup and registration
+        let mangled = format!("{}@{}", fn_name, type_args.join("_"));
+        if let Some(&ip) = self.monomorphized_fns.get(&mangled) {
+            return Ok(ip);
+        }
+
+        // Get the generic function's metadata
+        let meta = self
+            .fn_meta
+            .get(fn_name)
+            .cloned()
+            .or_else(|| self.fn_meta.get(&mangled).cloned());
+        let (params, body_expr, return_type) = match meta {
+            Some(m) => m,
+            None => {
+                return Err(FerriError::Runtime {
+                    message: format!("cannot monomorphize; function '{}' has no stored AST body (fn_meta not found)", fn_name),
+                    line: err_line,
+                    column: err_col,
+                });
+            }
+        };
+
+        // Build substitution map: generic_param_name → concrete_type_name
+        let generic_param_names = self
+            .fn_generic_names
+            .get(fn_name)
+            .cloned()
+            .unwrap_or_default();
+        if generic_param_names.len() != type_args.len() {
+            return Err(FerriError::Runtime {
+                message: format!(
+                    "function '{}' expects {} type argument(s), but {} provided",
+                    fn_name,
+                    generic_param_names.len(),
+                    type_args.len()
+                ),
+                line: err_line,
+                column: err_col,
+            });
+        }
+        let subst: Vec<(String, String)> = generic_param_names
+            .iter()
+            .zip(type_args.iter())
+            .map(|(p, c)| (p.clone(), c.clone()))
+            .collect();
+
+        // Substitute type params in the body expression
+        let mut subbed_body = (*body_expr).clone();
+        Self::substitute_type_params(&mut subbed_body, &subst);
+
+        // Build a synthetic FnDef for compilation
+        let blank_span = crate::lexer::Span {
+            start: 0,
+            end: 0,
+            line: 0,
+            column: 0,
+        };
+        let synth_fn = crate::ast::FnDef {
+            name: mangled.clone(),
+            is_async: false,
+            generic_params: vec![], // no longer generic
+            params: params.clone(),
+            return_type: return_type.map(|rt| {
+                let mut ann = rt.clone();
+                for (param, concrete) in &subst {
+                    ann.name = ann.name.replace(param.as_str(), concrete.as_str());
+                }
+                ann
+            }),
+            body: crate::ast::Block {
+                stmts: vec![crate::ast::Stmt::Expr {
+                    expr: subbed_body,
+                    has_semicolon: false,
+                }],
+                span: blank_span,
+            },
+            attributes: vec![],
+            visibility: crate::ast::Visibility::Private,
+            span: blank_span,
+        };
+
+        // Compile the synthetic function
+        let ip = self.code.len();
+        self.functions.insert(mangled.clone(), ip);
+        self.compile_fn_item(&synth_fn, None)?;
+
+        // Store for dedup
+        self.monomorphized_fns.insert(mangled, ip);
+        Ok(ip)
     }
 
     /// Compile an inline or file-based module recursively.
@@ -2050,7 +2271,12 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                turbofish,
+                args,
+                span,
+            } => {
                 // Handle bare enum constructors: Some(val), None, Ok(val), Err(val)
                 if let Expr::Ident(name, _) = callee.as_ref() {
                     let enum_info: Option<(&str, &str)> = match name.as_str() {
@@ -2105,6 +2331,45 @@ impl Compiler {
                 };
 
                 if let Some(target) = direct_target {
+                    // Check if we should monomorphize: turbofish present with all concrete types
+                    let concrete_types: Option<Vec<String>> = turbofish.as_ref().map(|tf| {
+                        tf.iter()
+                            .map(|ta| ta.name.clone())
+                            .filter(|n| n != "_")
+                            .collect()
+                    });
+                    let should_monomorphize = concrete_types
+                        .as_ref()
+                        .map(|ct| !ct.is_empty())
+                        .unwrap_or(false);
+
+                    if should_monomorphize {
+                        // Monomorphize: compile a copy with concrete types substituted
+                        if let Expr::Ident(name, _) = callee.as_ref() {
+                            let resolved = self
+                                .use_aliases
+                                .get(name)
+                                .cloned()
+                                .unwrap_or_else(|| name.clone());
+                            let type_args = concrete_types.unwrap();
+                            let mono_target = self.monomorphize_call(
+                                &resolved,
+                                &type_args,
+                                span.line,
+                                span.column,
+                            )?;
+                            // Compile args and emit call to monomorphized version
+                            for arg in args {
+                                self.compile_expr(arg)?;
+                            }
+                            self.emit(OpCode::Call {
+                                target: mono_target,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
+                        }
+                    }
+
                     // Check argument count against function definition
                     if let Expr::Ident(name, _) = callee.as_ref() {
                         let resolved = self
@@ -2127,8 +2392,8 @@ impl Compiler {
                                         args.len(),
                                         if args.len() == 1 { "was" } else { "were" },
                                     ),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
+                                    line: span.line,
+                                    column: span.column,
                                 });
                             }
                         }
