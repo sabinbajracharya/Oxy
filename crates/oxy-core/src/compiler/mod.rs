@@ -579,114 +579,6 @@ impl Compiler {
         Ok(())
     }
 
-    /// Substitute generic type param names with concrete types in an expression tree.
-    /// Used by monomorphization to replace `T` with `i64` etc. in path calls and annotations.
-    fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(String, String)]) {
-        match expr {
-            crate::ast::Expr::PathCall { path, args, .. } => {
-                if let Some(concrete) = subst.iter().find(|(p, _)| **p == path[0]).map(|(_, c)| c) {
-                    path[0] = concrete.clone();
-                }
-                for arg in args {
-                    Self::substitute_type_params(arg, subst);
-                }
-            }
-            crate::ast::Expr::Call { callee, args, .. } => {
-                Self::substitute_type_params(callee, subst);
-                for arg in args {
-                    Self::substitute_type_params(arg, subst);
-                }
-            }
-            crate::ast::Expr::MethodCall { object, args, .. } => {
-                Self::substitute_type_params(object, subst);
-                for arg in args {
-                    Self::substitute_type_params(arg, subst);
-                }
-            }
-            crate::ast::Expr::BinaryOp { left, right, .. } => {
-                Self::substitute_type_params(left, subst);
-                Self::substitute_type_params(right, subst);
-            }
-            crate::ast::Expr::UnaryOp { expr: inner, .. } => {
-                Self::substitute_type_params(inner, subst);
-            }
-            crate::ast::Expr::Block(block) => {
-                for stmt in &mut block.stmts {
-                    match stmt {
-                        crate::ast::Stmt::Expr { expr, .. } => {
-                            Self::substitute_type_params(expr, subst);
-                        }
-                        crate::ast::Stmt::Let { value, .. } => {
-                            if let Some(val) = value {
-                                Self::substitute_type_params(val, subst);
-                            }
-                        }
-                        crate::ast::Stmt::Return { value, .. } => {
-                            if let Some(val) = value {
-                                Self::substitute_type_params(val, subst);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            crate::ast::Expr::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                Self::substitute_type_params(condition, subst);
-                for stmt in &mut then_block.stmts {
-                    if let crate::ast::Stmt::Expr { expr, .. } = stmt {
-                        Self::substitute_type_params(expr, subst);
-                    }
-                }
-                if let Some(else_expr) = else_block {
-                    Self::substitute_type_params(else_expr, subst);
-                }
-            }
-            crate::ast::Expr::Assign { target, value, .. } => {
-                Self::substitute_type_params(target, subst);
-                Self::substitute_type_params(value, subst);
-            }
-            crate::ast::Expr::CompoundAssign { target, value, .. } => {
-                Self::substitute_type_params(target, subst);
-                Self::substitute_type_params(value, subst);
-            }
-            crate::ast::Expr::Match { expr, arms, .. } => {
-                Self::substitute_type_params(expr, subst);
-                for arm in arms {
-                    Self::substitute_type_params(&mut arm.body, subst);
-                }
-            }
-            crate::ast::Expr::Array { elements, .. } => {
-                for elem in elements {
-                    Self::substitute_type_params(elem, subst);
-                }
-            }
-            crate::ast::Expr::StructInit { fields, .. } => {
-                for (_, field_expr) in fields {
-                    Self::substitute_type_params(field_expr, subst);
-                }
-            }
-            crate::ast::Expr::FieldAccess { object, .. } => {
-                Self::substitute_type_params(object, subst);
-            }
-            crate::ast::Expr::Index { object, index, .. } => {
-                Self::substitute_type_params(object, subst);
-                Self::substitute_type_params(index, subst);
-            }
-            crate::ast::Expr::MacroCall { args, .. } => {
-                for arg in args {
-                    Self::substitute_type_params(arg, subst);
-                }
-            }
-            // Ident, literals — no generic type params to substitute
-            _ => {}
-        }
-    }
-
     /// Monomorphize a generic function call: compile a copy with concrete types substituted
     /// for the generic params. Returns the new function's entry IP.
     fn monomorphize_call(
@@ -745,7 +637,7 @@ impl Compiler {
 
         // Substitute type params in the body expression
         let mut subbed_body = (*body_expr).clone();
-        Self::substitute_type_params(&mut subbed_body, &subst);
+        substitute_type_params(&mut subbed_body, &subst);
 
         // Build a synthetic FnDef for compilation
         let blank_span = crate::lexer::Span {
@@ -811,7 +703,7 @@ impl Compiler {
 
     /// Process a `use` declaration.
     fn compile_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
-        let resolved_path = Self::resolve_use_path(&use_def.path, &self.module_stack);
+        let resolved_path = resolve_use_path(&use_def.path, &self.module_stack);
         let base_path = resolved_path.join("::");
         let module_prefix = self.module_stack.join("::");
         match &use_def.tree {
@@ -923,38 +815,6 @@ impl Compiler {
 
     /// Resolve `self`, `super`, `crate` across ALL segments of a use path.
     /// Returns the resolved path with special keywords replaced relative to module_stack.
-    fn resolve_use_path(path: &[String], module_stack: &[String]) -> Vec<String> {
-        let mut context: Vec<String> = module_stack.to_vec();
-        let mut i = 0;
-        let mut had_special = false;
-        while i < path.len() {
-            match path[i].as_str() {
-                "self" => {
-                    had_special = true;
-                    i += 1;
-                }
-                "super" => {
-                    had_special = true;
-                    context.pop();
-                    i += 1;
-                }
-                "crate" => {
-                    had_special = true;
-                    context.clear();
-                    i += 1;
-                }
-                _ => break,
-            }
-        }
-        if had_special {
-            let mut resolved = context;
-            resolved.extend_from_slice(&path[i..]);
-            resolved
-        } else {
-            path.to_vec()
-        }
-    }
-
     /// Pre-resolve all use statements against pre-scanned data, before function bodies
     /// are compiled. This ensures use aliases (especially globs) are available.
     fn preresolve_uses(&mut self, items: &[Item]) -> Result<(), FerriError> {
@@ -962,7 +822,7 @@ impl Compiler {
         for item in items {
             match item {
                 Item::Use(u) => {
-                    let resolved_path = Self::resolve_use_path(&u.path, &self.module_stack);
+                    let resolved_path = resolve_use_path(&u.path, &self.module_stack);
                     let base_path = resolved_path.join("::");
                     match &u.tree {
                         UseTree::Simple(alias) => {
@@ -2923,7 +2783,7 @@ impl Compiler {
                     self.compile_expr(arg)?;
                 }
                 // Resolve self/super/crate in path prefix
-                let resolved_path = Self::resolve_use_path(path, &self.module_stack);
+                let resolved_path = resolve_use_path(path, &self.module_stack);
                 let path = if resolved_path != *path {
                     &resolved_path
                 } else {
@@ -3537,5 +3397,6 @@ mod visibility;
 
 pub(crate) use helpers::{
     check_literal_fits_type, emit_narrowing_cast, find_captured_mutable, find_free_vars,
-    is_builtin_path, try_eval_const, validate_int_literal,
+    is_builtin_path, resolve_use_path, substitute_type_params, try_eval_const,
+    validate_int_literal,
 };

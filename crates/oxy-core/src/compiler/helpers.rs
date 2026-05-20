@@ -422,9 +422,147 @@ pub(crate) fn is_builtin_path(path: &[String]) -> bool {
             | ["TreeNode", "new"]
             | ["char", "from_code"]
             | ["int", "parse"]
+
             | ["float", "parse"]
     ) || matches!(
         effective_module,
         "fs" | "env" | "process" | "regex" | "net" | "time" | "rand" | "http"
     ) || segs.as_slice() == ["std", "env", "args"]
+}
+
+/// Substitute generic type param names with concrete types in an expression tree.
+/// Used by monomorphization to replace `T` with `i64` etc. in path calls and annotations.
+/// Resolve `self`, `super`, `crate` across ALL segments of a use path.
+pub(crate) fn resolve_use_path(path: &[String], module_stack: &[String]) -> Vec<String> {
+    let mut context: Vec<String> = module_stack.to_vec();
+    let mut i = 0;
+    let mut had_special = false;
+    while i < path.len() {
+        match path[i].as_str() {
+            "self" => {
+                had_special = true;
+                i += 1;
+            }
+            "super" => {
+                had_special = true;
+                context.pop();
+                i += 1;
+            }
+            "crate" => {
+                had_special = true;
+                context.clear();
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+    if had_special {
+        let mut resolved = context;
+        resolved.extend_from_slice(&path[i..]);
+        resolved
+    } else {
+        path.to_vec()
+    }
+}
+pub(crate) fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(String, String)]) {
+    match expr {
+        crate::ast::Expr::PathCall { path, args, .. } => {
+            if let Some(concrete) = subst.iter().find(|(p, _)| **p == path[0]).map(|(_, c)| c) {
+                path[0] = concrete.clone();
+            }
+            for arg in args {
+                substitute_type_params(arg, subst);
+            }
+        }
+        crate::ast::Expr::Call { callee, args, .. } => {
+            substitute_type_params(callee, subst);
+            for arg in args {
+                substitute_type_params(arg, subst);
+            }
+        }
+        crate::ast::Expr::MethodCall { object, args, .. } => {
+            substitute_type_params(object, subst);
+            for arg in args {
+                substitute_type_params(arg, subst);
+            }
+        }
+        crate::ast::Expr::BinaryOp { left, right, .. } => {
+            substitute_type_params(left, subst);
+            substitute_type_params(right, subst);
+        }
+        crate::ast::Expr::UnaryOp { expr: inner, .. } => {
+            substitute_type_params(inner, subst);
+        }
+        crate::ast::Expr::Block(block) => {
+            for stmt in &mut block.stmts {
+                match stmt {
+                    crate::ast::Stmt::Expr { expr, .. } => substitute_type_params(expr, subst),
+                    crate::ast::Stmt::Let { value, .. } => {
+                        if let Some(val) = value {
+                            substitute_type_params(val, subst);
+                        }
+                    }
+                    crate::ast::Stmt::Return { value, .. } => {
+                        if let Some(val) = value {
+                            substitute_type_params(val, subst);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        crate::ast::Expr::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            substitute_type_params(condition, subst);
+            for stmt in &mut then_block.stmts {
+                if let crate::ast::Stmt::Expr { expr, .. } = stmt {
+                    substitute_type_params(expr, subst);
+                }
+            }
+            if let Some(else_expr) = else_block {
+                substitute_type_params(else_expr, subst);
+            }
+        }
+        crate::ast::Expr::Assign { target, value, .. } => {
+            substitute_type_params(target, subst);
+            substitute_type_params(value, subst);
+        }
+        crate::ast::Expr::CompoundAssign { target, value, .. } => {
+            substitute_type_params(target, subst);
+            substitute_type_params(value, subst);
+        }
+        crate::ast::Expr::Match { expr, arms, .. } => {
+            substitute_type_params(expr, subst);
+            for arm in arms {
+                substitute_type_params(&mut arm.body, subst);
+            }
+        }
+        crate::ast::Expr::Array { elements, .. } => {
+            for elem in elements {
+                substitute_type_params(elem, subst);
+            }
+        }
+        crate::ast::Expr::StructInit { fields, .. } => {
+            for (_, field_expr) in fields {
+                substitute_type_params(field_expr, subst);
+            }
+        }
+        crate::ast::Expr::FieldAccess { object, .. } => {
+            substitute_type_params(object, subst);
+        }
+        crate::ast::Expr::Index { object, index, .. } => {
+            substitute_type_params(object, subst);
+            substitute_type_params(index, subst);
+        }
+        crate::ast::Expr::MacroCall { args, .. } => {
+            for arg in args {
+                substitute_type_params(arg, subst);
+            }
+        }
+        _ => {}
+    }
 }
