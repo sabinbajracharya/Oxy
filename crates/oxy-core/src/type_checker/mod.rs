@@ -228,7 +228,15 @@ impl TypeChecker {
         for item in &program.items {
             if let Item::Function(f) = item {
                 let ret_ty = if let Some(ref ann) = f.return_type {
-                    self.resolve_type(&ann.name)
+                    // If the return type is a generic param, treat as Unknown
+                    // (type-erased generics — concrete type not known until monomorphization)
+                    let generic_names: Vec<&str> =
+                        f.generic_params.iter().map(|p| p.name.as_str()).collect();
+                    if generic_names.contains(&ann.name.as_str()) {
+                        TypeInfo::Unknown
+                    } else {
+                        self.resolve_type(&ann.name)
+                    }
                 } else {
                     TypeInfo::Unit
                 };
@@ -278,7 +286,14 @@ impl TypeChecker {
 
     fn check_function(&mut self, f: &FnDef) -> Result<(), FerriError> {
         let ret_ty = if let Some(ref ann) = f.return_type {
-            self.resolve_type(&ann.name)
+            // If return type is a generic param, treat as Unknown (type-erased generics)
+            let generic_names: Vec<&str> =
+                f.generic_params.iter().map(|p| p.name.as_str()).collect();
+            if generic_names.contains(&ann.name.as_str()) {
+                TypeInfo::Unknown
+            } else {
+                self.resolve_type(&ann.name)
+            }
         } else {
             TypeInfo::Unit
         };
