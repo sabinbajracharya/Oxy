@@ -186,6 +186,8 @@ pub struct TypeChecker {
     module_stack: Vec<String>,
     /// Import aliases: short_name → qualified_name (e.g. "Record" → "database::Record").
     use_aliases: HashMap<String, String>,
+    /// Current impl type name for `Self` resolution (qualified).
+    current_impl_type: Option<String>,
 }
 
 impl TypeChecker {
@@ -197,6 +199,7 @@ impl TypeChecker {
             fn_return_types: HashMap::new(),
             module_stack: Vec::new(),
             use_aliases: HashMap::new(),
+            current_impl_type: None,
         }
     }
 }
@@ -210,6 +213,12 @@ impl Default for TypeChecker {
 impl TypeChecker {
     /// Resolve a type name through type aliases and module context.
     fn resolve_type(&self, name: &str) -> TypeInfo {
+        // `Self` resolves to the current impl type
+        if name == "Self" {
+            if let Some(ref impl_type) = self.current_impl_type {
+                return TypeInfo::UserStruct(impl_type.clone());
+            }
+        }
         if let Some(alias) = self.type_aliases.get(name) {
             return TypeInfo::from_name(&alias.name);
         }
@@ -264,6 +273,12 @@ impl TypeChecker {
 
     /// Resolve a struct name through use_aliases (for `use foo::Bar` → `Bar` unqualified).
     fn resolve_struct_name(&self, name: &str) -> String {
+        // `Self` resolves to the current impl type
+        if name == "Self" {
+            if let Some(ref impl_type) = self.current_impl_type {
+                return impl_type.clone();
+            }
+        }
         // Check use_aliases for a direct alias
         if let Some(resolved) = self.use_aliases.get(name) {
             if self.struct_defs.contains_key(resolved) {
@@ -438,6 +453,21 @@ impl TypeChecker {
                         // so we skip. Visibility is enforced by the compiler.
                     }
                 }
+                Ok(())
+            }
+            Item::Impl(i) => {
+                let qualified_type = if self.module_stack.is_empty() {
+                    i.type_name.clone()
+                } else {
+                    format!("{}::{}", self.module_stack.join("::"), i.type_name)
+                };
+                let resolved = self.resolve_struct_name(&qualified_type);
+                let saved_impl = self.current_impl_type.clone();
+                self.current_impl_type = Some(resolved);
+                for method in &i.methods {
+                    self.check_function(method)?;
+                }
+                self.current_impl_type = saved_impl;
                 Ok(())
             }
             _ => Ok(()),
@@ -710,12 +740,41 @@ impl TypeChecker {
                 if let Some(ret) = self.fn_return_types.get(name) {
                     return Ok(ret.clone());
                 }
+                // Try module-qualified function return type
+                {
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let qualified = format!("{}::{}", module_prefix, name);
+                        if let Some(ret) = self.fn_return_types.get(&qualified) {
+                            return Ok(ret.clone());
+                        }
+                    }
+                }
+                // Try use_aliases -> struct_defs
+                if let Some(resolved) = self.use_aliases.get(name) {
+                    if self.struct_defs.contains_key(resolved) {
+                        return Ok(TypeInfo::UserStruct(resolved.clone()));
+                    }
+                }
+                // Try module-qualified struct name
+                let resolved = self.resolve_struct_name(name);
+                if self.struct_defs.contains_key(&resolved) {
+                    return Ok(TypeInfo::UserStruct(resolved));
+                }
                 Ok(TypeInfo::Unknown)
             }
 
             Expr::BinaryOp { left, right, .. } => {
                 let lt = self.infer_expr(left)?;
                 let rt = self.infer_expr(right)?;
+                // String concatenation
+                if lt == TypeInfo::String || rt == TypeInfo::String {
+                    return Ok(TypeInfo::String);
+                }
+                // Char + Char → String (or Char + anything → String)
+                if lt == TypeInfo::Char || rt == TypeInfo::Char {
+                    return Ok(TypeInfo::String);
+                }
                 // Numeric ops: float wins, otherwise promote to wider integer
                 if matches!(lt, TypeInfo::F32 | TypeInfo::F64)
                     || matches!(rt, TypeInfo::F32 | TypeInfo::F64)
@@ -858,8 +917,29 @@ impl TypeChecker {
 
             Expr::Assign { target, value, .. } => {
                 let vt = self.infer_expr(value)?;
-                if let Expr::Ident(name, _) = target.as_ref() {
-                    self.env.borrow_mut().define(name, vt);
+                match target.as_ref() {
+                    Expr::Ident(name, _) => {
+                        // Check compatibility with existing binding
+                        if let Some(existing) = self.env.borrow().get(name) {
+                            if !existing.accepts(&vt) {
+                                return Err(FerriError::TypeError {
+                                    message: format!(
+                                        "type mismatch: cannot assign `{}` to variable `{name}` of type `{}`",
+                                        vt.name(),
+                                        existing.name()
+                                    ),
+                                    line: target.span().line,
+                                    column: target.span().column,
+                                });
+                            }
+                        }
+                        self.env.borrow_mut().define(name, vt);
+                    }
+                    Expr::FieldAccess { .. } => {
+                        // Field assignment — type checking deferred
+                        // (would need to look up field type in struct_defs)
+                    }
+                    _ => {}
                 }
                 Ok(TypeInfo::Unit)
             }
@@ -913,13 +993,26 @@ impl TypeChecker {
                 if let TypeInfo::UserStruct(struct_name) = &obj_ty {
                     let resolved = self.resolve_struct_name(struct_name);
                     self.check_field_visible(&resolved, field, *span)?;
+                    // Return the field's declared type
+                    if let Some(def) = self.struct_defs.get(&resolved) {
+                        if let StructKind::Named(fields) = &def.kind {
+                            for f in fields {
+                                if f.name == *field {
+                                    return Ok(self.resolve_type(&f.type_ann.name));
+                                }
+                            }
+                        }
+                    }
                 }
                 Ok(TypeInfo::Unknown)
             }
 
             Expr::Index { object, index, .. } => {
-                let _ = self.infer_expr(object)?;
+                let obj_ty = self.infer_expr(object)?;
                 let _ = self.infer_expr(index)?;
+                if obj_ty == TypeInfo::String {
+                    return Ok(TypeInfo::Char);
+                }
                 Ok(TypeInfo::Unknown)
             }
 
@@ -948,8 +1041,32 @@ impl TypeChecker {
             }
             Expr::FString { .. } => Ok(TypeInfo::String),
             Expr::MacroCall { .. } => Ok(TypeInfo::Unknown),
-            Expr::Path { .. } => Ok(TypeInfo::Unknown),
-            Expr::SelfRef { .. } => Ok(TypeInfo::Unknown),
+            Expr::Path { segments, .. } => {
+                let qualified = segments.join("::");
+                if let Some(ret) = self.fn_return_types.get(&qualified) {
+                    return Ok(ret.clone());
+                }
+                if self.struct_defs.contains_key(&qualified) {
+                    return Ok(TypeInfo::UserStruct(qualified));
+                }
+                // Try through use_aliases for the first segment
+                if segments.len() == 2 {
+                    if let Some(resolved) = self.use_aliases.get(&segments[0]) {
+                        let full = format!("{}::{}", resolved, segments[1]);
+                        if self.struct_defs.contains_key(&full) {
+                            return Ok(TypeInfo::UserStruct(full));
+                        }
+                    }
+                }
+                Ok(TypeInfo::Unknown)
+            }
+            Expr::SelfRef { .. } => {
+                if let Some(ref impl_type) = self.current_impl_type {
+                    Ok(TypeInfo::UserStruct(impl_type.clone()))
+                } else {
+                    Ok(TypeInfo::Unknown)
+                }
+            }
             Expr::As {
                 expr, type_name, ..
             } => {
@@ -969,10 +1086,23 @@ impl TypeChecker {
                 }
                 Ok(TypeInfo::Unknown) // diverging expression
             }
-            Expr::CompoundAssign {
-                target: _, value, ..
-            } => {
-                let _ = self.infer_expr(value)?;
+            Expr::CompoundAssign { target, value, .. } => {
+                let vt = self.infer_expr(value)?;
+                if let Expr::Ident(name, _) = target.as_ref() {
+                    if let Some(existing) = self.env.borrow().get(name) {
+                        if !existing.accepts(&vt) {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "type mismatch: cannot compound-assign `{}` to variable `{name}` of type `{}`",
+                                    vt.name(),
+                                    existing.name()
+                                ),
+                                line: target.span().line,
+                                column: target.span().column,
+                            });
+                        }
+                    }
+                }
                 Ok(TypeInfo::Unit)
             }
         }
