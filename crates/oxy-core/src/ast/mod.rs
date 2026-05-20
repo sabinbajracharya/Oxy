@@ -140,6 +140,7 @@ pub struct Attribute {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDef {
     pub name: String,
+    pub generic_params: Vec<GenericParam>,
     pub attributes: Vec<Attribute>,
     pub kind: StructKind,
     pub visibility: Visibility,
@@ -170,6 +171,7 @@ pub struct StructField {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDef {
     pub name: String,
+    pub generic_params: Vec<GenericParam>,
     pub attributes: Vec<Attribute>,
     pub variants: Vec<EnumVariant>,
     pub visibility: Visibility,

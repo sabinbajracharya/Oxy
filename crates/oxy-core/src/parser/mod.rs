@@ -624,10 +624,18 @@ impl Parser {
         self.expect(TokenKind::Struct)?;
         let name = self.expect_ident()?;
 
+        // Parse optional generic params: struct Name<T, U: Bound>
+        let generic_params = if self.check(&TokenKind::Lt) {
+            self.parse_generic_params()?
+        } else {
+            Vec::new()
+        };
+
         // Unit struct: `struct Name;`
         if self.match_token(&TokenKind::Semicolon) {
             return Ok(StructDef {
                 name,
+                generic_params,
                 attributes: attributes.clone(),
                 kind: StructKind::Unit,
                 visibility: visibility.clone(),
@@ -655,6 +663,7 @@ impl Parser {
             self.expect(TokenKind::Semicolon)?;
             return Ok(StructDef {
                 name,
+                generic_params,
                 attributes: attributes.clone(),
                 kind: StructKind::Tuple(types),
                 visibility: visibility.clone(),
@@ -690,6 +699,7 @@ impl Parser {
 
         Ok(StructDef {
             name,
+            generic_params,
             attributes,
             kind: StructKind::Named(fields),
             visibility: visibility.clone(),
@@ -707,6 +717,14 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::Enum)?;
         let name = self.expect_ident()?;
+
+        // Parse optional generic params: enum Name<T, U: Bound>
+        let generic_params = if self.check(&TokenKind::Lt) {
+            self.parse_generic_params()?
+        } else {
+            Vec::new()
+        };
+
         self.expect(TokenKind::LBrace)?;
 
         let mut variants = Vec::new();
@@ -771,6 +789,7 @@ impl Parser {
 
         Ok(EnumDef {
             name,
+            generic_params,
             attributes,
             variants,
             visibility: visibility.clone(),
@@ -1372,9 +1391,11 @@ impl Parser {
                 if self.check(&TokenKind::ColonColon) {
                     self.advance();
 
-                    // Turbofish on simple call: `foo::<T>(args)`
+                    let mut turbofish = None;
+                    // Turbofish: `foo::<T>(args)`, `Foo::<T> { ... }`, `Vec::<T>::new()`, `Foo::<T>`
                     if self.check(&TokenKind::Lt) {
-                        let turbofish = Some(self.parse_turbofish()?);
+                        turbofish = Some(self.parse_turbofish()?);
+                        // `foo::<T>(args)` — call with turbofish
                         if self.check(&TokenKind::LParen) {
                             self.advance();
                             let args = self.parse_arg_list()?;
@@ -1387,11 +1408,21 @@ impl Parser {
                                 span: self.merge_spans(span, end_span),
                             });
                         }
-                        return Err(self.error("expected `(` after turbofish".into()));
+                        // `Foo::<T> { field: val }` — struct init with turbofish
+                        if self.check(&TokenKind::LBrace) {
+                            return self.parse_struct_init(name, span);
+                        }
+                        // No `::` after turbofish → `Foo::<T>` (unit/tuple struct)
+                        if !self.check(&TokenKind::ColonColon) {
+                            return Ok(Expr::Ident(name, span));
+                        }
+                        // Otherwise, `::` follows → fall through to path loop
                     }
 
                     let mut segments = vec![name];
-                    segments.push(self.expect_ident()?);
+                    if turbofish.is_none() {
+                        segments.push(self.expect_ident()?);
+                    }
 
                     // Continue collecting path segments
                     while self.check(&TokenKind::ColonColon) {
