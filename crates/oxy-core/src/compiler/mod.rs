@@ -2929,9 +2929,25 @@ impl Compiler {
                 if path.len() == 2 {
                     let enum_name = &path[0];
                     let variant = &path[1];
-                    if self.enum_defs.contains_key(enum_name) {
+                    // Resolve enum_name via use aliases, type aliases, and module prefix
+                    let resolved_enum = self
+                        .type_aliases
+                        .get(enum_name)
+                        .cloned()
+                        .or_else(|| self.use_aliases.get(enum_name).cloned())
+                        .unwrap_or_else(|| {
+                            let module_prefix = self.module_stack.join("::");
+                            if !module_prefix.is_empty() {
+                                let qualified = format!("{}::{}", module_prefix, enum_name);
+                                if self.enum_defs.contains_key(&qualified) {
+                                    return qualified;
+                                }
+                            }
+                            enum_name.clone()
+                        });
+                    if self.enum_defs.contains_key(&resolved_enum) {
                         self.emit(OpCode::MakeEnumVariant {
-                            enum_name: enum_name.clone(),
+                            enum_name: resolved_enum,
                             variant: variant.clone(),
                             arg_count: args.len(),
                         });
