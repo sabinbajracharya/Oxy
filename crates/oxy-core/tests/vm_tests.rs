@@ -2688,7 +2688,7 @@ fn test_struct_init_with_use_import() {
     let output = run_and_capture(
         r#"
 mod geom {
-    pub struct Point { x: f64, y: f64 }
+    pub struct Point { pub x: f64, pub y: f64 }
 }
 use geom::Point;
 fn main() {

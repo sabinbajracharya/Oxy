@@ -873,6 +873,42 @@ impl Compiler {
             || self.pub_enums.contains(qualified)
     }
 
+    /// Check whether a field on a struct is visible from the current module context.
+    /// Returns Ok(()) if the field can be accessed, or an error if it's private.
+    fn check_field_visibility(
+        &self,
+        struct_name: &str,
+        field_name: &str,
+        span: crate::lexer::Span,
+    ) -> Result<(), FerriError> {
+        if let Some(struct_def) = self.struct_defs.get(struct_name) {
+            if let StructKind::Named(fields) = &struct_def.kind {
+                for field in fields {
+                    if field.name == field_name {
+                        if matches!(field.visibility, Visibility::Private) {
+                            let struct_module =
+                                struct_name.rsplit_once("::").map(|(m, _)| m).unwrap_or("");
+                            let current_module = self.module_stack.join("::");
+                            if struct_module != current_module {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "field `{}` of struct `{}` is private",
+                                        field_name, struct_name
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        // Field not found in definition — allow (validation happens elsewhere)
+        Ok(())
+    }
+
     /// Process a `use` declaration.
     fn compile_use(&mut self, use_def: &UseDef) -> Result<(), FerriError> {
         let resolved_path = Self::resolve_use_path(&use_def.path, &self.module_stack);
@@ -2823,7 +2859,9 @@ impl Compiler {
                     }
                 }
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
-                for (_, expr) in fields {
+                for (field_name, expr) in fields {
+                    // Check field visibility — private fields can't be set from outside
+                    self.check_field_visibility(&resolved_name, field_name, expr.span())?;
                     self.compile_expr(expr)?;
                 }
                 self.emit(OpCode::StructInit {
