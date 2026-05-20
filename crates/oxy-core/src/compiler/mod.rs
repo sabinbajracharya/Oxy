@@ -148,12 +148,8 @@ pub struct Compiler {
     /// Deferred use resolutions processed in post-pass: (qualified_path, reexport_name_or_empty).
     /// Empty reexport_name means glob import; non-empty means pub use re-export.
     deferred_globs: Vec<(String, String)>,
-    /// Qualified names of public functions (for visibility-aware glob filters).
-    pub_fns: HashSet<String>,
-    /// Qualified names of public structs (for visibility-aware glob filters).
-    pub_structs: HashSet<String>,
-    /// Qualified names of public enums (for visibility-aware glob filters).
-    pub_enums: HashSet<String>,
+    /// Visibility of public items (name → visibility level).
+    pub_vis: HashMap<String, Visibility>,
 }
 
 impl Compiler {
@@ -213,9 +209,7 @@ impl Default for Compiler {
             forward_calls: Vec::new(),
             module_stack: Vec::new(),
             deferred_globs: Vec::new(),
-            pub_fns: HashSet::new(),
-            pub_structs: HashSet::new(),
-            pub_enums: HashSet::new(),
+            pub_vis: HashMap::new(),
         }
     }
 }
@@ -398,13 +392,13 @@ impl Compiler {
     fn compile_item(&mut self, item: &Item) -> Result<(), FerriError> {
         match item {
             Item::Function(f) => {
-                self.pub_fns.insert(f.name.clone());
+                self.pub_vis.insert(f.name.clone(), f.visibility.clone());
                 self.compile_fn_item(f, None)?;
                 Ok(())
             }
             Item::Struct(s) => {
                 self.struct_defs.insert(s.name.clone(), s.clone());
-                self.pub_structs.insert(s.name.clone());
+                self.pub_vis.insert(s.name.clone(), s.visibility.clone());
                 // Handle #[derive(Default)] by generating a default() constructor
                 if s.attributes
                     .iter()
@@ -416,7 +410,7 @@ impl Compiler {
             }
             Item::Enum(e) => {
                 self.enum_defs.insert(e.name.clone(), e.clone());
-                self.pub_enums.insert(e.name.clone());
+                self.pub_vis.insert(e.name.clone(), e.visibility.clone());
                 Ok(())
             }
             Item::Impl(i) => {
@@ -562,7 +556,7 @@ impl Compiler {
             let qualified = format!("{}::{}", tn, f.name);
             self.functions.insert(qualified.clone(), ip);
             if f.visibility.is_pub() {
-                self.pub_fns.insert(qualified);
+                self.pub_vis.insert(qualified.clone(), f.visibility.clone());
             }
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
         }
@@ -868,9 +862,31 @@ impl Compiler {
         if !in_fns && !in_structs && !in_enums {
             return true; // not tracked — allow (builtin, forward ref)
         }
-        self.pub_fns.contains(qualified)
-            || self.pub_structs.contains(qualified)
-            || self.pub_enums.contains(qualified)
+        if let Some(vis) = self.pub_vis.get(qualified) {
+            match vis {
+                Visibility::Pub | Visibility::PubCrate => true,
+                Visibility::PubSuper => {
+                    // pub(super): visible to the parent module and all its descendants.
+                    let defining_module = qualified.rsplit_once("::").map(|(m, _)| m).unwrap_or("");
+                    let target_parent = defining_module
+                        .rsplit_once("::")
+                        .map(|(p, _)| p)
+                        .unwrap_or("");
+                    let current_module = self.module_stack.join("::");
+                    if target_parent.is_empty() {
+                        // At root level: pub(super) is equivalent to pub(crate)
+                        true
+                    } else {
+                        current_module == target_parent
+                            || current_module.starts_with(&format!("{}::", target_parent))
+                    }
+                }
+                Visibility::Private => false,
+            }
+        } else {
+            // Not in pub_vis — item exists but is private
+            false
+        }
     }
 
     /// Check whether a field on a struct is visible from the current module context.
@@ -959,7 +975,7 @@ impl Compiler {
                 let prefix = &base_path;
                 for qualified_name in self.functions.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                             if use_def.visibility.is_pub() {
@@ -978,7 +994,7 @@ impl Compiler {
                 }
                 for qualified_name in self.struct_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                             if use_def.visibility.is_pub() {
@@ -997,7 +1013,7 @@ impl Compiler {
                 }
                 for qualified_name in self.enum_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                             if use_def.visibility.is_pub() {
@@ -1201,7 +1217,7 @@ impl Compiler {
                 let prefix = base_path;
                 for qualified_name in self.functions.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_fns.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
@@ -1209,7 +1225,7 @@ impl Compiler {
                 }
                 for qualified_name in self.struct_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_structs.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
@@ -1217,7 +1233,7 @@ impl Compiler {
                 }
                 for qualified_name in self.enum_defs.keys() {
                     if let Some(stripped) = qualified_name.strip_prefix(&format!("{}::", prefix)) {
-                        if !stripped.contains("::") && self.pub_enums.contains(qualified_name) {
+                        if !stripped.contains("::") && self.is_visible(qualified_name) {
                             self.use_aliases
                                 .insert(stripped.to_string(), qualified_name.clone());
                         }
@@ -1227,15 +1243,15 @@ impl Compiler {
                 // pub use re-export: register qualified item under alias name
                 if let Some(&ip) = self.functions.get(base_path) {
                     self.functions.insert(reexport_name.clone(), ip);
-                    self.pub_fns.insert(reexport_name.clone());
+                    self.pub_vis.insert(reexport_name.clone(), Visibility::Pub);
                 }
                 if let Some(def) = self.struct_defs.get(base_path).cloned() {
                     self.struct_defs.insert(reexport_name.clone(), def);
-                    self.pub_structs.insert(reexport_name.clone());
+                    self.pub_vis.insert(reexport_name.clone(), Visibility::Pub);
                 }
                 if let Some(def) = self.enum_defs.get(base_path).cloned() {
                     self.enum_defs.insert(reexport_name.clone(), def);
-                    self.pub_enums.insert(reexport_name.clone());
+                    self.pub_vis.insert(reexport_name.clone(), Visibility::Pub);
                 }
             }
         }
@@ -1250,7 +1266,7 @@ impl Compiler {
                     let ip = self.code.len();
                     self.functions.insert(qualified.clone(), ip);
                     if f.visibility.is_pub() {
-                        self.pub_fns.insert(qualified.clone());
+                        self.pub_vis.insert(qualified.clone(), f.visibility.clone());
                     }
                     // Store metadata for function-reference-as-value
                     let body_expr = f
@@ -1283,14 +1299,14 @@ impl Compiler {
                     let qualified = format!("{}::{}", prefix, s.name);
                     self.struct_defs.insert(qualified.clone(), s.clone());
                     if s.visibility.is_pub() {
-                        self.pub_structs.insert(qualified);
+                        self.pub_vis.insert(qualified.clone(), s.visibility.clone());
                     }
                 }
                 Item::Enum(e) => {
                     let qualified = format!("{}::{}", prefix, e.name);
                     self.enum_defs.insert(qualified.clone(), e.clone());
                     if e.visibility.is_pub() {
-                        self.pub_enums.insert(qualified);
+                        self.pub_vis.insert(qualified.clone(), e.visibility.clone());
                     }
                 }
                 Item::Impl(i) => {
@@ -1305,7 +1321,8 @@ impl Compiler {
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
                         if method.visibility.is_pub() {
-                            self.pub_fns.insert(mname.clone());
+                            self.pub_vis
+                                .insert(mname.clone(), method.visibility.clone());
                         }
                         // Store fn_meta for arg count checking
                         let body_expr = method
@@ -1395,7 +1412,8 @@ impl Compiler {
                         let ip = self.code.len();
                         self.functions.insert(mname.clone(), ip);
                         if method.visibility.is_pub() {
-                            self.pub_fns.insert(mname.clone());
+                            self.pub_vis
+                                .insert(mname.clone(), method.visibility.clone());
                         }
                         let body_expr = method
                             .body
