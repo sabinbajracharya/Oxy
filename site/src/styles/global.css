@@ -1,0 +1,59 @@
+@import './variables.css';
+@import './reset.css';
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CodeMirror overrides */
+.cm-editor {
+  font-family: var(--font-mono) !important;
+  font-size: 0.875rem !important;
+  height: 100% !important;
+}
+
+.cm-editor .cm-scroller {
+  overflow: auto !important;
+}
+
+.cm-editor .cm-content {
+  padding: 1rem !important;
+}
+
+.cm-editor .cm-gutters {
+  border-right: 1px solid var(--border) !important;
+  background: var(--ctp-mantle) !important;
+  color: var(--ctp-overlay0) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--ctp-mantle);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ctp-surface1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ctp-surface2);
+}

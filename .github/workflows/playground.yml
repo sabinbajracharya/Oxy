@@ -1,9 +1,10 @@
-name: Playground
+name: Website
 
 on:
   push:
     branches: [main]
     paths:
+      - 'site/**'
       - 'playground/**'
       - 'crates/oxy-core/**'
 
@@ -34,13 +35,24 @@ jobs:
           cd playground/wasm
           wasm-pack build --target web --out-dir ../pkg
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install and build site
+        run: |
+          cd site
+          bash scripts/copy-wasm.sh
+          npm ci
+          npm run build
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: playground/
+          path: site/dist/
 
       - name: Deploy to GitHub Pages
         id: deploy

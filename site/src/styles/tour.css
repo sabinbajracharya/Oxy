@@ -1,0 +1,250 @@
+/* Tour View */
+.tour-view {
+  display: flex;
+  height: calc(100vh - 56px - 57px);
+}
+
+.tour-left {
+  width: 40%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--ctp-mantle);
+}
+
+.tour-instructions {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.tour-breadcrumb {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.tour-lesson-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.tour-content h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.75rem;
+}
+.tour-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.tour-content p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  margin-bottom: 0.75rem;
+}
+
+.tour-content code {
+  background: var(--bg-input);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ctp-peach);
+}
+
+.tour-content pre {
+  background: var(--ctp-crust);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.tour-content pre code {
+  background: none;
+  padding: 0;
+  color: var(--text);
+}
+
+.tour-content ul, .tour-content ol {
+  margin: 0.5rem 0 0.75rem 1.5rem;
+  list-style: disc;
+}
+
+.tour-content li {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Hints */
+.tour-hints {
+  margin-top: 1rem;
+}
+
+.hint-toggle {
+  background: var(--ctp-surface0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+
+.hint-toggle[open] {
+  border-color: var(--accent);
+}
+
+.hint-toggle summary {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.hint-body {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* Tour Navigation */
+.tour-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  border-top: 1px solid var(--border);
+  background: var(--ctp-mantle);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.tour-nav-btn {
+  color: var(--accent);
+  transition: color var(--transition);
+}
+
+.tour-nav-btn:hover {
+  color: var(--text);
+}
+
+.tour-nav-btn.disabled {
+  color: var(--ctp-overlay0);
+  pointer-events: none;
+}
+
+.tour-nav-sep {
+  color: var(--ctp-overlay0);
+}
+
+/* Tour Right (Editor + Output) */
+.tour-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tour-editor-wrap {
+  flex: 0 0 60%;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
+.tour-editor-wrap .cm-editor {
+  height: 100% !important;
+}
+
+.tour-output-wrap {
+  flex: 1;
+  overflow: auto;
+  background: var(--ctp-mantle);
+}
+
+/* Tour Contents */
+.tour-contents {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+.tour-contents h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+}
+
+.toc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.toc-chapter-card {
+  background: var(--ctp-mantle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+}
+
+.toc-chapter-card h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--accent);
+}
+
+.toc-chapter-card ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+
+.toc-chapter-card li {
+  margin-bottom: 0.375rem;
+}
+
+.toc-chapter-card a {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  transition: color var(--transition);
+}
+
+.toc-chapter-card a:hover {
+  color: var(--text);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tour-view {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .tour-left {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tour-instructions {
+    max-height: none;
+  }
+
+  .tour-editor-wrap {
+    flex: 0 0 40vh;
+  }
+
+  .toc-grid {
+    grid-template-columns: 1fr;
+  }
+}
