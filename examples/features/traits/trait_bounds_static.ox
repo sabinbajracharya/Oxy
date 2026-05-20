@@ -18,6 +18,6 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_trait_static_method_bound() {
-    let z: i64 = make_zero();
+    let z = make_zero::<i64>();
     assert_eq!(z, 0);
 }

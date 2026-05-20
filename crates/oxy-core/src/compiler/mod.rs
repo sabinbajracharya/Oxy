@@ -3018,55 +3018,29 @@ impl Compiler {
                     });
                     return Ok(());
                 }
-                // Check if path[0] is a generic type param → resolve via trait bounds
-                if path.len() == 2 {
-                    if let Some(gparam) = self
+                // Check if path[0] is a generic type param → emit placeholder.
+                // The generic body is never executed directly — only monomorphized
+                // copies (with concrete types substituted) are called.
+                if path.len() == 2
+                    && self
                         .current_generic_params
                         .iter()
-                        .find(|p| p.name == path[0])
-                    {
-                        let method_name = &path[1];
-                        // For each trait bound on the generic param, look for the method
-                        let mut resolved_target: Option<usize> = None;
-                        for bound in &gparam.bounds {
-                            // Check if the trait defines this method (via signature or default)
-                            let trait_has_method = self
-                                .trait_method_names
-                                .get(bound)
-                                .map(|names| names.iter().any(|n| n == method_name))
-                                .unwrap_or(false);
-                            if trait_has_method {
-                                // Find a concrete impl with this method
-                                for ((_type_name, mname), &target) in &self.method_ips {
-                                    if mname == method_name {
-                                        resolved_target = Some(target);
-                                        break;
-                                    }
-                                }
-                            }
-                            if resolved_target.is_some() {
-                                break;
-                            }
-                        }
-                        if let Some(target) = resolved_target {
-                            self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            return Ok(());
-                        }
-                        // Generic param found but method not resolved — helpful error
-                        let bounds_str = gparam.bounds.join(" + ");
-                        return Err(FerriError::Runtime {
-                            message: format!(
-                                "no known implementation of `{}::{}()` for type param `{}: {}`; \
-                                 add an `impl {} for <type>` block or use turbofish to specify a concrete type",
-                                path[0], path[1], path[0], bounds_str, bounds_str
-                            ),
-                            line: expr.span().line,
-                            column: expr.span().column,
-                        });
+                        .any(|p| p.name == path[0])
+                {
+                    let method_name = &path[1];
+                    for arg in args {
+                        self.compile_expr(arg)?;
                     }
+                    self.emit(OpCode::ConstString(format!(
+                        "generic function called without monomorphization: \
+                         cannot resolve `{}::{}()` without a concrete type; \
+                         use turbofish: `func::<Type>(args)`",
+                        path[0], method_name,
+                    )));
+                    self.emit(OpCode::Panic);
+                    // Push a dummy value for stack balance (Return expects one)
+                    self.emit(OpCode::ConstUnit);
+                    return Ok(());
                 }
                 Err(self.not_yet_supported("Unknown path call", expr.span()))
             }
