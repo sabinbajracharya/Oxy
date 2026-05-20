@@ -1,4 +1,10 @@
 //! Symbol table tracking local variables in the current scope.
+//!
+//! ```text
+//! sym_table.rs  ── pub(crate) struct SymTable, no dependencies
+//!   re-exported by: mod.rs (pub(crate) use sym_table::SymTable)
+//!   used by: Compiler.sym field, expr.rs (compile_stmt/compile_expr)
+//! ```
 
 use std::collections::{HashMap, HashSet};
 

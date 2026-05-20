@@ -1,5 +1,10 @@
 //! Compiler helper functions: closure capture analysis, const evaluation,
 //! literal validation, narrowing casts, and builtin path detection.
+//!
+//! ```text
+//! helpers.rs  ── free pub(crate) functions, no Compiler access needed
+//!   used by: mod.rs (re-exported), expr.rs (type checking + casts)
+//! ```
 
 use std::collections::HashSet;
 

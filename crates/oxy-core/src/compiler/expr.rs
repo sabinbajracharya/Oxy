@@ -1,5 +1,11 @@
 //! Expression and statement compilation: pattern matching, destructuring,
 //! block/statement compilation, and the main expression bytecode emitter.
+//!
+//! ```text
+//! expr.rs  ── impl Compiler { compile_expr, compile_stmt, compile_block, ... }
+//!   uses: mod.rs (Compiler struct), helpers.rs (free functions),
+//!         visibility.rs (via self.is_visible()), sym_table.rs (SymTable)
+//! ```
 
 use std::collections::HashSet;
 

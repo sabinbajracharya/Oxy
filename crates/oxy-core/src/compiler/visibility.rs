@@ -1,4 +1,10 @@
 //! Visibility checking for module-level items, path segments, and struct fields.
+//!
+//! ```text
+//! visibility.rs  ── impl Compiler { is_visible, check_path_visible, ... }
+//!   uses: mod.rs (reads Compiler fields: functions, pub_vis, module_names, ...)
+//!   used by: mod.rs (compile_use, preresolve_uses), expr.rs (PathCall, StructInit)
+//! ```
 
 use super::Compiler;
 use crate::ast::*;

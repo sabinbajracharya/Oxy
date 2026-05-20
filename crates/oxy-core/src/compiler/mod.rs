@@ -3,6 +3,18 @@
 //! The compiler is single-pass. It resolves local variable names to stack
 //! slot indices and emits [`OpCode`]s into a [`Chunk`]. Forward jumps
 //! (for `if`, `while`, `loop`) are backpatched after the target is known.
+//!
+//! # Module structure
+//! ```text
+//! mod.rs  ── struct Compiler, compile() pipeline, item/module compilation
+//!   ├── sym_table.rs     SymTable struct (pub(crate) use'd here)
+//!   ├── loop_context.rs  LoopContext struct (pub(crate) use'd here)
+//!   ├── helpers.rs       free functions (pub(crate) use'd here)
+//!   ├── visibility.rs    impl Compiler { is_visible, check_path_visible, ... }
+//!   └── expr.rs          impl Compiler { compile_expr, compile_stmt, ... }
+//! ```
+//!
+//! All Compiler fields are `pub(crate)` so submodule impl blocks can access them.
 
 use std::collections::{HashMap, HashSet};
 
