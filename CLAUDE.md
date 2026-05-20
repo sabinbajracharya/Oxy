@@ -1,191 +1,325 @@
-# CLAUDE.md — Project Context
+# CLAUDE.md — Oxy Language Project
 
-## Project: Oxy
+## Project
 
-Interpreted programming language written in Rust. Replicates Rust syntax without borrow checker/ownership. File extension: `.ox`.
+Oxy is a compiled programming language written in Rust. Rust-like syntax without borrow checker/ownership. File extension: `.ox`.
 
-### Success Criterion
+**Pipeline:** `parse → type_check → compile → bytecode → VM`
 
-**Complete bytecode migration and interpreter removal — then all tests pass natively.**
+There is no interpreter. One execution path: compiler to VM.
 
-- Making tests pass by routing through interpreter fallback (`emit_eval`, `self.interpreter.call_method()`, etc.) is NOT success.
-- Every feature must have native bytecode execution.
-- The end goal is to delete the interpreter directory entirely — one execution path: compiler → VM.
-- **Test regressions during architectural changes are expected and acceptable.** Do not revert necessary architectural work just to keep tests green. Temporarily disable failing tests if they distract from productive work — re-enable when the migration is complete.
-- Tests are a verification tool, not the goal itself. The goal is zero interpreter code.
-
-## Build & Test (Docker — no local Rust)
+## Build & Test (Docker)
 
 ```bash
 docker compose run --rm dev bash -c "cargo test"                    # All tests
-docker compose run --rm dev bash -c "cargo test -p oxy-core"    # Core only
-docker compose run --rm dev bash -c "cargo test -p oxy-lsp"     # LSP only
+docker compose run --rm dev bash -c "cargo test -p oxy-core"        # Core only
+docker compose run --rm dev bash -c "cargo test -p oxy-lsp"         # LSP only
 docker compose run --rm dev bash -c "cargo fmt --all"               # Format
 docker compose run --rm dev bash -c "cargo clippy -- -D warnings"   # Lint
 docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"  # Run
-docker compose run --rm test                                        # Full CI check
-docker compose run --rm setup                                       # Install npm deps
+docker compose run --rm test                                        # Full CI
+docker compose run --rm setup                                       # npm deps
 docker compose run --rm build-ext                                   # Package .vsix
 ```
+
+### Pre-Commit Checklist (run before every commit)
+
+```bash
+docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"
+```
+
+All three must pass. No exceptions.
 
 ## Architecture
 
 ```
-crates/
-├── oxy-core/src/
-│   ├── lib.rs           # Public API exports
-│   ├── lexer/           # Tokenizer → Vec<Token>
-│   │   ├── mod.rs       # Scanner (scan_token, scan_string, scan_fstring, scan_number)
-│   │   └── token.rs     # Token, TokenKind (keywords, operators, literals), Span
-│   ├── ast/mod.rs       # AST nodes: Item, Expr, Stmt, FnDef, StructDef, EnumDef, Attribute, FStringPart
-│   ├── parser/mod.rs    # Pratt parser (~3200 lines). Precedence levels 0-14.
-│   ├── interpreter/mod.rs  # Tree-walking evaluator (~7000+ lines). All runtime logic.
-│   ├── types/mod.rs     # Value enum: Integer, Float, Bool, String, Vec, HashMap, Struct, EnumVariant, Function(Box), Future(Box), etc.
-│   ├── env/mod.rs       # Lexical scope chain (parent pointer)
-│   ├── json/mod.rs      # Hand-written JSON ser/de (no deps)
-│   ├── http/mod.rs      # HTTP client wrapping ureq
-│   └── errors.rs        # FerriError: Lexer/Parser/Runtime with line/column, Return(Box<Value>), Break, Continue
-├── oxy-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast
-└── oxy-lsp/src/main.rs  # LSP server (tower-lsp): diagnostics, completion, hover, symbols, goto-def
-editors/vscode/
-├── extension.js         # LSP client — launches oxy-lsp via Docker or native binary
-├── package.json         # Extension manifest with oxy.lsp.mode/path/enabled settings
-├── syntaxes/oxy.tmLanguage.json  # TextMate grammar
-└── language-configuration.json       # Brackets, comments, indentation
+crates/oxy-core/src/
+├── lib.rs                  # Public API exports
+├── lexer/mod.rs            # Tokenizer → Vec<Token>
+├── lexer/token.rs          # Token, TokenKind, Span (1-indexed)
+├── ast/mod.rs              # AST: Program, Item, Expr, Stmt, FnDef, StructDef, EnumDef, Attribute, Visibility, etc.
+├── parser/mod.rs           # Pratt parser (~3200 lines), precedence 0-14
+├── compiler/mod.rs         # Compiler: prescan → compile items → bytecode Chunk
+├── type_checker/mod.rs     # Semantic type checker: infers types, enforces field visibility
+├── vm/mod.rs               # Stack-based VM: executes bytecode, hosts run_tests()
+├── vm/builtins.rs          # Built-in method implementations (Vec, String, HashMap, HashSet, etc.)
+├── types/mod.rs            # Value enum (all integer widths, floats, Bool, String, Vec, HashMap, Struct, etc.)
+├── env/mod.rs              # Lexical scope chain (for repl/eval compatibility)
+├── json/mod.rs             # Hand-written JSON ser/de
+├── http/mod.rs             # HTTP client (ureq wrapper)
+├── errors.rs               # FerriError: Lexer, Parser, TypeError, Runtime (with line/column)
+├── stdlib.rs               # Standard library built-in functions
+└── repl.rs                 # REPL utilities
+crates/oxy-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast, --dump-bytecode
+crates/oxy-lsp/src/main.rs  # LSP server (tower-lsp)
 ```
 
-## Key Patterns (follow these when adding features)
+## Test Infrastructure
 
-### Adding a built-in macro (e.g. `println!`, `vec!`, `format!`)
-→ Add match arm in `interpreter::eval_macro_call()`
+### Test types
 
-### Adding a path-call module (e.g. `math::sqrt()`, `json::parse()`, `http::get()`)
-→ Add match arm in `interpreter::eval_path_call()` under the module prefix
+| Type | Mechanism | Location |
+|------|-----------|----------|
+| Runtime tests | `#[test]` fn in `.ox` file | `examples/features/<category>/` |
+| Compile-error tests | `#[compile_error]` fn in `.ox` file | `examples/features/<category>/` |
+| Rust unit tests | `#[test]` in `#[cfg(test)]` modules | `crates/oxy-core/tests/vm_tests.rs` |
+| Integration test | `feature_examples.rs` globs all `.ox` | `crates/oxy-core/tests/feature_examples.rs` |
+| Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
 
-### Adding a path constant (e.g. `math::PI`)
-→ Handle in `interpreter::eval_expr()` under `Expr::Path`
+### `run_tests()` flow (`vm/mod.rs`)
 
-### Adding methods on built-in types (e.g. `.sqrt()`, `.len()`, `.clone()`)
-→ Add match arm in `interpreter::call_method()` → type-specific dispatcher:
-  - `call_vec_method()`, `call_string_method()`, `call_hashmap_method()`
-  - Numeric methods handled inline in `call_method()`
+```
+1. parse(source) → Program
+2. Split: normal_items (no #[compile_error]) vs compile_error_fns
+3. type_check(normal_items) + compile(normal_items) — must succeed
+4. Run each #[test] fn via VM → TestResult { passed, error }
+5. For each #[compile_error] fn:
+   a. Build program: normal_items + this fn
+   b. Try type_check + compile
+   c. Err → passed (expected error); Ok → FAILED (expected error, got none)
+6. Return combined results
+```
 
-### Adding a new expression type
-1. Add variant to `Expr` enum in `ast/mod.rs`
-2. Parse it in `parser/mod.rs` (`parse_prefix` or `parse_infix`)
-3. Evaluate it in `interpreter::eval_expr()`
+A `#[compile_error]` test passes if EITHER the type checker OR the compiler rejects it.
 
-### Adding a new item type (struct/enum feature)
-1. Extend AST node in `ast/mod.rs` (e.g. add field to `StructDef`)
-2. Parse in `parser::parse_item()`
-3. Register in `interpreter::register_item()`
+### Rust-side test helpers
 
-### Adding a new Value type
-1. Add variant to `Value` enum in `types/mod.rs` + Display impl
-2. Handle in `interpreter::call_method()` for methods
-3. Handle in binary/comparison operators if needed
+- `run_and_capture(src) → Vec<String>` — compile + run main, return stdout lines
+- `run(src) → Result<Value>` — compile + run main, return final value or error
+- Source must wrap in `fn main() { ... }`
+- `run_tests(path, source) → Result<Vec<TestResult>>` — run #[test] + #[compile_error] functions
 
-## Critical Implementation Details
+## TDD Feature Development Process
 
-- **Value::Function and Value::Future are boxed** — `Function(Box<FunctionData>)`, `Future(Box<FutureData>)` to prevent stack overflow in recursive code
-- **FerriError::Return and Break are boxed** — `Return(Box<Value>)`, `Break(Option<Box<Value>>)` to satisfy clippy result_large_err
-- **Spans are 1-indexed** — line 1, column 1. LSP converts to 0-indexed.
-- **Struct init disambiguation** — `Ident { ... }` is struct init only if name starts with uppercase
-- **Option/Result** — modeled as `Value::EnumVariant` with `enum_name: "Option"/"Result"`
-- **Test pattern** — `run_and_capture(src)` returns `Vec<String>` of output lines (each ending `\n`). Source must wrap in `fn main() { ... }`.
-- **Pratt parser precedence** — None(0) → Assignment(1) → Range(2) → Or(3) → And(4) → Equality(8) → Comparison(9) → Term(11) → Factor(12) → Unary(13) → Call(14)
-- **Method dispatch order** — Vec → String → HashMap → Option/Result → HttpResponse → HttpRequestBuilder → numeric methods → .to_json() → impl blocks → trait impls → trait defaults
-- **Derived traits** tracked in `interpreter.derived_traits: HashMap<String, HashSet<String>>`
-- **Async** — simulated, not real threads. `async fn` returns lazy `Value::Future`, `.await` evaluates it.
+This is the ONLY acceptable process for adding features:
+
+1. **Write `.ox` test file first** in `examples/features/<category>/<name>.ox`
+2. **Cover all cases:**
+   - `#[test]` for each success/happy-path scenario
+   - `#[test]` for edge cases and corner cases
+   - `#[compile_error]` for every error case that should be rejected at compile time
+3. **Run the feature test** to find failures:
+   ```bash
+   docker compose run --rm dev bash -c "cargo test -p oxy-core -- feature_examples"
+   ```
+4. **Fix the compiler/type checker** — NEVER change the test to pass when the compiler should catch it
+5. **Iterate** until all tests pass
+6. **Run full validation:**
+   ```bash
+   docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"
+   ```
+7. **Commit** only when everything is green
+
+### Write tests for ALL of these:
+- Basic success case
+- Edge case (empty, boundary, extreme values)
+- Error cases via `#[compile_error]` (visibility, type mismatch, missing fields, etc.)
+- Interaction with other features (modules + generics, visibility + impl blocks, etc.)
+
+## Compiler Internals
+
+### Compilation pipeline (`compiler/mod.rs`)
+
+```
+1. prescan_items() — register all fn/struct/enum names + pub_vis (so forward refs resolve)
+2. preresolve_uses() — process use statements against prescanned data
+3. compile items — function bodies, struct/enum definitions, modules, impls
+4. Post-pass — patch forward calls, deferred globs
+```
+
+### Prescan phase (critical for forward references)
+
+The prescan registers items BEFORE any function body is compiled. This allows `fn a()` to call `fn b()` even if `b` is defined after `a`.
+
+**Must register in prescan:**
+- `self.functions` — name → `usize::MAX` (placeholder IP)
+- `self.fn_meta` — params + body + return type
+- `self.struct_defs` — qualified name → StructDef
+- `self.enum_defs` — qualified name → EnumDef
+- `self.pub_vis` — qualified name → Visibility (if pub)
+
+If `pub_vis` is NOT populated during prescan, `is_visible()` will return false for forward-referenced functions, breaking valid calls.
+
+### Module compilation
+
+Two code paths:
+- **`compile_module()`** (line ~855): top-level `mod foo { ... }` — prefix = `module.name`
+- **`compile_module_items()` Item::Module** (line ~1391): nested modules — prefix = `"parent::child"` (cumulative)
+
+Items in nested modules get fully qualified names: `"parent::child::fn_name"`.
+
+### Visibility system
+
+- **`pub_vis: HashMap<String, Visibility>`** — tracks pub items. Populated in prescan AND during compilation.
+- **`module_names: HashSet<String>`** — tracks known module qualified names. Populated during `compile_module` and `compile_module_items`.
+
+#### `is_visible(qualified) → bool`
+
+1. If name not in functions/structs/enums/modules → `true` (untracked, e.g. builtins)
+2. If in `pub_vis`:
+   - `Pub` / `PubCrate` → `true`
+   - `PubSuper` → check parent module ancestry
+   - `Private` → `true` only if parent is NOT a module (top-level or struct-scoped)
+3. If NOT in `pub_vis` (private):
+   - `true` only if parent is empty or parent is NOT a known module
+   - `false` otherwise (item inside a module, not pub)
+
+**Key rule:** Top-level items and items scoped to structs (methods) are always accessible. Only items inside modules are subject to visibility restrictions.
+
+#### `check_path_visible(path, span) → Result<(), Error>`
+
+Called in PathCall and StructInit compilation. Checks:
+1. Each intermediate path segment that's a module — must be visible
+2. The leaf item (function/struct/enum) — must be visible
+
+Module visibility: a private module is accessible only from its parent module or descendants.
+
+### PathCall compilation
+
+Resolution order for 2-segment paths like `Foo::bar()`:
+1. Check if path[0] is an enum variant constructor
+2. Try `self.functions.get("Foo::bar")` — direct match
+3. Try type alias + use-aliased prefix
+4. Try use_aliases on the full qualified name
+5. Try module-qualified (current module prefix + path)
+6. Try builtin path
+
+**Must call `check_path_visible(path, span)?` before emitting Call.**
+
+### StructInit compilation
+
+1. Resolve name: `Self` → `current_impl_type`, then type_aliases, then use_aliases
+2. Check enum variant constructor (if name contains `::`)
+3. **Check `is_visible(resolved_name)`** — reject private structs
+4. Check field visibility for each field via `check_field_visibility()`
+5. Emit StructInit opcode
+
+## Type Checker Internals
+
+### `TypeChecker` struct fields
+
+- `struct_defs` — qualified name → StructDef
+- `type_aliases` — alias name → TypeAnnotation
+- `fn_return_types` — qualified name → TypeInfo (return type)
+- `use_aliases` — short_name → qualified_name
+- `module_stack` — current module nesting
+- `current_impl_type` — for `Self` resolution
+
+### `check_program()` order
+
+```
+1. collect_defs(items, prefix)  — structs, type aliases, use aliases
+2. collect_fn_types(items, prefix) — function/method return types
+3. check_item() for each item — type-check bodies
+```
+
+### `collect_fn_types()` — MUST handle ALL of these:
+
+- `Item::Function` — register return type under qualified name
+- `Item::Module` — recurse with nested prefix
+- **`Item::Impl`** — register method return types under `"Type::method"` AND `"prefix::Type::method"`
+- **`Item::ImplTrait`** — same as Impl
+- DO NOT skip Impl/ImplTrait — method return types will be Unknown, breaking field visibility checks
+
+### `check_stmt()` — `Stmt::Use`
+
+**MUST** populate `use_aliases` (not be a no-op):
+```rust
+Stmt::Use(use_def) => {
+    // Process Simple, Group, Glob — same logic as Item::Use
+    self.use_aliases.insert(local_name, qualified_name);
+}
+```
+
+### PathCall return type resolution
+
+Try in order:
+1. `fn_return_types.get(path.join("::"))` — direct match
+2. If 2-segment: resolve path[0] through use_aliases, try `"resolved::method"` in fn_return_types
+3. Try module-qualified: `"current_module::path"`
+
+### FieldAccess type inference
+
+1. `infer_expr(object)` → get object type
+2. If `UserStruct(struct_name)`: resolve struct name, call `check_field_visible()`
+3. Return the field's declared type from struct_defs
+
+### `check_field_visible()` — compile-time field enforcement
+
+Compares struct's defining module against current `module_stack`. Private fields accessible only from within the same module.
+
+## Anti-Patterns (NEVER DO THESE)
+
+- **Quick workaround or hack** instead of proper compiler/type-checker implementation
+- **Change `.ox` test to pass** when the compiler should reject/fail/error
+- **Skip visibility checks** in PathCall, StructInit, or field access paths
+- **Use `contains("::")`** for top-level detection — check `module_names.contains(parent)` instead
+- **Forget to register `pub_vis` in prescan** — forward references will break
+- **Leave `Stmt::Use` as a no-op** in type checker — use_aliases won't populate, field visibility checks won't resolve
+- **Skip `Item::Impl`/`Item::ImplTrait` in `collect_fn_types`** — method return types will be Unknown
+- **Skip `check_path_visible` / `is_visible()` in PathCall/StructInit** — private items will be accessible
+- **Cut corners silently** — if a shortcut is unavoidable, tell the user and explain why
+
+## Common Pitfalls & Their Fixes
+
+| Pitfall | Fix |
+|---------|-----|
+| Forward ref breaks `is_visible()` | Register `pub_vis` in prescan phase |
+| `name` moved before later use | Clone before first insert: `functions.insert(name.clone(), usize::MAX)` |
+| `is_visible()` returns true for untracked items | Check `module_names` in the "is tracked" condition |
+| Nested module items not found | `compile_module_items` uses cumulative prefix `"parent::child"` |
+| Method return type Unknown | Register in `fn_return_types` under both `"Type::method"` and `"module::Type::method"` |
+| Top-level items incorrectly blocked | Check `!self.module_names.contains(parent)` not `contains("::")` |
+| `#[compile_error]` test passes when it shouldn't | Ensure the error is caught at type-check OR compile time; check both stages |
 
 ## Conventions
 
-- `rustfmt.toml` config (max width 100)
+- `rustfmt.toml`: max width 100
 - `thiserror` for error types
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
-- Always add trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
-- Tests: `test_<what>_<scenario>` naming, unit tests in `#[cfg(test)]` modules
+- **No co-author trailers** on commits
+- Test naming: `test_<what>_<scenario>`
+- Unit tests in `#[cfg(test)]` modules within source files
+- `.ox` feature tests in `examples/features/<category>/<name>.ox`
 
 ## Debug Tools
 
 ### `--dump-bytecode <file>` (CLI)
-Prints compiled bytecode with opcodes, slot names, function/closure entry points, and closure metadata.
 ```bash
 docker compose run --rm dev bash -c "cargo run --bin oxy -- --dump-bytecode examples/foo.ox"
 ```
+Prints compiled bytecode: opcodes with IPs, slot names, function/closure entry points.
 
 ### `OXY_VM_TRACE=1` (env var)
-Enables per-opcode execution tracing to stderr. Shows each instruction with IP, stack state, frame info (base/protected), and compact value representation. Works with `cargo test` and `cargo run`.
 ```bash
 OXY_VM_TRACE=1 docker compose run --rm dev bash -c "cargo test -p oxy-core --test feature_examples"
 ```
-When debugging a specific test failure, run with trace to see the exact opcode sequence and stack state at each step.
+Per-opcode execution tracing to stderr: IP, stack state, frame info, compact values. Use when debugging a specific test failure.
 
-### `disassemble_chunk(&Chunk) -> String` (api)
-Programmatic access to bytecode disassembly in `oxy_core::vm::disassemble_chunk`.
+### `disassemble_chunk(&Chunk) → String`
+Programmatic bytecode disassembly in `oxy_core::vm::disassemble_chunk`.
 
-### `disassemble_source(path, source) -> Result<String>` (api)
-Parse + type-check + compile + disassemble in one call. In `oxy_core::vm::disassemble_source`.
+### `disassemble_source(path, source) → Result<String>`
+Parse + type-check + compile + disassemble in one call: `oxy_core::vm::disassemble_source`.
 
-# context-mode — MANDATORY routing rules
+## Context-Mode MCP Tools
 
-You have context-mode MCP tools available. These rules are NOT optional — they protect your context window from flooding. A single unrouted command can dump 56 KB into context and waste the entire session.
+### Blocked commands — do NOT use
+- `curl` / `wget` → use `ctx_fetch_and_index(url, source)` or `ctx_execute` with fetch
+- `WebFetch` → use `ctx_fetch_and_index(url, source)` then `ctx_search(queries)`
 
-## BLOCKED commands — do NOT attempt these
+### Tool selection
+1. **GATHER**: `ctx_batch_execute(commands, queries)` — one call replaces many
+2. **FOLLOW-UP**: `ctx_search(queries: ["q1", "q2"])` — query indexed content
+3. **PROCESSING**: `ctx_execute(language, code)` / `ctx_execute_file(path, language, code)` — sandbox execution
+4. **WEB**: `ctx_fetch_and_index(url, source)` then `ctx_search(queries)`
 
-### curl / wget — BLOCKED
-Any Bash command containing `curl` or `wget` is intercepted and replaced with an error message. Do NOT retry.
-Instead use:
-- `ctx_fetch_and_index(url, source)` to fetch and index web pages
-- `ctx_execute(language: "javascript", code: "const r = await fetch(...)")` to run HTTP calls in sandbox
+Bash is ONLY for: git, mkdir, rm, mv, navigation, and short-output commands. For everything else use sandbox equivalents.
 
-### Inline HTTP — BLOCKED
-Any Bash command containing `fetch('http`, `requests.get(`, `requests.post(`, `http.get(`, or `http.request(` is intercepted and replaced with an error message. Do NOT retry with Bash.
-Instead use:
-- `ctx_execute(language, code)` to run HTTP calls in sandbox — only stdout enters context
-
-### WebFetch — BLOCKED
-WebFetch calls are denied entirely. The URL is extracted and you are told to use `ctx_fetch_and_index` instead.
-Instead use:
-- `ctx_fetch_and_index(url, source)` then `ctx_search(queries)` to query the indexed content
-
-## REDIRECTED tools — use sandbox equivalents
-
-### Bash (>20 lines output)
-Bash is ONLY for: `git`, `mkdir`, `rm`, `mv`, `cd`, `ls`, `npm install`, `pip install`, and other short-output commands.
-For everything else, use:
-- `ctx_batch_execute(commands, queries)` — run multiple commands + search in ONE call
-- `ctx_execute(language: "shell", code: "...")` — run in sandbox, only stdout enters context
-
-### Read (for analysis)
-If you are reading a file to **Edit** it → Read is correct (Edit needs content in context).
-If you are reading to **analyze, explore, or summarize** → use `ctx_execute_file(path, language, code)` instead. Only your printed summary enters context. The raw file content stays in the sandbox.
-
-### Grep (large results)
-Grep results can flood context. Use `ctx_execute(language: "shell", code: "grep ...")` to run searches in sandbox. Only your printed summary enters context.
-
-## Tool selection hierarchy
-
-1. **GATHER**: `ctx_batch_execute(commands, queries)` — Primary tool. Runs all commands, auto-indexes output, returns search results. ONE call replaces 30+ individual calls.
-2. **FOLLOW-UP**: `ctx_search(queries: ["q1", "q2", ...])` — Query indexed content. Pass ALL questions as array in ONE call.
-3. **PROCESSING**: `ctx_execute(language, code)` | `ctx_execute_file(path, language, code)` — Sandbox execution. Only stdout enters context.
-4. **WEB**: `ctx_fetch_and_index(url, source)` then `ctx_search(queries)` — Fetch, chunk, index, query. Raw HTML never enters context.
-5. **INDEX**: `ctx_index(content, source)` — Store content in FTS5 knowledge base for later search.
-
-## Subagent routing
-
-When spawning subagents (Agent/Task tool), the routing block is automatically injected into their prompt. Bash-type subagents are upgraded to general-purpose so they have access to MCP tools. You do NOT need to manually instruct subagents about context-mode.
-
-## Output constraints
-
-- Keep responses under 500 words.
-- Write artifacts (code, configs, PRDs) to FILES — never return them as inline text. Return only: file path + 1-line description.
-- When indexing content, use descriptive source labels so others can `ctx_search(source: "label")` later.
-
-## ctx commands
+### ctx commands
 
 | Command | Action |
 |---------|--------|
-| `ctx stats` | Call the `ctx_stats` MCP tool and display the full output verbatim |
-| `ctx doctor` | Call the `ctx_doctor` MCP tool, run the returned shell command, display as checklist |
-| `ctx upgrade` | Call the `ctx_upgrade` MCP tool, run the returned shell command, display as checklist |
+| `ctx stats` | Display context consumption statistics |
+| `ctx doctor` | Diagnose context-mode installation |
+| `ctx upgrade` | Upgrade context-mode to latest |
