@@ -98,3 +98,51 @@ fn test_enum_mixed_variants() {
     };
     assert_eq!(desc, "click");
 }
+
+// === Tuple Variants with Many Positional Fields ===
+// Regression: 3+ positional fields used to bind the third (and beyond)
+// to Unit because EnumVariantEqual bulk-pushed data into stack slots
+// that collided with binding positions.
+
+enum Color {
+    Rgb(i64, i64, i64),
+    Rgba(i64, i64, i64, i64),
+    Hsl(i64, i64, i64),
+}
+
+#[test]
+fn test_three_positional_fields_bind_correctly() {
+    let c = Color::Rgb(255, 128, 64);
+    match c {
+        Color::Rgb(r, g, b) => {
+            assert_eq!(r, 255);
+            assert_eq!(g, 128);
+            assert_eq!(b, 64);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn test_four_positional_fields_bind_correctly() {
+    let c = Color::Rgba(10, 20, 30, 40);
+    match c {
+        Color::Rgba(r, g, b, a) => {
+            assert_eq!(r, 10);
+            assert_eq!(g, 20);
+            assert_eq!(b, 30);
+            assert_eq!(a, 40);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn test_if_let_three_positional_fields() {
+    let c = Color::Hsl(120, 50, 75);
+    let mut total = 0;
+    if let Color::Hsl(h, s, l) = c {
+        total = h + s + l;
+    }
+    assert_eq!(total, 245);
+}
