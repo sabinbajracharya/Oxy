@@ -22,7 +22,13 @@ fi
 echo -e "${GREEN}=== clippy ===${NC}"
 run_in_dev "cargo clippy -- -D warnings"
 
+echo -e "${GREEN}=== clippy (oxy-lsp) ===${NC}"
+run_in_dev "cargo clippy -p oxy-lsp -- -D warnings"
+
 echo -e "${GREEN}=== test (oxy-core) ===${NC}"
 run_in_dev "cargo test -p oxy-core"
+
+echo -e "${GREEN}=== test (oxy-lsp) ===${NC}"
+run_in_dev "cargo test -p oxy-lsp"
 
 echo -e "${GREEN}All checks passed.${NC}"

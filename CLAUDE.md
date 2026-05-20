@@ -26,9 +26,10 @@ docker compose run --rm build-ext                                   # Package .v
 
 ```bash
 docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"
+docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp -- -D warnings && cargo test -p oxy-lsp"
 ```
 
-All three must pass. No exceptions.
+All must pass. No exceptions.
 
 ## Architecture
 
@@ -104,11 +105,17 @@ This is the ONLY acceptable process for adding features:
    ```
 4. **Fix the compiler/type checker** — NEVER change the test to pass when the compiler should catch it
 5. **Iterate** until all tests pass
-6. **Run full validation:**
+6. **Update downstream systems as needed:**
+   - **LSP** (`crates/oxy-lsp/src/main.rs`) — new AST nodes, keywords, built-in types, or methods may need completion/hover/diagnostic updates
+   - **VS Code extension** (`editors/vscode/`) — new keywords, types, or operators may need syntax highlighting updates in `oxy.tmLanguage.json`
+   - **REPL** (`crates/oxy-core/src/repl.rs`) — new language constructs may need REPL-specific handling
+   - At minimum, verify the LSP compiles: `cargo test -p oxy-lsp`
+7. **Run full validation:**
    ```bash
    docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"
+   docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp -- -D warnings && cargo test -p oxy-lsp"
    ```
-7. **Commit** only when everything is green
+8. **Commit** only when everything is green
 
 ### Write tests for ALL of these:
 - Basic success case
