@@ -271,6 +271,7 @@ Compares struct's defining module against current `module_stack`. Private fields
 - **Use raw string literals in builtins dispatch match arms** — use `symbols::<type>_m::CONSTANT` instead. If you add a method without adding its constant to `symbols.rs`, it won't compile
 - **Add a built-in method only to builtins or only to symbols** — must update both: the dispatch match arm (using the constant) AND the `MethodInfo` list in `symbols.rs`. Consistency tests + compile-time constants enforce this
 - **Wire up only some Value variants** for a built-in dispatch — all integer/float widths must go through `numeric::dispatch`, all collection types must be handled. `dispatched_type_names()` + consistency tests catch gaps
+- **Inline-match on type name strings** in the type checker or compiler — use `TypeInfo::from_name()` instead. A partial match with `_ => Unknown` silently accepts any type because `TypeInfo::accepts()` returns `true` when either side is `Unknown`. The `from_name` function at `type_checker/mod.rs:91` is the single source of truth for type name → TypeInfo conversion.
 
 ## Symbol Definitions (`symbols.rs`)
 
