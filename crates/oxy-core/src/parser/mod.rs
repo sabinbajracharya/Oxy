@@ -803,12 +803,12 @@ impl Parser {
     fn parse_impl_or_impl_trait(&mut self) -> Result<Item, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Impl)?;
-        let first_name = self.expect_ident()?;
+        let first_name = self.parse_type_name_with_args()?;
 
         // Check for `impl Trait for Type { ... }`
         if self.check(&TokenKind::For) {
             self.advance();
-            let type_name = self.expect_ident()?;
+            let type_name = self.parse_type_name_with_args()?;
             self.expect(TokenKind::LBrace)?;
 
             let mut methods = Vec::new();
@@ -851,6 +851,27 @@ impl Parser {
             methods,
             span: self.merge_spans(start_span, end_span),
         }))
+    }
+
+    /// Parse a type name optionally followed by generic arguments: `Ident` or `Ident<A, B>`.
+    fn parse_type_name_with_args(&mut self) -> Result<String, FerriError> {
+        let name = self.expect_ident()?;
+        if self.check(&TokenKind::Lt) {
+            self.advance(); // consume `<`
+            let mut args = Vec::new();
+            loop {
+                args.push(self.parse_type_annotation()?);
+                if self.check(&TokenKind::Gt) {
+                    self.advance();
+                    break;
+                }
+                self.expect(TokenKind::Comma)?;
+            }
+            let arg_names: Vec<String> = args.iter().map(|a| a.name.clone()).collect();
+            Ok(format!("{}<{}>", name, arg_names.join(", ")))
+        } else {
+            Ok(name)
+        }
     }
 
     // === Trait parsing ===
@@ -1544,7 +1565,7 @@ impl Parser {
                         self.expect(TokenKind::RParen)?;
                         return Ok(Expr::PathCall {
                             path: segments,
-                            turbofish: None,
+                            turbofish,
                             args,
                             span: self.merge_spans(span, end_span),
                         });

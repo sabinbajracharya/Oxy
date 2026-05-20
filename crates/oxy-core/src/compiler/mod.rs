@@ -559,6 +559,11 @@ impl Compiler {
                 self.pub_vis.insert(qualified.clone(), f.visibility.clone());
             }
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
+            // If type has generic args (e.g. "Pair<i64>"), also register under base name
+            if let Some(lt_pos) = tn.find('<') {
+                let base_name = tn[..lt_pos].to_string();
+                self.method_ips.insert((base_name, f.name.clone()), ip);
+            }
         }
         // Store metadata for function-reference-as-value support
         let body_expr = f
@@ -1351,6 +1356,20 @@ impl Compiler {
                             .insert((qualified_type.clone(), method.name.clone()), ip);
                         self.method_ips
                             .insert((i.type_name.clone(), method.name.clone()), ip);
+                        // Also register under base type name (strip type args: "Pair<i64>" → "Pair")
+                        if let Some(lt_pos) = i.type_name.find('<') {
+                            let base_name = i.type_name[..lt_pos].to_string();
+                            self.method_ips
+                                .insert((base_name.clone(), method.name.clone()), ip);
+                            let base_qualified = if qualified_type.contains("::") {
+                                let lt_in_qualified = qualified_type.find('<').unwrap();
+                                qualified_type[..lt_in_qualified].to_string()
+                            } else {
+                                base_name
+                            };
+                            self.method_ips
+                                .insert((base_qualified, method.name.clone()), ip);
+                        }
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
                             self.sym.define(&param.name);
@@ -2971,7 +2990,12 @@ impl Compiler {
                 Err(self.not_yet_supported("Unknown path", expr.span()))
             }
 
-            Expr::PathCall { path, args, .. } => {
+            Expr::PathCall {
+                path,
+                turbofish,
+                args,
+                ..
+            } => {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
@@ -2982,6 +3006,14 @@ impl Compiler {
                 } else {
                     path
                 };
+                // Build type args suffix if turbofish present (e.g. "<i64, i64>")
+                let type_args_suffix: String = turbofish
+                    .as_ref()
+                    .map(|tf| {
+                        let names: Vec<&str> = tf.iter().map(|ta| ta.name.as_str()).collect();
+                        format!("<{}>", names.join(", "))
+                    })
+                    .unwrap_or_default();
                 if path.len() == 2 {
                     let enum_name = &path[0];
                     let variant = &path[1];
@@ -3009,7 +3041,8 @@ impl Compiler {
                         });
                         return Ok(());
                     }
-                    let qualified = format!("{}::{}", &path[0], &path[1]);
+                    let type_name = format!("{}{}", &path[0], type_args_suffix);
+                    let qualified = format!("{}::{}", type_name, &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
                         let call_idx = self.emit(OpCode::Call {
                             target,
@@ -3028,7 +3061,7 @@ impl Compiler {
                         .cloned()
                         .or_else(|| self.use_aliases.get(prefix).cloned());
                     if let Some(rp) = resolved_prefix {
-                        let aliased = format!("{}::{}", rp, &path[1]);
+                        let aliased = format!("{}{}::{}", rp, type_args_suffix, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
                             let call_idx = self.emit(OpCode::Call {
                                 target,
@@ -3058,7 +3091,7 @@ impl Compiler {
                     let module_prefix = self.module_stack.join("::");
                     if !module_prefix.is_empty() {
                         let module_qualified =
-                            format!("{}::{}::{}", module_prefix, &path[0], &path[1]);
+                            format!("{}::{}::{}", module_prefix, type_name, &path[1]);
                         if let Some(&target) = self.functions.get(&module_qualified) {
                             let call_idx = self.emit(OpCode::Call {
                                 target,
