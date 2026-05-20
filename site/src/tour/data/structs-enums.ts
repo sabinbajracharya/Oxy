@@ -113,33 +113,33 @@ fn main() {
       title: 'Enum with Data',
       instructions: `## Enums Carrying Data
 
-Each enum variant can carry different types of data. Pattern matching destructures the variant and binds the data to variables.
+Each enum variant can carry different types of data: nothing (unit), positional values (tuple), or named fields (struct-shaped). Pattern matching destructures the variant and binds the data to variables.
 
 This is the foundation of \`Option<T>\` and \`Result<T, E>\`.
 
-**Try it:** Add a \`Mul(Box<Expr>, Box<Expr>)\` variant for multiplication.`,
+**Try it:** Add a \`Resize(i64, i64)\` variant for window resizes and handle it in \`process()\`.`,
       hints: [
-        'Use `Box<T>` for recursive types — it allocates on the heap.',
-        'Match arms can destructure nested data.',
+        'Variants can be unit (no data), tuple (positional), or struct-shaped (named fields).',
+        'Pattern matching destructures variant data into local bindings.',
       ],
-      initialCode: `enum Expr {
-    Int(i64),
-    Add(Box<Expr>, Box<Expr>),
+      initialCode: `enum Message {
+    Quit,
+    Move { x: i64, y: i64 },
+    Write(String),
 }
 
-fn eval(e: Expr) -> i64 {
-    match e {
-        Expr::Int(n) => n,
-        Expr::Add(a, b) => eval(*a) + eval(*b),
+fn process(msg: Message) {
+    match msg {
+        Message::Quit => println!("quit"),
+        Message::Move { x, y } => println!("move to ({}, {})", x, y),
+        Message::Write(text) => println!("write: {}", text),
     }
 }
 
 fn main() {
-    let expr = Expr::Add(
-        Box::new(Expr::Int(3)),
-        Box::new(Expr::Int(4)),
-    );
-    println!("result = {}", eval(expr));
+    process(Message::Quit);
+    process(Message::Move { x: 10, y: 20 });
+    process(Message::Write("hello".to_string()));
 }
 `,
     },
