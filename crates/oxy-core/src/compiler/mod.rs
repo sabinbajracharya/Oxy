@@ -1916,6 +1916,23 @@ impl Compiler {
                             meta_idx,
                         });
                         Ok(())
+                    } else if let Some(sdef) = self.struct_defs.get(&resolved) {
+                        if matches!(sdef.kind, crate::ast::StructKind::Unit) {
+                            self.emit(OpCode::StructInit {
+                                name: resolved,
+                                field_count: 0,
+                                field_names: vec![],
+                            });
+                            Ok(())
+                        } else {
+                            Err(FerriError::Runtime {
+                                message: format!(
+                                    "expected arguments or named fields for struct '{resolved}'"
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            })
+                        }
                     } else {
                         // Suggest similar variable names
                         let suggestion = self
@@ -2114,6 +2131,109 @@ impl Compiler {
                             self.forward_calls.push((call_idx, resolved));
                         }
                     }
+                } else if let Expr::Ident(name, _) = callee.as_ref() {
+                    // Not a known function — check if it's a tuple struct constructor.
+                    let resolved = self
+                        .type_aliases
+                        .get(name)
+                        .cloned()
+                        .or_else(|| self.use_aliases.get(name).cloned())
+                        .unwrap_or_else(|| name.clone());
+                    // Also try Self -> current_impl_type
+                    let resolved = if resolved == "Self" {
+                        self.current_impl_type.clone().unwrap_or(resolved)
+                    } else {
+                        resolved
+                    };
+                    // Clone struct kind before mutable borrows below
+                    let struct_kind = self.struct_defs.get(&resolved).map(|sd| sd.kind.clone());
+                    if let Some(kind) = struct_kind {
+                        match &kind {
+                            crate::ast::StructKind::Tuple(type_anns) => {
+                                if args.len() != type_anns.len() {
+                                    return Err(FerriError::Runtime {
+                                        message: format!(
+                                            "tuple struct '{}' expects {} field{}, but {} {} provided",
+                                            resolved,
+                                            type_anns.len(),
+                                            if type_anns.len() == 1 { "" } else { "s" },
+                                            args.len(),
+                                            if args.len() == 1 { "was" } else { "were" },
+                                        ),
+                                        line: callee.span().line,
+                                        column: callee.span().column,
+                                    });
+                                }
+                                for arg in args {
+                                    self.compile_expr(arg)?;
+                                }
+                                let field_names: Vec<String> =
+                                    (0..type_anns.len()).map(|i| i.to_string()).collect();
+                                self.emit(OpCode::StructInit {
+                                    name: resolved,
+                                    field_count: type_anns.len(),
+                                    field_names,
+                                });
+                                return Ok(());
+                            }
+                            crate::ast::StructKind::Unit => {
+                                if !args.is_empty() {
+                                    return Err(FerriError::Runtime {
+                                        message: format!(
+                                            "unit struct '{}' does not take arguments",
+                                            resolved
+                                        ),
+                                        line: callee.span().line,
+                                        column: callee.span().column,
+                                    });
+                                }
+                                self.emit(OpCode::StructInit {
+                                    name: resolved,
+                                    field_count: 0,
+                                    field_names: vec![],
+                                });
+                                return Ok(());
+                            }
+                            _ => {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "struct '{}' has named fields; use {} {{ field: value }} syntax",
+                                        resolved, resolved
+                                    ),
+                                    line: callee.span().line,
+                                    column: callee.span().column,
+                                });
+                            }
+                        }
+                    }
+                    // Also check enum variant constructors: Type::Variant(args)
+                    if resolved.contains("::") {
+                        let parts: Vec<&str> = resolved.split("::").collect();
+                        if parts.len() == 2 {
+                            let enum_name = parts[0].to_string();
+                            let variant = parts[1].to_string();
+                            if self.enum_defs.contains_key(&enum_name) {
+                                for arg in args {
+                                    self.compile_expr(arg)?;
+                                }
+                                self.emit(OpCode::MakeEnumVariant {
+                                    enum_name,
+                                    variant,
+                                    arg_count: args.len(),
+                                });
+                                return Ok(());
+                            }
+                        }
+                    }
+                    // Fall through to dynamic CallClosure
+                    self.compile_expr(callee)?;
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    self.emit(OpCode::CallClosure {
+                        arg_count: args.len(),
+                    });
+                    return Ok(());
                 } else {
                     // Unknown at compile time — emit dynamic call via CallClosure.
                     // This handles closures from variables (|x|), array indexing (arr[0]),

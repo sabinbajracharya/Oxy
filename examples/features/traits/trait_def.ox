@@ -1,0 +1,133 @@
+// === Feature: Traits — Trait Definition and Implementation ===
+// Define traits with method signatures and implement them on structs.
+// Trait methods are called via `.method()` syntax like inherent methods.
+
+// === Basic Trait: Single Method ===
+
+trait Speak {
+    fn speak(self) -> String;
+}
+
+struct Dog {
+    name: String,
+}
+
+impl Speak for Dog {
+    fn speak(self) -> String {
+        "Woof! I'm " + self.name
+    }
+}
+
+#[test]
+fn test_basic_trait() {
+    let d = Dog { name: "Rex" };
+    assert_eq!(d.speak(), "Woof! I'm Rex");
+}
+
+// === Trait on Enum ===
+
+trait Area {
+    fn area(self) -> f64;
+}
+
+enum Shape {
+    Circle(f64),
+    Rectangle(f64, f64),
+}
+
+impl Area for Shape {
+    fn area(self) -> f64 {
+        match self {
+            Shape::Circle(r) => 3.14 * r * r,
+            Shape::Rectangle(w, h) => w * h,
+        }
+    }
+}
+
+#[test]
+fn test_trait_on_enum() {
+    let c = Shape::Circle(10.0);
+    let r = Shape::Rectangle(4.0, 5.0);
+    assert_eq!(c.area(), 314.0);
+    assert_eq!(r.area(), 20.0);
+}
+
+// === Trait with Multiple Methods ===
+
+trait Calculator {
+    fn add(self, other: Self) -> Self;
+    fn sub(self, other: Self) -> Self;
+}
+
+struct Num(i64);
+
+impl Calculator for Num {
+    fn add(self, other: Num) -> Num {
+        Num(self.0 + other.0)
+    }
+
+    fn sub(self, other: Num) -> Num {
+        Num(self.0 - other.0)
+    }
+}
+
+#[test]
+fn test_multiple_trait_methods() {
+    let a = Num(10);
+    let b = Num(3);
+    assert_eq!(a.add(b).0, 13);
+    let c = Num(10);
+    let d = Num(3);
+    assert_eq!(c.sub(d).0, 7);
+}
+
+// === Trait with &self Receiver ===
+
+trait Describe {
+    fn describe(self) -> String;
+    fn tag_line(self) -> String;
+}
+
+struct Book {
+    title: String,
+    year: i64,
+}
+
+impl Describe for Book {
+    fn describe(self) -> String {
+        self.title + " (" + self.year + ")"
+    }
+    fn tag_line(self) -> String {
+        "A great read: " + self.describe()
+    }
+}
+
+#[test]
+fn test_self_receiver() {
+    let b = Book { title: "Oxy Guide", year: 2025 };
+    assert_eq!(b.describe(), "Oxy Guide (2025)");
+    assert_eq!(b.tag_line(), "A great read: Oxy Guide (2025)");
+}
+
+// === Chaining Trait Method Calls ===
+
+trait Chain {
+    fn double(self) -> Self;
+    fn add_ten(self) -> Self;
+}
+
+impl Chain for i64 {
+    fn double(self) -> i64 {
+        self * 2
+    }
+    fn add_ten(self) -> i64 {
+        self + 10
+    }
+}
+
+#[test]
+fn test_trait_method_chain() {
+    let x: i64 = 5;
+    assert_eq!(x.double().add_ten(), 20);
+    assert_eq!(x.add_ten().double(), 30);
+}

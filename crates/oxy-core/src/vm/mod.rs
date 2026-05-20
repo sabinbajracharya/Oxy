@@ -458,6 +458,29 @@ impl Vm {
 
                 OpCode::Neg => {
                     let v = self.stack.pop().unwrap_or(Value::Unit);
+                    // Try operator overloading for struct/enum types
+                    let type_name = match &v {
+                        Value::Struct { name, .. } => Some(name.clone()),
+                        Value::EnumVariant { enum_name, .. } => Some(enum_name.clone()),
+                        _ => None,
+                    };
+                    if let Some(ref tn) = type_name {
+                        let key = (tn.clone(), "neg".to_string());
+                        if let Some(&target) = self.chunk.method_ips.get(&key) {
+                            self.stack.push(v.clone());
+                            if self.call_stack.len() < 1024 {
+                                self.call_stack.push(Frame {
+                                    return_ip: self.ip + 1,
+                                    base: self.stack.len() - 1,
+                                    max_slot: 1,
+                                    write_back_slot: None,
+                                    fn_ip: target,
+                                });
+                                self.ip = target;
+                                continue;
+                            }
+                        }
+                    }
                     self.stack.push(vm_neg(v));
                 }
 
@@ -1064,28 +1087,27 @@ impl Vm {
                     let is_struct = matches!(receiver, Value::Struct { .. });
                     let is_enum = matches!(receiver, Value::EnumVariant { .. });
 
-                    // Look up method IP: first check user methods, then built-ins
-                    let method_ip = if is_struct || is_enum {
-                        // Check user-defined methods
-                        let struct_name = match &receiver {
+                    // Look up method IP: first check user methods (struct, enum, AND trait impls
+                    // on built-in types), then built-ins.
+                    let lookup_name = if is_struct {
+                        match &receiver {
                             Value::Struct { name, .. } => name.clone(),
+                            _ => type_name.clone(),
+                        }
+                    } else if is_enum {
+                        match &receiver {
                             Value::EnumVariant { enum_name, .. } => enum_name.clone(),
                             _ => type_name.clone(),
-                        };
-                        self.chunk
-                            .method_ips
-                            .get(&(struct_name.clone(), method_name.clone()))
-                            .copied()
-                            .or_else(|| {
-                                // Fallback: check all impl_methods for trait methods
-                                self.chunk
-                                    .method_ips
-                                    .get(&(struct_name, method_name.clone()))
-                                    .copied()
-                            })
+                        }
                     } else {
-                        None
+                        // Built-in type (i64, String, etc.) — still check method_ips for trait impls
+                        type_name.clone()
                     };
+                    let method_ip = self
+                        .chunk
+                        .method_ips
+                        .get(&(lookup_name, method_name.clone()))
+                        .copied();
 
                     match method_ip {
                         Some(target) => {
@@ -2495,10 +2517,10 @@ fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
 }
 
 fn vm_div(a: Value, b: Value) -> Result<Value, String> {
-    if b.to_f64() == 0.0 {
-        return Err("division by zero".into());
-    }
     if a.is_float() || b.is_float() {
+        if b.to_f64() == 0.0 {
+            return Err("division by zero".into());
+        }
         return Ok(Value::F64(a.to_f64() / b.to_f64()));
     }
     if a.is_integer() && b.is_integer() {
@@ -2517,10 +2539,10 @@ fn vm_div(a: Value, b: Value) -> Result<Value, String> {
 }
 
 fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
-    if b.to_f64() == 0.0 {
-        return Err("modulo by zero".into());
-    }
     if a.is_float() || b.is_float() {
+        if b.to_f64() == 0.0 {
+            return Err("modulo by zero".into());
+        }
         return Ok(Value::F64(a.to_f64() % b.to_f64()));
     }
     if a.is_integer() && b.is_integer() {
