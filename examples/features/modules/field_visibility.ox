@@ -103,3 +103,30 @@ fn test_mixed_visibility_via_constructor() {
     assert_eq!(s.max_connections, 10);
     assert_eq!(s.get_counter(), 0);
 }
+
+// === Negative tests: private fields NOT accessible from outside ===
+
+#[compile_error]
+fn test_cannot_read_private_field_from_outside() {
+    let r = database::make_admin();
+    let _ = r.secret_key; // ERROR: private field
+}
+
+#[compile_error]
+fn test_cannot_init_private_field_from_outside() {
+    use database::Record;
+    let _ = Record { name: "x".to_string(), secret_key: 1 }; // ERROR: private field
+}
+
+#[compile_error]
+fn test_cannot_read_mixed_private_field() {
+    use config::Settings;
+    let s = Settings::new(true, 10);
+    let _ = s.internal_counter; // ERROR: private field
+}
+
+#[compile_error]
+fn test_cannot_init_mixed_private_field() {
+    use config::Settings;
+    let _ = Settings { debug: true, max_connections: 5, internal_counter: 0 }; // ERROR: private field
+}

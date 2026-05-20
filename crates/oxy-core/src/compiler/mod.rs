@@ -150,6 +150,8 @@ pub struct Compiler {
     deferred_globs: Vec<(String, String)>,
     /// Visibility of public items (name → visibility level).
     pub_vis: HashMap<String, Visibility>,
+    /// Module qualified names (for checking path visibility through modules).
+    module_names: HashSet<String>,
 }
 
 impl Compiler {
@@ -210,6 +212,7 @@ impl Default for Compiler {
             module_stack: Vec::new(),
             deferred_globs: Vec::new(),
             pub_vis: HashMap::new(),
+            module_names: HashSet::new(),
         }
     }
 }
@@ -233,6 +236,7 @@ impl Compiler {
             >,
             struct_defs: &mut HashMap<String, StructDef>,
             enum_defs: &mut HashMap<String, EnumDef>,
+            pub_vis: &mut HashMap<String, Visibility>,
             prefix: &str,
         ) {
             for item in items {
@@ -243,6 +247,9 @@ impl Compiler {
                         } else {
                             format!("{}::{}", prefix, f.name)
                         };
+                        if f.visibility.is_pub() {
+                            pub_vis.insert(name.clone(), f.visibility.clone());
+                        }
                         functions.insert(name.clone(), usize::MAX);
                         let body_expr = f
                             .body
@@ -268,6 +275,9 @@ impl Compiler {
                         } else {
                             format!("{}::{}", prefix, s.name)
                         };
+                        if s.visibility.is_pub() {
+                            pub_vis.insert(name.clone(), s.visibility.clone());
+                        }
                         struct_defs.insert(name, s.clone());
                     }
                     Item::Enum(e) => {
@@ -276,6 +286,9 @@ impl Compiler {
                         } else {
                             format!("{}::{}", prefix, e.name)
                         };
+                        if e.visibility.is_pub() {
+                            pub_vis.insert(name.clone(), e.visibility.clone());
+                        }
                         enum_defs.insert(name, e.clone());
                     }
                     Item::Module(m) => {
@@ -291,6 +304,7 @@ impl Compiler {
                                 fn_meta,
                                 struct_defs,
                                 enum_defs,
+                                pub_vis,
                                 &nested,
                             );
                         }
@@ -305,6 +319,7 @@ impl Compiler {
             &mut self.fn_meta,
             &mut self.struct_defs,
             &mut self.enum_defs,
+            &mut self.pub_vis,
             "",
         );
 
@@ -851,6 +866,11 @@ impl Compiler {
             program.items
         };
         let prefix = module.name.clone();
+        self.module_names.insert(prefix.clone());
+        if module.visibility.is_pub() {
+            self.pub_vis
+                .insert(prefix.clone(), module.visibility.clone());
+        }
         self.module_stack.push(module.name.clone());
         self.compile_module_items(&items, &prefix)?;
         self.module_stack.pop();
@@ -864,7 +884,8 @@ impl Compiler {
         let in_fns = self.functions.contains_key(qualified);
         let in_structs = self.struct_defs.contains_key(qualified);
         let in_enums = self.enum_defs.contains_key(qualified);
-        if !in_fns && !in_structs && !in_enums {
+        let in_modules = self.module_names.contains(qualified);
+        if !in_fns && !in_structs && !in_enums && !in_modules {
             return true; // not tracked — allow (builtin, forward ref)
         }
         if let Some(vis) = self.pub_vis.get(qualified) {
@@ -886,12 +907,86 @@ impl Compiler {
                             || current_module.starts_with(&format!("{}::", target_parent))
                     }
                 }
-                Visibility::Private => false,
+                Visibility::Private => {
+                    // Allow if parent is not a module (e.g. field on top-level struct)
+                    let parent = qualified.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
+                    parent.is_empty() || !self.module_names.contains(parent)
+                }
             }
         } else {
-            // Not in pub_vis — item exists but is private
+            // Not in pub_vis — item exists but is private.
+            // Allow if parent is not a module (e.g. method on top-level struct)
+            // or if it's a top-level item (no parent module boundary).
+            let parent = qualified.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
+            if parent.is_empty() || !self.module_names.contains(parent) {
+                return true;
+            }
             false
         }
+    }
+
+    /// Check that every segment of a path is visible: intermediate modules
+    /// and the final item (function, struct, enum).
+    fn check_path_visible(
+        &self,
+        path: &[String],
+        span: crate::lexer::Span,
+    ) -> Result<(), FerriError> {
+        let current_module = self.module_stack.join("::");
+        // Check each intermediate prefix as a potential module
+        for i in 1..path.len() {
+            let prefix: String = path[..i].join("::");
+            if self.module_names.contains(&prefix) {
+                if let Some(vis) = self.pub_vis.get(&prefix) {
+                    match vis {
+                        Visibility::Pub | Visibility::PubCrate => {}
+                        Visibility::PubSuper => {
+                            let parent = prefix.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
+                            if !parent.is_empty()
+                                && current_module != parent
+                                && !current_module.starts_with(&format!("{}::", parent))
+                            {
+                                return Err(FerriError::Runtime {
+                                    message: format!("module `{}` is private", prefix),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        Visibility::Private => {
+                            return Err(FerriError::Runtime {
+                                message: format!("module `{}` is private", prefix),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                    }
+                } else {
+                    // Module is not pub — accessible only from parent or descendants
+                    let parent = prefix.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
+                    if !parent.is_empty()
+                        && current_module != parent
+                        && !current_module.starts_with(&format!("{}::", parent))
+                    {
+                        return Err(FerriError::Runtime {
+                            message: format!("module `{}` is private", prefix),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+            }
+        }
+        // Check the leaf item
+        let qualified = path.join("::");
+        if !self.is_visible(&qualified) {
+            return Err(FerriError::Runtime {
+                message: format!("`{}` is private", qualified),
+                line: span.line,
+                column: span.column,
+            });
+        }
+        Ok(())
     }
 
     /// Check whether a field on a struct is visible from the current module context.
@@ -1382,6 +1477,11 @@ impl Compiler {
                 }
                 Item::Module(m) => {
                     let nested_prefix = format!("{}::{}", prefix, m.name);
+                    self.module_names.insert(nested_prefix.clone());
+                    if m.visibility.is_pub() {
+                        self.pub_vis
+                            .insert(nested_prefix.clone(), m.visibility.clone());
+                    }
                     self.module_stack.push(m.name.clone());
                     if let Some(body) = &m.body {
                         self.compile_module_items(body, &nested_prefix)?;
@@ -2896,6 +2996,14 @@ impl Compiler {
                     }
                 }
                 let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+                // Check struct visibility — private structs can't be constructed from outside
+                if !self.is_visible(&resolved_name) {
+                    return Err(FerriError::Runtime {
+                        message: format!("`{}` is private", resolved_name),
+                        line: expr.span().line,
+                        column: expr.span().column,
+                    });
+                }
                 for (field_name, expr) in fields {
                     // Check field visibility — private fields can't be set from outside
                     self.check_field_visibility(&resolved_name, field_name, expr.span())?;
@@ -3044,6 +3152,7 @@ impl Compiler {
                     let type_name = format!("{}{}", &path[0], type_args_suffix);
                     let qualified = format!("{}::{}", type_name, &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
+                        self.check_path_visible(path, expr.span())?;
                         let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
@@ -3063,6 +3172,13 @@ impl Compiler {
                     if let Some(rp) = resolved_prefix {
                         let aliased = format!("{}{}::{}", rp, type_args_suffix, &path[1]);
                         if let Some(&target) = self.functions.get(&aliased) {
+                            if !self.is_visible(&aliased) {
+                                return Err(FerriError::Runtime {
+                                    message: format!("`{}` is private", aliased),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
                             let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
@@ -3077,6 +3193,13 @@ impl Compiler {
                     // (handles pub use re-exports like middle::msg -> inner::msg)
                     if let Some(aliased_target) = self.use_aliases.get(&qualified).cloned() {
                         if let Some(&target) = self.functions.get(&aliased_target) {
+                            if !self.is_visible(&aliased_target) {
+                                return Err(FerriError::Runtime {
+                                    message: format!("`{}` is private", aliased_target),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
                             let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
@@ -3114,6 +3237,7 @@ impl Compiler {
                 if path.len() == 3 {
                     let qualified = format!("{}::{}::{}", &path[0], &path[1], &path[2]);
                     if let Some(&target) = self.functions.get(&qualified) {
+                        self.check_path_visible(path, expr.span())?;
                         let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
@@ -3146,6 +3270,7 @@ impl Compiler {
                 if path.len() > 3 {
                     let qualified = path.join("::");
                     if let Some(&target) = self.functions.get(&qualified) {
+                        self.check_path_visible(path, expr.span())?;
                         let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),

@@ -108,3 +108,26 @@ fn test_pub_struct_with_private_fields() {
     assert_eq!(item.name, "widget");
     assert_eq!(item.get_price(), 100);
 }
+
+// === Negative tests: private items NOT accessible from outside ===
+
+#[compile_error]
+fn test_cannot_call_private_function() {
+    let _ = api::private_fn(); // ERROR: private function
+}
+
+#[compile_error]
+fn test_cannot_use_private_struct() {
+    let _ = api::PrivateStruct { x: 1 }; // ERROR: private struct
+}
+
+#[compile_error]
+fn test_cannot_access_private_module() {
+    let _ = parent::private_child::hidden_fn(); // ERROR: private module
+}
+
+#[compile_error]
+fn test_cannot_init_struct_with_private_field() {
+    use store::Item;
+    let _ = Item { name: "x".to_string(), price: 50 }; // ERROR: private field
+}

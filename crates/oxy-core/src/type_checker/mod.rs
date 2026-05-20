@@ -387,6 +387,43 @@ impl TypeChecker {
                         self.collect_fn_types(body, &nested_prefix);
                     }
                 }
+                Item::Impl(i) => {
+                    let type_prefix = if prefix.is_empty() {
+                        i.type_name.clone()
+                    } else {
+                        format!("{}::{}", prefix, i.type_name)
+                    };
+                    for method in &i.methods {
+                        let qualified = format!("{}::{}", type_prefix, method.name);
+                        let ret_ty = if let Some(ref ann) = method.return_type {
+                            self.resolve_type(&ann.name)
+                        } else {
+                            TypeInfo::Unit
+                        };
+                        // Also register under unqualified type name (for use-aliased lookups)
+                        self.fn_return_types
+                            .insert(format!("{}::{}", i.type_name, method.name), ret_ty.clone());
+                        self.fn_return_types.insert(qualified, ret_ty);
+                    }
+                }
+                Item::ImplTrait(i) => {
+                    let type_prefix = if prefix.is_empty() {
+                        i.type_name.clone()
+                    } else {
+                        format!("{}::{}", prefix, i.type_name)
+                    };
+                    for method in &i.methods {
+                        let qualified = format!("{}::{}", type_prefix, method.name);
+                        let ret_ty = if let Some(ref ann) = method.return_type {
+                            self.resolve_type(&ann.name)
+                        } else {
+                            TypeInfo::Unit
+                        };
+                        self.fn_return_types
+                            .insert(format!("{}::{}", i.type_name, method.name), ret_ty.clone());
+                        self.fn_return_types.insert(qualified, ret_ty);
+                    }
+                }
                 _ => {}
             }
         }
@@ -678,7 +715,30 @@ impl TypeChecker {
                 self.infer_expr(value)?;
                 Ok(())
             }
-            Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Use(_) => Ok(()),
+            Stmt::Break { .. } | Stmt::Continue { .. } => Ok(()),
+            Stmt::Use(use_def) => {
+                let base_path = use_def.path.join("::");
+                match &use_def.tree {
+                    UseTree::Simple(alias) => {
+                        let local_name = alias
+                            .as_ref()
+                            .cloned()
+                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                        self.use_aliases.insert(local_name, base_path.clone());
+                    }
+                    UseTree::Group(items) => {
+                        for (name, alias) in items {
+                            let local_name = alias.as_ref().unwrap_or(name);
+                            let qualified = format!("{}::{}", base_path, name);
+                            self.use_aliases.insert(local_name.clone(), qualified);
+                        }
+                    }
+                    UseTree::Glob => {
+                        // Glob entries are resolved by the compiler
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -971,6 +1031,23 @@ impl TypeChecker {
                 let qualified = path.join("::");
                 if let Some(ret) = self.fn_return_types.get(&qualified) {
                     return Ok(ret.clone());
+                }
+                // Try resolving first segment through use_aliases
+                if path.len() == 2 {
+                    if let Some(resolved_prefix) = self.use_aliases.get(&path[0]) {
+                        let aliased = format!("{}::{}", resolved_prefix, &path[1]);
+                        if let Some(ret) = self.fn_return_types.get(&aliased) {
+                            return Ok(ret.clone());
+                        }
+                    }
+                }
+                // Try module-qualified resolution
+                let module_prefix = self.module_stack.join("::");
+                if !module_prefix.is_empty() {
+                    let module_qualified = format!("{}::{}", module_prefix, qualified);
+                    if let Some(ret) = self.fn_return_types.get(&module_qualified) {
+                        return Ok(ret.clone());
+                    }
                 }
                 Ok(TypeInfo::Unknown)
             }
