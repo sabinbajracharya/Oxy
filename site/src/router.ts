@@ -29,7 +29,9 @@ export class Router {
 
   private async route(): Promise<void> {
     const raw = window.location.hash.slice(1) || '/';
-    const hash = raw.split(';')[0];
+    // strip leading / so #/playground matches ^playground$
+    const normalized = raw.replace(/^\//, '');
+    const hash = normalized.split(';')[0];
 
     for (const route of this.routes) {
       const match = hash.match(route.pattern);
