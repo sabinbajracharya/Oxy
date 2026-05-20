@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Oxy pre-commit hook — runs fmt, clippy, and tests inside Docker.
+# Blocks commit if any check fails.
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+run_in_dev() {
+    docker compose run --rm dev bash -c "$1"
+}
+
+echo -e "${GREEN}=== fmt ===${NC}"
+run_in_dev "cargo fmt --all"
+if ! git diff --exit-code --quiet; then
+    echo -e "${RED}fmt modified files above. Stage the changes and re-commit.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}=== clippy ===${NC}"
+run_in_dev "cargo clippy -- -D warnings"
+
+echo -e "${GREEN}=== test (oxy-core) ===${NC}"
+run_in_dev "cargo test -p oxy-core"
+
+echo -e "${GREEN}All checks passed.${NC}"
