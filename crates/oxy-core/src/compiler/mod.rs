@@ -3269,6 +3269,13 @@ impl Compiler {
                         let module_qualified =
                             format!("{}::{}::{}", module_prefix, type_name, &path[1]);
                         if let Some(&target) = self.functions.get(&module_qualified) {
+                            if !self.is_visible(&module_qualified) {
+                                return Err(FerriError::Runtime {
+                                    message: format!("`{}` is private", module_qualified),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
                             let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
@@ -3308,6 +3315,13 @@ impl Compiler {
                             module_prefix, &path[0], &path[1], &path[2]
                         );
                         if let Some(&target) = self.functions.get(&module_qualified) {
+                            if !self.is_visible(&module_qualified) {
+                                return Err(FerriError::Runtime {
+                                    message: format!("`{}` is private", module_qualified),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
                             let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
@@ -3338,6 +3352,13 @@ impl Compiler {
                     if !module_prefix.is_empty() {
                         let module_qualified = format!("{}::{}", module_prefix, qualified);
                         if let Some(&target) = self.functions.get(&module_qualified) {
+                            if !self.is_visible(&module_qualified) {
+                                return Err(FerriError::Runtime {
+                                    message: format!("`{}` is private", module_qualified),
+                                    line: expr.span().line,
+                                    column: expr.span().column,
+                                });
+                            }
                             let call_idx = self.emit(OpCode::Call {
                                 target,
                                 arg_count: args.len(),
