@@ -886,7 +886,7 @@ impl Compiler {
         let in_enums = self.enum_defs.contains_key(qualified);
         let in_modules = self.module_names.contains(qualified);
         if !in_fns && !in_structs && !in_enums && !in_modules {
-            return true; // not tracked — allow (builtin, forward ref)
+            return false; // unknown name — reject
         }
         if let Some(vis) = self.pub_vis.get(qualified) {
             match vis {
@@ -910,7 +910,12 @@ impl Compiler {
                 Visibility::Private => {
                     // Allow if parent is not a module (e.g. field on top-level struct)
                     let parent = qualified.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
-                    parent.is_empty() || !self.module_names.contains(parent)
+                    if parent.is_empty() || !self.module_names.contains(parent) {
+                        return true;
+                    }
+                    // Allow access from within the same defining module
+                    let current_module = self.module_stack.join("::");
+                    parent == current_module
                 }
             }
         } else {
@@ -919,6 +924,11 @@ impl Compiler {
             // or if it's a top-level item (no parent module boundary).
             let parent = qualified.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
             if parent.is_empty() || !self.module_names.contains(parent) {
+                return true;
+            }
+            // Allow access from within the same defining module
+            let current_module = self.module_stack.join("::");
+            if parent == current_module {
                 return true;
             }
             false
@@ -930,6 +940,19 @@ impl Compiler {
     fn check_path_visible(
         &self,
         path: &[String],
+        span: crate::lexer::Span,
+    ) -> Result<(), FerriError> {
+        let qualified = path.join("::");
+        self.check_path_visible_with_leaf(path, &qualified, span)
+    }
+
+    /// Like check_path_visible, but allows overriding the leaf name for cases
+    /// where the resolved qualified name includes type args (e.g. `Pair<i64, i64>::make`)
+    /// that aren't in the raw path segments.
+    fn check_path_visible_with_leaf(
+        &self,
+        path: &[String],
+        leaf_qualified: &str,
         span: crate::lexer::Span,
     ) -> Result<(), FerriError> {
         let current_module = self.module_stack.join("::");
@@ -978,10 +1001,9 @@ impl Compiler {
             }
         }
         // Check the leaf item
-        let qualified = path.join("::");
-        if !self.is_visible(&qualified) {
+        if !self.is_visible(leaf_qualified) {
             return Err(FerriError::Runtime {
-                message: format!("`{}` is private", qualified),
+                message: format!("`{}` is private", leaf_qualified),
                 line: span.line,
                 column: span.column,
             });
@@ -1225,7 +1247,7 @@ impl Compiler {
                                 if let Some(stripped) =
                                     qualified_name.strip_prefix(&format!("{}::", prefix))
                                 {
-                                    if !stripped.contains("::") {
+                                    if !stripped.contains("::") && self.is_visible(qualified_name) {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
                                         if u.visibility.is_pub() {
@@ -1248,7 +1270,7 @@ impl Compiler {
                                 if let Some(stripped) =
                                     qualified_name.strip_prefix(&format!("{}::", prefix))
                                 {
-                                    if !stripped.contains("::") {
+                                    if !stripped.contains("::") && self.is_visible(qualified_name) {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
                                         if u.visibility.is_pub() {
@@ -1271,7 +1293,7 @@ impl Compiler {
                                 if let Some(stripped) =
                                     qualified_name.strip_prefix(&format!("{}::", prefix))
                                 {
-                                    if !stripped.contains("::") {
+                                    if !stripped.contains("::") && self.is_visible(qualified_name) {
                                         self.use_aliases
                                             .insert(stripped.to_string(), qualified_name.clone());
                                         if u.visibility.is_pub() {
@@ -2525,6 +2547,27 @@ impl Compiler {
                 };
 
                 if let Some(target) = direct_target {
+                    // Visibility check: reject calls to private functions resolved through use aliases
+                    if let Expr::Ident(name, _) = callee.as_ref() {
+                        let mut resolved = name.clone();
+                        let mut seen: HashSet<&str> = HashSet::new();
+                        while let Some(alias_target) = self.use_aliases.get(&resolved) {
+                            if !seen.insert(alias_target) {
+                                break; // cycle guard
+                            }
+                            resolved = alias_target.clone();
+                        }
+                        if resolved != *name
+                            && self.functions.contains_key(&resolved)
+                            && !self.is_visible(&resolved)
+                        {
+                            return Err(FerriError::Runtime {
+                                message: format!("`{}` is private", resolved),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                    }
                     // Check if we should monomorphize: turbofish present with all concrete types
                     let concrete_types: Option<Vec<String>> = turbofish.as_ref().map(|tf| {
                         tf.iter()
@@ -2964,7 +3007,7 @@ impl Compiler {
 
             Expr::StructInit { name, fields, .. } => {
                 // Resolve `Self` to the current impl type name, then type aliases, then use aliases
-                let resolved_name = if name == "Self" {
+                let mut resolved_name = if name == "Self" {
                     self.current_impl_type
                         .clone()
                         .unwrap_or_else(|| name.clone())
@@ -2975,6 +3018,16 @@ impl Compiler {
                         .or_else(|| self.use_aliases.get(name).cloned())
                         .unwrap_or_else(|| name.clone())
                 };
+                // Try module-qualified name for unqualified structs in the current module
+                if !resolved_name.contains("::") {
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let qualified = format!("{}::{}", module_prefix, resolved_name);
+                        if self.struct_defs.contains_key(&qualified) {
+                            resolved_name = qualified;
+                        }
+                    }
+                }
                 // Check if this is an enum variant constructor (e.g. Message::Move { x, y })
                 if resolved_name.contains("::") {
                     let parts: Vec<&str> = resolved_name.split("::").collect();
@@ -3152,7 +3205,7 @@ impl Compiler {
                     let type_name = format!("{}{}", &path[0], type_args_suffix);
                     let qualified = format!("{}::{}", type_name, &path[1]);
                     if let Some(&target) = self.functions.get(&qualified) {
-                        self.check_path_visible(path, expr.span())?;
+                        self.check_path_visible_with_leaf(path, &qualified, expr.span())?;
                         let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
