@@ -2551,6 +2551,10 @@ impl Parser {
             if !self.match_token(&TokenKind::Comma) {
                 break;
             }
+            // Allow trailing comma: `foo(a, b,)` and `foo[a, b,]`.
+            if self.check(&TokenKind::RParen) || self.check(&TokenKind::RBracket) {
+                break;
+            }
         }
 
         Ok(args)
