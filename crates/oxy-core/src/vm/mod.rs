@@ -1230,26 +1230,17 @@ impl Vm {
                 }
 
                 OpCode::EnumVariantEqual { enum_name, variant } => {
-                    // Pop the scrutinee, check match, push data + bool
+                    // Pop the scrutinee, push only the match bool. Field data
+                    // is later extracted via LoadLocal(scrutinee_slot) +
+                    // EnumDataGet(i) so stack positions don't collide with
+                    // pre-allocated binding slots.
                     let val = self.stack.pop().unwrap_or(Value::Unit);
-                    match &val {
-                        Value::EnumVariant {
-                            enum_name: en,
-                            variant: v,
-                            data,
-                        } if en == &enum_name && v == &variant => {
-                            // Push in reverse: bind_pattern_data processes fields
-                            // left-to-right but pops from top (LIFO), so we push
-                            // rightmost field first so leftmost is on top
-                            for d in data.iter().rev() {
-                                self.stack.push(d.clone());
-                            }
-                            self.stack.push(Value::Bool(true));
-                        }
-                        _ => {
-                            self.stack.push(Value::Bool(false));
-                        }
-                    }
+                    let matched = matches!(
+                        &val,
+                        Value::EnumVariant { enum_name: en, variant: v, .. }
+                            if en == &enum_name && v == &variant
+                    );
+                    self.stack.push(Value::Bool(matched));
                 }
 
                 OpCode::EnumDataGet(index) => {
@@ -1697,19 +1688,25 @@ impl Vm {
             }
             OpCode::EnumVariantEqual { enum_name, variant } => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
-                match &val {
-                    Value::EnumVariant {
-                        enum_name: en,
-                        variant: v,
-                        data,
-                    } if en == &enum_name && v == &variant => {
-                        for d in data.iter().rev() {
-                            self.stack.push(d.clone());
-                        }
-                        self.stack.push(Value::Bool(true));
+                let matched = matches!(
+                    &val,
+                    Value::EnumVariant { enum_name: en, variant: v, .. }
+                        if en == &enum_name && v == &variant
+                );
+                self.stack.push(Value::Bool(matched));
+            }
+            OpCode::EnumDataGet(index) => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                match val {
+                    Value::EnumVariant { data, .. } => {
+                        let item = data.get(index).cloned().unwrap_or(Value::Unit);
+                        self.stack.push(item);
                     }
                     _ => {
-                        self.stack.push(Value::Bool(false));
+                        return Err(format!(
+                            "EnumDataGet: expected enum variant, got {}",
+                            val.type_name()
+                        ));
                     }
                 }
             }

@@ -165,8 +165,15 @@ impl Compiler {
                 Ok(())
             }
             Pattern::EnumVariant { fields, .. } => {
-                // For each field pattern, bind the corresponding data value
-                for field_pat in fields {
+                // Stack: [variant_value]. Store in temp, extract each field by
+                // index, and recurse. Mirrors Pattern::Tuple's approach so that
+                // BindIdent always sees exactly one value on top — avoids the
+                // stack-slot collisions that occur if data is bulk-pushed.
+                let temp = self.sym.define("__variant_tmp");
+                self.emit(OpCode::StoreLocal(temp));
+                for (i, field_pat) in fields.iter().enumerate() {
+                    self.emit(OpCode::LoadLocal(temp));
+                    self.emit(OpCode::EnumDataGet(i));
                     self.bind_pattern_data(field_pat)?;
                 }
                 Ok(())
@@ -587,8 +594,12 @@ impl Compiler {
                 let consumes = matches!(pattern.as_ref(), Pattern::EnumVariant { .. });
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_end = self.emit(OpCode::JumpIfFalse(0));
-                // Matched: clean up, bind, compile body
-                if !consumes {
+                // Matched: clean up, bind, compile body. EnumVariant patterns
+                // need the scrutinee reloaded — see match arm comment for
+                // details.
+                if consumes {
+                    self.emit(OpCode::LoadLocal(scrut_slot));
+                } else {
                     self.emit(OpCode::Pop);
                 }
                 self.bind_pattern_data(pattern)?;
@@ -1910,10 +1921,15 @@ impl Compiler {
                     // JumpIfFalse to next arm if pattern didn't match
                     let jump_to_next = self.emit(OpCode::JumpIfFalse(0));
 
-                    // Pattern matched. EnumVariant consumed the scrutinee;
-                    // other patterns left it on stack → Pop it.
-                    if !consumes_scrutinee {
-                        self.emit(OpCode::Pop); // discard scrutinee
+                    // Pattern matched. EnumVariant consumed the scrutinee in
+                    // the equality check — reload it from the scrutinee slot
+                    // so bind_pattern_data can extract fields by index. Other
+                    // patterns left the scrutinee on stack → Pop it (Ident
+                    // binds via the existing tail, others don't bind at all).
+                    if consumes_scrutinee {
+                        self.emit(OpCode::LoadLocal(scrutinee_slot));
+                    } else {
+                        self.emit(OpCode::Pop);
                     }
                     self.bind_pattern_data(&arm.pattern)?;
 
@@ -1978,8 +1994,12 @@ impl Compiler {
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_else = self.emit(OpCode::JumpIfFalse(0));
 
-                // Matched: clean up, bind, compile then block
-                if !consumes {
+                // Matched: clean up, bind, compile then block. EnumVariant
+                // patterns need the scrutinee reloaded — see match arm
+                // comment for details.
+                if consumes {
+                    self.emit(OpCode::LoadLocal(scrut_slot));
+                } else {
                     self.emit(OpCode::Pop);
                 }
                 self.bind_pattern_data(pattern)?;

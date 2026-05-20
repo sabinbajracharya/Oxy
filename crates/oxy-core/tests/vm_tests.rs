@@ -1211,6 +1211,32 @@ fn main() {
 }
 
 #[test]
+fn test_enum_match_three_field_tuple_variant() {
+    // Regression: 3+ positional fields in a tuple variant used to bind the
+    // third (and beyond) to Unit because EnumVariantEqual bulk-pushed data
+    // into stack positions that collided with the binding slots.
+    let out = run_and_capture(
+        r#"
+enum E { Three(i64, i64, i64), Four(i64, i64, i64, i64) }
+
+fn main() {
+    let v = E::Three(10, 20, 30);
+    match v {
+        E::Three(a, b, c) => println!("{} {} {}", a, b, c),
+        _ => println!("no"),
+    }
+    let w = E::Four(1, 2, 3, 4);
+    match w {
+        E::Four(a, b, c, d) => println!("{} {} {} {}", a, b, c, d),
+        _ => println!("no"),
+    }
+}
+"#,
+    );
+    assert_eq!(out, vec!["10 20 30\n", "1 2 3 4\n"]);
+}
+
+#[test]
 fn test_enum_match_unit_variant() {
     let out = run_and_capture(
         r#"
