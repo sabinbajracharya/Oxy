@@ -129,8 +129,12 @@ pub struct Compiler {
     require_main: bool,
     /// Current impl type name (for resolving `Self` in method bodies).
     current_impl_type: Option<String>,
+    /// Generic params of the current function being compiled (for resolving `T::method()`).
+    current_generic_params: Vec<crate::ast::GenericParam>,
     /// Trait definitions: trait_name → methods (for default method inheritance).
     trait_defs: HashMap<String, Vec<FnDef>>,
+    /// Trait method signatures: trait_name → method names (for resolving T::method()).
+    trait_method_names: HashMap<String, Vec<String>>,
     /// Type aliases: alias_name → actual_type_name (e.g., P → Point).
     type_aliases: HashMap<String, String>,
     /// Forward calls that need target patching: (bytecode_index, function_name).
@@ -196,7 +200,9 @@ impl Default for Compiler {
             captured_mutable: HashSet::new(),
             require_main: true,
             current_impl_type: None,
+            current_generic_params: Vec::new(),
             trait_defs: HashMap::new(),
+            trait_method_names: HashMap::new(),
             type_aliases: HashMap::new(),
             forward_calls: Vec::new(),
             module_stack: Vec::new(),
@@ -446,6 +452,16 @@ impl Compiler {
                 // Store trait default methods for inheritance in impl blocks
                 self.trait_defs
                     .insert(t.name.clone(), t.default_methods.clone());
+                // Store all method names (signatures + default methods) for generic resolution
+                let mut method_names: Vec<String> = t
+                    .methods
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .chain(t.default_methods.iter().map(|d| d.name.clone()))
+                    .collect();
+                method_names.sort();
+                method_names.dedup();
+                self.trait_method_names.insert(t.name.clone(), method_names);
                 Ok(())
             }
             Item::Module(m) => {
@@ -573,6 +589,10 @@ impl Compiler {
         let param_names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         self.captured_mutable = find_captured_mutable(&f.body, &param_names);
 
+        // Store generic params for resolving T::method() calls in the function body
+        let saved_generic_params =
+            std::mem::replace(&mut self.current_generic_params, f.generic_params.clone());
+
         self.compile_block(&f.body)?;
         // For methods with self parameter and no explicit tail expression,
         // implicitly return self so mutations propagate to caller.
@@ -597,6 +617,7 @@ impl Compiler {
 
         self.sym = saved_sym;
         self.current_impl_type = saved_impl_type;
+        self.current_generic_params = saved_generic_params;
         Ok(())
     }
 
@@ -2731,6 +2752,56 @@ impl Compiler {
                         arg_count: args.len(),
                     });
                     return Ok(());
+                }
+                // Check if path[0] is a generic type param → resolve via trait bounds
+                if path.len() == 2 {
+                    if let Some(gparam) = self
+                        .current_generic_params
+                        .iter()
+                        .find(|p| p.name == path[0])
+                    {
+                        let method_name = &path[1];
+                        // For each trait bound on the generic param, look for the method
+                        let mut resolved_target: Option<usize> = None;
+                        for bound in &gparam.bounds {
+                            // Check if the trait defines this method (via signature or default)
+                            let trait_has_method = self
+                                .trait_method_names
+                                .get(bound)
+                                .map(|names| names.iter().any(|n| n == method_name))
+                                .unwrap_or(false);
+                            if trait_has_method {
+                                // Find a concrete impl with this method
+                                for ((_type_name, mname), &target) in &self.method_ips {
+                                    if mname == method_name {
+                                        resolved_target = Some(target);
+                                        break;
+                                    }
+                                }
+                            }
+                            if resolved_target.is_some() {
+                                break;
+                            }
+                        }
+                        if let Some(target) = resolved_target {
+                            self.emit(OpCode::Call {
+                                target,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
+                        }
+                        // Generic param found but method not resolved — helpful error
+                        let bounds_str = gparam.bounds.join(" + ");
+                        return Err(FerriError::Runtime {
+                            message: format!(
+                                "no known implementation of `{}::{}()` for type param `{}: {}`; \
+                                 add an `impl {} for <type>` block or use turbofish to specify a concrete type",
+                                path[0], path[1], path[0], bounds_str, bounds_str
+                            ),
+                            line: expr.span().line,
+                            column: expr.span().column,
+                        });
+                    }
                 }
                 Err(self.not_yet_supported("Unknown path call", expr.span()))
             }
