@@ -46,6 +46,11 @@ impl OxyLsp {
             diagnostics.push(error_to_diagnostic(&e));
         }
 
+        // Run bytecode compiler to catch visibility and other compile-time errors
+        if let Err(e) = oxy_core::compiler::Compiler::new_for_tests(None).compile(&program) {
+            diagnostics.push(error_to_diagnostic(&e));
+        }
+
         diagnostics
     }
 
@@ -181,8 +186,6 @@ fn builtin_function_completions() -> Vec<CompletionItem> {
         ("todo!", "Mark unfinished code"),
         ("unimplemented!", "Mark unimplemented code"),
         ("vec!", "Create a Vec"),
-        ("spawn", "Spawn an async task"),
-        ("sleep", "Sleep for a duration"),
     ];
     builtins
         .iter()
@@ -451,9 +454,27 @@ impl LanguageServer for OxyLsp {
             }
         };
 
-        // Check if cursor is after a dot — suggest methods
+        // Check if cursor is after a dot — suggest methods (type-aware + builtins)
         if is_after_dot(&source, pos) {
-            return Ok(Some(CompletionResponse::Array(method_completions())));
+            let mut items = method_completions();
+            // Try to infer receiver type and add user-defined methods
+            if let Some(program) = Self::try_parse(&source) {
+                if let Some(type_name) = try_infer_receiver_type(&source, pos) {
+                    items.extend(find_methods_for_type(&program, &type_name));
+                }
+            }
+            return Ok(Some(CompletionResponse::Array(items)));
+        }
+
+        // Check if cursor is after :: — suggest module/type members
+        if is_after_colon_colon(&source, pos) {
+            if let Some(program) = Self::try_parse(&source) {
+                let prefix = extract_prefix_before_colon_colon(&source, pos);
+                let items = module_member_completions(&program, &prefix);
+                if !items.is_empty() {
+                    return Ok(Some(CompletionResponse::Array(items)));
+                }
+            }
         }
 
         let mut items = Vec::new();
@@ -462,6 +483,10 @@ impl LanguageServer for OxyLsp {
         items.extend(builtin_function_completions());
         items.extend(module_completions());
         items.extend(snippet_completions());
+        // Add user-defined items from AST
+        if let Some(program) = Self::try_parse(&source) {
+            items.extend(user_defined_completions(&program));
+        }
         Ok(Some(CompletionResponse::Array(items)))
     }
 
@@ -478,40 +503,30 @@ impl LanguageServer for OxyLsp {
             None => return Ok(None),
         };
 
-        // Check keywords
-        if let Some(desc) = keyword_hover(&word) {
-            return Ok(Some(Hover {
+        let make_hover = |value: String| -> Result<Option<Hover>> {
+            Ok(Some(Hover {
                 contents: HoverContents::Markup(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: desc,
+                    value,
                 }),
                 range: None,
-            }));
+            }))
+        };
+
+        // Check keywords
+        if let Some(desc) = keyword_hover(&word) {
+            return make_hover(desc);
         }
 
         // Check built-in types/functions
         if let Some(desc) = builtin_hover(&word) {
-            return Ok(Some(Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: desc,
-                }),
-                range: None,
-            }));
+            return make_hover(desc);
         }
 
-        // Check user-defined items
+        // Check user-defined items (search all items including nested modules)
         if let Some(program) = Self::try_parse(&source) {
-            for item in &program.items {
-                if let Some(desc) = item_hover_info(item, &word) {
-                    return Ok(Some(Hover {
-                        contents: HoverContents::Markup(MarkupContent {
-                            kind: MarkupKind::Markdown,
-                            value: desc,
-                        }),
-                        range: None,
-                    }));
-                }
+            if let Some(desc) = find_item_hover(&program.items, &word) {
+                return make_hover(desc);
             }
         }
 
@@ -563,15 +578,17 @@ impl LanguageServer for OxyLsp {
             None => return Ok(None),
         };
 
-        for item in &program.items {
-            if let Some(span) = item_definition_span(item, &word) {
-                let line0 = if span.line > 0 { span.line - 1 } else { 0 } as u32;
-                let col0 = if span.column > 0 { span.column - 1 } else { 0 } as u32;
-                let start = Position::new(line0, col0);
-                let end_pos = byte_offset_to_position(&source, span.end);
-                let loc = Location::new(uri.clone(), Range::new(start, end_pos));
-                return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
-            }
+        // Resolve through use imports first
+        let resolved = resolve_use_import(&program.items, &word);
+
+        // Search all items (including nested in modules) for the definition
+        if let Some(span) = find_definition_span(&program.items, &resolved) {
+            let line0 = if span.line > 0 { span.line - 1 } else { 0 } as u32;
+            let col0 = if span.column > 0 { span.column - 1 } else { 0 } as u32;
+            let start = Position::new(line0, col0);
+            let end_pos = byte_offset_to_position(&source, span.end);
+            let loc = Location::new(uri.clone(), Range::new(start, end_pos));
+            return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
         }
 
         Ok(None)
@@ -819,14 +836,6 @@ fn item_name(item: &Item) -> Option<&str> {
     }
 }
 
-fn item_definition_span(item: &Item, name: &str) -> Option<oxy_core::lexer::Span> {
-    if item_name(item) == Some(name) {
-        Some(item.span())
-    } else {
-        None
-    }
-}
-
 fn item_hover_info(item: &Item, name: &str) -> Option<String> {
     if item_name(item) != Some(name) {
         return None;
@@ -864,6 +873,456 @@ fn item_hover_info(item: &Item, name: &str) -> Option<String> {
         Item::Trait(t) => Some(format!("```oxy\ntrait {}\n```", t.name)),
         _ => Some(format!("**{}**", name)),
     }
+}
+
+// ---------------------------------------------------------------------------
+// AST-aware completions
+// ---------------------------------------------------------------------------
+
+/// Check if cursor is immediately after `::`.
+fn is_after_colon_colon(source: &str, position: Position) -> bool {
+    let line = match source.lines().nth(position.line as usize) {
+        Some(l) => l,
+        None => return false,
+    };
+    let col = position.character as usize;
+    if col < 2 {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    bytes.get(col.saturating_sub(1)) == Some(&b':')
+        && bytes.get(col.saturating_sub(2)) == Some(&b':')
+}
+
+/// Extract the identifier prefix before `::` on the current line.
+fn extract_prefix_before_colon_colon(source: &str, position: Position) -> String {
+    let line = match source.lines().nth(position.line as usize) {
+        Some(l) => l,
+        None => return String::new(),
+    };
+    let col = position.character as usize;
+    if col < 2 {
+        return String::new();
+    }
+    // Scan backwards from before the ::
+    let scan_start = col.saturating_sub(2);
+    let before = &line[..scan_start];
+    // Extract the last identifier-like segment before ::
+    before
+        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+        .map(|i| before[i + 1..].to_string())
+        .unwrap_or_else(|| before.to_string())
+}
+
+/// Collect user-defined items from the top-level AST for completions.
+fn user_defined_completions(program: &Program) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    collect_scope_items(&program.items, "", &mut items);
+    items
+}
+
+fn collect_scope_items(ast_items: &[Item], _module_prefix: &str, out: &mut Vec<CompletionItem>) {
+    for item in ast_items {
+        match item {
+            Item::Function(f) => {
+                out.push(CompletionItem {
+                    label: f.name.clone(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    detail: Some(format!(
+                        "fn({})",
+                        f.params
+                            .iter()
+                            .map(|p| p.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
+                    ..Default::default()
+                });
+            }
+            Item::Struct(s) => {
+                out.push(CompletionItem {
+                    label: s.name.clone(),
+                    kind: Some(CompletionItemKind::STRUCT),
+                    detail: Some("struct".to_string()),
+                    ..Default::default()
+                });
+            }
+            Item::Enum(e) => {
+                out.push(CompletionItem {
+                    label: e.name.clone(),
+                    kind: Some(CompletionItemKind::ENUM),
+                    detail: Some("enum".to_string()),
+                    ..Default::default()
+                });
+            }
+            Item::Trait(t) => {
+                out.push(CompletionItem {
+                    label: t.name.clone(),
+                    kind: Some(CompletionItemKind::INTERFACE),
+                    detail: Some("trait".to_string()),
+                    ..Default::default()
+                });
+            }
+            Item::TypeAlias { name, .. } => {
+                out.push(CompletionItem {
+                    label: name.clone(),
+                    kind: Some(CompletionItemKind::CLASS),
+                    detail: Some("type alias".to_string()),
+                    ..Default::default()
+                });
+            }
+            Item::Const { name, .. } => {
+                out.push(CompletionItem {
+                    label: name.clone(),
+                    kind: Some(CompletionItemKind::CONSTANT),
+                    detail: Some("const".to_string()),
+                    ..Default::default()
+                });
+            }
+            Item::Impl(i) => {
+                for method in &i.methods {
+                    out.push(CompletionItem {
+                        label: format!("{}::{}", i.type_name, method.name),
+                        kind: Some(CompletionItemKind::METHOD),
+                        detail: Some("method".to_string()),
+                        ..Default::default()
+                    });
+                }
+            }
+            Item::ImplTrait(i) => {
+                for method in &i.methods {
+                    out.push(CompletionItem {
+                        label: format!("{}::{}", i.type_name, method.name),
+                        kind: Some(CompletionItemKind::METHOD),
+                        detail: Some(format!("{}::{}", i.trait_name, method.name)),
+                        ..Default::default()
+                    });
+                }
+            }
+            Item::Module(m) => {
+                out.push(CompletionItem {
+                    label: m.name.clone(),
+                    kind: Some(CompletionItemKind::MODULE),
+                    detail: Some("mod".to_string()),
+                    ..Default::default()
+                });
+                if let Some(body) = &m.body {
+                    collect_scope_items(body, &m.name, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Get completions for members of a module or type (after `::`).
+fn module_member_completions(program: &Program, prefix: &str) -> Vec<CompletionItem> {
+    if prefix.is_empty() {
+        return Vec::new();
+    }
+    let mut items = Vec::new();
+    find_module_members(&program.items, prefix, &mut items);
+    items
+}
+
+fn find_module_members(items: &[Item], prefix: &str, out: &mut Vec<CompletionItem>) {
+    for item in items {
+        if let Item::Module(m) = item {
+            if m.name == prefix {
+                if let Some(body) = &m.body {
+                    for child in body {
+                        match child {
+                            Item::Function(f) => {
+                                if f.visibility.is_pub() {
+                                    out.push(CompletionItem {
+                                        label: f.name.clone(),
+                                        kind: Some(CompletionItemKind::FUNCTION),
+                                        detail: Some("fn".to_string()),
+                                        ..Default::default()
+                                    });
+                                }
+                            }
+                            Item::Struct(s) if s.visibility.is_pub() => {
+                                out.push(CompletionItem {
+                                    label: s.name.clone(),
+                                    kind: Some(CompletionItemKind::STRUCT),
+                                    detail: Some("struct".to_string()),
+                                    ..Default::default()
+                                });
+                            }
+                            Item::Enum(e) if e.visibility.is_pub() => {
+                                out.push(CompletionItem {
+                                    label: e.name.clone(),
+                                    kind: Some(CompletionItemKind::ENUM),
+                                    detail: Some("enum".to_string()),
+                                    ..Default::default()
+                                });
+                            }
+                            Item::Const { name, .. } => {
+                                out.push(CompletionItem {
+                                    label: name.clone(),
+                                    kind: Some(CompletionItemKind::CONSTANT),
+                                    detail: Some("const".to_string()),
+                                    ..Default::default()
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                return;
+            }
+            if let Some(body) = &m.body {
+                find_module_members(body, prefix, out);
+            }
+        }
+    }
+    // Also look for impl methods on the type name
+    for item in items {
+        if let Item::Impl(i) = item {
+            if i.type_name == prefix {
+                for method in &i.methods {
+                    out.push(CompletionItem {
+                        label: method.name.clone(),
+                        kind: Some(CompletionItemKind::METHOD),
+                        detail: Some("fn".to_string()),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Try to infer the type of the receiver before a dot.
+fn try_infer_receiver_type(source: &str, position: Position) -> Option<String> {
+    let line = source.lines().nth(position.line as usize)?;
+    let col = position.character as usize;
+    if col == 0 {
+        return None;
+    }
+    let before = &line[..col.saturating_sub(1)];
+    // Find the last identifier before the dot
+    let ident = before
+        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+        .map(|i| before[i + 1..].to_string())
+        .unwrap_or_else(|| before.to_string());
+    if ident.is_empty() {
+        return None;
+    }
+    // Try to find a let binding with type annotation
+    infer_type_from_binding(source, &ident)
+}
+
+fn infer_type_from_binding(source: &str, var_name: &str) -> Option<String> {
+    // Parse the source and search for `let var_name: Type = ...`
+    let program = oxy_core::parser::parse(source).ok()?;
+    find_var_type_in_items(&program.items, var_name)
+}
+
+fn find_var_type_in_items(items: &[Item], var_name: &str) -> Option<String> {
+    for item in items {
+        if let Item::Function(f) = item {
+            // Check params
+            for param in &f.params {
+                if param.name == var_name {
+                    return Some(param.type_ann.name.clone());
+                }
+            }
+            // Check body for let bindings
+            if let Some(ty) = find_let_type_in_block(&f.body, var_name) {
+                return Some(ty);
+            }
+        }
+        if let Item::Module(m) = item {
+            if let Some(body) = &m.body {
+                if let Some(ty) = find_var_type_in_items(body, var_name) {
+                    return Some(ty);
+                }
+            }
+        }
+    }
+    // Check top-level const/static
+    for item in items {
+        match item {
+            Item::Const { name, type_ann, .. } if name == var_name => {
+                return type_ann.as_ref().map(|t| t.name.clone());
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn find_let_type_in_block(block: &oxy_core::ast::Block, var_name: &str) -> Option<String> {
+    for stmt in &block.stmts {
+        if let oxy_core::ast::Stmt::Let {
+            name,
+            type_ann,
+            value,
+            ..
+        } = stmt
+        {
+            if name == var_name {
+                if let Some(ann) = type_ann {
+                    return Some(ann.name.clone());
+                }
+                // Try to infer from value (simple cases)
+                if let Some(expr) = value {
+                    if let Some(ty) = infer_simple_expr_type(expr) {
+                        return Some(ty);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn infer_simple_expr_type(expr: &oxy_core::ast::Expr) -> Option<String> {
+    match expr {
+        oxy_core::ast::Expr::StructInit { name, .. } => Some(name.clone()),
+        oxy_core::ast::Expr::IntLiteral(..) => Some("i64".to_string()),
+        oxy_core::ast::Expr::FloatLiteral(..) => Some("f64".to_string()),
+        oxy_core::ast::Expr::StringLiteral(..) => Some("String".to_string()),
+        oxy_core::ast::Expr::BoolLiteral(..) => Some("bool".to_string()),
+        oxy_core::ast::Expr::Ident(name, _) => {
+            // Could be another variable — not traceable without full analysis
+            if name.starts_with(|c: char| c.is_uppercase()) {
+                Some(name.clone())
+            } else {
+                None
+            }
+        }
+        oxy_core::ast::Expr::PathCall { path, .. } => {
+            // e.g. Vec::new() -> Vec, HashMap::new() -> HashMap
+            path.first().cloned()
+        }
+        oxy_core::ast::Expr::Call { callee, .. } => {
+            if let oxy_core::ast::Expr::Ident(name, _) = callee.as_ref() {
+                match name.as_str() {
+                    "Some" => Some("Option".to_string()),
+                    "Ok" => Some("Result".to_string()),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Find user-defined impl methods for a given type name.
+fn find_methods_for_type(program: &Program, type_name: &str) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    search_impl_methods(&program.items, type_name, &mut items);
+    items
+}
+
+fn search_impl_methods(ast_items: &[Item], type_name: &str, out: &mut Vec<CompletionItem>) {
+    for item in ast_items {
+        match item {
+            Item::Impl(i) if i.type_name == type_name => {
+                for method in &i.methods {
+                    out.push(CompletionItem {
+                        label: method.name.clone(),
+                        kind: Some(CompletionItemKind::METHOD),
+                        detail: Some(format!(
+                            "fn({})",
+                            method
+                                .params
+                                .iter()
+                                .map(|p| p.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )),
+                        ..Default::default()
+                    });
+                }
+            }
+            Item::Module(m) => {
+                if let Some(body) = &m.body {
+                    search_impl_methods(body, type_name, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Improved goto-def and hover
+// ---------------------------------------------------------------------------
+
+/// Resolve a name through `use` imports. Returns the resolved name if found,
+/// otherwise the original name unchanged.
+fn resolve_use_import(items: &[Item], name: &str) -> String {
+    for item in items {
+        if let Item::Use(use_def) = item {
+            let resolved = resolve_use_tree(&use_def.tree, &use_def.path, name);
+            if resolved != name {
+                return resolved;
+            }
+        }
+    }
+    name.to_string()
+}
+
+fn resolve_use_tree(tree: &oxy_core::ast::UseTree, path: &[String], name: &str) -> String {
+    match tree {
+        oxy_core::ast::UseTree::Simple(alias) => {
+            let last_seg = path.last().cloned().unwrap_or_default();
+            let local = alias.as_ref().unwrap_or(&last_seg);
+            if local == name {
+                return path.join("::");
+            }
+        }
+        oxy_core::ast::UseTree::Group(items) => {
+            for (item_name, alias) in items {
+                let local = alias.as_ref().unwrap_or(item_name);
+                if local == name {
+                    return format!("{}::{}", path.join("::"), item_name);
+                }
+            }
+        }
+        oxy_core::ast::UseTree::Glob => {}
+    }
+    name.to_string()
+}
+
+/// Search all items recursively (including inside modules) for a definition span.
+fn find_definition_span(items: &[Item], name: &str) -> Option<oxy_core::lexer::Span> {
+    for item in items {
+        if item_name(item) == Some(name) {
+            return Some(item.span());
+        }
+        if let Item::Module(m) = item {
+            if let Some(body) = &m.body {
+                if let Some(span) = find_definition_span(body, name) {
+                    return Some(span);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Search all items recursively for hover info.
+fn find_item_hover(items: &[Item], name: &str) -> Option<String> {
+    for item in items {
+        if let Some(desc) = item_hover_info(item, name) {
+            return Some(desc);
+        }
+        if let Item::Module(m) = item {
+            if let Some(body) = &m.body {
+                if let Some(desc) = find_item_hover(body, name) {
+                    return Some(desc);
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
     "publisher": "oxy-lang",
     "repository": {
         "type": "git",
-        "url": "https://github.com/nickel-lang/project-ferrite"
+        "url": "https://github.com/sabinbajracharya/Oxy"
     },
     "engines": {
         "vscode": "^1.75.0"
