@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::{FloatSuffix, IntegerSuffix};
+use crate::lexer::{FloatSuffix, IntegerSuffix, Span};
 
 /// Internal representation of an Oxy type.
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +182,10 @@ pub struct TypeChecker {
     struct_defs: HashMap<String, StructDef>,
     type_aliases: HashMap<String, TypeAnnotation>,
     fn_return_types: HashMap<String, TypeInfo>,
+    /// Tracks the current module nesting for field visibility checks.
+    module_stack: Vec<String>,
+    /// Import aliases: short_name → qualified_name (e.g. "Record" → "database::Record").
+    use_aliases: HashMap<String, String>,
 }
 
 impl TypeChecker {
@@ -191,6 +195,8 @@ impl TypeChecker {
             struct_defs: HashMap::new(),
             type_aliases: HashMap::new(),
             fn_return_types: HashMap::new(),
+            module_stack: Vec::new(),
+            use_aliases: HashMap::new(),
         }
     }
 }
@@ -202,47 +208,87 @@ impl Default for TypeChecker {
 }
 
 impl TypeChecker {
-    /// Resolve a type name through type aliases (e.g. `Meters` → `f64`).
+    /// Resolve a type name through type aliases and module context.
     fn resolve_type(&self, name: &str) -> TypeInfo {
         if let Some(alias) = self.type_aliases.get(name) {
             return TypeInfo::from_name(&alias.name);
         }
-        TypeInfo::from_name(name)
+        // Try module-qualified type alias
+        if !name.contains("::") {
+            let module_prefix = self.module_stack.join("::");
+            if !module_prefix.is_empty() {
+                let qualified = format!("{}::{}", module_prefix, name);
+                if let Some(alias) = self.type_aliases.get(&qualified) {
+                    return TypeInfo::from_name(&alias.name);
+                }
+            }
+        }
+        // Try module-qualified struct name
+        let resolved = self.resolve_struct_name(name);
+        TypeInfo::from_name(&resolved)
+    }
+
+    /// Check whether a struct field is visible from the current module context.
+    fn check_field_visible(
+        &self,
+        struct_name: &str,
+        field_name: &str,
+        span: Span,
+    ) -> Result<(), FerriError> {
+        if let Some(struct_def) = self.struct_defs.get(struct_name) {
+            if let StructKind::Named(fields) = &struct_def.kind {
+                for field in fields {
+                    if field.name == field_name {
+                        if matches!(field.visibility, Visibility::Private) {
+                            let struct_module =
+                                struct_name.rsplit_once("::").map(|(m, _)| m).unwrap_or("");
+                            let current_module = self.module_stack.join("::");
+                            if struct_module != current_module {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "field `{}` of struct `{}` is private",
+                                        field_name, struct_name
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Resolve a struct name through use_aliases (for `use foo::Bar` → `Bar` unqualified).
+    fn resolve_struct_name(&self, name: &str) -> String {
+        // Check use_aliases for a direct alias
+        if let Some(resolved) = self.use_aliases.get(name) {
+            if self.struct_defs.contains_key(resolved) {
+                return resolved.clone();
+            }
+        }
+        // Try module-qualified name (current module prefix + name)
+        if !name.contains("::") {
+            let module_prefix = self.module_stack.join("::");
+            if !module_prefix.is_empty() {
+                let qualified = format!("{}::{}", module_prefix, name);
+                if self.struct_defs.contains_key(&qualified) {
+                    return qualified;
+                }
+            }
+        }
+        name.to_string()
     }
 
     pub fn check_program(&mut self, program: &Program) -> Result<(), FerriError> {
-        // First pass: collect struct definitions and type aliases
-        for item in &program.items {
-            match item {
-                Item::Struct(s) => {
-                    self.struct_defs.insert(s.name.clone(), s.clone());
-                }
-                Item::TypeAlias { name, target, .. } => {
-                    self.type_aliases.insert(name.clone(), target.clone());
-                }
-                _ => {}
-            }
-        }
+        // First pass: collect struct defs, type aliases, and use aliases
+        self.collect_defs(&program.items, "");
 
         // Second pass: register function return types
-        for item in &program.items {
-            if let Item::Function(f) = item {
-                let ret_ty = if let Some(ref ann) = f.return_type {
-                    // If the return type is a generic param, treat as Unknown
-                    // (type-erased generics — concrete type not known until monomorphization)
-                    let generic_names: Vec<&str> =
-                        f.generic_params.iter().map(|p| p.name.as_str()).collect();
-                    if generic_names.contains(&ann.name.as_str()) {
-                        TypeInfo::Unknown
-                    } else {
-                        self.resolve_type(&ann.name)
-                    }
-                } else {
-                    TypeInfo::Unit
-                };
-                self.fn_return_types.insert(f.name.clone(), ret_ty);
-            }
-        }
+        self.collect_fn_types(&program.items, "");
 
         // Third pass: check each item
         for item in &program.items {
@@ -250,6 +296,86 @@ impl TypeChecker {
         }
 
         Ok(())
+    }
+
+    /// Recursively collect struct defs, type aliases, and use aliases with module prefix.
+    fn collect_defs(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Struct(s) => {
+                    let qualified = if prefix.is_empty() {
+                        s.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, s.name)
+                    };
+                    self.struct_defs.insert(qualified, s.clone());
+                }
+                Item::TypeAlias { name, target, .. } => {
+                    let qualified = if prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}::{}", prefix, name)
+                    };
+                    self.type_aliases.insert(qualified, target.clone());
+                }
+                Item::Module(m) => {
+                    let nested_prefix = if prefix.is_empty() {
+                        m.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, m.name)
+                    };
+                    if let Some(body) = &m.body {
+                        self.collect_defs(body, &nested_prefix);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Recursively register function return types with module prefix.
+    fn collect_fn_types(&mut self, items: &[Item], prefix: &str) {
+        let saved_stack = self.module_stack.clone();
+        self.module_stack = if prefix.is_empty() {
+            vec![]
+        } else {
+            prefix.split("::").map(|s| s.to_string()).collect()
+        };
+        for item in items {
+            match item {
+                Item::Function(f) => {
+                    let qualified = if prefix.is_empty() {
+                        f.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, f.name)
+                    };
+                    let ret_ty = if let Some(ref ann) = f.return_type {
+                        let generic_names: Vec<&str> =
+                            f.generic_params.iter().map(|p| p.name.as_str()).collect();
+                        if generic_names.contains(&ann.name.as_str()) {
+                            TypeInfo::Unknown
+                        } else {
+                            self.resolve_type(&ann.name)
+                        }
+                    } else {
+                        TypeInfo::Unit
+                    };
+                    self.fn_return_types.insert(qualified, ret_ty);
+                }
+                Item::Module(m) => {
+                    let nested_prefix = if prefix.is_empty() {
+                        m.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, m.name)
+                    };
+                    if let Some(body) = &m.body {
+                        self.collect_fn_types(body, &nested_prefix);
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.module_stack = saved_stack;
     }
 
     fn check_item(&mut self, item: &Item) -> Result<(), FerriError> {
@@ -277,6 +403,40 @@ impl TypeChecker {
                         line: span.line,
                         column: span.column,
                     });
+                }
+                Ok(())
+            }
+            Item::Module(m) => {
+                self.module_stack.push(m.name.clone());
+                if let Some(body) = &m.body {
+                    for item in body {
+                        self.check_item(item)?;
+                    }
+                }
+                self.module_stack.pop();
+                Ok(())
+            }
+            Item::Use(use_def) => {
+                let base_path = use_def.path.join("::");
+                match &use_def.tree {
+                    UseTree::Simple(alias) => {
+                        let local_name = alias
+                            .as_ref()
+                            .cloned()
+                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                        self.use_aliases.insert(local_name, base_path.clone());
+                    }
+                    UseTree::Group(items) => {
+                        for (name, alias) in items {
+                            let local_name = alias.as_ref().unwrap_or(name);
+                            let qualified = format!("{}::{}", base_path, name);
+                            self.use_aliases.insert(local_name.clone(), qualified);
+                        }
+                    }
+                    UseTree::Glob => {
+                        // Glob: we can't enumerate all exports at type-check time,
+                        // so we skip. Visibility is enforced by the compiler.
+                    }
                 }
                 Ok(())
             }
@@ -576,6 +736,16 @@ impl TypeChecker {
                     if let Some(ret) = self.fn_return_types.get(name) {
                         return Ok(ret.clone());
                     }
+                    // Try module-qualified name
+                    if !name.contains("::") {
+                        let module_prefix = self.module_stack.join("::");
+                        if !module_prefix.is_empty() {
+                            let qualified = format!("{}::{}", module_prefix, name);
+                            if let Some(ret) = self.fn_return_types.get(&qualified) {
+                                return Ok(ret.clone());
+                            }
+                        }
+                    }
                     // Built-in constructors
                     match name.as_str() {
                         "Some" => return Ok(TypeInfo::Option),
@@ -714,9 +884,13 @@ impl TypeChecker {
                 Ok(result)
             }
 
-            Expr::PathCall { args, .. } => {
+            Expr::PathCall { path, args, .. } => {
                 for arg in args {
                     self.infer_expr(arg)?;
+                }
+                let qualified = path.join("::");
+                if let Some(ret) = self.fn_return_types.get(&qualified) {
+                    return Ok(ret.clone());
                 }
                 Ok(TypeInfo::Unknown)
             }
@@ -729,8 +903,17 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
 
-            Expr::FieldAccess { object, .. } => {
-                let _ = self.infer_expr(object)?;
+            Expr::FieldAccess {
+                object,
+                field,
+                span,
+                ..
+            } => {
+                let obj_ty = self.infer_expr(object)?;
+                if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                    let resolved = self.resolve_struct_name(struct_name);
+                    self.check_field_visible(&resolved, field, *span)?;
+                }
                 Ok(TypeInfo::Unknown)
             }
 
@@ -742,11 +925,15 @@ impl TypeChecker {
 
             Expr::Range { .. } => Ok(TypeInfo::I64),
 
-            Expr::StructInit { name, fields, .. } => {
-                for (_, f_expr) in fields {
+            Expr::StructInit {
+                name, fields, span, ..
+            } => {
+                let resolved = self.resolve_struct_name(name);
+                for (field_name, f_expr) in fields {
+                    self.check_field_visible(&resolved, field_name, *span)?;
                     self.infer_expr(f_expr)?;
                 }
-                Ok(TypeInfo::UserStruct(name.clone()))
+                Ok(TypeInfo::UserStruct(resolved))
             }
 
             Expr::Try { expr: inner, .. } => {

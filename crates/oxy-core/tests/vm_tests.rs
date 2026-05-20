@@ -5869,3 +5869,101 @@ fn test_treenode_linking() {
     );
     assert_eq!(output, vec!["5\n", "3\n", "7\n"]);
 }
+
+// === Field Visibility Enforcement ===
+
+#[test]
+fn test_cannot_read_private_field_from_outside_module() {
+    let result = run_compiled_capturing(
+        r#"
+mod database {
+    pub struct Record {
+        pub name: String,
+        secret_key: i64,
+    }
+    pub fn make_record() -> Record {
+        Record { name: "x".to_string(), secret_key: 42 }
+    }
+}
+fn main() {
+    let r = database::make_record();
+    let k = r.secret_key;
+    println!("{}", k);
+}"#,
+    );
+    assert!(result.is_err(), "should reject reading private field");
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("private"),
+        "error should mention 'private', got: {err}"
+    );
+}
+
+#[test]
+fn test_cannot_write_private_field_in_struct_init_from_outside() {
+    let result = run_compiled_capturing(
+        r#"
+mod database {
+    pub struct Record {
+        pub name: String,
+        secret_key: i64,
+    }
+}
+fn main() {
+    let r = database::Record { name: "x".to_string(), secret_key: 99 };
+    println!("{}", r.name);
+}"#,
+    );
+    assert!(
+        result.is_err(),
+        "should reject struct init with private field from outside"
+    );
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("private"),
+        "error should mention 'private', got: {err}"
+    );
+}
+
+#[test]
+fn test_can_access_private_field_inside_same_module() {
+    let output = run_and_capture(
+        r#"
+mod database {
+    pub struct Record {
+        pub name: String,
+        secret_key: i64,
+    }
+    pub fn get_key(r: Record) -> i64 {
+        r.secret_key  // Allowed: inside the same module
+    }
+    pub fn make_record() -> Record {
+        Record { name: "x".to_string(), secret_key: 42 }
+    }
+}
+fn main() {
+    let r = database::make_record();
+    println!("{}", database::get_key(r));
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
+
+#[test]
+fn test_pub_fields_always_accessible() {
+    let output = run_and_capture(
+        r#"
+mod shapes {
+    pub struct Point {
+        pub x: f64,
+        pub y: f64,
+    }
+}
+fn main() {
+    let p = shapes::Point { x: 1.0, y: 2.0 };
+    println!("{}", p.x);
+    println!("{}", p.y);
+}"#,
+    );
+    assert_eq!(output, vec!["1.0\n", "2.0\n"]);
+}
