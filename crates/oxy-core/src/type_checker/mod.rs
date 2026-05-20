@@ -33,6 +33,11 @@ pub enum TypeInfo {
     Option,
     Result,
     UserStruct(String),
+    Function {
+        params: Vec<TypeInfo>,
+        ret: Box<TypeInfo>,
+    },
+    Array(Box<TypeInfo>, usize),
     Unknown,
 }
 
@@ -76,6 +81,8 @@ impl TypeInfo {
             TypeInfo::Option => "Option",
             TypeInfo::Result => "Result",
             TypeInfo::UserStruct(name) => name.as_str(),
+            TypeInfo::Function { .. } => "fn",
+            TypeInfo::Array(..) => "[...]",
             TypeInfo::Unknown => "?",
         }
     }
@@ -85,10 +92,40 @@ impl TypeInfo {
             Some(a) => a,
             None => return Ok(TypeInfo::Unknown),
         };
-        Ok(Self::from_name(&ann.name))
+        match ann {
+            TypeAnnotation::Named { name, .. } => Ok(Self::from_name(name)),
+            TypeAnnotation::Array { inner, size, .. } => {
+                let inner_ty = Self::from_annotation(&Some(*inner.clone()))?;
+                Ok(TypeInfo::Array(Box::new(inner_ty), *size))
+            }
+        }
     }
 
     pub fn from_name(name: &str) -> TypeInfo {
+        // Parse function type syntax: fn(P1, P2, ...) -> R
+        if let Some(inner) = name.strip_prefix("fn(") {
+            if let Some(paren_end) = inner.find(')') {
+                let params_str = &inner[..paren_end];
+                let after_paren = &inner[paren_end + 1..];
+                let ret_str = after_paren
+                    .strip_prefix(" -> ")
+                    .or_else(|| after_paren.trim_start().strip_prefix("-> "));
+                let params: Vec<TypeInfo> = if params_str.is_empty() {
+                    vec![]
+                } else {
+                    params_str
+                        .split(',')
+                        .map(|s| Self::from_name(s.trim()))
+                        .collect()
+                };
+                let ret = if let Some(r) = ret_str {
+                    Box::new(Self::from_name(r))
+                } else {
+                    Box::new(TypeInfo::Unit)
+                };
+                return TypeInfo::Function { params, ret };
+            }
+        }
         match name {
             "i8" => TypeInfo::I8,
             "i16" => TypeInfo::I16,
@@ -103,6 +140,10 @@ impl TypeInfo {
             "bool" => TypeInfo::Bool,
             "String" | "str" => TypeInfo::String,
             "char" => TypeInfo::Char,
+            "Fn" => TypeInfo::Function {
+                params: vec![],
+                ret: Box::new(TypeInfo::Unknown),
+            },
             "()" | "Unit" => TypeInfo::Unit,
             "Vec" => TypeInfo::Vec,
             "HashMap" => TypeInfo::HashMap,
@@ -133,6 +174,43 @@ impl TypeInfo {
         }
         // Integer → float
         if self.is_float() && other.is_integer() {
+            return true;
+        }
+        // Function types: structural compatibility.
+        if let (
+            TypeInfo::Function {
+                params: self_params,
+                ret: self_ret,
+            },
+            TypeInfo::Function {
+                params: other_params,
+                ret: other_ret,
+            },
+        ) = (self, other)
+        {
+            // Bare Fn (0 params, no specific signature) — compatible with any function
+            if self_params.is_empty() || other_params.is_empty() {
+                return true;
+            }
+            if self_params.len() != other_params.len() {
+                return false;
+            }
+            for (s, o) in self_params.iter().zip(other_params.iter()) {
+                if !s.accepts(o) {
+                    return false;
+                }
+            }
+            return self_ret.accepts(other_ret);
+        }
+        // Unit accepts Function (closures returned from unannotated functions)
+        if matches!(self, TypeInfo::Unit) && matches!(other, TypeInfo::Function { .. }) {
+            return true;
+        }
+        // Array accepts Vec and vice versa (vec literal can initialize array-typed binding)
+        if matches!(
+            (&self, &other),
+            (TypeInfo::Array(..), TypeInfo::Vec) | (TypeInfo::Vec, TypeInfo::Array(..))
+        ) {
             return true;
         }
         false
@@ -220,7 +298,7 @@ impl TypeChecker {
             }
         }
         if let Some(alias) = self.type_aliases.get(name) {
-            return TypeInfo::from_name(&alias.name);
+            return TypeInfo::from_annotation(&Some(alias.clone())).unwrap_or(TypeInfo::Unknown);
         }
         // Try module-qualified type alias
         if !name.contains("::") {
@@ -228,13 +306,25 @@ impl TypeChecker {
             if !module_prefix.is_empty() {
                 let qualified = format!("{}::{}", module_prefix, name);
                 if let Some(alias) = self.type_aliases.get(&qualified) {
-                    return TypeInfo::from_name(&alias.name);
+                    return TypeInfo::from_annotation(&Some(alias.clone()))
+                        .unwrap_or(TypeInfo::Unknown);
                 }
             }
         }
         // Try module-qualified struct name
         let resolved = self.resolve_struct_name(name);
         TypeInfo::from_name(&resolved)
+    }
+
+    /// Resolve a TypeAnnotation to TypeInfo, handling Named and Array variants.
+    fn resolve_annotation(&self, ann: &TypeAnnotation) -> TypeInfo {
+        match ann {
+            TypeAnnotation::Named { name, .. } => self.resolve_type(name),
+            TypeAnnotation::Array { inner, size, .. } => {
+                let inner_ty = self.resolve_annotation(inner);
+                TypeInfo::Array(Box::new(inner_ty), *size)
+            }
+        }
     }
 
     /// Check whether a struct field is visible from the current module context.
@@ -365,12 +455,18 @@ impl TypeChecker {
                         format!("{}::{}", prefix, f.name)
                     };
                     let ret_ty = if let Some(ref ann) = f.return_type {
-                        let generic_names: Vec<&str> =
-                            f.generic_params.iter().map(|p| p.name.as_str()).collect();
-                        if generic_names.contains(&ann.name.as_str()) {
+                        let is_generic = match ann {
+                            TypeAnnotation::Named { name, .. } => {
+                                let generic_names: Vec<&str> =
+                                    f.generic_params.iter().map(|p| p.name.as_str()).collect();
+                                generic_names.contains(&name.as_str())
+                            }
+                            TypeAnnotation::Array { .. } => false,
+                        };
+                        if is_generic {
                             TypeInfo::Unknown
                         } else {
-                            self.resolve_type(&ann.name)
+                            self.resolve_annotation(ann)
                         }
                     } else {
                         TypeInfo::Unit
@@ -396,7 +492,7 @@ impl TypeChecker {
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
-                            self.resolve_type(&ann.name)
+                            self.resolve_annotation(ann)
                         } else {
                             TypeInfo::Unit
                         };
@@ -415,7 +511,7 @@ impl TypeChecker {
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
-                            self.resolve_type(&ann.name)
+                            self.resolve_annotation(ann)
                         } else {
                             TypeInfo::Unit
                         };
@@ -441,7 +537,7 @@ impl TypeChecker {
                 ..
             } => {
                 let declared = if let Some(ann) = type_ann {
-                    self.resolve_type(&ann.name)
+                    self.resolve_annotation(ann)
                 } else {
                     TypeInfo::Unknown
                 };
@@ -514,12 +610,18 @@ impl TypeChecker {
     fn check_function(&mut self, f: &FnDef) -> Result<(), FerriError> {
         let ret_ty = if let Some(ref ann) = f.return_type {
             // If return type is a generic param, treat as Unknown (type-erased generics)
-            let generic_names: Vec<&str> =
-                f.generic_params.iter().map(|p| p.name.as_str()).collect();
-            if generic_names.contains(&ann.name.as_str()) {
+            let is_generic = match ann {
+                TypeAnnotation::Named { name, .. } => {
+                    let generic_names: Vec<&str> =
+                        f.generic_params.iter().map(|p| p.name.as_str()).collect();
+                    generic_names.contains(&name.as_str())
+                }
+                TypeAnnotation::Array { .. } => false,
+            };
+            if is_generic {
                 TypeInfo::Unknown
             } else {
-                self.resolve_type(&ann.name)
+                self.resolve_annotation(ann)
             }
         } else {
             TypeInfo::Unit
@@ -528,7 +630,7 @@ impl TypeChecker {
 
         let fn_env = TypeEnv::child(&self.env);
         for param in &f.params {
-            let param_ty = self.resolve_type(&param.type_ann.name);
+            let param_ty = self.resolve_annotation(&param.type_ann);
             fn_env.borrow_mut().define(&param.name, param_ty);
         }
 
@@ -553,7 +655,7 @@ impl TypeChecker {
                 ..
             } => {
                 let declared = if let Some(ann) = type_ann {
-                    self.resolve_type(&ann.name)
+                    self.resolve_annotation(ann)
                 } else {
                     TypeInfo::Unknown
                 };
@@ -961,6 +1063,12 @@ impl TypeChecker {
 
             Expr::Grouped(inner, _) => self.infer_expr(inner),
 
+            Expr::Repeat { value, count, .. } => {
+                let val_ty = self.infer_expr(value)?;
+                let _ = self.infer_expr(count)?;
+                Ok(val_ty)
+            }
+
             Expr::Array { elements, .. } => {
                 for e in elements {
                     self.infer_expr(e)?;
@@ -1095,7 +1203,7 @@ impl TypeChecker {
                         if let StructKind::Named(fields) = &def.kind {
                             for f in fields {
                                 if f.name == *field {
-                                    return Ok(self.resolve_type(&f.type_ann.name));
+                                    return Ok(self.resolve_annotation(&f.type_ann));
                                 }
                             }
                         }
@@ -1131,7 +1239,46 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
 
-            Expr::Closure { .. } => Ok(TypeInfo::Unknown),
+            Expr::Closure {
+                params,
+                return_type,
+                body,
+                ..
+            } => {
+                let mut param_types = Vec::with_capacity(params.len());
+                let closure_env = TypeEnv::child(&self.env);
+                for p in params {
+                    let p_ty = if let Some(ref ann) = p.type_ann {
+                        self.resolve_annotation(ann)
+                    } else {
+                        TypeInfo::Unknown
+                    };
+                    closure_env.borrow_mut().define(&p.name, p_ty.clone());
+                    param_types.push(p_ty);
+                }
+                let saved_env = self.env.clone();
+                self.env = closure_env;
+                let inferred_ret = self.infer_expr(body)?;
+                self.env = saved_env;
+                if let Some(ref ann) = return_type {
+                    let declared_ret = self.resolve_annotation(ann);
+                    if !declared_ret.accepts(&inferred_ret) {
+                        return Err(FerriError::TypeError {
+                            message: format!(
+                                "type mismatch: closure returns `{}`, but body has type `{}`",
+                                declared_ret.name(),
+                                inferred_ret.name()
+                            ),
+                            line: ann.span().line,
+                            column: ann.span().column,
+                        });
+                    }
+                }
+                Ok(TypeInfo::Function {
+                    params: param_types,
+                    ret: Box::new(inferred_ret),
+                })
+            }
             Expr::Await { expr: inner, .. } => {
                 let _ = self.infer_expr(inner)?;
                 Ok(TypeInfo::Unknown)

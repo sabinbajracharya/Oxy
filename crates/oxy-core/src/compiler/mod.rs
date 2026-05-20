@@ -431,7 +431,8 @@ impl Compiler {
                 Ok(())
             }
             Item::TypeAlias { name, target, .. } => {
-                self.type_aliases.insert(name.clone(), target.name.clone());
+                self.type_aliases
+                    .insert(name.clone(), target.name().to_string());
                 Ok(())
             }
             Item::Const { name, value, .. } => {
@@ -454,7 +455,7 @@ impl Compiler {
         let default_span = s.span;
         let mut field_exprs: Vec<(String, Expr)> = Vec::new();
         for field in fields {
-            let default_val = match field.type_ann.name.as_str() {
+            let default_val = match field.type_ann.name() {
                 "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "usize" => {
                     Expr::IntLiteral(0, IntegerSuffix::None, default_span)
                 }
@@ -481,7 +482,7 @@ impl Compiler {
             is_async: false,
             generic_params: vec![],
             params: vec![],
-            return_type: Some(TypeAnnotation {
+            return_type: Some(TypeAnnotation::Named {
                 name: "Self".to_string(),
                 span: default_span,
             }),
@@ -665,7 +666,16 @@ impl Compiler {
             return_type: return_type.map(|rt| {
                 let mut ann = rt.clone();
                 for (param, concrete) in &subst {
-                    ann.name = ann.name.replace(param.as_str(), concrete.as_str());
+                    match &mut ann {
+                        TypeAnnotation::Named { ref mut name, .. } => {
+                            *name = name.replace(param.as_str(), concrete.as_str());
+                        }
+                        TypeAnnotation::Array { ref mut inner, .. } => {
+                            if let TypeAnnotation::Named { ref mut name, .. } = **inner {
+                                *name = name.replace(param.as_str(), concrete.as_str());
+                            }
+                        }
+                    }
                 }
                 ann
             }),
@@ -1226,7 +1236,8 @@ impl Compiler {
                 }
                 Item::TypeAlias { name, target, .. } => {
                     let qualified = format!("{}::{}", prefix, name);
-                    self.type_aliases.insert(qualified, target.name.clone());
+                    self.type_aliases
+                        .insert(qualified, target.name().to_string());
                 }
                 Item::Const { name, value, .. } => {
                     if let Some(val) = try_eval_const(value) {

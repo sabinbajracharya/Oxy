@@ -275,13 +275,13 @@ impl Compiler {
                 }
                 if let Some(expr) = value {
                     // Check literal out-of-range before compilation
-                    if let Some(ann) = type_ann {
-                        check_literal_fits_type(expr, &ann.name, ann.span)?;
+                    if let Some(TypeAnnotation::Named { name, span }) = type_ann {
+                        check_literal_fits_type(expr, name, *span)?;
                     }
                     self.compile_expr(expr)?;
                     // Narrow to the annotated type if it specifies a width
-                    if let Some(ann) = type_ann {
-                        emit_narrowing_cast(self, &ann.name);
+                    if let Some(TypeAnnotation::Named { name, .. }) = type_ann {
+                        emit_narrowing_cast(self, name);
                     }
                 } else {
                     self.emit(OpCode::ConstUnit);
@@ -958,7 +958,7 @@ impl Compiler {
                     // Check if we should monomorphize: turbofish present with all concrete types
                     let concrete_types: Option<Vec<String>> = turbofish.as_ref().map(|tf| {
                         tf.iter()
-                            .map(|ta| ta.name.clone())
+                            .map(|ta| ta.name().to_string())
                             .filter(|n| n != "_")
                             .collect()
                     });
@@ -1329,6 +1329,28 @@ impl Compiler {
                 Ok(())
             }
 
+            Expr::Repeat {
+                value, count, span, ..
+            } => {
+                let n = match crate::compiler::helpers::try_eval_const(count) {
+                    Some(crate::types::Value::I64(n)) if n >= 0 => n as usize,
+                    Some(crate::types::Value::U64(n)) => n as usize,
+                    _ => {
+                        return Err(crate::errors::FerriError::Runtime {
+                            message: "array repeat count must be a non-negative integer constant"
+                                .into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                };
+                self.compile_expr(value)?;
+                for _ in 1..n {
+                    self.emit(OpCode::Dup);
+                }
+                self.emit(OpCode::MakeFixedArray { count: n });
+                Ok(())
+            }
             Expr::Array { elements, .. } => {
                 let count = elements.len();
                 for elem in elements {
@@ -1558,7 +1580,7 @@ impl Compiler {
                 let type_args_suffix: String = turbofish
                     .as_ref()
                     .map(|tf| {
-                        let names: Vec<&str> = tf.iter().map(|ta| ta.name.as_str()).collect();
+                        let names: Vec<&str> = tf.iter().map(|ta| ta.name()).collect();
                         format!("<{}>", names.join(", "))
                     })
                     .unwrap_or_default();

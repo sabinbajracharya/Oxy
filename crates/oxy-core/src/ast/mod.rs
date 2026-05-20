@@ -241,11 +241,34 @@ pub struct GenericParam {
     pub span: Span,
 }
 
-/// A type annotation (simple for now — just a name like `i64`, `String`, `bool`).
+/// A type annotation.
 #[derive(Debug, Clone, PartialEq)]
-pub struct TypeAnnotation {
-    pub name: String,
-    pub span: Span,
+pub enum TypeAnnotation {
+    /// Simple named type: `i64`, `String`, `bool`, `Vec<i64>`, etc.
+    Named { name: String, span: Span },
+    /// Fixed-size array type: `[T; N]`
+    Array {
+        inner: Box<TypeAnnotation>,
+        size: usize,
+        span: Span,
+    },
+}
+
+impl TypeAnnotation {
+    /// Extract the name for simple named types. Panics on compound types.
+    pub fn name(&self) -> &str {
+        match self {
+            TypeAnnotation::Named { name, .. } => name,
+            TypeAnnotation::Array { .. } => panic!("called name() on Array type annotation"),
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            TypeAnnotation::Named { span, .. } => *span,
+            TypeAnnotation::Array { span, .. } => *span,
+        }
+    }
 }
 
 /// An inline or file-based module definition.
@@ -467,6 +490,12 @@ pub enum Expr {
         inclusive: bool,
         span: Span,
     },
+    /// Array repeat: `[val; N]`
+    Repeat {
+        value: Box<Expr>,
+        count: Box<Expr>,
+        span: Span,
+    },
     /// Array literal: `[1, 2, 3]`
     Array { elements: Vec<Expr>, span: Span },
     /// Index expression: `expr[index]`
@@ -562,6 +591,7 @@ impl Expr {
             | Expr::Grouped(_, s)
             | Expr::Match { span: s, .. }
             | Expr::Range { span: s, .. }
+            | Expr::Repeat { span: s, .. }
             | Expr::Array { span: s, .. }
             | Expr::Index { span: s, .. }
             | Expr::MethodCall { span: s, .. }
@@ -851,7 +881,7 @@ impl Item {
                     StructKind::Named(fields) => {
                         out.push_str(" {\n");
                         for f in fields {
-                            out.push_str(&format!("{pad}  {}: {},\n", f.name, f.type_ann.name));
+                            out.push_str(&format!("{pad}  {}: {},\n", f.name, f.type_ann.name()));
                         }
                         out.push_str(&format!("{pad}}}\n"));
                     }
@@ -861,7 +891,7 @@ impl Item {
                             if i > 0 {
                                 out.push_str(", ");
                             }
-                            out.push_str(&t.name);
+                            out.push_str(t.name());
                         }
                         out.push_str(");\n");
                     }
@@ -881,7 +911,7 @@ impl Item {
                                 if i > 0 {
                                     out.push_str(", ");
                                 }
-                                out.push_str(&t.name);
+                                out.push_str(t.name());
                             }
                             out.push(')');
                         }
@@ -891,7 +921,7 @@ impl Item {
                                 if i > 0 {
                                     out.push_str(", ");
                                 }
-                                out.push_str(&format!("{}: {}", f.name, f.type_ann.name));
+                                out.push_str(&format!("{}: {}", f.name, f.type_ann.name()));
                             }
                             out.push_str(" }");
                         }
@@ -917,11 +947,11 @@ impl Item {
                         if i > 0 {
                             out.push_str(", ");
                         }
-                        out.push_str(&format!("{}: {}", p.name, p.type_ann.name));
+                        out.push_str(&format!("{}: {}", p.name, p.type_ann.name()));
                     }
                     out.push(')');
                     if let Some(ret) = &sig.return_type {
-                        out.push_str(&format!(" -> {}", ret.name));
+                        out.push_str(&format!(" -> {}", ret.name()));
                     }
                     out.push_str(";\n");
                 }
@@ -995,7 +1025,7 @@ impl Item {
             }
             Item::TypeAlias { name, target, .. } => {
                 let pad = "  ".repeat(indent);
-                out.push_str(&format!("{pad}type {name} = {};\n", target.name));
+                out.push_str(&format!("{pad}type {name} = {};\n", target.name()));
             }
             Item::Const {
                 name,
@@ -1006,7 +1036,7 @@ impl Item {
                 let pad = "  ".repeat(indent);
                 let kw = if *is_static { "static" } else { "const" };
                 if let Some(ta) = type_ann {
-                    out.push_str(&format!("{pad}{kw} {name}: {} = ...;\n", ta.name));
+                    out.push_str(&format!("{pad}{kw} {name}: {} = ...;\n", ta.name()));
                 } else {
                     out.push_str(&format!("{pad}{kw} {name} = ...;\n"));
                 }
@@ -1042,11 +1072,11 @@ impl FnDef {
             if i > 0 {
                 out.push_str(", ");
             }
-            out.push_str(&format!("{}: {}", p.name, p.type_ann.name));
+            out.push_str(&format!("{}: {}", p.name, p.type_ann.name()));
         }
         out.push(')');
         if let Some(ret) = &self.return_type {
-            out.push_str(&format!(" -> {}", ret.name));
+            out.push_str(&format!(" -> {}", ret.name()));
         }
         out.push_str(" {\n");
         for stmt in &self.body.stmts {
@@ -1072,7 +1102,7 @@ impl Stmt {
                     if *mutable { "mut " } else { "" }
                 ));
                 if let Some(t) = type_ann {
-                    out.push_str(&format!(": {}", t.name));
+                    out.push_str(&format!(": {}", t.name()));
                 }
                 if let Some(v) = value {
                     out.push_str(" = ");
@@ -1360,6 +1390,13 @@ impl Expr {
                 if let Some(e) = end {
                     e.pretty_print(out, 0);
                 }
+            }
+            Expr::Repeat { value, count, .. } => {
+                out.push('[');
+                value.pretty_print(out, 0);
+                out.push_str("; ");
+                count.pretty_print(out, 0);
+                out.push(']');
             }
             Expr::Array { elements, .. } => {
                 out.push('[');

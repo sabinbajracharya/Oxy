@@ -78,6 +78,8 @@ pub enum Value {
     Range(i64, i64),
     /// A vector (dynamic array) — shared mutable via Rc<RefCell<>>.
     Vec(Rc<RefCell<Vec<Value>>>),
+    /// A fixed-size array: `[T; N]` — value type (no interior mutability).
+    Array(Vec<Value>),
     /// A tuple.
     Tuple(Vec<Value>),
     /// A struct instance: `Point { x: 1.0, y: 2.0 }`
@@ -249,6 +251,7 @@ impl Clone for Value {
                 variant: variant.clone(),
                 data: data.clone(),
             },
+            Value::Array(a) => Value::Array(a.clone()),
             Value::HashMap(rc) => Value::HashMap(Rc::clone(rc)),
             Value::HashSet(rc) => Value::HashSet(Rc::clone(rc)),
             Value::BinaryHeap(rc) => Value::BinaryHeap(Rc::clone(rc)),
@@ -445,6 +448,7 @@ impl Value {
             Value::Function(_) => "fn".into(),
             Value::Range(_, _) => "Range".into(),
             Value::Vec(_) => "Vec".into(),
+            Value::Array(_) => "Array".into(),
             Value::Tuple(_) => "tuple".into(),
             Value::Struct { name, .. } => name.clone(),
             Value::EnumVariant { enum_name, .. } => enum_name.clone(),
@@ -520,6 +524,7 @@ impl Value {
         match self {
             Value::Range(start, end) => Ok((start..end).map(Value::I64).collect()),
             Value::Vec(rc) => Ok(rc.borrow().clone()),
+            Value::Array(a) => Ok(a.clone()),
             Value::String(s) => Ok(s.chars().map(Value::Char).collect()),
             Value::HashMap(rc) => {
                 let m = rc.borrow();
@@ -578,6 +583,7 @@ impl Value {
             Value::Function(_) => 16,
             Value::Future(_) => 17,
             Value::JoinHandle(_) => 18,
+            Value::Array(_) => 20,
             Value::Cell(_) => 19,
         }
     }
@@ -597,6 +603,7 @@ impl Value {
             Value::Unit => false,
             Value::Range(_, _) => true,
             Value::Vec(rc) => !rc.borrow().is_empty(),
+            Value::Array(a) => !a.is_empty(),
             Value::Tuple(t) => !t.is_empty(),
             Value::Struct { .. } => true,
             Value::EnumVariant { .. } => true,
@@ -645,6 +652,16 @@ impl fmt::Display for Value {
                 let v = rc.borrow();
                 write!(f, "[")?;
                 for (i, elem) in v.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "]")
+            }
+            Value::Array(a) => {
+                write!(f, "[")?;
+                for (i, elem) in a.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
@@ -779,6 +796,7 @@ impl PartialEq for Value {
             (Value::Unit, Value::Unit) => true,
             (Value::Range(a1, a2), Value::Range(b1, b2)) => a1 == b1 && a2 == b2,
             (Value::Vec(a), Value::Vec(b)) => *a.borrow() == *b.borrow(),
+            (Value::Array(a), Value::Array(b)) => a == b,
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
             (
                 Value::Struct {
@@ -863,6 +881,15 @@ impl Ord for Value {
                     }
                 }
                 va.len().cmp(&vb.len())
+            }
+            (Value::Array(a), Value::Array(b)) => {
+                for (ai, bi) in a.iter().zip(b.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                a.len().cmp(&b.len())
             }
             (Value::Tuple(a), Value::Tuple(b)) => {
                 for (ai, bi) in a.iter().zip(b.iter()) {
@@ -1024,6 +1051,11 @@ impl Hash for Value {
             }
             Value::Vec(rc) => {
                 for elem in rc.borrow().iter() {
+                    elem.hash(state);
+                }
+            }
+            Value::Array(a) => {
+                for elem in a {
                     elem.hash(state);
                 }
             }

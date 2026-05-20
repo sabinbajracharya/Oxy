@@ -39,6 +39,10 @@ fn serialize_value(value: &Value) -> Result<String, String> {
             let items: Result<Vec<String>, String> = v.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
+        Value::Array(a) => {
+            let items: Result<Vec<String>, String> = a.iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
         Value::Tuple(v) => {
             let items: Result<Vec<String>, String> = v.iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
@@ -106,6 +110,22 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
             let pad = " ".repeat(inner_indent);
             let close_pad = " ".repeat(indent);
             let items: Result<Vec<String>, String> = v
+                .iter()
+                .map(|item| {
+                    let s = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
+        Value::Array(a) => {
+            if a.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let items: Result<Vec<String>, String> = a
                 .iter()
                 .map(|item| {
                     let s = serialize_value_pretty(item, inner_indent)?;

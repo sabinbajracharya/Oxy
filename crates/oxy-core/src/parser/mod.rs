@@ -454,7 +454,7 @@ impl Parser {
                     self.advance(); // consume `self`
                     params.push(Param {
                         name: "self".to_string(),
-                        type_ann: TypeAnnotation {
+                        type_ann: TypeAnnotation::Named {
                             name: "Self".to_string(),
                             span: start_span,
                         },
@@ -481,7 +481,7 @@ impl Parser {
             let type_ann = self.parse_type_annotation()?;
 
             params.push(Param {
-                span: self.merge_spans(start_span, type_ann.span),
+                span: self.merge_spans(start_span, type_ann.span()),
                 name,
                 type_ann,
             });
@@ -503,7 +503,7 @@ impl Parser {
             if self.check(&TokenKind::Lt) {
                 self.skip_generic_args();
             }
-            return Ok(TypeAnnotation {
+            return Ok(TypeAnnotation::Named {
                 name: "Self".to_string(),
                 span,
             });
@@ -512,7 +512,7 @@ impl Parser {
         if self.check(&TokenKind::Impl) {
             self.advance();
             let name = self.expect_ident()?;
-            return Ok(TypeAnnotation { name, span });
+            return Ok(TypeAnnotation::Named { name, span });
         }
         // Accept `&` or `&mut` before type
         if self.check(&TokenKind::Amp) {
@@ -528,7 +528,7 @@ impl Parser {
             let mut param_types = Vec::new();
             if !self.check(&TokenKind::RParen) {
                 loop {
-                    param_types.push(self.parse_type_annotation()?.name);
+                    param_types.push(self.parse_type_annotation()?.name().to_string());
                     if !self.match_token(&TokenKind::Comma) {
                         break;
                     }
@@ -546,16 +546,50 @@ impl Parser {
             if self.match_token(&TokenKind::Arrow) {
                 let ret = self.parse_type_annotation()?;
                 name.push_str(" -> ");
-                name.push_str(&ret.name);
+                name.push_str(&ret.name());
             }
-            return Ok(TypeAnnotation { name, span });
+            return Ok(TypeAnnotation::Named { name, span });
+        }
+        // Accept `[T; N]` array type
+        if self.check(&TokenKind::LBracket) {
+            self.advance();
+            let inner = self.parse_type_annotation()?;
+            self.expect(TokenKind::Semicolon)?;
+            let size: usize = match self.peek_kind() {
+                TokenKind::IntLiteral(n, _) => {
+                    if *n < 0 {
+                        return Err(FerriError::Parser {
+                            message: "array size must be non-negative".into(),
+                            line: self.current_span().line,
+                            column: self.current_span().column,
+                        });
+                    }
+                    let val = *n as usize;
+                    self.advance();
+                    val
+                }
+                _ => {
+                    return Err(FerriError::Parser {
+                        message: "expected integer literal for array size".into(),
+                        line: self.current_span().line,
+                        column: self.current_span().column,
+                    });
+                }
+            };
+            let end_span = self.current_span();
+            self.expect(TokenKind::RBracket)?;
+            return Ok(TypeAnnotation::Array {
+                inner: Box::new(inner),
+                size,
+                span: self.merge_spans(span, end_span),
+            });
         }
         let name = self.expect_ident()?;
         // Skip generic type args: `Vec<i64>`, `HashMap<K, V>`
         if self.check(&TokenKind::Lt) {
             self.skip_generic_args();
         }
-        Ok(TypeAnnotation { name, span })
+        Ok(TypeAnnotation::Named { name, span })
     }
 
     /// Skip generic type arguments `<...>` — handles nesting.
@@ -681,7 +715,7 @@ impl Parser {
             self.expect(TokenKind::Colon)?;
             let type_ann = self.parse_type_annotation()?;
             fields.push(StructField {
-                span: self.merge_spans(field_span, type_ann.span),
+                span: self.merge_spans(field_span, type_ann.span()),
                 name: field_name,
                 type_ann,
                 visibility: if field_pub {
@@ -759,7 +793,7 @@ impl Parser {
                     self.expect(TokenKind::Colon)?;
                     let ftype = self.parse_type_annotation()?;
                     fields.push(StructField {
-                        span: self.merge_spans(fspan, ftype.span),
+                        span: self.merge_spans(fspan, ftype.span()),
                         name: fname,
                         type_ann: ftype,
                         visibility: Visibility::Private,
@@ -867,7 +901,7 @@ impl Parser {
                 }
                 self.expect(TokenKind::Comma)?;
             }
-            let arg_names: Vec<String> = args.iter().map(|a| a.name.clone()).collect();
+            let arg_names: Vec<String> = args.iter().map(|a| a.name().to_string()).collect();
             Ok(format!("{}<{}>", name, arg_names.join(", ")))
         } else {
             Ok(name)
@@ -1645,18 +1679,37 @@ impl Parser {
             TokenKind::LBracket => {
                 let start_span = self.current_span();
                 self.advance();
-                let mut elements = Vec::new();
-                if !self.check(&TokenKind::RBracket) {
-                    loop {
-                        elements.push(self.parse_expr(Precedence::None)?);
-                        if !self.match_token(&TokenKind::Comma) {
-                            break;
-                        }
-                        // Allow trailing comma
-                        if self.check(&TokenKind::RBracket) {
-                            break;
-                        }
+                if self.check(&TokenKind::RBracket) {
+                    let end_span = self.current_span();
+                    self.advance(); // ]
+                    return Ok(Expr::Array {
+                        elements: vec![],
+                        span: self.merge_spans(start_span, end_span),
+                    });
+                }
+                let first = self.parse_expr(Precedence::None)?;
+                // Check for `[expr; N]` repeat expression
+                if self.match_token(&TokenKind::Semicolon) {
+                    let count = self.parse_expr(Precedence::None)?;
+                    let end_span = self.current_span();
+                    self.expect(TokenKind::RBracket)?;
+                    return Ok(Expr::Repeat {
+                        value: Box::new(first),
+                        count: Box::new(count),
+                        span: self.merge_spans(start_span, end_span),
+                    });
+                }
+                let mut elements = vec![first];
+                loop {
+                    // Match a comma — if none, we're done
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
                     }
+                    // Allow trailing comma
+                    if self.check(&TokenKind::RBracket) {
+                        break;
+                    }
+                    elements.push(self.parse_expr(Precedence::None)?);
                 }
                 let end_span = self.current_span();
                 self.expect(TokenKind::RBracket)?;
@@ -2524,7 +2577,7 @@ impl Parser {
                     depth -= 1;
                     if depth == 0 {
                         if !current_type.trim().is_empty() {
-                            types.push(TypeAnnotation {
+                            types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
                                 span: type_start,
                             });
@@ -2539,7 +2592,7 @@ impl Parser {
                     depth -= 1;
                     if depth == 0 {
                         if !current_type.trim().is_empty() {
-                            types.push(TypeAnnotation {
+                            types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
                                 span: type_start,
                             });
@@ -2550,7 +2603,7 @@ impl Parser {
                     depth -= 1;
                     if depth == 0 {
                         if !current_type.trim().is_empty() {
-                            types.push(TypeAnnotation {
+                            types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
                                 span: type_start,
                             });
@@ -2563,7 +2616,7 @@ impl Parser {
                     if depth == 1 {
                         self.advance();
                         if !current_type.trim().is_empty() {
-                            types.push(TypeAnnotation {
+                            types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
                                 span: type_start,
                             });
@@ -2885,7 +2938,7 @@ mod tests {
         let Stmt::Let { type_ann, .. } = &stmts[0] else {
             panic!("expected let statement");
         };
-        assert_eq!(type_ann.as_ref().unwrap().name, "i64");
+        assert_eq!(type_ann.as_ref().unwrap().name(), "i64");
     }
 
     // === Functions ===
@@ -2904,9 +2957,9 @@ mod tests {
         assert_eq!(f.name, "add");
         assert_eq!(f.params.len(), 2);
         assert_eq!(f.params[0].name, "a");
-        assert_eq!(f.params[0].type_ann.name, "i64");
+        assert_eq!(f.params[0].type_ann.name(), "i64");
         assert_eq!(f.params[1].name, "b");
-        assert_eq!(f.return_type.as_ref().unwrap().name, "i64");
+        assert_eq!(f.return_type.as_ref().unwrap().name(), "i64");
     }
 
     #[test]
@@ -3194,7 +3247,7 @@ mod tests {
     #[test]
     fn test_reference_in_param() {
         let f = parse_fn("fn foo(x: &i64) {}");
-        assert_eq!(f.params[0].type_ann.name, "i64");
+        assert_eq!(f.params[0].type_ann.name(), "i64");
     }
 
     #[test]
@@ -4070,7 +4123,7 @@ fn main() {}"#,
             panic!("expected type alias");
         };
         assert_eq!(name, "Meters");
-        assert_eq!(target.name, "f64");
+        assert_eq!(target.name(), "f64");
     }
 
     #[test]
@@ -4087,7 +4140,7 @@ fn main() {}"#,
         };
         assert_eq!(name, "MAX");
         assert!(!is_static);
-        assert_eq!(type_ann.as_ref().unwrap().name, "i64");
+        assert_eq!(type_ann.as_ref().unwrap().name(), "i64");
     }
 
     #[test]
@@ -4131,7 +4184,7 @@ fn main() {}"#,
                 assert_eq!(method, "collect");
                 assert!(turbofish.is_some(), "expected turbofish");
                 assert_eq!(turbofish.as_ref().unwrap().len(), 1);
-                assert_eq!(turbofish.as_ref().unwrap()[0].name, "i64");
+                assert_eq!(turbofish.as_ref().unwrap()[0].name(), "i64");
             }
             other => panic!("expected MethodCall, got {:?}", other),
         }

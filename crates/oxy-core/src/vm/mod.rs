@@ -107,6 +107,10 @@ pub enum OpCode {
     MakeArray {
         count: usize,
     },
+    /// Pop `count` elements, push them as Value::Array.
+    MakeFixedArray {
+        count: usize,
+    },
     /// Pop `count` elements, push them as Value::Tuple.
     MakeTuple {
         count: usize,
@@ -711,6 +715,26 @@ impl Vm {
                                     ));
                                 }
                             }
+                            Value::Array(a) => {
+                                let idx = match key {
+                                    Value::I64(i) => i as usize,
+                                    other => {
+                                        return VmResult::Error(format!(
+                                            "index must be integer, got {}",
+                                            other.type_name()
+                                        ))
+                                    }
+                                };
+                                if idx < a.len() {
+                                    self.stack.push(a[idx].clone());
+                                } else {
+                                    return VmResult::Error(format!(
+                                        "index {} out of bounds for len {}",
+                                        idx,
+                                        a.len()
+                                    ));
+                                }
+                            }
                             Value::Struct { fields, .. } => {
                                 let field_key = key.to_string();
                                 self.stack
@@ -785,6 +809,12 @@ impl Vm {
                         .push(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
                             elements,
                         ))));
+                }
+
+                OpCode::MakeFixedArray { count } => {
+                    let start = self.stack.len().saturating_sub(count);
+                    let elements: Vec<Value> = self.stack.drain(start..).collect();
+                    self.stack.push(Value::Array(elements));
                 }
 
                 OpCode::MakeTuple { count } => {
@@ -871,7 +901,7 @@ impl Vm {
                         .into_iter()
                         .map(|name| crate::ast::Param {
                             name,
-                            type_ann: crate::ast::TypeAnnotation {
+                            type_ann: crate::ast::TypeAnnotation::Named {
                                 name: "_".into(),
                                 span: blank_span,
                             },
@@ -1558,6 +1588,11 @@ impl Vm {
                 let i: Vec<_> = self.stack.drain(s..).collect();
                 self.stack.push(Value::Vec(Rc::new(RefCell::new(i))));
             }
+            OpCode::MakeFixedArray { count } => {
+                let s = self.stack.len() - count;
+                let i: Vec<_> = self.stack.drain(s..).collect();
+                self.stack.push(Value::Array(i));
+            }
             OpCode::MakeTuple { count } => {
                 let s = self.stack.len() - count;
                 let i: Vec<_> = self.stack.drain(s..).collect();
@@ -1571,6 +1606,14 @@ impl Vm {
                         if let Value::I64(i) = key {
                             self.stack
                                 .push(rc.borrow().get(i as usize).cloned().unwrap_or(Value::Unit));
+                        } else {
+                            self.stack.push(Value::Unit);
+                        }
+                    }
+                    Value::Array(a) => {
+                        if let Value::I64(i) = key {
+                            self.stack
+                                .push(a.get(i as usize).cloned().unwrap_or(Value::Unit));
                         } else {
                             self.stack.push(Value::Unit);
                         }
@@ -1855,7 +1898,7 @@ impl Vm {
                         .into_iter()
                         .map(|name| crate::ast::Param {
                             name,
-                            type_ann: crate::ast::TypeAnnotation {
+                            type_ann: crate::ast::TypeAnnotation::Named {
                                 name: "_".into(),
                                 span: blank_span,
                             },
@@ -2027,6 +2070,13 @@ impl Vm {
                 "clone" => Ok(receiver.clone()),
                 "to_string" => Ok(Value::String(receiver.to_string())),
                 _ => Err(format!("no method '{}' on type tuple", method_name)),
+            },
+            Value::Array(a) => match method_name {
+                "len" => Ok(Value::I64(a.len() as i64)),
+                "is_empty" => Ok(Value::Bool(a.is_empty())),
+                "clone" => Ok(receiver.clone()),
+                "to_string" => Ok(Value::String(receiver.to_string())),
+                _ => Err(format!("no method '{}' on type Array", method_name)),
             },
             _ => Err(format!(
                 "no method '{}' on type {}",
@@ -3079,6 +3129,7 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
         OpCode::VecIndexStore => "VecIndexStore".into(),
         OpCode::MakeRange => "MakeRange".into(),
         OpCode::MakeArray { count } => format!("MakeArray(count={})", count),
+        OpCode::MakeFixedArray { count } => format!("MakeFixedArray(count={})", count),
         OpCode::MakeTuple { count } => format!("MakeTuple(count={})", count),
         OpCode::ToString => "ToString".into(),
         OpCode::FStringConcat { count } => format!("FStringConcat(count={})", count),

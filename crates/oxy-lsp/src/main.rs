@@ -614,12 +614,12 @@ fn item_hover_info(item: &Item, name: &str) -> Option<String> {
             let params: Vec<String> = f
                 .params
                 .iter()
-                .map(|p| format!("{}: {}", p.name, p.type_ann.name))
+                .map(|p| format!("{}: {}", p.name, p.type_ann.name()))
                 .collect();
             let ret = f
                 .return_type
                 .as_ref()
-                .map(|t| format!(" -> {}", t.name))
+                .map(|t| format!(" -> {}", t.name()))
                 .unwrap_or_default();
             let asyncness = if f.is_async { "async " } else { "" };
             Some(format!(
@@ -895,7 +895,7 @@ fn find_var_type_in_items(items: &[Item], var_name: &str) -> Option<String> {
             // Check params
             for param in &f.params {
                 if param.name == var_name {
-                    return Some(param.type_ann.name.clone());
+                    return Some(param.type_ann.name().to_string());
                 }
             }
             // Check body for let bindings
@@ -915,7 +915,7 @@ fn find_var_type_in_items(items: &[Item], var_name: &str) -> Option<String> {
     for item in items {
         match item {
             Item::Const { name, type_ann, .. } if name == var_name => {
-                return type_ann.as_ref().map(|t| t.name.clone());
+                return type_ann.as_ref().map(|t| t.name().to_string());
             }
             _ => {}
         }
@@ -934,7 +934,7 @@ fn find_let_type_in_block(block: &oxy_core::ast::Block, var_name: &str) -> Optio
         {
             if name == var_name {
                 if let Some(ann) = type_ann {
-                    return Some(ann.name.clone());
+                    return Some(ann.name().to_string());
                 }
                 // Try to infer from value (simple cases)
                 if let Some(expr) = value {
