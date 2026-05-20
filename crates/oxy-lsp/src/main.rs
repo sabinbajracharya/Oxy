@@ -137,12 +137,7 @@ fn error_to_diagnostic(e: &FerriError) -> Diagnostic {
 // ---------------------------------------------------------------------------
 
 fn keyword_completions() -> Vec<CompletionItem> {
-    let keywords = [
-        "let", "mut", "fn", "struct", "enum", "impl", "trait", "if", "else", "while", "loop",
-        "for", "in", "match", "return", "break", "continue", "pub", "mod", "use", "const",
-        "static", "type", "async", "await", "move",
-    ];
-    keywords
+    oxy_core::symbols::KEYWORDS
         .iter()
         .map(|kw| CompletionItem {
             label: kw.to_string(),
@@ -153,18 +148,7 @@ fn keyword_completions() -> Vec<CompletionItem> {
 }
 
 fn type_completions() -> Vec<CompletionItem> {
-    let types = [
-        ("i64", "64-bit signed integer"),
-        ("f64", "64-bit floating point"),
-        ("bool", "Boolean type"),
-        ("String", "Owned UTF-8 string"),
-        ("Vec", "Growable array type"),
-        ("HashMap", "Hash map collection"),
-        ("Option", "Optional value: Some(T) or None"),
-        ("Result", "Result type: Ok(T) or Err(E)"),
-        ("Self", "Current type in impl block"),
-    ];
-    types
+    oxy_core::symbols::PRIMITIVE_TYPES
         .iter()
         .map(|(name, detail)| CompletionItem {
             label: name.to_string(),
@@ -176,42 +160,24 @@ fn type_completions() -> Vec<CompletionItem> {
 }
 
 fn builtin_function_completions() -> Vec<CompletionItem> {
-    let builtins = [
-        ("println!", "Print with newline"),
-        ("print!", "Print without newline"),
-        ("format!", "Format a string"),
-        ("eprintln!", "Print to stderr"),
-        ("dbg!", "Debug print"),
-        ("panic!", "Panic with message"),
-        ("todo!", "Mark unfinished code"),
-        ("unimplemented!", "Mark unimplemented code"),
-        ("vec!", "Create a Vec"),
-    ];
-    builtins
+    oxy_core::symbols::ALL_MACROS
         .iter()
-        .map(|(name, detail)| CompletionItem {
-            label: name.to_string(),
+        .map(|m| CompletionItem {
+            label: m.name.to_string(),
             kind: Some(CompletionItemKind::FUNCTION),
-            detail: Some(detail.to_string()),
+            detail: Some(m.detail.to_string()),
             ..Default::default()
         })
         .collect()
 }
 
 fn module_completions() -> Vec<CompletionItem> {
-    let modules = [
-        ("json::", "JSON module"),
-        ("http::", "HTTP module"),
-        ("std::fs::", "Filesystem module"),
-        ("std::env::", "Environment module"),
-        ("std::process::", "Process module"),
-    ];
-    modules
+    oxy_core::symbols::ALL_MODULES
         .iter()
-        .map(|(name, detail)| CompletionItem {
-            label: name.to_string(),
+        .map(|m| CompletionItem {
+            label: m.path.to_string(),
             kind: Some(CompletionItemKind::MODULE),
-            detail: Some(detail.to_string()),
+            detail: Some(m.detail.to_string()),
             ..Default::default()
         })
         .collect()
@@ -263,62 +229,40 @@ fn snippet_completions() -> Vec<CompletionItem> {
 // ---------------------------------------------------------------------------
 
 fn keyword_hover(word: &str) -> Option<String> {
-    let desc = match word {
-        "let" => "Bind a value to a variable.\n\n```oxy\nlet x = 42;\nlet mut y = 0;\n```",
-        "mut" => "Mark a variable as mutable.",
-        "fn" => "Declare a function.\n\n```oxy\nfn add(a: i64, b: i64) -> i64 { a + b }\n```",
-        "struct" => "Define a struct type.\n\n```oxy\nstruct Point { x: f64, y: f64 }\n```",
-        "enum" => "Define an enum type.\n\n```oxy\nenum Color { Red, Green, Blue }\n```",
-        "impl" => "Implement methods on a type.",
-        "trait" => "Define a trait (interface).",
-        "if" => "Conditional branching.",
-        "else" => "Alternative branch of an `if` expression.",
-        "while" => "Loop while a condition is true.",
-        "loop" => "Loop forever (until `break`).",
-        "for" => "Iterate over a range or collection.\n\n```oxy\nfor i in 0..10 { println!(\"{}\", i); }\n```",
-        "in" => "Used in `for` loops to specify the iterator.",
-        "match" => "Pattern matching.\n\n```oxy\nmatch value { 1 => \"one\", _ => \"other\" }\n```",
-        "return" => "Return a value from a function.",
-        "break" => "Exit a loop.",
-        "continue" => "Skip to the next loop iteration.",
-        "pub" => "Mark an item as public.",
-        "mod" => "Define or reference a module.",
-        "use" => "Import items from a module.",
-        "const" => "Declare a compile-time constant.",
-        "static" => "Declare a static variable.",
-        "type" => "Create a type alias.",
-        "async" => "Mark a function as asynchronous.",
-        "await" => "Await an async expression.",
-        "move" => "Move captured variables into a closure.",
-        _ => return None,
-    };
-    Some(desc.to_string())
+    oxy_core::symbols::keyword_hover_text(word).map(|s| s.to_string())
 }
 
 fn builtin_hover(word: &str) -> Option<String> {
-    let desc = match word {
-        "i64" => "**i64** — 64-bit signed integer type",
-        "f64" => "**f64** — 64-bit floating-point type",
-        "bool" => "**bool** — Boolean type (`true` or `false`)",
-        "String" => "**String** — Owned, heap-allocated UTF-8 string",
-        "Vec" => "**Vec\\<T\\>** — Growable array\n\n```oxy\nlet v: Vec<i64> = vec![1, 2, 3];\n```",
-        "HashMap" => "**HashMap\\<K, V\\>** — Hash map collection",
-        "Option" => "**Option\\<T\\>** — `Some(value)` or `None`",
-        "Result" => "**Result\\<T, E\\>** — `Ok(value)` or `Err(error)`",
-        "println!" => "**println!(fmt, ...)** — Print to stdout with a newline",
-        "print!" => "**print!(fmt, ...)** — Print to stdout without a newline",
-        "format!" => "**format!(fmt, ...)** — Format into a String",
-        "eprintln!" => "**eprintln!(fmt, ...)** — Print to stderr with a newline",
-        "dbg!" => "**dbg!(expr)** — Debug-print an expression and return it",
-        "panic!" => "**panic!(msg)** — Abort with an error message",
-        "todo!" => "**todo!()** — Mark unfinished code (panics at runtime)",
-        "unimplemented!" => "**unimplemented!()** — Mark unimplemented code (panics at runtime)",
-        "vec!" => "**vec![items...]** — Create a Vec from elements",
-        "spawn" => "**spawn(async_fn)** — Spawn an async task",
-        "sleep" => "**sleep(ms)** — Sleep for the given milliseconds",
-        _ => return None,
-    };
-    Some(desc.to_string())
+    // Check primitive types
+    for &(name, _detail) in oxy_core::symbols::PRIMITIVE_TYPES {
+        if word == name {
+            for ty in oxy_core::symbols::ALL_TYPES {
+                if ty.name == name {
+                    return Some(ty.hover_text.to_string());
+                }
+            }
+            // For int/float types not in ALL_TYPES, provide a basic hover
+            return Some(format!("**{name}** — numeric type"));
+        }
+    }
+    // Check ALL_TYPES for richer hover
+    for ty in oxy_core::symbols::ALL_TYPES {
+        if word == ty.name {
+            return Some(ty.hover_text.to_string());
+        }
+    }
+    // Check macros
+    for m in oxy_core::symbols::ALL_MACROS {
+        if word == m.name {
+            return Some(m.hover_text.to_string());
+        }
+    }
+    // Built-in functions (not macros)
+    match word {
+        "spawn" => Some("**spawn(async_fn)** — Spawn an async task".to_string()),
+        "sleep" => Some("**sleep(ms)** — Sleep for the given milliseconds".to_string()),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -620,207 +564,32 @@ fn is_after_dot(source: &str, position: Position) -> bool {
 
 /// Completions for method calls after a dot.
 fn method_completions() -> Vec<CompletionItem> {
-    let methods: &[(&str, CompletionItemKind, &str)] = &[
-        // Vec methods
-        (
-            "push",
-            CompletionItemKind::METHOD,
-            "Add element to end of Vec",
-        ),
-        (
-            "pop",
-            CompletionItemKind::METHOD,
-            "Remove and return last element",
-        ),
-        (
-            "len",
-            CompletionItemKind::METHOD,
-            "Return number of elements",
-        ),
-        (
-            "first",
-            CompletionItemKind::METHOD,
-            "Return first element as Option",
-        ),
-        (
-            "last",
-            CompletionItemKind::METHOD,
-            "Return last element as Option",
-        ),
-        (
-            "is_empty",
-            CompletionItemKind::METHOD,
-            "Check if Vec is empty",
-        ),
-        (
-            "iter",
-            CompletionItemKind::METHOD,
-            "Return iterator over elements",
-        ),
-        ("map", CompletionItemKind::METHOD, "Transform each element"),
-        (
-            "filter",
-            CompletionItemKind::METHOD,
-            "Keep elements passing predicate",
-        ),
-        (
-            "fold",
-            CompletionItemKind::METHOD,
-            "Reduce elements to single value",
-        ),
-        (
-            "any",
-            CompletionItemKind::METHOD,
-            "Check if any element matches",
-        ),
-        (
-            "all",
-            CompletionItemKind::METHOD,
-            "Check if all elements match",
-        ),
-        (
-            "find",
-            CompletionItemKind::METHOD,
-            "Find first matching element",
-        ),
-        (
-            "enumerate",
-            CompletionItemKind::METHOD,
-            "Iterate with index",
-        ),
-        (
-            "for_each",
-            CompletionItemKind::METHOD,
-            "Execute closure on each element",
-        ),
-        ("flat_map", CompletionItemKind::METHOD, "Map and flatten"),
-        (
-            "position",
-            CompletionItemKind::METHOD,
-            "Find index of matching element",
-        ),
-        ("sort", CompletionItemKind::METHOD, "Sort elements"),
-        ("reverse", CompletionItemKind::METHOD, "Reverse order"),
-        ("join", CompletionItemKind::METHOD, "Join string elements"),
-        // String methods
-        (
-            "to_uppercase",
-            CompletionItemKind::METHOD,
-            "Convert to uppercase",
-        ),
-        (
-            "to_lowercase",
-            CompletionItemKind::METHOD,
-            "Convert to lowercase",
-        ),
-        (
-            "contains",
-            CompletionItemKind::METHOD,
-            "Check if contains substring",
-        ),
-        (
-            "starts_with",
-            CompletionItemKind::METHOD,
-            "Check if starts with prefix",
-        ),
-        (
-            "ends_with",
-            CompletionItemKind::METHOD,
-            "Check if ends with suffix",
-        ),
-        (
-            "trim",
-            CompletionItemKind::METHOD,
-            "Remove whitespace from ends",
-        ),
-        (
-            "split",
-            CompletionItemKind::METHOD,
-            "Split into Vec by delimiter",
-        ),
-        ("replace", CompletionItemKind::METHOD, "Replace occurrences"),
-        (
-            "repeat",
-            CompletionItemKind::METHOD,
-            "Repeat string n times",
-        ),
-        (
-            "chars",
-            CompletionItemKind::METHOD,
-            "Return iterator over chars",
-        ),
-        ("lines", CompletionItemKind::METHOD, "Split into lines"),
-        // HashMap methods
-        (
-            "insert",
-            CompletionItemKind::METHOD,
-            "Insert key-value pair",
-        ),
-        ("get", CompletionItemKind::METHOD, "Get value by key"),
-        (
-            "remove",
-            CompletionItemKind::METHOD,
-            "Remove key-value pair",
-        ),
-        (
-            "contains_key",
-            CompletionItemKind::METHOD,
-            "Check if key exists",
-        ),
-        (
-            "keys",
-            CompletionItemKind::METHOD,
-            "Return iterator over keys",
-        ),
-        (
-            "values",
-            CompletionItemKind::METHOD,
-            "Return iterator over values",
-        ),
-        // Option/Result methods
-        ("unwrap", CompletionItemKind::METHOD, "Get value or panic"),
-        (
-            "unwrap_or",
-            CompletionItemKind::METHOD,
-            "Get value or default",
-        ),
-        (
-            "is_some",
-            CompletionItemKind::METHOD,
-            "Check if Some variant",
-        ),
-        (
-            "is_none",
-            CompletionItemKind::METHOD,
-            "Check if None variant",
-        ),
-        ("is_ok", CompletionItemKind::METHOD, "Check if Ok variant"),
-        ("is_err", CompletionItemKind::METHOD, "Check if Err variant"),
-        ("ok", CompletionItemKind::METHOD, "Convert Result to Option"),
-        (
-            "err",
-            CompletionItemKind::METHOD,
-            "Convert Result to Option<Err>",
-        ),
-        // Generic methods
-        ("clone", CompletionItemKind::METHOD, "Create a shallow copy"),
-        ("to_string", CompletionItemKind::METHOD, "Convert to String"),
-        ("to_json", CompletionItemKind::METHOD, "Serialize to JSON"),
-        (
-            "to_json_pretty",
-            CompletionItemKind::METHOD,
-            "Serialize to pretty JSON",
-        ),
-    ];
-    methods
-        .iter()
-        .map(|(name, kind, detail)| CompletionItem {
-            label: name.to_string(),
-            kind: Some(*kind),
-            detail: Some(detail.to_string()),
-            ..Default::default()
-        })
-        .collect()
+    let mut seen = std::collections::HashSet::new();
+    let mut items = Vec::new();
+    for ty in oxy_core::symbols::ALL_TYPES {
+        for m in ty.methods {
+            if seen.insert(m.name) {
+                items.push(CompletionItem {
+                    label: m.name.to_string(),
+                    kind: Some(CompletionItemKind::METHOD),
+                    detail: Some(m.detail.to_string()),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+    // Generic methods (clone, to_string, to_json, to_json_pretty)
+    for m in oxy_core::symbols::GENERIC_TYPE_METHODS {
+        if seen.insert(m.name) {
+            items.push(CompletionItem {
+                label: m.name.to_string(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some(m.detail.to_string()),
+                ..Default::default()
+            });
+        }
+    }
+    items
 }
 
 fn item_name(item: &Item) -> Option<&str> {
@@ -1182,27 +951,23 @@ fn find_let_type_in_block(block: &oxy_core::ast::Block, var_name: &str) -> Optio
 fn infer_simple_expr_type(expr: &oxy_core::ast::Expr) -> Option<String> {
     match expr {
         oxy_core::ast::Expr::StructInit { name, .. } => Some(name.clone()),
-        oxy_core::ast::Expr::IntLiteral(..) => Some("i64".to_string()),
-        oxy_core::ast::Expr::FloatLiteral(..) => Some("f64".to_string()),
-        oxy_core::ast::Expr::StringLiteral(..) => Some("String".to_string()),
-        oxy_core::ast::Expr::BoolLiteral(..) => Some("bool".to_string()),
+        oxy_core::ast::Expr::IntLiteral(..) => Some(oxy_core::symbols::I64_TYPE.to_string()),
+        oxy_core::ast::Expr::FloatLiteral(..) => Some(oxy_core::symbols::F64_TYPE.to_string()),
+        oxy_core::ast::Expr::StringLiteral(..) => Some(oxy_core::symbols::STRING_TYPE.to_string()),
+        oxy_core::ast::Expr::BoolLiteral(..) => Some(oxy_core::symbols::BOOL_TYPE.to_string()),
         oxy_core::ast::Expr::Ident(name, _) => {
-            // Could be another variable — not traceable without full analysis
             if name.starts_with(|c: char| c.is_uppercase()) {
                 Some(name.clone())
             } else {
                 None
             }
         }
-        oxy_core::ast::Expr::PathCall { path, .. } => {
-            // e.g. Vec::new() -> Vec, HashMap::new() -> HashMap
-            path.first().cloned()
-        }
+        oxy_core::ast::Expr::PathCall { path, .. } => path.first().cloned(),
         oxy_core::ast::Expr::Call { callee, .. } => {
             if let oxy_core::ast::Expr::Ident(name, _) = callee.as_ref() {
                 match name.as_str() {
-                    "Some" => Some("Option".to_string()),
-                    "Ok" => Some("Result".to_string()),
+                    "Some" => Some(oxy_core::symbols::OPTION_TYPE.to_string()),
+                    "Ok" => Some(oxy_core::symbols::RESULT_TYPE.to_string()),
                     _ => None,
                 }
             } else {

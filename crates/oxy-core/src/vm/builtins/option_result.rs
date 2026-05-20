@@ -1,5 +1,6 @@
 //! Option and Result method implementations — shared by interpreter and VM.
 
+use crate::symbols;
 use crate::types::Value;
 
 pub fn dispatch<F>(
@@ -19,11 +20,11 @@ where
     let is_some = receiver.is_some_variant();
 
     match method {
-        "is_some" if is_option => Ok(Value::Bool(is_some)),
-        "is_none" if is_option => Ok(Value::Bool(!is_some)),
-        "is_ok" if is_result => Ok(Value::Bool(is_ok)),
-        "is_err" if is_result => Ok(Value::Bool(!is_ok)),
-        "unwrap" => match &receiver {
+        symbols::option_result_m::IS_SOME if is_option => Ok(Value::Bool(is_some)),
+        symbols::option_result_m::IS_NONE if is_option => Ok(Value::Bool(!is_some)),
+        symbols::option_result_m::IS_OK if is_result => Ok(Value::Bool(is_ok)),
+        symbols::option_result_m::IS_ERR if is_result => Ok(Value::Bool(!is_ok)),
+        symbols::option_result_m::UNWRAP => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Some" || variant == "Ok" => {
                 Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
@@ -35,7 +36,7 @@ where
             }
             _ => Err(format!("no method '{}' on this type", method)),
         },
-        "expect" => {
+        symbols::option_result_m::EXPECT => {
             let msg = args
                 .first()
                 .map(|v| v.to_string())
@@ -49,13 +50,13 @@ where
                 _ => Err(msg),
             }
         }
-        "unwrap_or" => match &receiver {
+        symbols::option_result_m::UNWRAP_OR => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Some" || variant == "Ok" => {
                 Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
             _ => Ok(args.first().cloned().unwrap_or(Value::Unit)),
         },
-        "unwrap_or_else" => {
+        symbols::option_result_m::UNWRAP_OR_ELSE => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
                 Value::EnumVariant { variant, data, .. }
@@ -71,11 +72,11 @@ where
                 _ => Err(format!("no method '{}' on this type", method)),
             }
         }
-        "or" if is_option => match &receiver {
+        symbols::option_result_m::OR if is_option => match &receiver {
             Value::EnumVariant { variant, .. } if variant == "Some" => Ok(receiver.clone()),
             _ => Ok(args.first().cloned().unwrap_or(Value::none())),
         },
-        "or_else" => {
+        symbols::option_result_m::OR_ELSE => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
                 Value::EnumVariant { variant, .. } if variant == "Some" || variant == "Ok" => {
@@ -88,7 +89,7 @@ where
                 _ => call_closure(closure, &[]),
             }
         }
-        "map" => {
+        symbols::option_result_m::MAP => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
                 Value::EnumVariant { variant, data, .. }
@@ -111,7 +112,7 @@ where
                 _ => Err(format!("no method '{}' on this type", method)),
             }
         }
-        "map_err" => {
+        symbols::option_result_m::MAP_ERR => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
                 Value::EnumVariant { variant, data, .. } if variant == "Ok" => Ok(receiver.clone()),
@@ -123,7 +124,7 @@ where
                 _ => Err(format!("no method '{}' on this type", method)),
             }
         }
-        "and_then" => {
+        symbols::option_result_m::AND_THEN => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
                 Value::EnumVariant { variant, data, .. }
@@ -135,30 +136,53 @@ where
                 _ => Ok(receiver.clone()),
             }
         }
-        "unwrap_err" if is_result => match &receiver {
+        symbols::option_result_m::UNWRAP_ERR if is_result => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Err" => {
                 Ok(data.first().cloned().unwrap_or(Value::Unit))
             }
             _ => Err("called `unwrap_err` on an `Ok` value".into()),
         },
-        "ok" if is_result => match &receiver {
+        symbols::option_result_m::OK if is_result => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Ok" => {
                 Ok(Value::some(data.first().cloned().unwrap_or(Value::Unit)))
             }
             _ => Ok(Value::none()),
         },
-        "err" if is_result => match &receiver {
+        symbols::option_result_m::ERR if is_result => match &receiver {
             Value::EnumVariant { variant, data, .. } if variant == "Err" => {
                 Ok(Value::some(data.first().cloned().unwrap_or(Value::Unit)))
             }
             _ => Ok(Value::none()),
         },
-        "clone" => Ok(receiver.clone()),
-        "to_string" => Ok(Value::String(receiver.to_string())),
+        symbols::option_result_m::CLONE => Ok(receiver.clone()),
+        symbols::option_result_m::TO_STRING => Ok(Value::String(receiver.to_string())),
         _ => Err(format!(
             "no method '{}' on type {}",
             method,
             receiver.type_name()
         )),
     }
+}
+
+pub fn method_names() -> &'static [&'static str] {
+    &[
+        symbols::option_result_m::IS_SOME,
+        symbols::option_result_m::IS_NONE,
+        symbols::option_result_m::IS_OK,
+        symbols::option_result_m::IS_ERR,
+        symbols::option_result_m::UNWRAP,
+        symbols::option_result_m::EXPECT,
+        symbols::option_result_m::UNWRAP_OR,
+        symbols::option_result_m::UNWRAP_OR_ELSE,
+        symbols::option_result_m::OR,
+        symbols::option_result_m::OR_ELSE,
+        symbols::option_result_m::MAP,
+        symbols::option_result_m::MAP_ERR,
+        symbols::option_result_m::AND_THEN,
+        symbols::option_result_m::UNWRAP_ERR,
+        symbols::option_result_m::OK,
+        symbols::option_result_m::ERR,
+        symbols::option_result_m::CLONE,
+        symbols::option_result_m::TO_STRING,
+    ]
 }

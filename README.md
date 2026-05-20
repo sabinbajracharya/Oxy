@@ -260,6 +260,8 @@ playground/wasm/         # WebAssembly playground
 
 ## Development
 
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide on adding features, built-in methods, tests, and more.
+
 ```bash
 # Full check (fmt + clippy + tests)
 docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test -p oxy-core"

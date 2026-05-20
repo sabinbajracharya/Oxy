@@ -1,190 +1,275 @@
 # Contributing to Oxy
 
-Thank you for your interest in contributing to Oxy! 🧲
+A guide for adding features, fixing bugs, and improving the Oxy programming language — written for human contributors.
 
-## Getting Started
+## Setup
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/project-ferrite.git`
-3. Create a feature branch: `git checkout -b feat/my-feature`
-4. Make your changes
-5. Run checks: `docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy -- -D warnings && cargo test --workspace"`
-6. Commit with conventional commit messages
-7. Push and open a Pull Request
-
-## Development Setup (Docker — recommended)
-
-No local Rust install needed. Everything runs inside Docker:
+You only need Docker.
 
 ```bash
-docker compose run --rm dev bash          # Drop into a dev shell
-docker compose run --rm dev bash -c "cargo test --workspace"   # Run all tests
-docker compose run --rm dev bash -c "cargo build --release"    # Release build
+git clone https://github.com/sabinbajracharya/Oxy.git
+cd Oxy
+docker compose run --rm setup
+docker compose run --rm dev bash
+
+# Inside the container
+cargo build
+cargo test -p oxy-core
+cargo run -- run examples/hello.ox
 ```
 
-## Architecture Overview
-
-Oxy is a Cargo workspace with three crates:
-
-```
-project-ferrite/
-├── crates/
-│   ├── oxy-core/    # Language engine (library crate)
-│   │   └── src/
-│   │       ├── lib.rs          # Crate root — re-exports all modules
-│   │       ├── lexer/          # Tokenizer: source text → Token stream
-│   │       │   ├── mod.rs      # Lexer implementation
-│   │       │   └── token.rs    # Token, TokenKind, Span definitions
-│   │       ├── ast/            # AST node definitions (Expr, Stmt, Item, etc.)
-│   │       ├── parser/         # Recursive descent parser (Pratt parsing for expressions)
-│   │       ├── interpreter/    # Tree-walking interpreter ← the big one
-│   │       │   ├── mod.rs      # Core: eval_expr, eval_stmt, call_function, REPL tests
-│   │       │   ├── operations.rs   # Binary/unary operator evaluation
-│   │       │   ├── pattern.rs      # Pattern matching & variable binding
-│   │       │   ├── macros.rs       # println!, print!, vec!, format! macros
-│   │       │   ├── format.rs       # Debug formatting ({:?})
-│   │       │   ├── path.rs         # Path resolution (Type::method), associated fns, trait dispatch
-│   │       │   ├── json.rs         # json:: module (serialize/deserialize)
-│   │       │   ├── http.rs         # http:: module (GET/POST/PUT/DELETE)
-│   │       │   └── methods/        # Type-specific method dispatch
-│   │       │       ├── mod.rs      # call_method() dispatcher
-│   │       │       ├── vec.rs      # Vec methods (push, pop, iter, map, filter, etc.)
-│   │       │       ├── string.rs   # String methods (contains, replace, split, etc.)
-│   │       │       ├── hashmap.rs  # HashMap methods (insert, get, keys, etc.)
-│   │       │       ├── option_result.rs  # Option/Result methods (unwrap, map, etc.)
-│   │       │       └── numeric.rs  # Numeric methods (abs, pow, clamp, etc.)
-│   │       ├── types/          # Value enum, FunctionData, type constants
-│   │       ├── env/            # Lexical scoping (Environment with parent chain)
-│   │       ├── stdlib/         # Built-in standard library modules
-│   │       │   ├── mod.rs      # Module declarations
-│   │       │   ├── math.rs     # Math functions and constants (sqrt, sin, PI, etc.)
-│   │       │   ├── rand.rs     # Pseudo-random number generation
-│   │       │   ├── time.rs     # Time and duration utilities
-│   │       │   ├── fs.rs       # File system operations (read, write, dirs, metadata)
-│   │       │   ├── env.rs      # Environment variables and working directory
-│   │       │   ├── process.rs  # Process control and command execution
-│   │       │   ├── regex.rs    # Regular expression matching and replacement
-│   │       │   └── net.rs      # TCP/UDP networking and DNS lookup
-│   │       └── errors/         # FerriError enum, check_arg_count, expect_type helpers
-│   ├── oxy-cli/     # CLI binary (REPL + file execution)
-│   └── oxy-lsp/     # Language Server Protocol implementation
-├── editors/
-│   └── vscode/          # VS Code extension (syntax highlighting + LSP client)
-├── tests/e2e/           # End-to-end test harness
-└── examples/            # Example .ox programs
+Enable the pre-commit hook:
+```bash
+git config core.hooksPath .githooks
 ```
 
-### How a Oxy program executes
+## How Oxy Works
 
 ```
-Source text (.ox file)
-    → Lexer (token.rs, mod.rs)     → Vec<Token>
-    → Parser (parser/mod.rs)       → Program (AST)
-    → Interpreter (interpreter/)   → Result<Value, FerriError>
+Source (.ox) → Lexer → Parser → Type Checker → Compiler → VM (bytecode)
 ```
 
-1. **Lexer** scans characters into tokens with span info (line, column)
-2. **Parser** builds an AST using recursive descent with Pratt parsing for expressions
-3. **Interpreter** walks the AST tree, evaluating expressions and executing statements
-4. Values are reference-counted (`Clone`-based) — no borrow checker or ownership
+There is no interpreter. One path: compile to bytecode, execute on the stack-based VM. Values use `Rc<RefCell<>>` under the hood — no borrow checker.
 
-## How To: Add a Standard Library Function
+## Project Map
 
-Example: adding `math::floor(x)`.
+```
+crates/oxy-core/src/
+├── lexer/            token.rs (Token, TokenKind, Span), mod.rs (tokenizer)
+├── parser/           mod.rs — Pratt parser, ~3200 lines, 15 precedence levels
+├── ast/              mod.rs — Program, Item, Expr, Stmt, FnDef, StructDef, etc.
+├── type_checker/     mod.rs — semantic type checking, field visibility enforcement
+├── compiler/         mod.rs — AST → bytecode Chunk (prescan → compile → post-pass)
+├── vm/
+│   ├── mod.rs        Stack-based VM, builtin_method, dispatch_pathcall, run_tests
+│   └── builtins/     Per-type method dispatches (string, vec, hashmap, etc.)
+├── types/            mod.rs — Value enum (25 variants), type_name, ordering
+├── stdlib/           fs, env, process, regex, net, time, rand, math, db, server
+├── symbols.rs        ★ Canonical symbol definitions — single source of truth
+├── errors.rs         FerriError (Lexer, Parser, TypeError, Runtime)
+└── lib.rs            Public API, re-exports
+crates/oxy-cli/       CLI binary (run, repl, --dump-tokens, --dump-ast, --dump-bytecode)
+crates/oxy-lsp/       LSP server (tower-lsp)
+editors/vscode/       VS Code extension (syntax highlighting + LSP client)
+examples/features/    Feature tests (.ox files with #[test] / #[compile_error])
+tests/                Rust-side tests (vm_tests, feature_examples, symbol_consistency)
+```
 
-1. **Register the function** in `stdlib/math.rs` — add a match arm in `call_math_function()`:
-   ```rust
-   "floor" => {
-       check_arg_count("math::floor", 1, args, &span)?;
-       match &args[0] {
-           Value::Float(f) => Ok(float_to_value(f.floor())),
-           Value::Integer(n) => Ok(Value::Integer(*n)),
-           _ => Err(FerriError::Runtime { message: "floor() requires a number".into(), line: span.line, column: span.column }),
-       }
-   }
-   ```
+## Feature Development (TDD)
 
-2. **Add a test** at the bottom of `stdlib/math.rs` or in `interpreter/mod.rs`:
-   ```rust
-   #[test]
-   fn test_math_floor() {
-       let result = run("fn main() { println!(\"{}\", math::floor(3.7)); }");
-       assert_eq!(result, "3\n");
-   }
-   ```
+Every feature follows this process. No exceptions.
 
-3. **Run tests**: `docker compose run --rm dev bash -c "cargo test --workspace"`
+### 1. Write the test file
 
-## How To: Add a Method to a Built-in Type
+Create `examples/features/<category>/<name>.ox`. Cover every case:
 
-Example: adding `String::repeat(n)`.
+```rust
+fn add(a: i64, b: i64) -> i64 { a + b }
 
-1. **Add a match arm** in `interpreter/methods/string.rs` → `call_string_method()`:
-   ```rust
-   "repeat" => {
-       check_arg_count("repeat", 1, args, span)?;
-       if let Value::Integer(n) = &args[0] {
-           Ok(Value::String(s.repeat(*n as usize)))
-       } else {
-           Err(FerriError::Runtime { message: "repeat() requires an integer".into(), line: span.line, column: span.column })
-       }
-   }
-   ```
+#[test]
+fn test_add_positive() { assert_eq!(add(2, 3), 5); }
 
-2. **Add a test** and run: `cargo test`
+#[test]
+fn test_add_negative() { assert_eq!(add(-1, -2), -3); }
 
-## How To: Add a New AST Node
+#[test]
+fn test_add_edge_cases() {
+    assert_eq!(add(0, 0), 0);
+    assert_eq!(add(i64::MAX, i64::MIN), -1);
+}
 
-1. Add the variant to the relevant enum in `ast/mod.rs` (e.g., `Expr::MyNewExpr { ... }`)
-2. Add parsing logic in `parser/mod.rs`
-3. Add evaluation logic in `interpreter/mod.rs` → `eval_expr()` or `eval_stmt()`
-4. Add tests for both parsing and evaluation
+#[compile_error]
+fn test_type_mismatch_rejected() {
+    let x: i64 = "not a number";
+}
+```
 
-## Commit Messages
+A `#[compile_error]` test passes only if compilation fails.
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+### 2. Run the test
 
-- `feat:` — new feature
-- `fix:` — bug fix
-- `refactor:` — code restructuring (no behavior change)
-- `test:` — adding or updating tests
-- `docs:` — documentation changes
-- `chore:` — maintenance tasks
+```bash
+cargo test -p oxy-core -- feature_examples
+```
 
-## Code Standards
+### 3. Implement
 
-- Run `cargo fmt --all` before committing
-- All code must pass `cargo clippy -- -D warnings`
-- All tests must pass: `cargo test --workspace`
-- Public items must have doc comments (`///`)
-- New features must include tests
-- Use `check_arg_count()` from `errors` module for argument validation
-- Look for `// WHY:` comments for explanations of non-obvious design decisions
+Fix the compiler/type checker/VM. Never change the test to pass when the compiler should reject it.
+
+### 4. Update downstream systems
+
+| Change | Also update |
+|--------|-------------|
+| New keyword | `symbols.rs` KEYWORDS, `editors/vscode/syntaxes/oxy.tmLanguage.json`, LSP keyword_hover_text |
+| New built-in method | `symbols.rs` (constant + MethodInfo), dispatch in `vm/builtins/`, `method_names()` |
+| New built-in type | `types/mod.rs` Value variant, `vm/builtins/<type>.rs`, `vm/mod.rs` dispatch + `dispatched_type_names()`, `symbols.rs` (constants + TypeInfo) |
+| New syntax (expr/stmt) | Lexer, AST, parser, type checker, compiler, VM, LSP |
+| New operator | Lexer, parser (precedence), compiler, VM, `oxy.tmLanguage.json` |
+
+### 5. Validate
+
+```bash
+cargo fmt --all
+cargo clippy -- -D warnings
+cargo clippy -p oxy-lsp -- -D warnings
+cargo test -p oxy-core
+cargo test -p oxy-lsp
+```
+
+All six must pass. The pre-commit hook enforces this.
+
+## Adding a Built-in Method
+
+This is the most common contribution. The constraint system requires all four steps.
+
+### Step 1: Add the constant in symbols.rs
+
+```rust
+// symbols.rs
+pub mod string_m {
+    // ...
+    pub const REVERSE: &str = "reverse";
+}
+```
+
+### Step 2: Add the MethodInfo in symbols.rs
+
+```rust
+pub const STRING_METHODS: &[MethodInfo] = methods![
+    // ...
+    "reverse": "() -> String" => "Return the reversed string.",
+];
+```
+
+### Step 3: Add the dispatch arm in vm/builtins/
+
+```rust
+// vm/builtins/string.rs
+match method {
+    // ...
+    symbols::string_m::REVERSE => Ok(Value::String(s.chars().rev().collect())),
+    _ => Err(format!("no method '{}' on type String", method)),
+}
+```
+
+### Step 4: Add to method_names()
+
+```rust
+pub fn method_names() -> &'static [&'static str] {
+    &[
+        // ...
+        symbols::string_m::REVERSE,
+    ]
+}
+```
+
+### Why this order
+
+- Using a raw string instead of a constant → consistency tests fail
+- Using the constant before adding it to symbols → **compile error**
+- Adding to symbols but skipping the dispatch → reverse consistency test fails
+
+The `tests/symbol_consistency.rs` file has 26 tests that enforce this bi-directionally.
+
+## Adding a New Built-in Type
+
+1. Add `Value::MyType` variant in `types/mod.rs`
+2. Create `vm/builtins/my_type.rs` with `dispatch()` and `method_names()`
+3. Add dispatch arm in `vm/mod.rs` `builtin_method()`
+4. Add to `dispatched_type_names()` in `vm/mod.rs`
+5. In `symbols.rs`: add name constants, method name constants, `*_METHODS` list, `TypeInfo` entry in `ALL_TYPES`
+6. Add consistency tests covering the new type
+7. Add `.ox` feature tests in `examples/features/`
+8. LSP picks it up automatically from `symbols`
+
+## The Symbols Module
+
+`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both the compiler/VM and the LSP read from it. Never hardcode a keyword, type name, or method name in the LSP.
+
+What it defines:
+- `KEYWORDS` — all 36 keywords
+- `PRIMITIVE_TYPES` — 19 types with descriptions
+- `ALL_MACROS` — 9 built-in macros with hover text
+- `ALL_MODULES` — 10 stdlib module paths
+- `ALL_TYPES` — 11 built-in types, each with its full method list
+- Per-type method name constants (`string_m::*`, `vec_m::*`, etc.)
+- Type name constants (`I64_TYPE`, `STRING_TYPE`, etc.)
+
+## Adding a Syntax Feature
+
+For new expressions, statements, or patterns:
+
+1. **Lexer** — add tokens in `lexer/token.rs`, tokenize in `lexer/mod.rs`
+2. **AST** — add variants in `ast/mod.rs`
+3. **Parser** — add parsing in `parser/mod.rs` (Pratt precedence if it's an expression)
+4. **Type checker** — add type inference/checking in `type_checker/mod.rs`
+5. **Compiler** — add bytecode emission in `compiler/mod.rs`
+6. **VM** — add opcode execution in `vm/mod.rs`
+7. **Tests** — `.ox` feature tests covering happy path, edge cases, `#[compile_error]`
+8. **LSP** — update completions/hover if user-facing
+9. **TextMate grammar** — update `editors/vscode/syntaxes/oxy.tmLanguage.json` if keywords, types, or operators changed
 
 ## Testing
 
-- **Unit tests:** In `#[cfg(test)]` modules alongside source code (417+ tests in oxy-core)
-- **Integration tests:** CLI tests in oxy-cli (8 tests)
-- **LSP tests:** In oxy-lsp (9 tests)
-- **E2E tests:** `.ox` files with `.expected` output in `tests/e2e/programs/`
+### Test types
 
-### Running specific tests
+| Type | Location | Run with |
+|------|----------|----------|
+| Rust unit tests | `#[cfg(test)]` in source files | `cargo test -p oxy-core` |
+| VM tests | `tests/vm_tests.rs` | `cargo test -p oxy-core --test vm_tests` |
+| Feature tests | `examples/features/**/*.ox` | `cargo test -p oxy-core -- feature_examples` |
+| Symbol consistency | `tests/symbol_consistency.rs` | `cargo test -p oxy-core --test symbol_consistency` |
+| LSP tests | `oxy-lsp/src/main.rs` | `cargo test -p oxy-lsp` |
+
+### Running subsets
 
 ```bash
-docker compose run --rm dev bash -c "cargo test -p oxy-core"       # Core only
-docker compose run --rm dev bash -c "cargo test -p oxy-cli"        # CLI only
-docker compose run --rm dev bash -c "cargo test -p oxy-lsp"        # LSP only
-docker compose run --rm dev bash -c "cargo test test_closures"         # By name
+cargo test -p oxy-core                         # all core tests (~1350)
+cargo test -p oxy-core -- feature_examples     # .ox feature tests only
+cargo test -p oxy-core --test vm_tests         # VM tests only
+cargo test -p oxy-core --test symbol_consistency  # consistency tests only
+cargo test -p oxy-core -- test_my_test         # by name
+```
+
+## Commit Messages
+
+[Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add String::reverse method
+fix: wire all integer widths to numeric dispatch
+refactor: extract method name constants to symbols
+test: add consistency tests for new LinkedList type
+docs: update CLAUDE.md with symbols workflow
+style: fix rustfmt
+```
+
+No co-author trailers. One logical change per commit.
+
+## Debugging
+
+```bash
+# Dump bytecode
+cargo run -- --dump-bytecode examples/hello.ox
+
+# Dump tokens
+cargo run -- --dump-tokens examples/hello.ox
+
+# Dump AST
+cargo run -- --dump-ast examples/hello.ox
+
+# Per-opcode VM execution trace
+OXY_VM_TRACE=1 cargo test -p oxy-core --test vm_tests -- test_string_len
 ```
 
 ## Common Pitfalls
 
-- **Value is Clone, not Copy** — use `.clone()` when needed, but be aware it's cheap (Rc-based internally)
-- **Span propagation** — always pass spans through to error constructors for good error messages
-- **Method vs associated function** — methods receive `self` as the object; associated functions (like `Vec::new()`) are dispatched through `eval_path_call` in `path.rs`
-- **Trait dispatch** — after built-in operators fail, the interpreter falls back to trait dispatch (e.g., `Add::add`). See `operations.rs`.
-- **Docker volumes** — the `target/` directory is a Docker volume, not mounted to host. Build artifacts stay inside Docker.
+- **Visibility check with `contains("::")`** — use `module_names.contains(parent)` instead. `::` appears in struct-qualified names too.
+- **Forgetting `pub_vis` in prescan** — forward references to pub items break visibility checks.
+- **Skipping `#[compile_error]` tests** — every feature needs negative tests for what the compiler must reject.
+- **Adding a method to dispatch without updating symbols** — use the constant from `symbols.rs`, never a raw string literal.
+- **`name` moved before later use** — clone before inserting into the first HashMap.
 
-## Questions?
+## Getting Help
 
-Open an issue or start a discussion — we're happy to help!
+Open an issue or start a discussion. We're happy to help.

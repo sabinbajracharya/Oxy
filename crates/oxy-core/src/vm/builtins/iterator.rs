@@ -4,6 +4,7 @@
 //! sum, count, nth) are native. Closure consumers (any, all, find, fold, for_each,
 //! position) use the interpreter's call_function in a Rust loop.
 
+use crate::symbols;
 use crate::types::{IteratorState, Value};
 
 /// Dispatch a method call on an Iterator value.
@@ -21,7 +22,7 @@ pub fn dispatch(
     match method {
         // --- Adapters ---
         // Map and Filter are eager (not lazy) to avoid closure-in-drive_next issue
-        "map" => {
+        symbols::iterator_m::MAP => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut result = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
@@ -31,7 +32,7 @@ pub fn dispatch(
                 result,
             ))))
         }
-        "filter" => {
+        symbols::iterator_m::FILTER => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut result = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
@@ -43,7 +44,7 @@ pub fn dispatch(
                 result,
             ))))
         }
-        "take" => {
+        symbols::iterator_m::TAKE => {
             let n = args
                 .first()
                 .and_then(|v| match v {
@@ -56,7 +57,7 @@ pub fn dispatch(
                 remaining: n,
             })))
         }
-        "skip" => {
+        symbols::iterator_m::SKIP => {
             let n = args
                 .first()
                 .and_then(|v| match v {
@@ -69,7 +70,7 @@ pub fn dispatch(
                 remaining: n,
             })))
         }
-        "chain" => {
+        symbols::iterator_m::CHAIN => {
             let other = args.first().cloned().unwrap_or(Value::Unit);
             let right = match other {
                 Value::Iterator(other_iter) => other_iter,
@@ -87,7 +88,7 @@ pub fn dispatch(
                 second: right,
             })))
         }
-        "zip" => {
+        symbols::iterator_m::ZIP => {
             let other = args.first().cloned().unwrap_or(Value::Unit);
             let right = match other {
                 Value::Iterator(other_iter) => other_iter,
@@ -105,11 +106,11 @@ pub fn dispatch(
                 right,
             })))
         }
-        "enumerate" => Ok(Value::Iterator(Box::new(IteratorState::Enumerate {
+        symbols::iterator_m::ENUMERATE => Ok(Value::Iterator(Box::new(IteratorState::Enumerate {
             source: iter,
             index: 0,
         }))),
-        "rev" => {
+        symbols::iterator_m::REV => {
             // Eager: collect all elements, reverse, return VecSource
             let mut v = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
@@ -118,7 +119,7 @@ pub fn dispatch(
             v.reverse();
             Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(v))))
         }
-        "flat_map" => {
+        symbols::iterator_m::FLAT_MAP => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut result = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
@@ -137,7 +138,7 @@ pub fn dispatch(
                 result,
             ))))
         }
-        "flatten" => {
+        symbols::iterator_m::FLATTEN => {
             let mut result = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
                 match val {
@@ -156,10 +157,10 @@ pub fn dispatch(
         }
 
         // --- Simple consumers (drain iterator — no closures) ---
-        "next" => Ok(drive_next(&mut iter)
+        symbols::iterator_m::NEXT => Ok(drive_next(&mut iter)
             .map(Value::some)
             .unwrap_or_else(Value::none)),
-        "collect" => {
+        symbols::iterator_m::COLLECT => {
             let mut result = Vec::new();
             while let Some(val) = drive_next(&mut iter) {
                 result.push(val);
@@ -168,21 +169,21 @@ pub fn dispatch(
                 result,
             ))))
         }
-        "sum" => {
+        symbols::iterator_m::SUM => {
             let mut total: Value = Value::I64(0);
             while let Some(val) = drive_next(&mut iter) {
                 total = add_values(total, val);
             }
             Ok(total)
         }
-        "count" => {
+        symbols::iterator_m::COUNT => {
             let mut n = 0i64;
             while drive_next(&mut iter).is_some() {
                 n += 1;
             }
             Ok(Value::I64(n))
         }
-        "nth" => {
+        symbols::iterator_m::NTH => {
             let n = args
                 .first()
                 .and_then(|v| match v {
@@ -201,10 +202,15 @@ pub fn dispatch(
         }
 
         // --- Closure consumers ---
-        "any" | "all" | "find" | "position" | "fold" | "for_each" => {
+        symbols::iterator_m::ANY
+        | symbols::iterator_m::ALL
+        | symbols::iterator_m::FIND
+        | symbols::iterator_m::POSITION
+        | symbols::iterator_m::FOLD
+        | symbols::iterator_m::FOR_EACH => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match method {
-                "any" => {
+                symbols::iterator_m::ANY => {
                     while let Some(val) = drive_next(&mut iter) {
                         if call_fn(&closure, &[val])?.is_truthy() {
                             return Ok(Value::Bool(true));
@@ -212,7 +218,7 @@ pub fn dispatch(
                     }
                     Ok(Value::Bool(false))
                 }
-                "all" => {
+                symbols::iterator_m::ALL => {
                     while let Some(val) = drive_next(&mut iter) {
                         if !call_fn(&closure, &[val])?.is_truthy() {
                             return Ok(Value::Bool(false));
@@ -220,7 +226,7 @@ pub fn dispatch(
                     }
                     Ok(Value::Bool(true))
                 }
-                "find" => {
+                symbols::iterator_m::FIND => {
                     while let Some(val) = drive_next(&mut iter) {
                         if call_fn(&closure, &[val.clone()])?.is_truthy() {
                             return Ok(Value::some(val));
@@ -228,7 +234,7 @@ pub fn dispatch(
                     }
                     Ok(Value::none())
                 }
-                "position" => {
+                symbols::iterator_m::POSITION => {
                     let mut idx = 0i64;
                     while let Some(val) = drive_next(&mut iter) {
                         if call_fn(&closure, &[val])?.is_truthy() {
@@ -238,7 +244,7 @@ pub fn dispatch(
                     }
                     Ok(Value::none())
                 }
-                "fold" => {
+                symbols::iterator_m::FOLD => {
                     let mut acc = args.first().cloned().unwrap_or(Value::Unit);
                     let f = args.get(1).cloned().unwrap_or(Value::Unit);
                     while let Some(val) = drive_next(&mut iter) {
@@ -246,7 +252,7 @@ pub fn dispatch(
                     }
                     Ok(acc)
                 }
-                "for_each" => {
+                symbols::iterator_m::FOR_EACH => {
                     while let Some(val) = drive_next(&mut iter) {
                         call_fn(&closure, &[val])?;
                     }
@@ -258,6 +264,32 @@ pub fn dispatch(
 
         _ => Err(format!("no method '{}' on type Iterator", method)),
     }
+}
+
+pub fn method_names() -> &'static [&'static str] {
+    &[
+        symbols::iterator_m::MAP,
+        symbols::iterator_m::FILTER,
+        symbols::iterator_m::TAKE,
+        symbols::iterator_m::SKIP,
+        symbols::iterator_m::CHAIN,
+        symbols::iterator_m::ZIP,
+        symbols::iterator_m::ENUMERATE,
+        symbols::iterator_m::REV,
+        symbols::iterator_m::FLAT_MAP,
+        symbols::iterator_m::FLATTEN,
+        symbols::iterator_m::NEXT,
+        symbols::iterator_m::COLLECT,
+        symbols::iterator_m::SUM,
+        symbols::iterator_m::COUNT,
+        symbols::iterator_m::NTH,
+        symbols::iterator_m::ANY,
+        symbols::iterator_m::ALL,
+        symbols::iterator_m::FIND,
+        symbols::iterator_m::POSITION,
+        symbols::iterator_m::FOLD,
+        symbols::iterator_m::FOR_EACH,
+    ]
 }
 
 /// Drive an iterator forward one step. Returns Some(value) or None if exhausted.

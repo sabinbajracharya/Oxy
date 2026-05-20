@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::symbols;
 use crate::types::Value;
 
 /// Dispatch a method call on a Vec value.
@@ -21,30 +22,30 @@ where
     };
     let rc = rc.clone();
     match method {
-        "len" => Ok(Value::I64(rc.borrow().len() as i64)),
-        "is_empty" => Ok(Value::Bool(rc.borrow().is_empty())),
-        "contains" => {
+        symbols::vec_m::LEN => Ok(Value::I64(rc.borrow().len() as i64)),
+        symbols::vec_m::IS_EMPTY => Ok(Value::Bool(rc.borrow().is_empty())),
+        symbols::vec_m::CONTAINS => {
             let val = args.first().ok_or("Vec::contains takes 1 argument")?;
             Ok(Value::Bool(rc.borrow().contains(val)))
         }
-        "push" => {
+        symbols::vec_m::PUSH => {
             let val = args.first().cloned().unwrap_or(Value::Unit);
             rc.borrow_mut().push(val);
             Ok(Value::Unit)
         }
-        "pop" => match rc.borrow_mut().pop() {
+        symbols::vec_m::POP => match rc.borrow_mut().pop() {
             Some(val) => Ok(Value::some(val)),
             None => Ok(Value::none()),
         },
-        "first" => match rc.borrow().first() {
+        symbols::vec_m::FIRST => match rc.borrow().first() {
             Some(val) => Ok(Value::some(val.clone())),
             None => Ok(Value::none()),
         },
-        "last" => match rc.borrow().last() {
+        symbols::vec_m::LAST => match rc.borrow().last() {
             Some(val) => Ok(Value::some(val.clone())),
             None => Ok(Value::none()),
         },
-        "get" => {
+        symbols::vec_m::GET => {
             let idx = args
                 .first()
                 .and_then(|v| match v {
@@ -57,7 +58,7 @@ where
                 None => Ok(Value::none()),
             }
         }
-        "insert" => {
+        symbols::vec_m::INSERT => {
             let idx = args
                 .first()
                 .and_then(|v| match v {
@@ -70,7 +71,7 @@ where
             rc.borrow_mut().insert(idx.min(len), val);
             Ok(Value::Unit)
         }
-        "remove" => {
+        symbols::vec_m::REMOVE => {
             let idx = args
                 .first()
                 .and_then(|v| match v {
@@ -84,15 +85,15 @@ where
                 Ok(Value::none())
             }
         }
-        "clear" => {
+        symbols::vec_m::CLEAR => {
             rc.borrow_mut().clear();
             Ok(Value::Unit)
         }
-        "reverse" => {
+        symbols::vec_m::REVERSE => {
             rc.borrow_mut().reverse();
             Ok(Value::Unit)
         }
-        "join" => {
+        symbols::vec_m::JOIN => {
             let sep = args.first().map(|v| v.to_string()).unwrap_or_default();
             let s: String = rc
                 .borrow()
@@ -102,25 +103,25 @@ where
                 .join(&sep);
             Ok(Value::String(s))
         }
-        "iter" => {
+        symbols::vec_m::ITER => {
             let data = rc.borrow().clone();
             Ok(Value::Iterator(Box::new(
                 crate::types::IteratorState::VecSource { data, index: 0 },
             )))
         }
-        "clone" => {
+        symbols::vec_m::CLONE => {
             let cloned = rc.borrow().clone();
             Ok(Value::Vec(Rc::new(RefCell::new(cloned))))
         }
-        "sort" => {
+        symbols::vec_m::SORT => {
             rc.borrow_mut().sort();
             Ok(Value::Unit)
         }
-        "dedup" => {
+        symbols::vec_m::DEDUP => {
             rc.borrow_mut().dedup();
             Ok(Value::Unit)
         }
-        "extend" => {
+        symbols::vec_m::EXTEND => {
             let other = args.first().ok_or("Vec::extend takes 1 argument")?;
             match other {
                 Value::Vec(other_rc) => {
@@ -132,11 +133,11 @@ where
             }
             Ok(Value::Unit)
         }
-        "rev" => {
+        symbols::vec_m::REV => {
             rc.borrow_mut().reverse();
             Ok(Value::Unit)
         }
-        "chunks" => {
+        symbols::vec_m::CHUNKS => {
             let n = args
                 .first()
                 .and_then(|v| match v {
@@ -151,7 +152,7 @@ where
                 .collect();
             Ok(Value::Vec(Rc::new(RefCell::new(chunks))))
         }
-        "windows" => {
+        symbols::vec_m::WINDOWS => {
             let n = args
                 .first()
                 .and_then(|v| match v {
@@ -166,7 +167,7 @@ where
                 .collect();
             Ok(Value::Vec(Rc::new(RefCell::new(windows))))
         }
-        "min" => {
+        symbols::vec_m::MIN => {
             let v = rc.borrow();
             if v.is_empty() {
                 Ok(Value::none())
@@ -177,7 +178,7 @@ where
                 Ok(Value::some(min.cloned().unwrap_or(Value::Unit)))
             }
         }
-        "max" => {
+        symbols::vec_m::MAX => {
             let v = rc.borrow();
             if v.is_empty() {
                 Ok(Value::none())
@@ -188,7 +189,7 @@ where
                 Ok(Value::some(max.cloned().unwrap_or(Value::Unit)))
             }
         }
-        "sort_by" => {
+        symbols::vec_m::SORT_BY => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut v = rc.borrow_mut();
             let len = v.len();
@@ -207,7 +208,7 @@ where
             }
             Ok(Value::Unit)
         }
-        "sort_by_key" => {
+        symbols::vec_m::SORT_BY_KEY => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             let mut v = rc.borrow_mut();
             let len = v.len();
@@ -233,4 +234,34 @@ where
         }
         _ => Err(format!("no method '{}' on type Vec", method)),
     }
+}
+
+pub fn method_names() -> &'static [&'static str] {
+    &[
+        symbols::vec_m::LEN,
+        symbols::vec_m::IS_EMPTY,
+        symbols::vec_m::CONTAINS,
+        symbols::vec_m::PUSH,
+        symbols::vec_m::POP,
+        symbols::vec_m::FIRST,
+        symbols::vec_m::LAST,
+        symbols::vec_m::GET,
+        symbols::vec_m::INSERT,
+        symbols::vec_m::REMOVE,
+        symbols::vec_m::CLEAR,
+        symbols::vec_m::REVERSE,
+        symbols::vec_m::JOIN,
+        symbols::vec_m::ITER,
+        symbols::vec_m::CLONE,
+        symbols::vec_m::SORT,
+        symbols::vec_m::DEDUP,
+        symbols::vec_m::EXTEND,
+        symbols::vec_m::REV,
+        symbols::vec_m::CHUNKS,
+        symbols::vec_m::WINDOWS,
+        symbols::vec_m::MIN,
+        symbols::vec_m::MAX,
+        symbols::vec_m::SORT_BY,
+        symbols::vec_m::SORT_BY_KEY,
+    ]
 }

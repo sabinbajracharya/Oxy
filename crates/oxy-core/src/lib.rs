@@ -43,6 +43,8 @@ pub mod package;
 pub mod parser;
 /// Built-in standard library modules.
 pub mod stdlib;
+/// Canonical symbol definitions: keywords, types, methods, modules.
+pub mod symbols;
 /// Semantic type checker that validates type annotations before execution.
 pub mod type_checker;
 /// Runtime value types and type metadata.

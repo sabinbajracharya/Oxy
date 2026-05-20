@@ -1987,9 +1987,16 @@ impl Vm {
                 "to_string" => Ok(Value::String(c.to_string())),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
-            Value::I64(_) | Value::F64(_) => {
-                builtins::numeric::dispatch(receiver, method_name, &args)
-            }
+            Value::I8(_)
+            | Value::I16(_)
+            | Value::I32(_)
+            | Value::I64(_)
+            | Value::U8(_)
+            | Value::U16(_)
+            | Value::U32(_)
+            | Value::U64(_)
+            | Value::F32(_)
+            | Value::F64(_) => builtins::numeric::dispatch(receiver, method_name, &args),
             Value::EnumVariant { enum_name, .. }
                 if enum_name == "Option" || enum_name == "Result" =>
             {
@@ -2704,6 +2711,29 @@ fn debug_format(val: &Value) -> String {
         Value::Cell(rc) => debug_format(&rc.borrow()),
         other => format!("{other}"),
     }
+}
+
+/// Return all type names that have built-in method dispatch.
+/// Used by symbol consistency tests to ensure `symbols.rs` stays in sync.
+/// **Must** be updated when a new `Value` variant receives a dispatch arm in
+/// `VMRuntime::builtin_method`.
+pub fn dispatched_type_names() -> Vec<&'static str> {
+    vec![
+        "Vec",
+        "String",
+        "HashMap",
+        "HashSet",
+        "VecDeque",
+        "BinaryHeap",
+        "char",
+        "numeric",
+        "Option",
+        "Result",
+        "enum",
+        "struct",
+        "Iterator",
+        "tuple",
+    ]
 }
 
 /// Compile and run with captured output (for testing).

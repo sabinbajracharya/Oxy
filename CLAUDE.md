@@ -43,6 +43,7 @@ crates/oxy-core/src/
 ├── compiler/mod.rs         # Compiler: prescan → compile items → bytecode Chunk
 ├── type_checker/mod.rs     # Semantic type checker: infers types, enforces field visibility
 ├── vm/mod.rs               # Stack-based VM: executes bytecode, hosts run_tests()
+├── symbols.rs              # Canonical symbol definitions (keywords, types, methods, modules) — single source of truth
 ├── vm/builtins.rs          # Built-in method implementations (Vec, String, HashMap, HashSet, etc.)
 ├── types/mod.rs            # Value enum (all integer widths, floats, Bool, String, Vec, HashMap, Struct, etc.)
 ├── env/mod.rs              # Lexical scope chain (for repl/eval compatibility)
@@ -66,6 +67,7 @@ crates/oxy-lsp/src/main.rs  # LSP server (tower-lsp)
 | Rust unit tests | `#[test]` in `#[cfg(test)]` modules | `crates/oxy-core/tests/vm_tests.rs` |
 | Integration test | `feature_examples.rs` globs all `.ox` | `crates/oxy-core/tests/feature_examples.rs` |
 | Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
+| Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/VM | `crates/oxy-core/tests/symbol_consistency.rs` |
 
 ### `run_tests()` flow (`vm/mod.rs`)
 
@@ -266,6 +268,38 @@ Compares struct's defining module against current `module_stack`. Private fields
 - **Skip `Item::Impl`/`Item::ImplTrait` in `collect_fn_types`** — method return types will be Unknown
 - **Skip `check_path_visible` / `is_visible()` in PathCall/StructInit** — private items will be accessible
 - **Cut corners silently** — if a shortcut is unavoidable, tell the user and explain why
+- **Use raw string literals in builtins dispatch match arms** — use `symbols::<type>_m::CONSTANT` instead. If you add a method without adding its constant to `symbols.rs`, it won't compile
+- **Add a built-in method only to builtins or only to symbols** — must update both: the dispatch match arm (using the constant) AND the `MethodInfo` list in `symbols.rs`. Consistency tests + compile-time constants enforce this
+- **Wire up only some Value variants** for a built-in dispatch — all integer/float widths must go through `numeric::dispatch`, all collection types must be handled. `dispatched_type_names()` + consistency tests catch gaps
+
+## Symbol Definitions (`symbols.rs`)
+
+`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both the compiler/VM and the LSP import from it. Never hardcode keyword/type/method names in the LSP.
+
+### Adding a new built-in method
+
+1. Add a method name constant in `symbols.rs` (e.g., `pub mod string_m { pub const NEW_METHOD: &str = "new_method"; }`)
+2. Add a `MethodInfo` entry in the corresponding `*_METHODS` list
+3. Add the match arm in the builtins dispatch file using the constant (e.g., `symbols::string_m::NEW_METHOD => ...`)
+4. Add the method name to `method_names()` in the builtins file (using the constant)
+5. Update the `MethodInfo` list in `symbols.rs` if adding the method to a type's `*_METHODS`
+
+### Adding a new built-in type
+
+1. Add a `TypeInfo` entry to `ALL_TYPES` in `symbols.rs`
+2. Add method name constants (a new `*_m` module) and a `*_METHODS` list
+3. Add the type's dispatch in `vm/mod.rs` `builtin_method()`
+4. Add the type to `dispatched_type_names()` in `vm/mod.rs`
+5. Add the dispatch implementation in `vm/builtins/` with `method_names()` helper
+
+### Enforcement
+
+| Constraint | Mechanism |
+|-----------|-----------|
+| Method in dispatch but not in symbols | Compile error — constant doesn't exist |
+| Method in symbols but not in dispatch | 26 consistency tests via `method_names()` + pre-commit hook |
+| New type wired up incompletely | `test_dispatched_types_in_symbols` / `test_symbols_types_have_dispatch` |
+| LSP out of date with symbols | LSP reads from `symbols` at runtime — no manual sync needed |
 
 ## Common Pitfalls & Their Fixes
 
