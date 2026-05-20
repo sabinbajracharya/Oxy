@@ -61,6 +61,16 @@ fn main() {
             });
             dump_ast(file);
         }
+        Some("--dump-bytecode") => {
+            let file = args.get(2).unwrap_or_else(|| {
+                eprintln!(
+                    "{} --dump-bytecode requires a file argument",
+                    "error:".red().bold()
+                );
+                process::exit(2);
+            });
+            dump_bytecode(file);
+        }
         Some(cmd) => {
             eprintln!("{} unknown command '{cmd}'", "error:".red().bold());
             eprintln!("Run 'oxy --help' for usage information.");
@@ -383,6 +393,27 @@ fn dump_ast(path: &str) {
     }
 }
 
+fn dump_bytecode(path: &str) {
+    let source = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "{} could not read file '{path}': {e}",
+                "error:".red().bold()
+            );
+            process::exit(1);
+        }
+    };
+
+    match oxy_core::vm::disassemble_source(path, &source) {
+        Ok(output) => print!("{output}"),
+        Err(e) => {
+            display_error(&e, &source, &[]);
+            process::exit(1);
+        }
+    }
+}
+
 fn print_help() {
     println!("{}", oxy_core::version_string());
     println!("{}\n", "Rust syntax, scripting freedom.".italic());
@@ -410,6 +441,10 @@ fn print_help() {
         "--dump-tokens <file>".cyan()
     );
     println!("  {}    Dump AST for a file", "--dump-ast <file>".cyan());
+    println!(
+        "  {} Dump compiled bytecode for a file",
+        "--dump-bytecode <file>".cyan()
+    );
     println!(
         "  {}           Print version information",
         "-V, --version".cyan()

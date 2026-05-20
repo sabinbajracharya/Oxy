@@ -106,6 +106,27 @@ editors/vscode/
 - Always add trailer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 - Tests: `test_<what>_<scenario>` naming, unit tests in `#[cfg(test)]` modules
 
+## Debug Tools
+
+### `--dump-bytecode <file>` (CLI)
+Prints compiled bytecode with opcodes, slot names, function/closure entry points, and closure metadata.
+```bash
+docker compose run --rm dev bash -c "cargo run --bin oxy -- --dump-bytecode examples/foo.ox"
+```
+
+### `OXY_VM_TRACE=1` (env var)
+Enables per-opcode execution tracing to stderr. Shows each instruction with IP, stack state, frame info (base/protected), and compact value representation. Works with `cargo test` and `cargo run`.
+```bash
+OXY_VM_TRACE=1 docker compose run --rm dev bash -c "cargo test -p oxy-core --test feature_examples"
+```
+When debugging a specific test failure, run with trace to see the exact opcode sequence and stack state at each step.
+
+### `disassemble_chunk(&Chunk) -> String` (api)
+Programmatic access to bytecode disassembly in `oxy_core::vm::disassemble_chunk`.
+
+### `disassemble_source(path, source) -> Result<String>` (api)
+Parse + type-check + compile + disassemble in one call. In `oxy_core::vm::disassemble_source`.
+
 # context-mode — MANDATORY routing rules
 
 You have context-mode MCP tools available. These rules are NOT optional — they protect your context window from flooding. A single unrouted command can dump 56 KB into context and waste the entire session.

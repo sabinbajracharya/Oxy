@@ -242,6 +242,8 @@ pub struct Vm {
     call_stack: Vec<Frame>,
     /// Captured output (for testing).
     output: Option<Rc<RefCell<Vec<String>>>>,
+    /// Trace execution to stderr.
+    trace: bool,
 }
 
 struct Frame {
@@ -265,13 +267,21 @@ pub enum VmResult {
 
 impl Vm {
     pub fn new(chunk: Chunk) -> Self {
+        let trace = std::env::var("OXY_VM_TRACE").is_ok();
         Self {
             chunk,
             stack: Vec::new(),
             ip: 0,
             call_stack: Vec::new(),
             output: None,
+            trace,
         }
+    }
+
+    /// Enable execution tracing to stderr.
+    pub fn with_trace(mut self) -> Self {
+        self.trace = true;
+        self
     }
 
     /// Create a VM that captures printed output (for testing).
@@ -308,6 +318,10 @@ impl Vm {
                 Some(op) => op.clone(),
                 None => return VmResult::Error("unexpected end of code".into()),
             };
+
+            if self.trace {
+                self.trace_op(&op);
+            }
 
             match op {
                 OpCode::ConstInt(n, w) => self.stack.push(match w {
@@ -348,16 +362,23 @@ impl Vm {
                                     frame.max_slot = slot + 1;
                                 }
                             }
-                            continue;
+                        } else {
+                            self.stack[idx] = val;
+                            if let Some(frame) = self.call_stack.last_mut() {
+                                if slot + 1 > frame.max_slot {
+                                    frame.max_slot = slot + 1;
+                                }
+                            }
                         }
-                    }
-                    while idx >= self.stack.len() {
-                        self.stack.push(Value::Unit);
-                    }
-                    self.stack[idx] = val;
-                    if let Some(frame) = self.call_stack.last_mut() {
-                        if slot + 1 > frame.max_slot {
-                            frame.max_slot = slot + 1;
+                    } else {
+                        while idx >= self.stack.len() {
+                            self.stack.push(Value::Unit);
+                        }
+                        self.stack[idx] = val;
+                        if let Some(frame) = self.call_stack.last_mut() {
+                            if slot + 1 > frame.max_slot {
+                                frame.max_slot = slot + 1;
+                            }
                         }
                     }
                 }
@@ -909,7 +930,7 @@ impl Vm {
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
                                 base,
-                                max_slot: max_slot.max(arg_count),
+                                max_slot: max_slot + arg_count,
                                 fn_ip: target,
                                 write_back_slot: None,
                             });
@@ -1745,7 +1766,7 @@ impl Vm {
         self.call_stack.push(Frame {
             return_ip: usize::MAX, // sentinel
             base,
-            max_slot: max_slot.max(args.len()),
+            max_slot: max_slot + args.len(),
             fn_ip: target,
             write_back_slot: None,
         });
@@ -2210,6 +2231,102 @@ impl Vm {
             print!("{s}");
         }
     }
+
+    fn trace_op(&self, op: &OpCode) {
+        let frame = self.call_stack.last();
+        let base = frame.map(|f| f.base).unwrap_or(0);
+        let max_slot = frame.map(|f| f.max_slot).unwrap_or(0);
+        let protected = base + max_slot;
+        let stack_preview: Vec<String> = self
+            .stack
+            .iter()
+            .enumerate()
+            .skip(base)
+            .map(|(i, v)| {
+                let marker = if i < protected { "L" } else { "O" };
+                format!("{}{}:{}", marker, i - base, trace_compact_val(v))
+            })
+            .collect();
+        let op_str = trace_format_op(op);
+        eprintln!(
+            "  [{:>4}] {:45} frame(base={}, prot={}) stack=[{}]",
+            self.ip,
+            op_str,
+            base,
+            protected,
+            stack_preview.join(", ")
+        );
+    }
+}
+
+fn trace_compact_val(v: &Value) -> String {
+    match v {
+        Value::Cell(rc) => format!("Cell({})", trace_compact_val(&rc.borrow())),
+        Value::I8(n) => n.to_string(),
+        Value::I16(n) => n.to_string(),
+        Value::I32(n) => n.to_string(),
+        Value::I64(n) => n.to_string(),
+        Value::U8(n) => n.to_string(),
+        Value::U16(n) => n.to_string(),
+        Value::U32(n) => n.to_string(),
+        Value::U64(n) => n.to_string(),
+        Value::F32(n) => format!("{:.1}", n),
+        Value::F64(n) => format!("{:.1}", n),
+        Value::Bool(b) => b.to_string(),
+        Value::String(s) => format!("\"{:.20}\"", s),
+        Value::Function(_) => "<fn>".into(),
+        Value::Unit => "()".into(),
+        _ => "?".into(),
+    }
+}
+
+fn trace_format_op(op: &OpCode) -> String {
+    match op {
+        OpCode::ConstInt(n, _) => format!("ConstInt({})", n),
+        OpCode::LoadLocal(s) => format!("LoadLocal({})", s),
+        OpCode::StoreLocal(s) => format!("StoreLocal({})", s),
+        OpCode::Call { target, arg_count } => format!("Call({}, {})", target, arg_count),
+        OpCode::Return => "Return".into(),
+        OpCode::CallClosure { arg_count } => format!("CallClosure({})", arg_count),
+        OpCode::Closure {
+            target_ip,
+            param_count,
+            meta_idx,
+        } => {
+            format!(
+                "Closure(ip={}, params={}, meta={})",
+                target_ip, param_count, meta_idx
+            )
+        }
+        OpCode::MakeCell(s) => format!("MakeCell({})", s),
+        OpCode::Dup => "Dup".into(),
+        OpCode::Pop => "Pop".into(),
+        OpCode::Add => "Add".into(),
+        OpCode::Sub => "Sub".into(),
+        OpCode::Mul => "Mul".into(),
+        OpCode::Div => "Div".into(),
+        OpCode::Mod => "Mod".into(),
+        OpCode::Eq => "Eq".into(),
+        OpCode::Neq => "Neq".into(),
+        OpCode::Lt => "Lt".into(),
+        OpCode::Gt => "Gt".into(),
+        OpCode::Le => "Le".into(),
+        OpCode::Ge => "Ge".into(),
+        OpCode::And => "And".into(),
+        OpCode::Or => "Or".into(),
+        OpCode::Neg => "Neg".into(),
+        OpCode::Not => "Not".into(),
+        OpCode::Jump(t) => format!("Jump({})", t),
+        OpCode::JumpIfFalse(t) => format!("JumpIfFalse({})", t),
+        OpCode::JumpIfTrue(t) => format!("JumpIfTrue({})", t),
+        OpCode::ConstUnit => "ConstUnit".into(),
+        OpCode::ConstBool(b) => format!("ConstBool({})", b),
+        OpCode::ConstString(s) => format!("ConstString({:?})", s),
+        OpCode::Print => "Print".into(),
+        OpCode::PrintLn => "PrintLn".into(),
+        OpCode::Halt => "Halt".into(),
+        _ => format!("{:?}", op),
+    }
 }
 
 // --- VM arithmetic helpers (standalone to avoid trait conflicts) ---
@@ -2618,6 +2735,14 @@ pub struct TestResult {
     pub error: Option<String>,
 }
 
+/// Parse, type-check, compile, and disassemble a source file to a debug string.
+pub fn disassemble_source(path: &str, source: &str) -> Result<String, crate::errors::FerriError> {
+    let program = crate::parser::parse(source)?;
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
+    let chunk = crate::compiler::Compiler::new_for_tests(Some(path)).compile(&program)?;
+    Ok(disassemble_chunk(&chunk))
+}
+
 /// Run all #[test] functions in source via the VM.
 pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::errors::FerriError> {
     let program = crate::parser::parse(source)?;
@@ -2709,6 +2834,196 @@ fn cast_to_float(val: &Value, width: FloatWidth) -> Value {
 }
 
 pub mod builtins;
+
+/// Disassemble a compiled chunk to a human-readable string for debugging.
+pub fn disassemble_chunk(chunk: &Chunk) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "=== Chunk: {} instructions, entry_point={}, local_count={}\n",
+        chunk.code.len(),
+        chunk.entry_point,
+        chunk.local_count
+    ));
+    if !chunk.local_names.is_empty() {
+        out.push_str(&format!("  main local_names: {:?}\n", chunk.local_names));
+    }
+    if !chunk.fn_local_names.is_empty() {
+        out.push_str("  fn_local_names:\n");
+        let mut ips: Vec<(&usize, &Vec<String>)> = chunk.fn_local_names.iter().collect();
+        ips.sort_by_key(|(k, _)| *k);
+        for (ip, names) in ips {
+            out.push_str(&format!("    @{}: {:?}\n", ip, names));
+        }
+    }
+    if !chunk.functions.is_empty() {
+        out.push_str("  functions:\n");
+        let mut fns: Vec<(&String, &usize)> = chunk.functions.iter().collect();
+        fns.sort_by_key(|(_, ip)| *ip);
+        for (name, ip) in fns {
+            out.push_str(&format!("    {} -> @{}\n", name, ip));
+        }
+    }
+    if !chunk.closure_meta.is_empty() {
+        out.push_str("  closure_meta:\n");
+        for (i, (params, _body, captured)) in chunk.closure_meta.iter().enumerate() {
+            out.push_str(&format!(
+                "    [{}] params={:?} captured={:?}\n",
+                i, params, captured
+            ));
+        }
+    }
+    out.push_str("\n--- Bytecode ---\n");
+
+    // Build a set of function entry points for labeling
+    let mut fn_entries: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
+    for (name, ip) in &chunk.functions {
+        fn_entries.entry(*ip).or_insert_with(|| name.clone());
+    }
+    // Add closure entry points from fn_local_names
+    for (ip, _names) in &chunk.fn_local_names {
+        fn_entries
+            .entry(*ip)
+            .or_insert_with(|| format!("<fn@{}>", ip));
+    }
+
+    let mut i = 0;
+    while i < chunk.code.len() {
+        // Print function/closure labels
+        if let Some(label) = fn_entries.get(&i) {
+            out.push_str(&format!("\n--- {} (ip={}) ---\n", label, i));
+        }
+        // Show local names for this IP
+        if let Some(names) = chunk.fn_local_names.get(&i) {
+            out.push_str(&format!("    ;; locals: {:?}\n", names));
+        }
+
+        let op = &chunk.code[i];
+        let line = format_opcode(op, &chunk.local_names);
+        out.push_str(&format!("  {:>4}: {}\n", i, line));
+        i += 1;
+    }
+    out
+}
+
+fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
+    let local_name = |slot: &usize| -> String {
+        local_names
+            .get(*slot)
+            .cloned()
+            .unwrap_or_else(|| format!("slot{}", slot))
+    };
+    match op {
+        OpCode::ConstInt(n, w) => format!("ConstInt({}, {:?})", n, w),
+        OpCode::ConstFloat(n, w) => format!("ConstFloat({}, {:?})", n, w),
+        OpCode::ConstBool(b) => format!("ConstBool({})", b),
+        OpCode::ConstString(s) => format!("ConstString({:?})", s),
+        OpCode::ConstChar(c) => format!("ConstChar({:?})", c),
+        OpCode::ConstUnit => "ConstUnit".into(),
+        OpCode::LoadLocal(s) => format!("LoadLocal({})  ;; {}", s, local_name(s)),
+        OpCode::StoreLocal(s) => format!("StoreLocal({}) ;; {}", s, local_name(s)),
+        OpCode::Add => "Add".into(),
+        OpCode::Sub => "Sub".into(),
+        OpCode::Mul => "Mul".into(),
+        OpCode::Div => "Div".into(),
+        OpCode::Mod => "Mod".into(),
+        OpCode::Eq => "Eq".into(),
+        OpCode::Neq => "Neq".into(),
+        OpCode::Lt => "Lt".into(),
+        OpCode::Gt => "Gt".into(),
+        OpCode::Le => "Le".into(),
+        OpCode::Ge => "Ge".into(),
+        OpCode::And => "And".into(),
+        OpCode::Or => "Or".into(),
+        OpCode::BitAnd => "BitAnd".into(),
+        OpCode::BitOr => "BitOr".into(),
+        OpCode::BitXor => "BitXor".into(),
+        OpCode::Shl => "Shl".into(),
+        OpCode::Shr => "Shr".into(),
+        OpCode::Neg => "Neg".into(),
+        OpCode::Not => "Not".into(),
+        OpCode::BitNot => "BitNot".into(),
+        OpCode::Jump(t) => format!("Jump({})", t),
+        OpCode::JumpIfFalse(t) => format!("JumpIfFalse({})", t),
+        OpCode::JumpIfTrue(t) => format!("JumpIfTrue({})", t),
+        OpCode::Call { target, arg_count } => {
+            format!("Call(target={}, arg_count={})", target, arg_count)
+        }
+        OpCode::Return => "Return".into(),
+        OpCode::Panic => "Panic".into(),
+        OpCode::Halt => "Halt".into(),
+        OpCode::Print => "Print".into(),
+        OpCode::PrintLn => "PrintLn".into(),
+        OpCode::Dup => "Dup".into(),
+        OpCode::Pop => "Pop".into(),
+        OpCode::MakeIter => "MakeIter".into(),
+        OpCode::IterLen => "IterLen".into(),
+        OpCode::VecIndex => "VecIndex".into(),
+        OpCode::VecIndexStore => "VecIndexStore".into(),
+        OpCode::MakeRange => "MakeRange".into(),
+        OpCode::MakeArray { count } => format!("MakeArray(count={})", count),
+        OpCode::MakeTuple { count } => format!("MakeTuple(count={})", count),
+        OpCode::ToString => "ToString".into(),
+        OpCode::FStringConcat { count } => format!("FStringConcat(count={})", count),
+        OpCode::Format { arg_count } => format!("Format(arg_count={})", arg_count),
+        OpCode::StructInit {
+            name,
+            field_count,
+            field_names,
+        } => format!(
+            "StructInit(name={:?}, field_count={}, field_names={:?})",
+            name, field_count, field_names
+        ),
+        OpCode::MethodCall {
+            method_name,
+            arg_count,
+        } => format!("MethodCall({}, arg_count={})", method_name, arg_count),
+        OpCode::FieldAccess { field_name } => format!("FieldAccess({})", field_name),
+        OpCode::ConstEnumVariant {
+            enum_name,
+            variant,
+            data,
+        } => format!("ConstEnumVariant({}::{}({:?}))", enum_name, variant, data),
+        OpCode::MakeEnumVariant {
+            enum_name,
+            variant,
+            arg_count,
+        } => format!(
+            "MakeEnumVariant({}::{}, arg_count={})",
+            enum_name, variant, arg_count
+        ),
+        OpCode::Closure {
+            target_ip,
+            param_count,
+            meta_idx,
+        } => format!(
+            "Closure(target_ip={}, param_count={}, meta_idx={})",
+            target_ip, param_count, meta_idx
+        ),
+        OpCode::CallClosure { arg_count } => format!("CallClosure(arg_count={})", arg_count),
+        OpCode::Await => "Await".into(),
+        OpCode::TryPop => "TryPop".into(),
+        OpCode::CastInt(w) => format!("CastInt({:?})", w),
+        OpCode::CastFloat(w) => format!("CastFloat({:?})", w),
+        OpCode::CastToChar => "CastToChar".into(),
+        OpCode::BindIdent(s) => format!("BindIdent({})  ;; {}", s, local_name(s)),
+        OpCode::EnumVariantEqual { enum_name, variant } => {
+            format!("EnumVariantEqual({}::{})", enum_name, variant)
+        }
+        OpCode::EnumDataGet(i) => format!("EnumDataGet({})", i),
+        OpCode::PathCallBuiltin {
+            segments,
+            arg_count,
+        } => format!(
+            "PathCallBuiltin({}, arg_count={})",
+            segments.join("::"),
+            arg_count
+        ),
+        OpCode::FieldStore(f) => format!("FieldStore({})", f),
+        OpCode::DisplayArg => "DisplayArg".into(),
+        OpCode::MakeCell(s) => format!("MakeCell({})  ;; {}", s, local_name(s)),
+    }
+}
+
 // FIXME: vm/tests.rs has compilation errors from interpreter migration
 // #[cfg(test)]
 // mod tests;
