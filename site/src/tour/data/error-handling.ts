@@ -30,7 +30,7 @@ Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`m
 }
 
 fn main() {
-    let result = find_even(vec![1, 3, 6, 7]);
+    let result = find_even([1, 3, 6, 7]);
     match result {
         Some(n) => println!("found: {}", n),
         None => println!("no even found"),
@@ -129,7 +129,7 @@ Both Option and Result have chainable methods:
 }
 
 fn main() {
-    let nums = vec![1, 3, 6, 7, 10];
+    let nums = [1, 3, 6, 7, 10];
 
     let result = first_even(nums)
         .map(|n| n * 2)
@@ -138,7 +138,7 @@ fn main() {
     println!("{}", result.unwrap_or("no even found".to_string()));
 
     // Using unwrap_or
-    let empty: Vec<i64> = vec![];
+    let empty: [i64; 0] = [];
     println!("{}", first_even(empty).unwrap_or(-1));
 }
 `,
