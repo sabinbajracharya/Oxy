@@ -20,7 +20,7 @@ Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`m
         '`unwrap()` panics on None — only use when sure.',
         '`map()` transforms the inner value if Some, passes through None.',
       ],
-      initialCode: `fn find_even(nums: &[i64]) -> Option<i64> {
+      initialCode: `fn find_even(nums: Vec<i64>) -> Option<i64> {
     for n in nums {
         if n % 2 == 0 {
             return Some(n);
@@ -30,7 +30,7 @@ Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`m
 }
 
 fn main() {
-    let result = find_even([1, 3, 6, 7]);
+    let result = find_even(vec![1, 3, 6, 7]);
     match result {
         Some(n) => println!("found: {}", n),
         None => println!("no even found"),
@@ -124,12 +124,12 @@ Both Option and Result have chainable methods:
         'Combinators avoid deeply nested match expressions.',
         '`and_then` is flat_map — the callback must return Option/Result.',
       ],
-      initialCode: `fn first_even(nums: &[i64]) -> Option<i64> {
+      initialCode: `fn first_even(nums: Vec<i64>) -> Option<i64> {
     nums.iter().filter(|x| x % 2 == 0).collect::<Vec<_>>().first().clone()
 }
 
 fn main() {
-    let nums = [1, 3, 6, 7, 10];
+    let nums = vec![1, 3, 6, 7, 10];
 
     let result = first_even(nums)
         .map(|n| n * 2)
@@ -138,7 +138,7 @@ fn main() {
     println!("{}", result.unwrap_or("no even found".to_string()));
 
     // Using unwrap_or
-    let empty: [i64; 0] = [];
+    let empty: Vec<i64> = vec![];
     println!("{}", first_even(empty).unwrap_or(-1));
 }
 `,
