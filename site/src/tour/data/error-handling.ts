@@ -163,13 +163,11 @@ fn main() {
         println!("got {}", n);
     }
 
-    let mut vals = [1, 2, 3, 4, 5];
-    let mut i = 0;
-    while i < vals.len() {
-        if let n if n % 2 == 0 = vals[i] {
-            println!("even: {}", n);
-        }
-        i = i + 1;
+    // while let drains a Vec via pop — keeps looping while the
+    // pattern Some(n) matches; stops naturally when pop returns None.
+    let mut nums = vec![10, 80, 20, 100, 30];
+    while let Some(n) = nums.pop() {
+        println!("got: {}", n);
     }
 }
 `,
