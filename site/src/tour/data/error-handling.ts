@@ -92,8 +92,8 @@ This works with both \`Option\` and \`Result\`. The enclosing function must retu
         '`?` works on Option too — None propagates as None.',
       ],
       initialCode: `fn parse_and_divide(a_str: String, b_str: String) -> Result<f64, String> {
-    let a = a_str.parse_float().map_err(|e| f"parse error: {}")?;
-    let b = b_str.parse_float().map_err(|e| f"parse error: {}")?;
+    let a = a_str.parse_float().map_err(|e| f"parse error: {e}")?;
+    let b = b_str.parse_float().map_err(|e| f"parse error: {e}")?;
     if b == 0.0 {
         return Err("division by zero".to_string());
     }
@@ -133,7 +133,7 @@ fn main() {
 
     let result = first_even(nums)
         .map(|n| n * 2)
-        .map(|n| f"doubled even: {}");
+        .map(|n| f"doubled even: {n}");
 
     println!("{}", result.unwrap_or("no even found".to_string()));
 

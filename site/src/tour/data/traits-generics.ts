@@ -63,7 +63,7 @@ struct Dog {
 
 impl Greet for Dog {
     fn greet(&self) -> String {
-        f"Woof! I'm {}!".to_string()
+        f"Woof! I'm {self.name}!"
     }
 }
 
@@ -94,13 +94,13 @@ Multiple bounds: \`T: Clone + Display\`. This limits what types can be used and 
 
 impl Display for i64 {
     fn display(&self) -> String {
-        f"int({})".to_string()
+        f"int({self})"
     }
 }
 
 impl Display for String {
     fn display(&self) -> String {
-        f"str({})".to_string()
+        f"str({self})"
     }
 }
 

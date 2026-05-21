@@ -28,7 +28,7 @@ Access JSON fields with \`value["key"]\` and \`value[index]\`.
         Ok(v) => {
             println!("name: {}", v["name"]);
             println!("year: {}", v["year"]);
-            println!("{}", f"{} is stable: {}");
+            println!("stable: {}", v["stable"]);
         },
         Err(e) => println!("parse error: {}", e),
     }
