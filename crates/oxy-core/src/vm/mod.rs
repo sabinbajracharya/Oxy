@@ -1448,7 +1448,11 @@ impl Vm {
             OpCode::ConstString(s) => self.stack.push(Value::String(s)),
             OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
             OpCode::Pop => {
-                self.stack.pop();
+                // Protect frame locals from being popped (matches Vm::run).
+                let protected = self.frame_protected();
+                if self.stack.len() > protected {
+                    self.stack.pop();
+                }
             }
             OpCode::Dup => {
                 let v = self.stack.last().cloned().unwrap_or(Value::Unit);
@@ -1540,6 +1544,11 @@ impl Vm {
                 if idx < self.stack.len() {
                     if let Value::Cell(rc) = &self.stack[idx] {
                         *rc.borrow_mut() = val;
+                        if let Some(frame) = self.call_stack.last_mut() {
+                            if slot + 1 > frame.max_slot {
+                                frame.max_slot = slot + 1;
+                            }
+                        }
                         return Ok(());
                     }
                 }
@@ -1547,18 +1556,31 @@ impl Vm {
                     self.stack.push(Value::Unit);
                 }
                 self.stack[idx] = val;
+                if let Some(frame) = self.call_stack.last_mut() {
+                    if slot + 1 > frame.max_slot {
+                        frame.max_slot = slot + 1;
+                    }
+                }
             }
             OpCode::BindIdent(slot) => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
                 let base = self.frame_base();
                 let idx = base + slot;
+                // Match Vm::run: extend stack with Unit first, then choose
+                // insert vs in-place assign based on whether the slot is at
+                // or near the new stack top.
+                while idx >= self.stack.len() {
+                    self.stack.push(Value::Unit);
+                }
                 if idx + 1 >= self.stack.len() && !self.stack.is_empty() {
                     self.stack.insert(idx, val);
                 } else {
-                    while idx >= self.stack.len() {
-                        self.stack.push(Value::Unit);
-                    }
                     self.stack[idx] = val;
+                }
+                if let Some(frame) = self.call_stack.last_mut() {
+                    if slot + 1 > frame.max_slot {
+                        frame.max_slot = slot + 1;
+                    }
                 }
             }
             OpCode::Print => {
@@ -1777,6 +1799,91 @@ impl Vm {
                 if i < self.stack.len() {
                     let v = self.stack[i].clone();
                     self.stack[i] = Value::cell(v);
+                }
+            }
+            OpCode::BitAnd => self.binary_op(vm_bitand),
+            OpCode::BitOr => self.binary_op(vm_bitor),
+            OpCode::BitXor => self.binary_op(vm_bitxor),
+            OpCode::Shl => self.binary_op(vm_shl),
+            OpCode::Shr => self.binary_op(vm_shr),
+            OpCode::Panic => {
+                let msg = self.stack.pop().map(|v| v.to_string()).unwrap_or_default();
+                return Err(msg);
+            }
+            OpCode::MakeIter => {
+                let value = self.stack.pop().unwrap_or(Value::Unit);
+                match value.into_iterable() {
+                    Ok(vec) => self
+                        .stack
+                        .push(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec)))),
+                    Err(e) => return Err(e),
+                }
+            }
+            OpCode::IterLen => {
+                let v = self.stack.pop().unwrap_or(Value::Unit);
+                match v {
+                    Value::Vec(rc) => self.stack.push(Value::I64(rc.borrow().len() as i64)),
+                    other => {
+                        return Err(format!("cannot get length of {}", other.type_name()));
+                    }
+                }
+            }
+            OpCode::StructInit {
+                name,
+                field_count,
+                field_names,
+            } => {
+                let start = self.stack.len().saturating_sub(field_count);
+                let values: Vec<Value> = self.stack.drain(start..).collect();
+                let fields: HashMap<String, Value> = field_names.into_iter().zip(values).collect();
+                if let Some(struct_def) = self.chunk.struct_defs.get(&name) {
+                    if let crate::ast::StructKind::Named(named_fields) = &struct_def.kind {
+                        for required in named_fields {
+                            if !fields.contains_key(&required.name) {
+                                return Err(format!(
+                                    "struct '{}' missing required field '{}'",
+                                    name, required.name
+                                ));
+                            }
+                        }
+                    }
+                }
+                self.stack.push(Value::Struct { name, fields });
+            }
+            OpCode::ConstEnumVariant {
+                enum_name,
+                variant,
+                data,
+            } => {
+                self.stack.push(Value::EnumVariant {
+                    enum_name,
+                    variant,
+                    data,
+                });
+            }
+            OpCode::Await => {
+                let val = self.stack.pop().unwrap_or(Value::Unit);
+                match val {
+                    Value::Future(_) => {
+                        return Err("Await on Future not yet supported in VM".into());
+                    }
+                    Value::JoinHandle(inner) => {
+                        self.stack.push(*inner);
+                    }
+                    other => {
+                        self.stack.push(other);
+                    }
+                }
+            }
+            OpCode::PathCallBuiltin {
+                segments,
+                arg_count,
+            } => {
+                let args_start = self.stack.len().saturating_sub(arg_count);
+                let args: Vec<Value> = self.stack.drain(args_start..).collect();
+                match self.dispatch_pathcall(&segments, &args) {
+                    Ok(val) => self.stack.push(val),
+                    Err(e) => return Err(e),
                 }
             }
             _ => return Err(format!("execute_op: unhandled {:?}", op)),

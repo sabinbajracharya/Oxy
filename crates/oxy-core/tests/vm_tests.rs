@@ -2355,6 +2355,43 @@ println!("{:?}", v.position(|x| x == 99));
 }
 
 #[test]
+fn test_bitwise_op_inside_closure() {
+    // Regression: BitAnd/BitOr/BitXor/Shl/Shr were missing from execute_op
+    // (the dispatcher used by run_closure). Map over a Vec with a bitwise
+    // closure used to error "execute_op: unhandled BitAnd".
+    let out = run_and_capture(
+        r#"
+fn main() {
+    let v = vec![0xFF, 0x0F, 0xF0];
+    let masked: Vec<i64> = v.iter().map(|x| x & 0x0F).collect::<Vec<_>>();
+    for m in masked { println!("{}", m); }
+}
+"#,
+    );
+    assert_eq!(out, vec!["15\n", "15\n", "0\n"]);
+}
+
+#[test]
+fn test_enum_match_inside_closure() {
+    // Regression: EnumDataGet (and the variant-equality dance for matching
+    // on Option/Result inside a closure) used to silently break — match
+    // arms would all miss and print "match: no arm matched".
+    let out = run_and_capture(
+        r#"
+fn main() {
+    let opts = vec![Some(1), None, Some(3)];
+    let unwrapped: Vec<i64> = opts.iter().map(|o| match o {
+        Some(v) => v,
+        None => 0,
+    }).collect::<Vec<_>>();
+    for u in unwrapped { println!("{}", u); }
+}
+"#,
+    );
+    assert_eq!(out, vec!["1\n", "0\n", "3\n"]);
+}
+
+#[test]
 fn test_option_map_with_closure() {
     let output = run_and_capture(
         r#"fn main() {
