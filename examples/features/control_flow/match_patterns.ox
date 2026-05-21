@@ -253,3 +253,90 @@ fn test_match_some_wildcard() {
     };
     assert_eq!(result, 1);
 }
+
+// === Tuple patterns in match arms ===
+
+#[test]
+fn test_match_tuple_all_bindings() {
+    let pair = (3, 4);
+    let label = match pair {
+        (a, b) => f"{a}+{b}",
+    };
+    assert_eq!(label, "3+4");
+}
+
+#[test]
+fn test_match_tuple_literal_then_binding() {
+    let pair = (1, 99);
+    let label = match pair {
+        (1, y) => f"one-{y}",
+        (x, y) => f"{x}-{y}",
+    };
+    assert_eq!(label, "one-99");
+}
+
+#[test]
+fn test_match_tuple_binding_then_literal() {
+    let pair = (5, 0);
+    let label = match pair {
+        (x, 0) => f"{x}-zero",
+        (x, y) => f"{x}-{y}",
+    };
+    assert_eq!(label, "5-zero");
+}
+
+#[test]
+fn test_match_tuple_all_literals() {
+    let pair = (2, 3);
+    let label = match pair {
+        (1, 1) => "ones",
+        (2, 3) => "two-three",
+        (_, _) => "other",
+    };
+    assert_eq!(label, "two-three");
+}
+
+#[test]
+fn test_match_tuple_with_wildcards() {
+    let pair = (7, 8);
+    let label = match pair {
+        (_, 0) => "second-zero",
+        (_, y) => f"second-{y}",
+    };
+    assert_eq!(label, "second-8");
+}
+
+#[test]
+fn test_match_three_tuple() {
+    let triple = (1, 2, 3);
+    let label = match triple {
+        (1, b, c) => f"one-{b}-{c}",
+        (a, b, c) => f"{a}-{b}-{c}",
+    };
+    assert_eq!(label, "one-2-3");
+}
+
+#[test]
+fn test_match_tuple_inside_for_loop() {
+    // Regression: pattern-binding slots cannot collide with iterator slots.
+    let pairs = [(1, 2), (3, 4), (5, 6)];
+    let mut buf = "".to_string();
+    for (a, b) in pairs {
+        let label = match (a, b) {
+            (1, y) => f"one-{y}",
+            (x, 4) => f"{x}-four",
+            (x, y) => f"{x}+{y}",
+        };
+        buf = f"{buf}{label};";
+    }
+    assert_eq!(buf, "one-2;3-four;5+6;");
+}
+
+#[test]
+fn test_if_let_tuple_pattern() {
+    let pair = (10, 20);
+    if let (x, y) = pair {
+        assert_eq!(x, 10);
+        assert_eq!(y, 20);
+    }
+}
