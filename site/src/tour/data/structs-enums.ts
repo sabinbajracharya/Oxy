@@ -168,7 +168,7 @@ Match supports many pattern types:
         0 => "zero".to_string(),
         1 | 2 => "one or two".to_string(),
         3..=9 => "small digit".to_string(),
-        n if n > 0 => f"positive {}" .to_string(),
+        n if n > 0 => f"positive {n}",
         _ => "negative".to_string(),
     }
 }

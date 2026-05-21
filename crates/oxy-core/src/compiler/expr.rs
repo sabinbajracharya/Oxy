@@ -102,24 +102,27 @@ impl Compiler {
                         }
                     }
                     (Some(s), Some(e)) => {
-                        // Compute both bounds. Use the lowest possible slot (0) as
-                        // temp storage. The first local variable is always at slot 0,
-                        // so the stack always has at least 1 element. Storing at
-                        // slot 0 overwrites a local but that's OK — it's the first
-                        // local which we don't need after the pattern check.
-                        self.emit(OpCode::Dup); // [s, s_copy]
+                        // Save scrutinee to a fresh slot so we can read it
+                        // twice without clobbering its stack-top position with
+                        // intermediate bools. Then rebuild [scrutinee, bool]
+                        // via a second temp for the result.
+                        let scrut_tmp = self.sym.define("__range_scrut");
+                        self.emit(OpCode::StoreLocal(scrut_tmp));
+                        self.emit(OpCode::LoadLocal(scrut_tmp));
                         self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
-                        self.emit(OpCode::Ge); // [s, lower]
-                        self.emit(OpCode::StoreLocal(0)); // store at slot 0 (always exists)
-                        self.emit(OpCode::Dup); // [s, s]
+                        self.emit(OpCode::Ge); // [lower]
+                        self.emit(OpCode::LoadLocal(scrut_tmp));
                         self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
                         if *inclusive {
                             self.emit(OpCode::Le);
                         } else {
                             self.emit(OpCode::Lt);
-                        } // [s, upper]
-                        self.emit(OpCode::LoadLocal(0)); // [s, upper, lower]
-                        self.emit(OpCode::And); // [s, result]
+                        } // [lower, upper]
+                        self.emit(OpCode::And); // [result]
+                        let bool_tmp = self.sym.define("__range_bool");
+                        self.emit(OpCode::StoreLocal(bool_tmp));
+                        self.emit(OpCode::LoadLocal(scrut_tmp));
+                        self.emit(OpCode::LoadLocal(bool_tmp));
                     }
                     (None, None) => {
                         self.emit(OpCode::ConstBool(true));
@@ -127,8 +130,41 @@ impl Compiler {
                 }
                 Ok(())
             }
+            Pattern::Or(pats, _) => {
+                // Input: [scrutinee]. Output: [scrutinee, bool] (= OR over alternatives).
+                //
+                // Strategy: stash the scrutinee in a temp; reserve an alt_tmp
+                // slot (initialized with Unit) so its stack position doesn't
+                // collide with the running accumulator above it. Each iteration
+                // recurses into compile_pattern, which leaves [scrutinee, alt_bool] —
+                // we stash alt_bool, pop the inner scrutinee, reload alt_bool,
+                // then OR into the accumulator. Finally, restore the shape
+                // [scrutinee, bool] that the match-arm caller expects.
+                if pats.is_empty() {
+                    self.emit(OpCode::ConstBool(false));
+                    return Ok(());
+                }
+                let scrut_tmp = self.sym.define("__or_scrut");
+                let alt_tmp = self.sym.define("__or_alt");
+                self.emit(OpCode::StoreLocal(scrut_tmp));
+                self.emit(OpCode::ConstUnit);
+                self.emit(OpCode::StoreLocal(alt_tmp));
+                self.emit(OpCode::ConstBool(false));
+                for pat in pats {
+                    self.emit(OpCode::LoadLocal(scrut_tmp));
+                    self.compile_pattern(pat, &mut vec![], false)?;
+                    self.emit(OpCode::StoreLocal(alt_tmp));
+                    self.emit(OpCode::Pop);
+                    self.emit(OpCode::LoadLocal(alt_tmp));
+                    self.emit(OpCode::Or);
+                }
+                self.emit(OpCode::StoreLocal(alt_tmp));
+                self.emit(OpCode::LoadLocal(scrut_tmp));
+                self.emit(OpCode::LoadLocal(alt_tmp));
+                Ok(())
+            }
             _ => {
-                // For Struct, Tuple, Or, Slice, Rest — fall back to const false
+                // For Struct, Tuple, Slice, Rest — fall back to const false
                 // (will be handled properly in subsequent iterations)
                 self.emit(OpCode::ConstBool(false));
                 Ok(())

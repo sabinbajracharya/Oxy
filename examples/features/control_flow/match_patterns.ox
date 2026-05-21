@@ -177,9 +177,58 @@ fn test_match_multiple_patterns() {
     assert_eq!(result, "consonant");
 }
 
-// NOTE: Or-patterns (`'a' | 'e' | 'i' | 'o' | 'u'`) and nested enum patterns
-// (`Some(Some(v))`) are not yet supported natively. These tests will be added
-// when the compiler gains support for these pattern types.
+// === Or Patterns ===
+
+#[test]
+fn test_or_pattern_vowels() {
+    let c = 'e';
+    let kind = match c {
+        'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
+        _ => "consonant",
+    };
+    assert_eq!(kind, "vowel");
+}
+
+#[test]
+fn test_or_pattern_consonant_falls_through() {
+    let c = 'b';
+    let kind = match c {
+        'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
+        _ => "consonant",
+    };
+    assert_eq!(kind, "consonant");
+}
+
+#[test]
+fn test_or_pattern_int_literals() {
+    let mut hits = 0;
+    for n in [1, 2, 3, 4] {
+        match n {
+            1 | 2 => hits = hits + 10,
+            _ => hits = hits + 1,
+        }
+    }
+    // 10 + 10 + 1 + 1 = 22
+    assert_eq!(hits, 22);
+}
+
+#[test]
+fn test_or_pattern_combined_with_range_and_guard_in_for_loop() {
+    // Regression: combining OR + Range + guard inside a for loop used to
+    // corrupt the iterator slot (Range pattern's slot-0 scratch hack).
+    let mut buf = "".to_string();
+    for n in [0, 2, 5, 42, -3] {
+        let label = match n {
+            0 => "zero",
+            1 | 2 => "or",
+            3..=9 => "range",
+            x if x > 0 => "guard",
+            _ => "neg",
+        };
+        buf = f"{buf}{label};";
+    }
+    assert_eq!(buf, "zero;or;range;guard;neg;");
+}
 
 // === Match with Option Enum Variant ===
 
