@@ -6030,3 +6030,106 @@ fn main() {
     );
     assert_eq!(output, vec!["1.0\n", "2.0\n"]);
 }
+
+// Regression tests for the slot/stack invariant class of bugs (see
+// docs/architecture/vm-locals-stack-separation.md). After locals were moved
+// to a per-frame Vec separate from the operand stack, these scenarios cannot
+// collide by construction, but the tests guard against architectural drift.
+
+#[test]
+fn test_for_loop_with_range_pattern() {
+    // Range pattern inside a for-loop used to clobber the iterator slot
+    // (Pattern::Range stored a scratch value in slot 0).
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let mut hits = 0;
+    for n in 0..20 {
+        match n {
+            3..=9 => { hits = hits + 1; },
+            _ => {},
+        }
+    }
+    println!("{}", hits);
+}"#,
+    );
+    assert_eq!(output, vec!["7\n"]);
+}
+
+#[test]
+fn test_nested_match_in_closure() {
+    // Enum match inside a closure body — EnumDataGet had to be wired up in
+    // the closure dispatch path (formerly a separate execute_op).
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let xs = [Some(1), None, Some(3), None, Some(5)];
+    let doubled = xs.iter().map(|x| match x {
+        Some(n) => n * 2,
+        None => 0,
+    }).collect::<Vec<i64>>();
+    for v in doubled {
+        println!("{}", v);
+    }
+}"#,
+    );
+    assert_eq!(output, vec!["2\n", "0\n", "6\n", "0\n", "10\n"]);
+}
+
+#[test]
+fn test_closure_mutating_captured_in_loop() {
+    // Closure assigning to a captured `mut` var inside a for-loop —
+    // a StoreLocal+continue bug previously corrupted the Cell-wrapped capture.
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let mut total = 0;
+    let add = |x: i64| { total = total + x; };
+    for n in [1, 2, 3, 4, 5] {
+        add(n);
+    }
+    println!("{}", total);
+}"#,
+    );
+    assert_eq!(output, vec!["15\n"]);
+}
+
+#[test]
+fn test_deeply_nested_pattern_destructure() {
+    // Tuple destructure then match on nested tuples — exercises temp-slot
+    // allocation in bind_pattern_data; would surface any slot/stack collision.
+    let output = run_and_capture(
+        r#"
+fn main() {
+    let pairs = [(1, 2), (3, 4), (5, 6)];
+    for (a, b) in pairs {
+        match (a, b) {
+            (1, y) => println!("one {}", y),
+            (x, 4) => println!("{} four", x),
+            (x, y) => println!("{} {}", x, y),
+        }
+    }
+}"#,
+    );
+    assert_eq!(output, vec!["one 2\n", "3 four\n", "5 6\n"]);
+}
+
+#[test]
+fn test_recursive_call_inside_closure() {
+    // Recursive Call inside a closure body run via run_closure — exercises
+    // frame-stack discipline between the iterator builtin path and nested calls.
+    let output = run_and_capture(
+        r#"
+fn fib(n: i64) -> i64 {
+    if n < 2 { return n; }
+    fib(n - 1) + fib(n - 2)
+}
+fn main() {
+    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<Vec<i64>>();
+    for v in results {
+        println!("{}", v);
+    }
+}"#,
+    );
+    assert_eq!(output, vec!["5\n", "8\n", "13\n"]);
+}

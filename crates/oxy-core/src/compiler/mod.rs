@@ -67,6 +67,9 @@ pub struct Compiler {
     pub(crate) fn_generic_names: HashMap<String, Vec<String>>,
     /// Per-function local variable names: function entry IP → slot_names.
     pub(crate) fn_local_names: HashMap<usize, Vec<String>>,
+    /// Per-function frame size (number of local slots): function entry IP → size.
+    /// Used by the VM at Call time to pre-allocate the frame's locals vec.
+    pub(crate) fn_frame_sizes: HashMap<usize, usize>,
     /// Mutable variables captured by closures (for targeted Cell wrapping).
     pub(crate) captured_mutable: HashSet<String>,
     /// If true, compilation fails when no `main` function exists.
@@ -143,6 +146,7 @@ impl Default for Compiler {
             fn_meta: HashMap::new(),
             fn_generic_names: HashMap::new(),
             fn_local_names: HashMap::new(),
+            fn_frame_sizes: HashMap::new(),
             captured_mutable: HashSet::new(),
             require_main: true,
             current_impl_type: None,
@@ -314,12 +318,13 @@ impl Compiler {
 
         Ok(Chunk {
             code: self.code,
-            local_count: 0,
+            local_count: self.main_local_names.len(),
             entry_point,
             functions: self.functions,
             closure_meta: self.closure_meta,
             local_names: self.main_local_names,
             fn_local_names: self.fn_local_names,
+            fn_frame_sizes: self.fn_frame_sizes,
             struct_defs: self.struct_defs,
             enum_defs: self.enum_defs,
             impl_methods: self.impl_methods,
@@ -584,6 +589,7 @@ impl Compiler {
             self.main_local_names = self.sym.build_slot_names();
         }
         self.fn_local_names.insert(ip, self.sym.build_slot_names());
+        self.fn_frame_sizes.insert(ip, self.sym.next_slot);
 
         self.sym = saved_sym;
         self.current_impl_type = saved_impl_type;
@@ -1058,6 +1064,7 @@ impl Compiler {
                     self.compile_block(&f.body)?;
                     self.emit(OpCode::Return);
                     self.fn_local_names.insert(ip, self.sym.build_slot_names());
+                    self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                     self.sym = saved_sym;
                 }
                 Item::Struct(s) => {
@@ -1137,6 +1144,7 @@ impl Compiler {
                         self.compile_block(&method.body)?;
                         self.emit(OpCode::Return);
                         self.fn_local_names.insert(ip, self.sym.build_slot_names());
+                        self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                         self.sym = saved_sym;
                     }
                 }
@@ -1231,6 +1239,7 @@ impl Compiler {
                         self.compile_block(&method.body)?;
                         self.emit(OpCode::Return);
                         self.fn_local_names.insert(ip, self.sym.build_slot_names());
+                        self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                         self.sym = saved_sym;
                     }
                 }

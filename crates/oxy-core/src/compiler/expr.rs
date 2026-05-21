@@ -130,6 +130,43 @@ impl Compiler {
                 }
                 Ok(())
             }
+            Pattern::Tuple(patterns, _) => {
+                // Input: [scrutinee]. Output: [bool]. Scrutinee is consumed —
+                // caller must reload it from the outer scrutinee slot before
+                // bind_pattern_data (same protocol as EnumVariant).
+                let scrut_tmp = self.sym.define("__tuple_scrut");
+                self.emit(OpCode::StoreLocal(scrut_tmp));
+                self.define_pattern_slots(patterns);
+                let acc_tmp = self.sym.define("__tuple_acc");
+                self.emit(OpCode::ConstBool(true));
+                self.emit(OpCode::StoreLocal(acc_tmp));
+                for (i, pat) in patterns.iter().enumerate() {
+                    match pat {
+                        Pattern::Wildcard(_) | Pattern::Ident(_, _) => {
+                            // Always matches — accumulator unchanged.
+                        }
+                        Pattern::Literal(lit_expr) => {
+                            self.emit(OpCode::LoadLocal(scrut_tmp));
+                            self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
+                            self.emit(OpCode::VecIndex);
+                            self.compile_expr(lit_expr)?;
+                            self.emit(OpCode::Eq);
+                            self.emit(OpCode::LoadLocal(acc_tmp));
+                            self.emit(OpCode::And);
+                            self.emit(OpCode::StoreLocal(acc_tmp));
+                        }
+                        _ => {
+                            // Nested Tuple/Range/EnumVariant inside a tuple
+                            // pattern is not yet handled — degrade gracefully
+                            // by failing the match arm.
+                            self.emit(OpCode::ConstBool(false));
+                            self.emit(OpCode::StoreLocal(acc_tmp));
+                        }
+                    }
+                }
+                self.emit(OpCode::LoadLocal(acc_tmp));
+                Ok(())
+            }
             Pattern::Or(pats, _) => {
                 // Input: [scrutinee]. Output: [scrutinee, bool] (= OR over alternatives).
                 //
@@ -253,8 +290,17 @@ impl Compiler {
                 Pattern::Wildcard(_) | Pattern::Rest(_) => {
                     // Skip — no binding needed
                 }
+                Pattern::Tuple(..) | Pattern::EnumVariant { .. } => {
+                    // Nested pattern: pre-define binding slots, extract the
+                    // element at index i, and recursively bind via the
+                    // general bind_pattern_data path.
+                    self.define_pattern_slots(std::slice::from_ref(pat));
+                    self.emit(OpCode::LoadLocal(temp_slot));
+                    self.emit(OpCode::ConstInt(i as i64, IntegerWidth::I64));
+                    self.emit(OpCode::VecIndex);
+                    self.bind_pattern_data(pat)?;
+                }
                 _ => {
-                    // Nested pattern — not supported yet
                     return Err(FerriError::Runtime {
                         message: "complex destructure patterns not yet supported natively".into(),
                         line: span.line,
@@ -627,7 +673,10 @@ impl Compiler {
                 self.emit(OpCode::StoreLocal(scrut_slot));
                 // Pattern check
                 self.emit(OpCode::LoadLocal(scrut_slot));
-                let consumes = matches!(pattern.as_ref(), Pattern::EnumVariant { .. });
+                let consumes = matches!(
+                    pattern.as_ref(),
+                    Pattern::EnumVariant { .. } | Pattern::Tuple(..)
+                );
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_end = self.emit(OpCode::JumpIfFalse(0));
                 // Matched: clean up, bind, compile body. EnumVariant patterns
@@ -1895,6 +1944,7 @@ impl Compiler {
                 }
                 self.compile_expr(body)?;
                 self.emit(OpCode::Return);
+                self.fn_frame_sizes.insert(target_ip, self.sym.next_slot);
                 self.sym = saved_sym;
                 // Patch the skip jump to land after the Return
                 self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
@@ -1951,7 +2001,10 @@ impl Compiler {
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
 
                     // Compile pattern check → leaves Bool(true)+data or Bool(false)
-                    let consumes_scrutinee = matches!(arm.pattern, Pattern::EnumVariant { .. });
+                    let consumes_scrutinee = matches!(
+                        arm.pattern,
+                        Pattern::EnumVariant { .. } | Pattern::Tuple(..)
+                    );
                     self.compile_pattern(&arm.pattern, &mut vec![], is_last)?;
 
                     // JumpIfFalse to next arm if pattern didn't match
@@ -2026,7 +2079,10 @@ impl Compiler {
 
                 // Pattern check
                 self.emit(OpCode::LoadLocal(scrut_slot));
-                let consumes = matches!(pattern.as_ref(), Pattern::EnumVariant { .. });
+                let consumes = matches!(
+                    pattern.as_ref(),
+                    Pattern::EnumVariant { .. } | Pattern::Tuple(..)
+                );
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_else = self.emit(OpCode::JumpIfFalse(0));
 

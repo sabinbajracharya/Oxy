@@ -1,8 +1,51 @@
 //! Stack-based virtual machine for executing compiled Oxy bytecode.
 //!
-//! The VM executes a flat sequence of [`OpCode`]s produced by the compiler.
-//! It uses a value stack and a call stack. Each call frame tracks its own
-//! local variable slots and return address.
+//! # Execution model
+//!
+//! The VM has two independent storage areas:
+//!
+//! - **Operand stack** (`Vm::stack: Vec<Value>`): pure LIFO scratch for
+//!   expression evaluation. `Pop` is unconditional. No locals live here.
+//! - **Frame locals** (`Frame::locals: Vec<Value>`): per-call random-access
+//!   storage. Pre-sized at Call time from a compiler-known `frame_size`
+//!   (`Chunk.fn_frame_sizes`). Slot N is `locals[N]` — no `base + slot`
+//!   arithmetic.
+//!
+//! ## Frame layout at Call time
+//!
+//! Regular functions: args occupy `locals[0..arg_count]`. The caller drains
+//! `arg_count` items off the operand stack into the new frame's locals.
+//!
+//! Closures: captures placed at their original outer-slot indices (the
+//! closure body was compiled inside the parent's symbol table and addresses
+//! captures by those indices). Args follow at
+//! `locals[captures_end..captures_end + arg_count]`.
+//!
+//! ## Return discipline
+//!
+//! Every Frame records `caller_op_stack_len` (the operand-stack length at
+//! Call entry, after args were drained). On `Return`: pop result, pop
+//! frame (which drops `locals`), truncate operand stack to
+//! `caller_op_stack_len`, push result. This cleans up any scratch the
+//! callee left behind.
+//!
+//! ## Pattern compilation contract
+//!
+//! Every `Pattern::*` compile path leaves the operand stack in one of two
+//! shapes (see `compiler/expr.rs::compile_pattern`):
+//!
+//! - Most patterns: `[scrutinee, bool]`. The match-arm dispatcher does
+//!   `JumpIfFalse` then `Pop` before calling `bind_pattern_data`.
+//! - `Pattern::EnumVariant` and `Pattern::Tuple`: `[bool]` — they consume
+//!   the scrutinee during the test. The dispatcher detects these via a
+//!   `consumes_scrutinee` flag and reloads from the outer scrutinee slot
+//!   before binding.
+//!
+//! ## History
+//!
+//! The locals/operand split was introduced to eliminate a recurring class
+//! of slot/stack-collision bugs. See
+//! `docs/architecture/vm-locals-stack-separation.md`.
 
 use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
@@ -224,6 +267,9 @@ pub struct Chunk {
     pub local_names: Vec<String>,
     /// Per-function local variable names: function entry IP → slot_names.
     pub fn_local_names: std::collections::HashMap<usize, Vec<String>>,
+    /// Per-function frame size: function entry IP → number of local slots.
+    /// Used by the VM at Call time to pre-allocate the frame's locals vec.
+    pub fn_frame_sizes: std::collections::HashMap<usize, usize>,
     /// Registered struct definitions (for StructInit and method dispatch).
     pub struct_defs: std::collections::HashMap<String, crate::ast::StructDef>,
     /// Registered enum definitions (for Path enum variant lookup).
@@ -252,9 +298,16 @@ pub struct Vm {
 
 struct Frame {
     return_ip: usize,
-    base: usize,
-    /// Maximum slot index accessed + 1 (protects locals from Pop).
-    max_slot: usize,
+    /// Locals for this frame, owned and pre-sized at Call time from the
+    /// compiler-known `frame_size`. Slot N is `locals[N]` — no `base + slot`
+    /// arithmetic, no growth-during-execution. Args occupy slots 0..arg_count
+    /// (regular functions) or `captures_end..captures_end + arg_count`
+    /// (closures, where captures are placed at their original outer indices).
+    locals: Vec<Value>,
+    /// Operand stack length at frame entry (after args have been drained off).
+    /// Used by `Return` (and the `TryPop` early-return path) to clean up any
+    /// scratch the callee leaves on the operand stack before pushing the result.
+    caller_op_stack_len: usize,
     /// Function entry IP (for looking up local variable names).
     #[allow(dead_code)]
     fn_ip: usize,
@@ -320,13 +373,14 @@ impl Vm {
     pub fn run(&mut self) -> VmResult {
         self.ip = self.chunk.entry_point;
 
-        // Push a synthetic top-level frame to protect locals from Pop.
-        // The sentinel `return_ip == usize::MAX` is how dispatch_op's
-        // Return arm detects "this is the top of execution".
+        // Push a synthetic top-level frame holding the top-level scope's locals.
+        // The sentinel `return_ip == usize::MAX` is how dispatch_op's Return
+        // arm detects "this is the top of execution".
+        let top_size = self.chunk.local_count;
         self.call_stack.push(Frame {
             return_ip: usize::MAX,
-            base: 0,
-            max_slot: 0,
+            locals: vec![Value::Unit; top_size],
+            caller_op_stack_len: 0,
             write_back_slot: None,
             fn_ip: self.chunk.entry_point,
         });
@@ -381,14 +435,16 @@ impl Vm {
                 if let Some(ref name) = a_name {
                     let key = (name.clone(), method.to_string());
                     if let Some(&target) = self.chunk.method_ips.get(&key) {
-                        self.stack.push(a.clone());
-                        self.stack.push(b.clone());
                         if self.call_stack.len() < 1024 {
-                            let base = self.stack.len() - 2;
+                            let frame_size = self.frame_size_for(target, 2);
+                            let mut locals = vec![Value::Unit; frame_size.max(2)];
+                            locals[0] = a.clone();
+                            locals[1] = b.clone();
+                            let caller_op_stack_len = self.stack.len();
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
-                                base,
-                                max_slot: 2,
+                                locals,
+                                caller_op_stack_len,
                                 write_back_slot: None,
                                 fn_ip: target,
                             });
@@ -401,14 +457,16 @@ impl Vm {
                 if let Some(ref name) = b_name {
                     let key = (name.clone(), method.to_string());
                     if let Some(&target) = self.chunk.method_ips.get(&key) {
-                        self.stack.push(b.clone());
-                        self.stack.push(a.clone());
                         if self.call_stack.len() < 1024 {
-                            let base = self.stack.len() - 2;
+                            let frame_size = self.frame_size_for(target, 2);
+                            let mut locals = vec![Value::Unit; frame_size.max(2)];
+                            locals[0] = b.clone();
+                            locals[1] = a.clone();
+                            let caller_op_stack_len = self.stack.len();
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
-                                base,
-                                max_slot: 2,
+                                locals,
+                                caller_op_stack_len,
                                 write_back_slot: None,
                                 fn_ip: target,
                             });
@@ -440,13 +498,15 @@ impl Vm {
             }
         };
         if let Some(&target) = self.chunk.method_ips.get(&(struct_name, "fmt".to_string())) {
-            self.stack.push(val.clone());
             if self.call_stack.len() < 1024 {
-                let base = self.stack.len() - 1;
+                let frame_size = self.frame_size_for(target, 1);
+                let mut locals = vec![Value::Unit; frame_size.max(1)];
+                locals[0] = val.clone();
+                let caller_op_stack_len = self.stack.len();
                 self.call_stack.push(Frame {
                     return_ip: self.ip + 1,
-                    base,
-                    max_slot: 1,
+                    locals,
+                    caller_op_stack_len,
                     fn_ip: target,
                     write_back_slot: None,
                 });
@@ -476,18 +536,19 @@ impl Vm {
                         .method_ips
                         .get(&(struct_name, method.to_string()))
                     {
-                        // Call the trait method natively via VM call stack
-                        self.stack.push(a);
-                        self.stack.push(b);
                         if self.call_stack.len() >= 1024 {
                             self.stack.push(Value::Unit);
                             return;
                         }
-                        let base = self.stack.len() - 2;
+                        let frame_size = self.frame_size_for(target, 2);
+                        let mut locals = vec![Value::Unit; frame_size.max(2)];
+                        locals[0] = a;
+                        locals[1] = b;
+                        let caller_op_stack_len = self.stack.len();
                         self.call_stack.push(Frame {
                             return_ip: self.ip + 1,
-                            base,
-                            max_slot: 2,
+                            locals,
+                            caller_op_stack_len,
                             write_back_slot: None,
                             fn_ip: target,
                         });
@@ -524,11 +585,7 @@ impl Vm {
             OpCode::ConstString(s) => self.stack.push(Value::String(s)),
             OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
             OpCode::Pop => {
-                // Protect frame locals from being popped (matches Vm::run).
-                let protected = self.frame_protected();
-                if self.stack.len() > protected {
-                    self.stack.pop();
-                }
+                self.stack.pop();
             }
             OpCode::Dup => {
                 let v = self.stack.last().cloned().unwrap_or(Value::Unit);
@@ -553,12 +610,15 @@ impl Vm {
                 if let Some(ref tn) = type_name {
                     let key = (tn.clone(), "neg".to_string());
                     if let Some(&target) = self.chunk.method_ips.get(&key) {
-                        self.stack.push(v.clone());
                         if self.call_stack.len() < 1024 {
+                            let frame_size = self.frame_size_for(target, 1);
+                            let mut locals = vec![Value::Unit; frame_size.max(1)];
+                            locals[0] = v.clone();
+                            let caller_op_stack_len = self.stack.len();
                             self.call_stack.push(Frame {
                                 return_ip: self.ip + 1,
-                                base: self.stack.len() - 1,
-                                max_slot: 1,
+                                locals,
+                                caller_op_stack_len,
                                 write_back_slot: None,
                                 fn_ip: target,
                             });
@@ -643,56 +703,32 @@ impl Vm {
                 }
             }
             OpCode::LoadLocal(slot) => {
-                let base = self.frame_base();
-                let idx = base + slot;
-                let v = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
+                let v = self
+                    .current_locals()
+                    .get(slot)
+                    .cloned()
+                    .unwrap_or(Value::Unit);
                 self.stack.push(v.deref_cell());
             }
             OpCode::StoreLocal(slot) => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
-                let base = self.frame_base();
-                let idx = base + slot;
-                if idx < self.stack.len() {
-                    if let Value::Cell(rc) = &self.stack[idx] {
-                        *rc.borrow_mut() = val;
-                        if let Some(frame) = self.call_stack.last_mut() {
-                            if slot + 1 > frame.max_slot {
-                                frame.max_slot = slot + 1;
-                            }
-                        }
-                        return Ok(StepOutcome::Bump);
-                    }
+                let locals = self.current_locals_mut();
+                if slot >= locals.len() {
+                    locals.resize(slot + 1, Value::Unit);
                 }
-                while idx >= self.stack.len() {
-                    self.stack.push(Value::Unit);
-                }
-                self.stack[idx] = val;
-                if let Some(frame) = self.call_stack.last_mut() {
-                    if slot + 1 > frame.max_slot {
-                        frame.max_slot = slot + 1;
-                    }
+                if let Value::Cell(rc) = &locals[slot] {
+                    *rc.borrow_mut() = val;
+                } else {
+                    locals[slot] = val;
                 }
             }
             OpCode::BindIdent(slot) => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
-                let base = self.frame_base();
-                let idx = base + slot;
-                // Match Vm::run: extend stack with Unit first, then choose
-                // insert vs in-place assign based on whether the slot is at
-                // or near the new stack top.
-                while idx >= self.stack.len() {
-                    self.stack.push(Value::Unit);
+                let locals = self.current_locals_mut();
+                if slot >= locals.len() {
+                    locals.resize(slot + 1, Value::Unit);
                 }
-                if idx + 1 >= self.stack.len() && !self.stack.is_empty() {
-                    self.stack.insert(idx, val);
-                } else {
-                    self.stack[idx] = val;
-                }
-                if let Some(frame) = self.call_stack.last_mut() {
-                    if slot + 1 > frame.max_slot {
-                        frame.max_slot = slot + 1;
-                    }
-                }
+                locals[slot] = val;
             }
             OpCode::Print => {
                 let v = self.stack.pop().unwrap_or(Value::Unit);
@@ -1000,7 +1036,7 @@ impl Vm {
                     if frame.return_ip == usize::MAX {
                         return Ok(StepOutcome::Returned(val));
                     }
-                    self.stack.truncate(frame.base);
+                    self.stack.truncate(frame.caller_op_stack_len);
                     self.stack.push(val);
                     self.ip = frame.return_ip;
                     return Ok(StepOutcome::Continue);
@@ -1024,11 +1060,9 @@ impl Vm {
                 }
             }
             OpCode::MakeCell(slot) => {
-                let b = self.frame_base();
-                let i = b + slot;
-                if i < self.stack.len() {
-                    let v = self.stack[i].clone();
-                    self.stack[i] = Value::cell(v);
+                let locals = self.current_locals_mut();
+                if let Some(v) = locals.get(slot).cloned() {
+                    locals[slot] = Value::cell(v);
                 }
             }
             OpCode::BitAnd => self.binary_op(vm_bitand),
@@ -1120,11 +1154,17 @@ impl Vm {
                 if self.call_stack.len() >= 1024 {
                     return Err("recursion limit exceeded (max depth 1024)".into());
                 }
+                let frame_size = self.frame_size_for(target, arg_count);
+                let mut locals = vec![Value::Unit; frame_size.max(arg_count)];
                 let args_start = self.stack.len() - arg_count;
+                for (i, arg) in self.stack.drain(args_start..).enumerate() {
+                    locals[i] = arg;
+                }
+                let caller_op_stack_len = self.stack.len();
                 self.call_stack.push(Frame {
                     return_ip: self.ip + 1,
-                    base: args_start,
-                    max_slot: arg_count,
+                    locals,
+                    caller_op_stack_len,
                     write_back_slot: None,
                     fn_ip: target,
                 });
@@ -1141,32 +1181,36 @@ impl Vm {
                         if self.call_stack.len() >= 1024 {
                             return Err("recursion limit exceeded (max depth 1024)".into());
                         }
-                        let args_start = self.stack.len() - arg_count - 1;
-                        let saved: Vec<Value> = self.stack.drain(args_start..).collect();
-                        let args = &saved[1..];
-                        let base = self.stack.len();
-                        let mut max_slot = 0usize;
+                        // Drain [closure_value, arg0, arg1, ...] off the operand stack.
+                        let drain_start = self.stack.len() - arg_count - 1;
+                        let mut drained: Vec<Value> = self.stack.drain(drain_start..).collect();
+                        let _closure_val = drained.remove(0); // drop the callable
+                        let args = drained;
+                        // Closure frame layout: captures at original outer-slot indices;
+                        // args at slots [captures_end .. captures_end + arg_count],
+                        // matching what the closure body was compiled to address.
+                        let captures_end = f
+                            .captured_slots
+                            .iter()
+                            .map(|(_, s)| s + 1)
+                            .max()
+                            .unwrap_or(0);
+                        let needed = captures_end + arg_count;
+                        let frame_size = self.frame_size_for(target, needed).max(needed);
+                        let mut locals = vec![Value::Unit; frame_size];
                         for (name, outer_slot) in &f.captured_slots {
-                            let val = f
-                                .closure_env
-                                .borrow()
-                                .get(name)
-                                .ok()
-                                .map(|v| v.clone())
-                                .unwrap_or(Value::Unit);
-                            while base + outer_slot >= self.stack.len() {
-                                self.stack.push(Value::Unit);
+                            if let Ok(val) = f.closure_env.borrow().get(name) {
+                                locals[*outer_slot] = val.clone();
                             }
-                            self.stack[base + outer_slot] = val;
-                            max_slot = max_slot.max(outer_slot + 1);
                         }
-                        for arg in args {
-                            self.stack.push(arg.clone());
+                        for (i, arg) in args.into_iter().enumerate() {
+                            locals[captures_end + i] = arg;
                         }
+                        let caller_op_stack_len = self.stack.len();
                         self.call_stack.push(Frame {
                             return_ip: self.ip + 1,
-                            base,
-                            max_slot: max_slot + arg_count,
+                            locals,
+                            caller_op_stack_len,
                             fn_ip: target,
                             write_back_slot: None,
                         });
@@ -1219,10 +1263,9 @@ impl Vm {
                 };
                 let closure_env = crate::env::Environment::new();
                 if !captured_vars.is_empty() {
-                    let base = self.frame_base();
+                    let outer_locals: Vec<Value> = self.current_locals().to_vec();
                     for (name, slot, is_mut) in &captured_vars {
-                        let idx = base + slot;
-                        let val = self.stack.get(idx).cloned().unwrap_or(Value::Unit);
+                        let val = outer_locals.get(*slot).cloned().unwrap_or(Value::Unit);
                         closure_env.borrow_mut().define(name.clone(), val, *is_mut);
                     }
                 }
@@ -1271,15 +1314,21 @@ impl Vm {
                     .copied();
                 match method_ip {
                     Some(target) => {
-                        self.stack.push(receiver);
-                        self.stack.extend(args);
                         if self.call_stack.len() >= 1024 {
                             return Err("recursion limit exceeded (max depth 1024)".into());
                         }
+                        let total_args = arg_count + 1; // includes receiver as slot 0
+                        let frame_size = self.frame_size_for(target, total_args);
+                        let mut locals = vec![Value::Unit; frame_size.max(total_args)];
+                        locals[0] = receiver;
+                        for (i, arg) in args.into_iter().enumerate() {
+                            locals[i + 1] = arg;
+                        }
+                        let caller_op_stack_len = self.stack.len();
                         self.call_stack.push(Frame {
                             return_ip: self.ip + 1,
-                            base: self.stack.len() - arg_count - 1,
-                            max_slot: arg_count + 1,
+                            locals,
+                            caller_op_stack_len,
                             write_back_slot: None,
                             fn_ip: target,
                         });
@@ -1299,7 +1348,7 @@ impl Vm {
                 if frame.return_ip == usize::MAX {
                     return Ok(StepOutcome::Returned(result));
                 }
-                self.stack.truncate(frame.base);
+                self.stack.truncate(frame.caller_op_stack_len);
                 self.stack.push(result);
                 self.ip = frame.return_ip;
                 return Ok(StepOutcome::Continue);
@@ -1325,35 +1374,30 @@ impl Vm {
         let saved_ip = self.ip;
         let saved_stack_len = self.stack.len();
         let saved_call_depth = self.call_stack.len();
-        // Push args and captured vars onto stack
-        let base = self.stack.len();
-        for (name, slot) in &ft.captured_slots {
-            let val = ft
-                .closure_env
-                .borrow()
-                .get(name)
-                .ok()
-                .map(|v| v.clone())
-                .unwrap_or(Value::Unit);
-            while base + slot >= self.stack.len() {
-                self.stack.push(Value::Unit);
-            }
-            self.stack[base + slot] = val;
-        }
-        let max_slot = ft
+        // Build the closure's frame: captures at original outer-slot indices,
+        // args at slots [captures_end .. captures_end + arg_count].
+        let captures_end = ft
             .captured_slots
             .iter()
             .map(|(_, s)| s + 1)
             .max()
             .unwrap_or(0);
-        for arg in args {
-            self.stack.push(arg.clone());
+        let needed = captures_end + args.len();
+        let frame_size = self.frame_size_for(target, needed).max(needed);
+        let mut locals = vec![Value::Unit; frame_size];
+        for (name, outer_slot) in &ft.captured_slots {
+            if let Ok(val) = ft.closure_env.borrow().get(name) {
+                locals[*outer_slot] = val.clone();
+            }
+        }
+        for (i, arg) in args.iter().enumerate() {
+            locals[captures_end + i] = arg.clone();
         }
         // Push call frame and run
         self.call_stack.push(Frame {
             return_ip: usize::MAX, // sentinel
-            base,
-            max_slot: max_slot + args.len(),
+            locals,
+            caller_op_stack_len: saved_stack_len,
             fn_ip: target,
             write_back_slot: None,
         });
@@ -1706,15 +1750,31 @@ impl Vm {
         (a, b)
     }
 
-    fn frame_base(&self) -> usize {
-        self.call_stack.last().map(|f| f.base).unwrap_or(0)
-    }
-
-    fn frame_protected(&self) -> usize {
+    fn current_locals(&self) -> &[Value] {
         self.call_stack
             .last()
-            .map(|f| f.base + f.max_slot)
-            .unwrap_or(0)
+            .map(|f| f.locals.as_slice())
+            .unwrap_or(&[])
+    }
+
+    fn current_locals_mut(&mut self) -> &mut Vec<Value> {
+        &mut self
+            .call_stack
+            .last_mut()
+            .expect("no frame on call_stack")
+            .locals
+    }
+
+    /// Look up a function's pre-computed frame size (number of local slots).
+    /// Falls back to `arg_count` if the function isn't in `fn_frame_sizes`
+    /// (e.g. for synthetically-generated entries) — the frame can always be
+    /// grown later by callers that pad with Unit.
+    fn frame_size_for(&self, target: usize, arg_count: usize) -> usize {
+        self.chunk
+            .fn_frame_sizes
+            .get(&target)
+            .copied()
+            .unwrap_or(arg_count)
     }
 
     fn write_output(&mut self, s: &str) {
@@ -1734,26 +1794,26 @@ impl Vm {
 
     fn trace_op(&self, op: &OpCode) {
         let frame = self.call_stack.last();
-        let base = frame.map(|f| f.base).unwrap_or(0);
-        let max_slot = frame.map(|f| f.max_slot).unwrap_or(0);
-        let protected = base + max_slot;
+        let locals_preview: Vec<String> = frame
+            .map(|f| {
+                f.locals
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| format!("L{}:{}", i, trace_compact_val(v)))
+                    .collect()
+            })
+            .unwrap_or_default();
         let stack_preview: Vec<String> = self
             .stack
             .iter()
-            .enumerate()
-            .skip(base)
-            .map(|(i, v)| {
-                let marker = if i < protected { "L" } else { "O" };
-                format!("{}{}:{}", marker, i - base, trace_compact_val(v))
-            })
+            .map(|v| format!("O:{}", trace_compact_val(v)))
             .collect();
         let op_str = trace_format_op(op);
         eprintln!(
-            "  [{:>4}] {:45} frame(base={}, prot={}) stack=[{}]",
+            "  [{:>4}] {:45} locals=[{}] op_stack=[{}]",
             self.ip,
             op_str,
-            base,
-            protected,
+            locals_preview.join(", "),
             stack_preview.join(", ")
         );
     }
