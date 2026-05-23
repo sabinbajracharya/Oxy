@@ -247,7 +247,13 @@ pub struct GenericParam {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeAnnotation {
     /// Simple named type: `i64`, `String`, `bool`, `Vec<i64>`, etc.
-    Named { name: String, span: Span },
+    /// `generic_args` carries the inner types of `Vec<T>`, `HashMap<K, V>`,
+    /// `Option<T>`, etc. Empty for unparameterized types.
+    Named {
+        name: String,
+        generic_args: Vec<TypeAnnotation>,
+        span: Span,
+    },
     /// Fixed-size array type: `[T; N]`
     Array {
         inner: Box<TypeAnnotation>,

@@ -463,6 +463,7 @@ impl Parser {
                     name: "self".to_string(),
                     type_ann: TypeAnnotation::Named {
                         name: "Self".to_string(),
+                        generic_args: Vec::new(),
                         span: start_span,
                     },
                     is_mut,
@@ -499,12 +500,14 @@ impl Parser {
         // Accept `Self` as a type
         if self.check(&TokenKind::SelfUpper) {
             self.advance();
-            // Skip generic type args if present: `Self<T>`
-            if self.check(&TokenKind::Lt) {
-                self.skip_generic_args();
-            }
+            let generic_args = if self.check(&TokenKind::Lt) {
+                self.parse_generic_args()?
+            } else {
+                Vec::new()
+            };
             return Ok(TypeAnnotation::Named {
                 name: "Self".to_string(),
+                generic_args,
                 span,
             });
         }
@@ -512,7 +515,11 @@ impl Parser {
         if self.check(&TokenKind::Impl) {
             self.advance();
             let name = self.expect_ident()?;
-            return Ok(TypeAnnotation::Named { name, span });
+            return Ok(TypeAnnotation::Named {
+                name,
+                generic_args: Vec::new(),
+                span,
+            });
         }
         // Reject `&` in type position — Oxy has no references.
         if self.check(&TokenKind::Amp) {
@@ -550,7 +557,11 @@ impl Parser {
                 name.push_str(" -> ");
                 name.push_str(&ret.name());
             }
-            return Ok(TypeAnnotation::Named { name, span });
+            return Ok(TypeAnnotation::Named {
+                name,
+                generic_args: Vec::new(),
+                span,
+            });
         }
         // Accept `[T; N]` array type
         if self.check(&TokenKind::LBracket) {
@@ -587,27 +598,36 @@ impl Parser {
             });
         }
         let name = self.expect_ident()?;
-        // Skip generic type args: `Vec<i64>`, `HashMap<K, V>`
-        if self.check(&TokenKind::Lt) {
-            self.skip_generic_args();
-        }
-        Ok(TypeAnnotation::Named { name, span })
+        let generic_args = if self.check(&TokenKind::Lt) {
+            self.parse_generic_args()?
+        } else {
+            Vec::new()
+        };
+        Ok(TypeAnnotation::Named {
+            name,
+            generic_args,
+            span,
+        })
     }
 
-    /// Skip generic type arguments `<...>` — handles nesting.
-    fn skip_generic_args(&mut self) {
-        if !self.match_token(&TokenKind::Lt) {
-            return;
-        }
-        let mut depth = 1;
-        while depth > 0 && !self.is_at_end() {
-            if self.check(&TokenKind::Lt) {
-                depth += 1;
-            } else if self.check(&TokenKind::Gt) {
-                depth -= 1;
-            }
+    /// Parse generic type arguments `<T, U, ...>` into a list of nested
+    /// `TypeAnnotation`s. Handles nesting (`Vec<Vec<i64>>`) via the recursive
+    /// `parse_type_annotation` call.
+    fn parse_generic_args(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
+        self.expect(TokenKind::Lt)?;
+        let mut args = Vec::new();
+        if self.check(&TokenKind::Gt) {
             self.advance();
+            return Ok(args);
         }
+        loop {
+            args.push(self.parse_type_annotation()?);
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(TokenKind::Gt)?;
+        Ok(args)
     }
 
     fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, FerriError> {
@@ -2576,6 +2596,7 @@ impl Parser {
                         if !current_type.trim().is_empty() {
                             types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
+                                generic_args: Vec::new(),
                                 span: type_start,
                             });
                         }
@@ -2591,6 +2612,7 @@ impl Parser {
                         if !current_type.trim().is_empty() {
                             types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
+                                generic_args: Vec::new(),
                                 span: type_start,
                             });
                         }
@@ -2602,6 +2624,7 @@ impl Parser {
                         if !current_type.trim().is_empty() {
                             types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
+                                generic_args: Vec::new(),
                                 span: type_start,
                             });
                         }
@@ -2615,6 +2638,7 @@ impl Parser {
                         if !current_type.trim().is_empty() {
                             types.push(TypeAnnotation::Named {
                                 name: current_type.trim().to_string(),
+                                generic_args: Vec::new(),
                                 span: type_start,
                             });
                             current_type.clear();

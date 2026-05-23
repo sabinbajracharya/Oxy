@@ -29,11 +29,16 @@ pub enum TypeInfo {
     String,
     Char,
     Unit,
-    Vec,
-    HashMap,
-    BTreeMap,
-    Option,
-    Result,
+    /// `Vec<T>` — element type carried in the box.
+    Vec(Box<TypeInfo>),
+    /// `HashMap<K, V>`.
+    HashMap(Box<TypeInfo>, Box<TypeInfo>),
+    /// `BTreeMap<K, V>`.
+    BTreeMap(Box<TypeInfo>, Box<TypeInfo>),
+    /// `Option<T>`.
+    Option(Box<TypeInfo>),
+    /// `Result<T, E>`.
+    Result(Box<TypeInfo>, Box<TypeInfo>),
     UserStruct(String),
     Function {
         params: Vec<TypeInfo>,
@@ -78,15 +83,36 @@ impl TypeInfo {
             TypeInfo::String => "String",
             TypeInfo::Char => "char",
             TypeInfo::Unit => "()",
-            TypeInfo::Vec => "Vec",
-            TypeInfo::HashMap => "HashMap",
-            TypeInfo::BTreeMap => "BTreeMap",
-            TypeInfo::Option => "Option",
-            TypeInfo::Result => "Result",
+            // Parameterized containers print their bare head — callers that
+            // want the full `Vec<T>` form should use `display_name()`.
+            TypeInfo::Vec(_) => "Vec",
+            TypeInfo::HashMap(..) => "HashMap",
+            TypeInfo::BTreeMap(..) => "BTreeMap",
+            TypeInfo::Option(_) => "Option",
+            TypeInfo::Result(..) => "Result",
             TypeInfo::UserStruct(name) => name.as_str(),
             TypeInfo::Function { .. } => "fn",
             TypeInfo::Array(..) => "[...]",
             TypeInfo::Unknown => "?",
+        }
+    }
+
+    /// Owned, fully-parameterized display name (e.g. `Vec<i64>`).
+    pub fn display_name(&self) -> String {
+        match self {
+            TypeInfo::Vec(t) => format!("Vec<{}>", t.display_name()),
+            TypeInfo::Option(t) => format!("Option<{}>", t.display_name()),
+            TypeInfo::HashMap(k, v) => {
+                format!("HashMap<{}, {}>", k.display_name(), v.display_name())
+            }
+            TypeInfo::BTreeMap(k, v) => {
+                format!("BTreeMap<{}, {}>", k.display_name(), v.display_name())
+            }
+            TypeInfo::Result(t, e) => {
+                format!("Result<{}, {}>", t.display_name(), e.display_name())
+            }
+            TypeInfo::Array(elem, n) => format!("[{}; {n}]", elem.display_name()),
+            _ => self.name().to_string(),
         }
     }
 
@@ -96,12 +122,39 @@ impl TypeInfo {
             None => return Ok(TypeInfo::Unknown),
         };
         match ann {
-            TypeAnnotation::Named { name, .. } => Ok(Self::from_name(name)),
+            TypeAnnotation::Named {
+                name, generic_args, ..
+            } => {
+                let head = Self::from_name(name);
+                Ok(Self::apply_generics(head, generic_args)?)
+            }
             TypeAnnotation::Array { inner, size, .. } => {
                 let inner_ty = Self::from_annotation(&Some(*inner.clone()))?;
                 Ok(TypeInfo::Array(Box::new(inner_ty), *size))
             }
         }
+    }
+
+    /// Substitute the user-supplied generic arguments into a parameterized
+    /// container type. Non-container heads ignore their generic args.
+    pub fn apply_generics(
+        head: TypeInfo,
+        generic_args: &[TypeAnnotation],
+    ) -> Result<TypeInfo, FerriError> {
+        let arg = |i: usize| -> Result<TypeInfo, FerriError> {
+            match generic_args.get(i) {
+                Some(a) => Self::from_annotation(&Some(a.clone())),
+                None => Ok(TypeInfo::Unknown),
+            }
+        };
+        Ok(match head {
+            TypeInfo::Vec(_) => TypeInfo::Vec(Box::new(arg(0)?)),
+            TypeInfo::Option(_) => TypeInfo::Option(Box::new(arg(0)?)),
+            TypeInfo::HashMap(..) => TypeInfo::HashMap(Box::new(arg(0)?), Box::new(arg(1)?)),
+            TypeInfo::BTreeMap(..) => TypeInfo::BTreeMap(Box::new(arg(0)?), Box::new(arg(1)?)),
+            TypeInfo::Result(..) => TypeInfo::Result(Box::new(arg(0)?), Box::new(arg(1)?)),
+            other => other,
+        })
     }
 
     pub fn from_name(name: &str) -> TypeInfo {
@@ -148,11 +201,15 @@ impl TypeInfo {
                 ret: Box::new(TypeInfo::Unknown),
             },
             "()" | "Unit" => TypeInfo::Unit,
-            "Vec" => TypeInfo::Vec,
-            "HashMap" => TypeInfo::HashMap,
-            "BTreeMap" => TypeInfo::BTreeMap,
-            "Option" => TypeInfo::Option,
-            "Result" => TypeInfo::Result,
+            "Vec" => TypeInfo::Vec(Box::new(TypeInfo::Unknown)),
+            "HashMap" => {
+                TypeInfo::HashMap(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown))
+            }
+            "BTreeMap" => {
+                TypeInfo::BTreeMap(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown))
+            }
+            "Option" => TypeInfo::Option(Box::new(TypeInfo::Unknown)),
+            "Result" => TypeInfo::Result(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown)),
             "_" => TypeInfo::Unknown,
             n => TypeInfo::UserStruct(n.to_string()),
         }
@@ -211,16 +268,32 @@ impl TypeInfo {
             return true;
         }
         // Array literal accepts Vec literal and vice versa (untyped Vec
-        // can initialize an array-typed binding).
-        if matches!(
-            (&self, &other),
-            (TypeInfo::Array(..), TypeInfo::Vec) | (TypeInfo::Vec, TypeInfo::Array(..))
-        ) {
-            return true;
+        // can initialize an array-typed binding). Element types must agree.
+        if let (TypeInfo::Array(se, _), TypeInfo::Vec(oe)) = (self, other) {
+            return se.accepts(oe);
+        }
+        if let (TypeInfo::Vec(se), TypeInfo::Array(oe, _)) = (self, other) {
+            return se.accepts(oe);
         }
         // Array-to-Array: recurse into element type and require matching length.
         if let (TypeInfo::Array(se, sn), TypeInfo::Array(oe, on)) = (self, other) {
             return sn == on && se.accepts(oe);
+        }
+        // Container-to-container: recurse into parameters.
+        if let (TypeInfo::Vec(se), TypeInfo::Vec(oe)) = (self, other) {
+            return se.accepts(oe);
+        }
+        if let (TypeInfo::Option(se), TypeInfo::Option(oe)) = (self, other) {
+            return se.accepts(oe);
+        }
+        if let (TypeInfo::Result(st, se), TypeInfo::Result(ot, oe)) = (self, other) {
+            return st.accepts(ot) && se.accepts(oe);
+        }
+        if let (TypeInfo::HashMap(sk, sv), TypeInfo::HashMap(ok, ov)) = (self, other) {
+            return sk.accepts(ok) && sv.accepts(ov);
+        }
+        if let (TypeInfo::BTreeMap(sk, sv), TypeInfo::BTreeMap(ok, ov)) = (self, other) {
+            return sk.accepts(ok) && sv.accepts(ov);
         }
         false
     }
@@ -333,7 +406,12 @@ impl TypeChecker {
     /// Resolve a TypeAnnotation to TypeInfo, handling Named and Array variants.
     fn resolve_annotation(&self, ann: &TypeAnnotation) -> TypeInfo {
         match ann {
-            TypeAnnotation::Named { name, .. } => self.resolve_type(name),
+            TypeAnnotation::Named {
+                name, generic_args, ..
+            } => {
+                let head = self.resolve_type(name);
+                TypeInfo::apply_generics(head, generic_args).unwrap_or(TypeInfo::Unknown)
+            }
             TypeAnnotation::Array { inner, size, .. } => {
                 let inner_ty = self.resolve_annotation(inner);
                 TypeInfo::Array(Box::new(inner_ty), *size)
@@ -345,15 +423,15 @@ impl TypeChecker {
     /// isn't a builtin we track (UserStruct / Unknown / etc).
     fn builtin_methods_for(&self, ty: &TypeInfo) -> Option<&'static [symbols::MethodInfo]> {
         match ty {
-            TypeInfo::Vec => Some(symbols::VEC_METHODS),
+            TypeInfo::Vec(_) => Some(symbols::VEC_METHODS),
             // Fixed-size arrays share Vec's read-only surface but disallow
             // mutators; we reuse VEC_METHODS and reject mutators in the
             // call-site check.
             TypeInfo::Array(..) => Some(symbols::VEC_METHODS),
             TypeInfo::String => Some(symbols::STRING_METHODS),
-            TypeInfo::HashMap => Some(symbols::HASHMAP_METHODS),
-            TypeInfo::BTreeMap => Some(symbols::BTREEMAP_METHODS),
-            TypeInfo::Option | TypeInfo::Result => Some(symbols::OPTION_RESULT_METHODS),
+            TypeInfo::HashMap(..) => Some(symbols::HASHMAP_METHODS),
+            TypeInfo::BTreeMap(..) => Some(symbols::BTREEMAP_METHODS),
+            TypeInfo::Option(_) | TypeInfo::Result(..) => Some(symbols::OPTION_RESULT_METHODS),
             TypeInfo::Char => Some(symbols::CHAR_METHODS),
             t if t.is_integer() || t.is_float() => Some(symbols::NUMERIC_METHODS),
             _ => None,
@@ -375,17 +453,116 @@ impl TypeChecker {
         // shortcut: `v.map(...)` instead of `v.iter().map(...).collect()`).
         if matches!(
             ty,
-            TypeInfo::Vec
+            TypeInfo::Vec(_)
                 | TypeInfo::Array(..)
-                | TypeInfo::HashMap
-                | TypeInfo::BTreeMap
-                | TypeInfo::Option
-                | TypeInfo::Result
+                | TypeInfo::HashMap(..)
+                | TypeInfo::BTreeMap(..)
+                | TypeInfo::Option(_)
+                | TypeInfo::Result(..)
         ) && symbols::ITERATOR_METHODS.iter().any(|m| m.name == method)
         {
             return true;
         }
         false
+    }
+
+    /// Per-method element-type validation for parameterized containers, and
+    /// a parameterized return type when known. Returns `Ok(Some(ret))` if the
+    /// method was recognised and the caller should use `ret` as the call's
+    /// type; `Ok(None)` to fall through to the generic return-type table.
+    fn check_builtin_method_args(
+        &mut self,
+        obj_ty: &TypeInfo,
+        method: &str,
+        args: &[Expr],
+        arg_types: &[TypeInfo],
+        span: Span,
+    ) -> Result<Option<TypeInfo>, FerriError> {
+        let check = |expected: &TypeInfo, pos: usize, label: &str| -> Result<(), FerriError> {
+            let actual = arg_types.get(pos).cloned().unwrap_or(TypeInfo::Unknown);
+            if !expected.accepts(&actual) {
+                let aspan = args.get(pos).map(|a| a.span()).unwrap_or(span);
+                return Err(FerriError::TypeError {
+                    message: format!(
+                        "type mismatch in `{method}` {label}: expected `{}`, got `{}`",
+                        expected.display_name(),
+                        actual.display_name()
+                    ),
+                    line: aspan.line,
+                    column: aspan.column,
+                });
+            }
+            Ok(())
+        };
+        match obj_ty {
+            TypeInfo::Vec(elem) | TypeInfo::Array(elem, _) => match method {
+                "push" | "contains" => {
+                    check(elem, 0, "argument")?;
+                    Ok(Some(if method == "contains" {
+                        TypeInfo::Bool
+                    } else {
+                        TypeInfo::Unit
+                    }))
+                }
+                "insert" => {
+                    check(&TypeInfo::I64, 0, "index")?;
+                    check(elem, 1, "value")?;
+                    Ok(Some(TypeInfo::Unit))
+                }
+                "pop" | "first" | "last" | "min" | "max" => {
+                    Ok(Some(TypeInfo::Option(elem.clone())))
+                }
+                "get" => {
+                    check(&TypeInfo::I64, 0, "index")?;
+                    Ok(Some(TypeInfo::Option(elem.clone())))
+                }
+                "remove" => {
+                    check(&TypeInfo::I64, 0, "index")?;
+                    Ok(Some(TypeInfo::Option(elem.clone())))
+                }
+                "iter" => Ok(Some(TypeInfo::Vec(elem.clone()))),
+                "len" => Ok(Some(TypeInfo::I64)),
+                "is_empty" => Ok(Some(TypeInfo::Bool)),
+                "clone" => Ok(Some(obj_ty.clone())),
+                _ => Ok(None),
+            },
+            TypeInfo::HashMap(k, v) | TypeInfo::BTreeMap(k, v) => match method {
+                "insert" => {
+                    check(k, 0, "key")?;
+                    check(v, 1, "value")?;
+                    Ok(Some(TypeInfo::Option(v.clone())))
+                }
+                "get" | "remove" => {
+                    check(k, 0, "key")?;
+                    Ok(Some(TypeInfo::Option(v.clone())))
+                }
+                "contains_key" => {
+                    check(k, 0, "key")?;
+                    Ok(Some(TypeInfo::Bool))
+                }
+                "keys" => Ok(Some(TypeInfo::Vec(k.clone()))),
+                "values" => Ok(Some(TypeInfo::Vec(v.clone()))),
+                "len" => Ok(Some(TypeInfo::I64)),
+                "is_empty" => Ok(Some(TypeInfo::Bool)),
+                _ => Ok(None),
+            },
+            TypeInfo::Option(inner) => match method {
+                "unwrap" | "expect" => Ok(Some((**inner).clone())),
+                "unwrap_or" => {
+                    check(inner, 0, "default")?;
+                    Ok(Some((**inner).clone()))
+                }
+                "is_some" | "is_none" => Ok(Some(TypeInfo::Bool)),
+                _ => Ok(None),
+            },
+            TypeInfo::Result(t, e) => match method {
+                "unwrap" => Ok(Some((**t).clone())),
+                "unwrap_err" => Ok(Some((**e).clone())),
+                "is_ok" | "is_err" => Ok(Some(TypeInfo::Bool)),
+                _ => Ok(None),
+            },
+            _ => Ok(None),
+        }
     }
 
     /// Fixed-size arrays forbid mutators (push/pop/etc). Returns true if
@@ -1318,13 +1495,31 @@ impl TypeChecker {
                     } else {
                         // Unknown callee — fall back to inferring args without
                         // checking against any signature.
-                        for arg in args {
-                            self.infer_expr(arg)?;
-                        }
-                        // Built-in constructors
+                        let arg_types: Vec<TypeInfo> = args
+                            .iter()
+                            .map(|a| self.infer_expr(a))
+                            .collect::<Result<_, _>>()?;
+                        // Built-in constructors: parameterize the wrapper by
+                        // the inner argument's inferred type.
                         match name.as_str() {
-                            "Some" => return Ok(TypeInfo::Option),
-                            "Ok" | "Err" => return Ok(TypeInfo::Result),
+                            "Some" => {
+                                let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                                return Ok(TypeInfo::Option(Box::new(inner)));
+                            }
+                            "Ok" => {
+                                let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                                return Ok(TypeInfo::Result(
+                                    Box::new(inner),
+                                    Box::new(TypeInfo::Unknown),
+                                ));
+                            }
+                            "Err" => {
+                                let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                                return Ok(TypeInfo::Result(
+                                    Box::new(TypeInfo::Unknown),
+                                    Box::new(inner),
+                                ));
+                            }
                             _ => {}
                         }
                     }
@@ -1674,9 +1869,10 @@ impl TypeChecker {
                             return Ok(ret_ty.clone());
                         }
                     } else {
-                        for arg in args {
-                            self.infer_expr(arg)?;
-                        }
+                        let arg_types: Vec<TypeInfo> = args
+                            .iter()
+                            .map(|a| self.infer_expr(a))
+                            .collect::<Result<_, _>>()?;
                         // Validate the method against the builtin method tables.
                         // Skip when the receiver type is Unknown (we have no
                         // signature to compare against) or a UserStruct (handled
@@ -1703,6 +1899,15 @@ impl TypeChecker {
                                 line: span.line,
                                 column: span.column,
                             });
+                        }
+                        // Per-method element-type checks for parameterized
+                        // containers (`Vec.push(T)`, `HashMap.insert(K, V)`,
+                        // ...). Returns the method's parameterized return type
+                        // when known.
+                        if let Some(ret) = self
+                            .check_builtin_method_args(&obj_ty, method, args, &arg_types, *span)?
+                        {
+                            return Ok(ret);
                         }
                     }
                 }
@@ -1796,7 +2001,7 @@ impl TypeChecker {
                 // Sequence indexing requires an integer (or a range for slicing).
                 let is_seq = matches!(
                     obj_ty,
-                    TypeInfo::Vec | TypeInfo::Array(..) | TypeInfo::String
+                    TypeInfo::Vec(_) | TypeInfo::Array(..) | TypeInfo::String
                 );
                 if is_seq && !is_range_index && idx_ty != TypeInfo::Unknown && !idx_ty.is_integer()
                 {
@@ -1821,7 +2026,13 @@ impl TypeChecker {
                 }
                 if let TypeInfo::Array(elem, _) = &obj_ty {
                     if is_range_index {
-                        return Ok(TypeInfo::Vec);
+                        return Ok(TypeInfo::Vec(elem.clone()));
+                    }
+                    return Ok((**elem).clone());
+                }
+                if let TypeInfo::Vec(elem) = &obj_ty {
+                    if is_range_index {
+                        return Ok(TypeInfo::Vec(elem.clone()));
                     }
                     return Ok((**elem).clone());
                 }
@@ -1995,7 +2206,7 @@ impl TypeChecker {
                             column: espan.column,
                         });
                     }
-                    return Ok(TypeInfo::Vec);
+                    return Ok(TypeInfo::Vec(Box::new(leader)));
                 }
                 Ok(TypeInfo::Unknown)
             }

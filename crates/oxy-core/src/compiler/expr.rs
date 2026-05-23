@@ -364,7 +364,7 @@ impl Compiler {
                 }
                 if let Some(expr) = value {
                     // Check literal out-of-range before compilation
-                    if let Some(TypeAnnotation::Named { name, span }) = type_ann {
+                    if let Some(TypeAnnotation::Named { name, span, .. }) = type_ann {
                         check_literal_fits_type(expr, name, *span)?;
                     }
                     self.compile_expr(expr)?;

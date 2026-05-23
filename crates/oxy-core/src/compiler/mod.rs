@@ -489,6 +489,7 @@ impl Compiler {
             params: vec![],
             return_type: Some(TypeAnnotation::Named {
                 name: "Self".to_string(),
+                generic_args: Vec::new(),
                 span: default_span,
             }),
             body: Block {

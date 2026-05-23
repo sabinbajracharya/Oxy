@@ -1248,6 +1248,7 @@ impl Vm {
                         name,
                         type_ann: crate::ast::TypeAnnotation::Named {
                             name: "_".into(),
+                            generic_args: Vec::new(),
                             span: blank_span,
                         },
                         is_mut: false,

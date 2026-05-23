@@ -34,3 +34,46 @@ fn test_vec_macro_mixed_int_bool_rejected() {
 fn test_vec_macro_mixed_float_string_rejected() {
     let _ = vec![1.5, "hello"];
 }
+
+// === Vec<T> generic-argument enforcement ===
+
+#[test]
+fn test_vec_i64_accepts_int_elements() {
+    let v: Vec<i64> = vec![1, 2, 3];
+    assert_eq!(v.len(), 3);
+}
+
+#[test]
+fn test_vec_string_accepts_string_elements() {
+    let v: Vec<String> = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(v.len(), 2);
+}
+
+#[compile_error]
+fn test_vec_i64_rejects_string_elements() {
+    let _v: Vec<i64> = vec!["hi".to_string()];
+}
+
+#[compile_error]
+fn test_vec_string_rejects_int_elements() {
+    let _v: Vec<String> = vec![1, 2, 3];
+}
+
+#[compile_error]
+fn test_vec_push_wrong_arg_type_rejected() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    v.push("hello".to_string());
+}
+
+#[test]
+fn test_vec_index_returns_element_type() {
+    let v: Vec<i64> = vec![10, 20, 30];
+    let x: i64 = v[1];
+    assert_eq!(x, 20);
+}
+
+#[compile_error]
+fn test_vec_index_element_type_mismatch_rejected() {
+    let v: Vec<i64> = vec![10, 20, 30];
+    let _x: String = v[1];
+}
