@@ -1714,6 +1714,24 @@ impl Compiler {
                         }
                     }
                 }
+                // 3+ segments: try `prefix::Enum::Variant` where the leading
+                // segments form a (possibly nested) module path and the last
+                // two are the enum + variant. e.g. `shapes::Color::Green`
+                // resolves against the enum registered as `shapes::Color`.
+                if segments.len() >= 3 {
+                    let variant = segments.last().unwrap().clone();
+                    let qualified_enum = segments[..segments.len() - 1].join("::");
+                    if let Some(ed) = self.enum_defs.get(&qualified_enum).cloned() {
+                        if ed.variants.iter().any(|v| v.name == variant) {
+                            self.emit(OpCode::ConstEnumVariant {
+                                enum_name: qualified_enum,
+                                variant,
+                                data: vec![],
+                            });
+                            return Ok(());
+                        }
+                    }
+                }
                 Err(self.not_yet_supported("Unknown path", expr.span()))
             }
 
