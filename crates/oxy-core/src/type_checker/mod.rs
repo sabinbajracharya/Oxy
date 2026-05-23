@@ -10,6 +10,7 @@ use std::rc::Rc;
 use crate::ast::*;
 use crate::errors::FerriError;
 use crate::lexer::{FloatSuffix, IntegerSuffix, Span};
+use crate::symbols;
 
 /// Internal representation of an Oxy type.
 #[derive(Debug, Clone, PartialEq)]
@@ -209,12 +210,17 @@ impl TypeInfo {
         if matches!(self, TypeInfo::Unit) && matches!(other, TypeInfo::Function { .. }) {
             return true;
         }
-        // Array accepts Vec and vice versa (vec literal can initialize array-typed binding)
+        // Array literal accepts Vec literal and vice versa (untyped Vec
+        // can initialize an array-typed binding).
         if matches!(
             (&self, &other),
             (TypeInfo::Array(..), TypeInfo::Vec) | (TypeInfo::Vec, TypeInfo::Array(..))
         ) {
             return true;
+        }
+        // Array-to-Array: recurse into element type and require matching length.
+        if let (TypeInfo::Array(se, sn), TypeInfo::Array(oe, on)) = (self, other) {
+            return sn == on && se.accepts(oe);
         }
         false
     }
@@ -333,6 +339,77 @@ impl TypeChecker {
                 TypeInfo::Array(Box::new(inner_ty), *size)
             }
         }
+    }
+
+    /// Builtin method list for a given concrete type, or None if the type
+    /// isn't a builtin we track (UserStruct / Unknown / etc).
+    fn builtin_methods_for(&self, ty: &TypeInfo) -> Option<&'static [symbols::MethodInfo]> {
+        match ty {
+            TypeInfo::Vec => Some(symbols::VEC_METHODS),
+            // Fixed-size arrays share Vec's read-only surface but disallow
+            // mutators; we reuse VEC_METHODS and reject mutators in the
+            // call-site check.
+            TypeInfo::Array(..) => Some(symbols::VEC_METHODS),
+            TypeInfo::String => Some(symbols::STRING_METHODS),
+            TypeInfo::HashMap => Some(symbols::HASHMAP_METHODS),
+            TypeInfo::BTreeMap => Some(symbols::BTREEMAP_METHODS),
+            TypeInfo::Option | TypeInfo::Result => Some(symbols::OPTION_RESULT_METHODS),
+            TypeInfo::Char => Some(symbols::CHAR_METHODS),
+            t if t.is_integer() || t.is_float() => Some(symbols::NUMERIC_METHODS),
+            _ => None,
+        }
+    }
+
+    /// True if `method` is callable on `ty`, considering both type-specific
+    /// methods and the generic methods available on every value.
+    fn method_exists_on(&self, ty: &TypeInfo, method: &str) -> bool {
+        if symbols::GENERIC_METHODS.iter().any(|m| m.name == method) {
+            return true;
+        }
+        if let Some(list) = self.builtin_methods_for(ty) {
+            if list.iter().any(|m| m.name == method) {
+                return true;
+            }
+        }
+        // Collection-like types accept iterator methods directly (Oxy's
+        // shortcut: `v.map(...)` instead of `v.iter().map(...).collect()`).
+        if matches!(
+            ty,
+            TypeInfo::Vec
+                | TypeInfo::Array(..)
+                | TypeInfo::HashMap
+                | TypeInfo::BTreeMap
+                | TypeInfo::Option
+                | TypeInfo::Result
+        ) && symbols::ITERATOR_METHODS.iter().any(|m| m.name == method)
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Fixed-size arrays forbid mutators (push/pop/etc). Returns true if
+    /// `method` is a Vec mutator that should be rejected on an Array.
+    fn is_array_mutator(&self, method: &str) -> bool {
+        matches!(
+            method,
+            "push"
+                | "pop"
+                | "insert"
+                | "remove"
+                | "swap_remove"
+                | "clear"
+                | "truncate"
+                | "resize"
+                | "extend"
+                | "append"
+                | "retain"
+                | "drain"
+                | "sort"
+                | "sort_by"
+                | "reverse"
+                | "dedup"
+        )
     }
 
     /// Check whether a struct field is visible from the current module context.
@@ -1034,33 +1111,118 @@ impl TypeChecker {
             }
 
             Expr::BinaryOp {
-                op, left, right, ..
+                op,
+                left,
+                right,
+                span,
             } => {
                 let lt = self.infer_expr(left)?;
                 let rt = self.infer_expr(right)?;
-                // Comparisons and logical ops always produce Bool.
-                if matches!(
-                    op,
-                    BinOp::Eq
-                        | BinOp::NotEq
-                        | BinOp::Lt
-                        | BinOp::Gt
-                        | BinOp::LtEq
-                        | BinOp::GtEq
-                        | BinOp::And
-                        | BinOp::Or
-                ) {
-                    return Ok(TypeInfo::Bool);
+                let is_num = |t: &TypeInfo| t.is_integer() || t.is_float();
+                let known = |t: &TypeInfo| *t != TypeInfo::Unknown;
+                // Helper to format a clean operand mismatch error.
+                let mk_err = |msg: String| FerriError::TypeError {
+                    message: msg,
+                    line: span.line,
+                    column: span.column,
+                };
+                match op {
+                    BinOp::Eq | BinOp::NotEq => {
+                        // Either side may be Unknown (e.g. closure args). Once
+                        // both are known we require one to accept the other.
+                        if known(&lt) && known(&rt) && !lt.accepts(&rt) && !rt.accepts(&lt) {
+                            return Err(mk_err(format!(
+                                "cannot compare `{}` and `{}` with `{op}`",
+                                lt.name(),
+                                rt.name()
+                            )));
+                        }
+                        return Ok(TypeInfo::Bool);
+                    }
+                    BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => {
+                        if known(&lt) && known(&rt) {
+                            let both_num = is_num(&lt) && is_num(&rt);
+                            let same_scalar = lt == rt
+                                && matches!(lt, TypeInfo::String | TypeInfo::Char | TypeInfo::Bool);
+                            if !both_num && !same_scalar {
+                                return Err(mk_err(format!(
+                                    "cannot order `{}` and `{}` with `{op}`",
+                                    lt.name(),
+                                    rt.name()
+                                )));
+                            }
+                        }
+                        return Ok(TypeInfo::Bool);
+                    }
+                    BinOp::And | BinOp::Or => {
+                        if known(&lt) && lt != TypeInfo::Bool {
+                            return Err(mk_err(format!(
+                                "logical `{op}` requires `bool` operands, left is `{}`",
+                                lt.name()
+                            )));
+                        }
+                        if known(&rt) && rt != TypeInfo::Bool {
+                            return Err(mk_err(format!(
+                                "logical `{op}` requires `bool` operands, right is `{}`",
+                                rt.name()
+                            )));
+                        }
+                        return Ok(TypeInfo::Bool);
+                    }
+                    BinOp::Add => {
+                        // String/Char concatenation paths.
+                        if lt == TypeInfo::String || rt == TypeInfo::String {
+                            return Ok(TypeInfo::String);
+                        }
+                        if lt == TypeInfo::Char || rt == TypeInfo::Char {
+                            return Ok(TypeInfo::String);
+                        }
+                    }
+                    BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
+                        // Pure arithmetic — String/Char operands are illegal.
+                    }
+                    BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
+                        if known(&lt) && !lt.is_integer() {
+                            return Err(mk_err(format!(
+                                "bitwise `{op}` requires integer operands, left is `{}`",
+                                lt.name()
+                            )));
+                        }
+                        if known(&rt) && !rt.is_integer() {
+                            return Err(mk_err(format!(
+                                "bitwise `{op}` requires integer operands, right is `{}`",
+                                rt.name()
+                            )));
+                        }
+                        return Ok(if lt.is_integer() { lt } else { rt });
+                    }
                 }
-                // String concatenation
-                if lt == TypeInfo::String || rt == TypeInfo::String {
-                    return Ok(TypeInfo::String);
+                // Arithmetic Add/Sub/Mul/Div/Mod — operands must be numeric,
+                // or user-defined structs (which may implement operator
+                // overloading via traits).
+                let arithmetic_ok = |t: &TypeInfo| {
+                    *t == TypeInfo::Unknown || is_num(t) || matches!(t, TypeInfo::UserStruct(_))
+                };
+                if !arithmetic_ok(&lt) {
+                    return Err(mk_err(format!(
+                        "arithmetic `{op}` requires numeric operands, left is `{}`",
+                        lt.name()
+                    )));
                 }
-                // Char + Char → String (or Char + anything → String)
-                if lt == TypeInfo::Char || rt == TypeInfo::Char {
-                    return Ok(TypeInfo::String);
+                if !arithmetic_ok(&rt) {
+                    return Err(mk_err(format!(
+                        "arithmetic `{op}` requires numeric operands, right is `{}`",
+                        rt.name()
+                    )));
                 }
-                // Numeric ops: float wins, otherwise promote to wider integer
+                // User-struct operator overloading: result type is the struct
+                // (Add/Sub on Vec2 -> Vec2, etc).
+                if let TypeInfo::UserStruct(_) = &lt {
+                    return Ok(lt);
+                }
+                if let TypeInfo::UserStruct(_) = &rt {
+                    return Ok(rt);
+                }
                 if matches!(lt, TypeInfo::F32 | TypeInfo::F64)
                     || matches!(rt, TypeInfo::F32 | TypeInfo::F64)
                 {
@@ -1070,7 +1232,60 @@ impl TypeChecker {
                 }
             }
 
-            Expr::UnaryOp { expr: inner, .. } => self.infer_expr(inner),
+            Expr::UnaryOp {
+                op,
+                expr: inner,
+                span,
+            } => {
+                let inner_ty = self.infer_expr(inner)?;
+                match op {
+                    UnaryOp::Neg => {
+                        // Allow UserStruct in case the type implements
+                        // operator overloading via a Neg trait impl.
+                        let ok = inner_ty == TypeInfo::Unknown
+                            || inner_ty.is_integer()
+                            || inner_ty.is_float()
+                            || matches!(inner_ty, TypeInfo::UserStruct(_));
+                        if !ok {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "unary `-` requires a numeric operand, got `{}`",
+                                    inner_ty.name()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        Ok(inner_ty)
+                    }
+                    UnaryOp::Not => {
+                        if inner_ty != TypeInfo::Unknown && inner_ty != TypeInfo::Bool {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "unary `!` requires a `bool` operand, got `{}`",
+                                    inner_ty.name()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        Ok(TypeInfo::Bool)
+                    }
+                    UnaryOp::BitNot => {
+                        if inner_ty != TypeInfo::Unknown && !inner_ty.is_integer() {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "unary `~` requires an integer operand, got `{}`",
+                                    inner_ty.name()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        Ok(inner_ty)
+                    }
+                }
+            }
 
             Expr::Call {
                 callee, args, span, ..
@@ -1210,14 +1425,54 @@ impl TypeChecker {
             Expr::Repeat { value, count, .. } => {
                 let val_ty = self.infer_expr(value)?;
                 let _ = self.infer_expr(count)?;
-                Ok(val_ty)
+                // Repeat literals are constant-length arrays. If the count is
+                // an integer literal we propagate it; otherwise the compiler
+                // will already have rejected non-constant counts.
+                let n = if let Expr::IntLiteral(n, _, _) = count.as_ref() {
+                    *n as usize
+                } else {
+                    0
+                };
+                Ok(TypeInfo::Array(Box::new(val_ty), n))
             }
 
-            Expr::Array { elements, .. } => {
+            Expr::Array { elements, span } => {
+                let mut elem_types = Vec::with_capacity(elements.len());
                 for e in elements {
-                    self.infer_expr(e)?;
+                    elem_types.push(self.infer_expr(e)?);
                 }
-                Ok(TypeInfo::Vec)
+                // Determine the array's element type. Pick the first non-Unknown
+                // type as the "leader" and require every other element to be
+                // compatible with it via the standard accepts rules. A mismatch
+                // here means the literal is heterogeneous and we error out so
+                // it can't be silently widened to Unknown.
+                let mut leader: TypeInfo = TypeInfo::Unknown;
+                for (i, t) in elem_types.iter().enumerate() {
+                    if leader == TypeInfo::Unknown {
+                        leader = t.clone();
+                        continue;
+                    }
+                    if leader.accepts(t) {
+                        continue;
+                    }
+                    if t.accepts(&leader) {
+                        leader = t.clone();
+                        continue;
+                    }
+                    let espan = elements[i].span();
+                    return Err(FerriError::TypeError {
+                        message: format!(
+                            "array literal has mixed element types: element {} is `{}`, expected `{}`",
+                            i + 1,
+                            t.name(),
+                            leader.name()
+                        ),
+                        line: espan.line,
+                        column: espan.column,
+                    });
+                }
+                let _ = span;
+                Ok(TypeInfo::Array(Box::new(leader), elements.len()))
             }
 
             Expr::Tuple { elements, .. } => {
@@ -1405,8 +1660,50 @@ impl TypeChecker {
                         }
                     }
                 } else {
-                    for arg in args {
-                        self.infer_expr(arg)?;
+                    // Check for impl-on-primitive (e.g. `impl Doublable for i64`).
+                    let primitive_qualified = format!("{}::{}", obj_ty.name(), method);
+                    let prim_key = if self.fn_param_types.contains_key(&primitive_qualified) {
+                        Some(primitive_qualified)
+                    } else {
+                        None
+                    };
+                    if let Some(key) = prim_key {
+                        let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                        self.check_args_against_params(&params, args, true, method, *span)?;
+                        if let Some(ret_ty) = self.fn_return_types.get(&key) {
+                            return Ok(ret_ty.clone());
+                        }
+                    } else {
+                        for arg in args {
+                            self.infer_expr(arg)?;
+                        }
+                        // Validate the method against the builtin method tables.
+                        // Skip when the receiver type is Unknown (we have no
+                        // signature to compare against) or a UserStruct (handled
+                        // above; impl methods may not be in symbols).
+                        if obj_ty != TypeInfo::Unknown
+                            && !matches!(obj_ty, TypeInfo::UserStruct(_))
+                            && !self.method_exists_on(&obj_ty, method)
+                        {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "no method `{method}` on type `{}`",
+                                    obj_ty.name()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        // Fixed-size arrays disallow Vec mutators.
+                        if matches!(obj_ty, TypeInfo::Array(..)) && self.is_array_mutator(method) {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "method `{method}` is not available on fixed-size arrays; convert to `Vec` first"
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
                     }
                 }
                 // Common built-in method return types. Keeps downstream
@@ -1431,30 +1728,131 @@ impl TypeChecker {
                 if let TypeInfo::UserStruct(struct_name) = &obj_ty {
                     let resolved = self.resolve_struct_name(struct_name);
                     self.check_field_visible(&resolved, field, *span)?;
-                    // Return the field's declared type
                     if let Some(def) = self.struct_defs.get(&resolved) {
-                        if let StructKind::Named(fields) = &def.kind {
-                            for f in fields {
-                                if f.name == *field {
-                                    return Ok(self.resolve_annotation(&f.type_ann));
+                        match &def.kind {
+                            StructKind::Named(fields) => {
+                                for f in fields {
+                                    if f.name == *field {
+                                        return Ok(self.resolve_annotation(&f.type_ann));
+                                    }
                                 }
+                                return Err(FerriError::TypeError {
+                                    message: format!("no field `{field}` on struct `{resolved}`"),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                            StructKind::Tuple(types) => {
+                                // Tuple-struct field access: `Pair.0`, `Pair.1`.
+                                if let Ok(idx) = field.parse::<usize>() {
+                                    if let Some(ann) = types.get(idx) {
+                                        return Ok(self.resolve_annotation(ann));
+                                    }
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "no field `{field}` on tuple struct `{resolved}`"
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                return Ok(TypeInfo::Unknown);
+                            }
+                            StructKind::Unit => {
+                                return Err(FerriError::TypeError {
+                                    message: format!(
+                                        "no field `{field}` on unit struct `{resolved}`"
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
                             }
                         }
                     }
+                    return Ok(TypeInfo::Unknown);
+                }
+                // Tuple field access (`.0`, `.1`) is also Expr::FieldAccess
+                // with a numeric-looking name. Leave those alone for now.
+                if field.chars().all(|c| c.is_ascii_digit()) {
+                    return Ok(TypeInfo::Unknown);
+                }
+                // Builtin types (Vec, String, primitives, ...) have no
+                // user-accessible fields. If the receiver type is known and
+                // concrete, an unknown field is a compile error.
+                if obj_ty != TypeInfo::Unknown && !matches!(obj_ty, TypeInfo::UserStruct(_)) {
+                    return Err(FerriError::TypeError {
+                        message: format!("no field `{field}` on type `{}`", obj_ty.name()),
+                        line: span.line,
+                        column: span.column,
+                    });
                 }
                 Ok(TypeInfo::Unknown)
             }
 
             Expr::Index { object, index, .. } => {
                 let obj_ty = self.infer_expr(object)?;
-                let _ = self.infer_expr(index)?;
+                let idx_ty = self.infer_expr(index)?;
+                let is_range_index = matches!(index.as_ref(), Expr::Range { .. });
+                // Sequence indexing requires an integer (or a range for slicing).
+                let is_seq = matches!(
+                    obj_ty,
+                    TypeInfo::Vec | TypeInfo::Array(..) | TypeInfo::String
+                );
+                if is_seq && !is_range_index && idx_ty != TypeInfo::Unknown && !idx_ty.is_integer()
+                {
+                    let ispan = index.span();
+                    return Err(FerriError::TypeError {
+                        message: format!(
+                            "cannot index `{}` with `{}`: expected integer",
+                            obj_ty.name(),
+                            idx_ty.name()
+                        ),
+                        line: ispan.line,
+                        column: ispan.column,
+                    });
+                }
                 if obj_ty == TypeInfo::String {
-                    return Ok(TypeInfo::Char);
+                    // Range index → String slice; integer index → Char.
+                    return Ok(if is_range_index {
+                        TypeInfo::String
+                    } else {
+                        TypeInfo::Char
+                    });
+                }
+                if let TypeInfo::Array(elem, _) = &obj_ty {
+                    if is_range_index {
+                        return Ok(TypeInfo::Vec);
+                    }
+                    return Ok((**elem).clone());
                 }
                 Ok(TypeInfo::Unknown)
             }
 
-            Expr::Range { .. } => Ok(TypeInfo::I64),
+            Expr::Range {
+                start, end, span, ..
+            } => {
+                if let Some(s) = start {
+                    let st = self.infer_expr(s)?;
+                    if st != TypeInfo::Unknown && !st.is_integer() {
+                        return Err(FerriError::TypeError {
+                            message: format!("range start must be an integer, got `{}`", st.name()),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+                if let Some(e) = end {
+                    let et = self.infer_expr(e)?;
+                    if et != TypeInfo::Unknown && !et.is_integer() {
+                        return Err(FerriError::TypeError {
+                            message: format!("range end must be an integer, got `{}`", et.name()),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
+                Ok(TypeInfo::I64)
+            }
 
             Expr::StructInit {
                 name, fields, span, ..
@@ -1560,12 +1958,44 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
             Expr::FString { .. } => Ok(TypeInfo::String),
-            Expr::MacroCall { args, .. } => {
-                // Macros are opaque at type-check time, but their argument
-                // expressions still need to be inferred so any calls or
-                // field accesses inside get their own type checks run.
-                for arg in args {
-                    self.infer_expr(arg)?;
+            Expr::MacroCall { name, args, .. } => {
+                // Infer all args so nested calls / field accesses still get
+                // type-checked.
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                if name == "vec" {
+                    // vec![a, b, c] must be homogeneous (or contain Unknown).
+                    let mut leader = TypeInfo::Unknown;
+                    for (i, t) in arg_types.iter().enumerate() {
+                        if *t == TypeInfo::Unknown {
+                            continue;
+                        }
+                        if leader == TypeInfo::Unknown {
+                            leader = t.clone();
+                            continue;
+                        }
+                        if leader.accepts(t) {
+                            continue;
+                        }
+                        if t.accepts(&leader) {
+                            leader = t.clone();
+                            continue;
+                        }
+                        let espan = args[i].span();
+                        return Err(FerriError::TypeError {
+                            message: format!(
+                                "`vec!` has mixed element types: element {} is `{}`, expected `{}`",
+                                i + 1,
+                                t.name(),
+                                leader.name()
+                            ),
+                            line: espan.line,
+                            column: espan.column,
+                        });
+                    }
+                    return Ok(TypeInfo::Vec);
                 }
                 Ok(TypeInfo::Unknown)
             }
@@ -1596,10 +2026,27 @@ impl TypeChecker {
                 }
             }
             Expr::As {
-                expr, type_name, ..
+                expr,
+                type_name,
+                span,
             } => {
                 let _ = self.infer_expr(expr)?;
-                Ok(TypeInfo::from_name(type_name))
+                let target = TypeInfo::from_name(type_name);
+                // `as` is only meaningful for primitive scalar conversions.
+                // Anything that came back as `UserStruct` is an unknown name.
+                let is_scalar = target.is_integer()
+                    || target.is_float()
+                    || matches!(target, TypeInfo::Bool | TypeInfo::String | TypeInfo::Char);
+                if !is_scalar {
+                    return Err(FerriError::TypeError {
+                        message: format!(
+                            "`as` cast to unknown type `{type_name}`; only numeric, bool, String, and char are supported"
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(target)
             }
             Expr::Return { value, .. } => {
                 if let Some(expr) = value {

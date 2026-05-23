@@ -30,7 +30,7 @@ fn test_try_option_none() {
 // === ? on Result ===
 
 fn try_result_ok() -> Result {
-    let x: Result = Ok(10)?;
+    let x = Ok(10)?;
     Ok(x + 1)
 }
 
@@ -41,7 +41,7 @@ fn test_try_result_ok() {
 }
 
 fn try_result_err() -> Result {
-    let x: Result = Err("boom")?;
+    let x = Err("boom")?;
     Ok(x)
 }
 
@@ -54,9 +54,9 @@ fn test_try_result_err() {
 // === Chaining ? operators ===
 
 fn chain_try() -> Result {
-    let a: Result = Ok(10)?;
-    let b: Result = Ok(20)?;
-    let c: Result = Ok(30)?;
+    let a = Ok(10)?;
+    let b = Ok(20)?;
+    let c = Ok(30)?;
     Ok(a + b + c)
 }
 
@@ -70,9 +70,9 @@ fn test_chain_try() {
 // === ? propagates first error ===
 
 fn first_error_short_circuits() -> Result {
-    let a: Result = Ok(10)?;
-    let b: Result = Err("b fails")?;
-    let c: Result = Ok(30)?;
+    let a = Ok(10)?;
+    let b = Err("b fails")?;
+    let c = Ok(30)?;
     Ok(a + b + c)
 }
 
@@ -85,9 +85,9 @@ fn test_first_error_short_circuits() {
 // === ? in middle of chain ===
 
 fn middle_error() -> Result {
-    let a: Result = Ok(1)?;
-    let b: Result = Ok(2)?;
-    let c: Result = Err("c fails")?;
+    let a = Ok(1)?;
+    let b = Ok(2)?;
+    let c = Err("c fails")?;
     Ok(a + b + c)
 }
 
