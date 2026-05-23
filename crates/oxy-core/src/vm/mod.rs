@@ -1186,21 +1186,16 @@ impl Vm {
                         let mut drained: Vec<Value> = self.stack.drain(drain_start..).collect();
                         let _closure_val = drained.remove(0); // drop the callable
                         let args = drained;
-                        // Closure frame layout: captures at original outer-slot indices;
-                        // args at slots [captures_end .. captures_end + arg_count],
-                        // matching what the closure body was compiled to address.
-                        let captures_end = f
-                            .captured_slots
-                            .iter()
-                            .map(|(_, s)| s + 1)
-                            .max()
-                            .unwrap_or(0);
+                        // Closure frame layout: captures at dense slots [0..N];
+                        // args at slots [N..N+arg_count], matching what the closure
+                        // body was compiled to address.
+                        let captures_end = f.captured_names.len();
                         let needed = captures_end + arg_count;
                         let frame_size = self.frame_size_for(target, needed).max(needed);
                         let mut locals = vec![Value::Unit; frame_size];
-                        for (name, outer_slot) in &f.captured_slots {
+                        for (i, name) in f.captured_names.iter().enumerate() {
                             if let Ok(val) = f.closure_env.borrow().get(name) {
-                                locals[*outer_slot] = val.clone();
+                                locals[i] = val.clone();
                             }
                         }
                         for (i, arg) in args.into_iter().enumerate() {
@@ -1270,9 +1265,9 @@ impl Vm {
                         closure_env.borrow_mut().define(name.clone(), val, *is_mut);
                     }
                 }
-                let captured_slots: Vec<(String, usize)> = captured_vars
+                let captured_names: Vec<String> = captured_vars
                     .iter()
-                    .map(|(name, slot, _)| (name.clone(), *slot))
+                    .map(|(name, _, _)| name.clone())
                     .collect();
                 self.stack
                     .push(Value::Function(Box::new(crate::types::FunctionData {
@@ -1282,7 +1277,7 @@ impl Vm {
                         body: body_block,
                         closure_env,
                         target_ip: Some(target_ip),
-                        captured_slots,
+                        captured_names,
                     })));
             }
             OpCode::MethodCall {
@@ -1375,20 +1370,15 @@ impl Vm {
         let saved_ip = self.ip;
         let saved_stack_len = self.stack.len();
         let saved_call_depth = self.call_stack.len();
-        // Build the closure's frame: captures at original outer-slot indices,
-        // args at slots [captures_end .. captures_end + arg_count].
-        let captures_end = ft
-            .captured_slots
-            .iter()
-            .map(|(_, s)| s + 1)
-            .max()
-            .unwrap_or(0);
+        // Build the closure's frame: captures at dense slots [0..N],
+        // args at slots [N..N+arg_count].
+        let captures_end = ft.captured_names.len();
         let needed = captures_end + args.len();
         let frame_size = self.frame_size_for(target, needed).max(needed);
         let mut locals = vec![Value::Unit; frame_size];
-        for (name, outer_slot) in &ft.captured_slots {
+        for (i, name) in ft.captured_names.iter().enumerate() {
             if let Ok(val) = ft.closure_env.borrow().get(name) {
-                locals[*outer_slot] = val.clone();
+                locals[i] = val.clone();
             }
         }
         for (i, arg) in args.iter().enumerate() {

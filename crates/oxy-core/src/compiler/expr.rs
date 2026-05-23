@@ -1943,30 +1943,31 @@ impl Compiler {
                 // Emit a jump to skip over the closure body in the instruction stream
                 let skip_jump_idx = self.emit(OpCode::Jump(0));
                 let target_ip = self.code.len();
-                // Swap in a fresh sym table so closure params start at slot 0.
-                // Outer sym is needed to resolve captured variable slots.
+                // Swap in a fresh sym table. Captures get dense slots 0..N first,
+                // then params at N..N+param_count, then body locals after — so the
+                // closure's frame size is independent of the parent's local count.
                 let saved_sym = std::mem::replace(&mut self.sym, SymTable::new(0));
-                // Pre-scan: find which outer variables the closure body references.
-                // Register them in the fresh sym at their outer slot positions so
-                // LoadLocal in the closure body emits the correct frame offset.
                 let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-                let captured_names = find_free_vars(body, &param_names);
-                let captured: Vec<(String, usize, bool)> = captured_names
+                let captured_free = find_free_vars(body, &param_names);
+                // Build the captured list. `outer_slot` is the parent's slot for
+                // fetching the value at OpCode::Closure time; the child places it
+                // densely at the index it appears in this vec.
+                let captured: Vec<(String, usize, bool)> = captured_free
                     .iter()
                     .filter_map(|name| {
-                        saved_sym.get(name).map(|slot| {
+                        saved_sym.get(name).map(|outer_slot| {
                             let is_mut = saved_sym.is_mutable(name);
-                            // Register captured var in closure sym at its outer slot,
-                            // preserving mutability so assignments work inside the closure.
-                            self.sym.define_at(name, slot);
+                            // Define each capture at the next dense slot. Order
+                            // here matches the dense placement done by the VM.
+                            self.sym.define(name);
                             if is_mut {
                                 self.sym.mutable.insert(name.clone());
                             }
-                            (name.clone(), slot, is_mut)
+                            (name.clone(), outer_slot, is_mut)
                         })
                     })
                     .collect();
-                // Now define params — they get slots above the captured vars.
+                // Params get the next dense slots after captures.
                 // Closures don't have surface `mut` syntax on params yet.
                 for param in params {
                     self.sym.define(&param.name);

@@ -36,13 +36,6 @@ impl SymTable {
         self.define(name)
     }
 
-    pub(crate) fn define_at(&mut self, name: &str, slot: usize) {
-        self.locals.insert(name.to_string(), slot);
-        if slot >= self.next_slot {
-            self.next_slot = slot + 1;
-        }
-    }
-
     pub(crate) fn is_mutable(&self, name: &str) -> bool {
         self.mutable.contains(name)
     }

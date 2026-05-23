@@ -423,8 +423,9 @@ pub struct FunctionData {
     pub closure_env: Env,
     /// VM-only: bytecode instruction index where the function body starts.
     pub target_ip: Option<usize>,
-    /// Captured variable slot indices (name, outer_slot) for CallClosure stack setup.
-    pub captured_slots: Vec<(String, usize)>,
+    /// Captured variable names in dense order. The closure's frame places
+    /// `captured_names[i]` at `locals[i]`; params follow at `locals[N..]`.
+    pub captured_names: Vec<String>,
 }
 
 impl Value {
