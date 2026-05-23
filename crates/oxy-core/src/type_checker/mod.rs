@@ -2411,8 +2411,17 @@ impl TypeChecker {
                         }
                     }
                 }
+                // If `resolved` names a struct-style enum variant (e.g.
+                // `Shape::Rectangle`), the produced value's type is the
+                // enclosing enum (`Shape`), not the variant. Without this,
+                // `area(Shape::Rectangle { ... })` is rejected because the
+                // arg types `Shape` and `Shape::Rectangle` don't match.
+                let final_name = match resolved.rsplit_once("::") {
+                    Some((parent, _)) if self.enum_defs.contains(parent) => parent.to_string(),
+                    _ => resolved,
+                };
                 Ok(TypeInfo::UserStruct {
-                    name: resolved,
+                    name: final_name,
                     generic_args: inferred_generics,
                 })
             }

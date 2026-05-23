@@ -2018,14 +2018,21 @@ impl Compiler {
                 let mut arm_jumps: Vec<usize> = vec![];
                 let mut guard_fail_jumps: Vec<usize> = vec![];
 
+                let mut prev_consumed_scrutinee = false;
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last = i == arms.len() - 1;
 
                     // Pop leftover scrutinee from a previous failed arm.
                     // The first arm has no predecessor — StoreLocal above
                     // already drained the stack — so don't pop into the
-                    // caller's frame.
-                    if i > 0 {
+                    // caller's frame. Also skip the pop when the previous
+                    // arm's pattern was EnumVariant or Tuple: their equality
+                    // check already consumed the scrutinee, so there's
+                    // nothing on the stack to clean up. Without this guard
+                    // the spurious Pop would dip into the caller's frame
+                    // and corrupt the stack downstream (e.g. an
+                    // FStringConcat underflow in the caller's println!).
+                    if i > 0 && !prev_consumed_scrutinee {
                         self.emit(OpCode::Pop);
                     }
                     // Push scrutinee for this arm
@@ -2036,6 +2043,7 @@ impl Compiler {
                         arm.pattern,
                         Pattern::EnumVariant { .. } | Pattern::Tuple(..)
                     );
+                    prev_consumed_scrutinee = consumes_scrutinee;
                     self.compile_pattern(&arm.pattern, &mut vec![], is_last)?;
 
                     // JumpIfFalse to next arm if pattern didn't match
