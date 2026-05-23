@@ -384,6 +384,11 @@ pub struct TypeChecker {
     /// Known enum names (qualified). Populated alongside struct_defs so the
     /// type-name validator can accept them.
     enum_defs: std::collections::HashSet<String>,
+    /// Declared return type of the function currently being checked.
+    /// Used by `Expr::Try` (`?` operator) to reject use of `?` in functions
+    /// that don't return `Result<_, _>` / `Option<_>` — without this, an
+    /// unhandled error silently exits with code 0.
+    current_fn_return: TypeInfo,
 }
 
 impl TypeChecker {
@@ -399,6 +404,7 @@ impl TypeChecker {
             current_impl_type: None,
             current_generics: Vec::new(),
             enum_defs: std::collections::HashSet::new(),
+            current_fn_return: TypeInfo::Unit,
         }
     }
 }
@@ -1217,6 +1223,7 @@ impl TypeChecker {
 
         let saved_env = self.env.clone();
         self.env = fn_env;
+        let saved_fn_return = std::mem::replace(&mut self.current_fn_return, ret_ty.clone());
 
         let body_result = (|| -> Result<(), FerriError> {
             for stmt in &f.body.stmts {
@@ -1227,6 +1234,7 @@ impl TypeChecker {
 
         self.env = saved_env;
         self.current_generics = saved_generics;
+        self.current_fn_return = saved_fn_return;
         body_result
     }
 
@@ -2409,9 +2417,46 @@ impl TypeChecker {
                 })
             }
 
-            Expr::Try { expr: inner, .. } => {
-                let _ = self.infer_expr(inner)?;
-                Ok(TypeInfo::Unknown)
+            Expr::Try { expr: inner, span } => {
+                let inner_ty = self.infer_expr(inner)?;
+                // The `?` operator only makes sense in a function whose
+                // return type is `Result<_, _>` or `Option<_>`. Otherwise
+                // an error/None propagated by `?` would silently vanish
+                // off the end of the function — exit 0 with no output.
+                let ok_here = matches!(
+                    &self.current_fn_return,
+                    TypeInfo::Result(..) | TypeInfo::Option(..) | TypeInfo::Unknown
+                );
+                if !ok_here {
+                    return Err(FerriError::TypeError {
+                        message: format!(
+                            "`?` cannot be used in a function returning `{}`. \
+                             The enclosing function must return `Result<_, _>` or \
+                             `Option<_>` so `?` has something to propagate into. \
+                             Use a `match` on the expression instead, or change \
+                             the function signature.",
+                            self.current_fn_return.display_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                // The expression being `?`'d must itself be a Result or Option.
+                // (Unknown is allowed as a wildcard so we don't false-positive
+                // on values we couldn't infer.)
+                match &inner_ty {
+                    TypeInfo::Result(ok, _) => Ok((**ok).clone()),
+                    TypeInfo::Option(inner) => Ok((**inner).clone()),
+                    TypeInfo::Unknown => Ok(TypeInfo::Unknown),
+                    other => Err(FerriError::TypeError {
+                        message: format!(
+                            "`?` requires a `Result` or `Option` operand; got `{}`",
+                            other.display_name()
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    }),
+                }
             }
 
             Expr::Closure {
