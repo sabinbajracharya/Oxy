@@ -1310,12 +1310,40 @@ impl Compiler {
                     }
                     Ok(())
                 } else if let Expr::FieldAccess { object, field, .. } = target.as_ref() {
-                    // Field assignment: compile object, push value, emit FieldStore,
-                    // then store back to the original variable if it's a local.
+                    // Field assignment: mutating a field is mutation of the binding
+                    // itself in Oxy's value semantics (no aliasing), so the binding
+                    // must be `mut`. Reject `let x = ...; x.field = ...` and
+                    // `fn method(self) { self.field = ... }`; permit `let mut x` and
+                    // `fn method(mut self) { ... }`.
+                    match object.as_ref() {
+                        Expr::Ident(name, _) => {
+                            if self.sym.get(name).is_some() && !self.sym.is_mutable(name) {
+                                return Err(FerriError::Runtime {
+                                    message: format!(
+                                        "cannot assign to field of immutable variable `{name}` — declare it `let mut {name}` or `mut {name}: T`"
+                                    ),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        Expr::SelfRef(_) => {
+                            if !self.sym.is_mutable("self") {
+                                return Err(FerriError::Runtime {
+                                    message:
+                                        "cannot assign to field of immutable `self` — declare the method receiver as `mut self`"
+                                            .into(),
+                                    line: span.line,
+                                    column: span.column,
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
                     self.compile_expr(object)?;
                     self.compile_expr(value)?;
                     self.emit(OpCode::FieldStore(field.clone()));
-                    // If the object is a local/SelfRef, store the updated struct back
+                    // Store the updated struct back to the original binding.
                     match object.as_ref() {
                         Expr::Ident(name, _) => {
                             if let Some(slot) = self.sym.get(name) {

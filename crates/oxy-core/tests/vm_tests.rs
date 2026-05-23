@@ -6211,3 +6211,61 @@ fn main() {
     );
     assert_eq!(output, vec!["42\n"]);
 }
+
+#[test]
+fn test_immutable_self_field_assign_rejected() {
+    // Method declared `fn ...(self) { self.field = X }` must error —
+    // mutating a field of `self` requires `mut self`.
+    let result = run(r#"
+struct Counter { n: i64 }
+impl Counter {
+    fn try_bump(self) -> i64 {
+        self.n = self.n + 1;
+        self.n
+    }
+}
+fn main() {
+    let c = Counter { n: 5 };
+    println!("{}", c.try_bump());
+}"#);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("immutable `self`") && msg.contains("mut self"),
+        "expected fix-it error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_immutable_let_field_assign_rejected() {
+    // `let x = Struct { ... }; x.field = Y;` must error — same logic.
+    let result = run(r#"
+struct Point { x: i64 }
+fn main() {
+    let p = Point { x: 1 };
+    p.x = 42;
+}"#);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("immutable variable `p`") && msg.contains("let mut"),
+        "expected fix-it error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_mut_let_field_assign_works() {
+    // `let mut p = ...; p.x = ...;` should be permitted (the binding is mut).
+    let output = run_and_capture(
+        r#"
+struct Point { x: i64 }
+fn main() {
+    let mut p = Point { x: 1 };
+    p.x = 42;
+    println!("{}", p.x);
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
+}
