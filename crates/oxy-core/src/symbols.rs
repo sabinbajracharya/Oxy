@@ -110,6 +110,8 @@ pub const RESULT_TYPE: &str = "Result";
 pub const VEC_TYPE: &str = "Vec";
 pub const HASHMAP_TYPE: &str = "HashMap";
 pub const HASHSET_TYPE: &str = "HashSet";
+pub const BTREEMAP_TYPE: &str = "BTreeMap";
+pub const BTREESET_TYPE: &str = "BTreeSet";
 pub const ITERATOR_TYPE: &str = "Iterator";
 pub const UNIT_TYPE: &str = "()";
 
@@ -134,6 +136,8 @@ pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
     ("Vec", "Growable array type"),
     ("HashMap", "Hash map collection"),
     ("HashSet", "Hash set collection"),
+    ("BTreeMap", "Ordered map collection"),
+    ("BTreeSet", "Ordered set collection"),
     ("Option", "Optional value: Some(T) or None"),
     ("Result", "Result type: Ok(T) or Err(E)"),
     ("Self", "Current type in impl block"),
@@ -283,6 +287,36 @@ pub const HASHSET_METHODS: &[MethodInfo] = methods![
     "remove": "(val: T) -> bool" => "Remove a value. Returns true if it existed.",
     "to_vec": "() -> Vec<T>" => "Return a sorted Vec of all elements.",
     "union": "(other: HashSet<T>) -> HashSet<T>" => "Return elements in either set.",
+];
+
+// --- BTreeMap ---
+
+pub const BTREEMAP_METHODS: &[MethodInfo] = methods![
+    "clone": "() -> BTreeMap<K, V>" => "Create a shallow copy.",
+    "contains_key": "(key: K) -> bool" => "Check if the key exists.",
+    "get": "(key: K) -> Option<V>" => "Return the value for `key`, or None.",
+    "get_or": "(key: K, default: V) -> V" => "Return the value for `key`, or `default`.",
+    "insert": "(key: K, val: V) -> Option<V>" => "Insert a key-value pair.",
+    "is_empty": "() -> bool" => "Check if the map is empty.",
+    "keys": "() -> Vec<K>" => "Return a Vec of all keys in sorted order.",
+    "len": "() -> i64" => "Return the number of entries.",
+    "remove": "(key: K) -> Option<V>" => "Remove and return the value for `key`.",
+    "values": "() -> Vec<V>" => "Return a Vec of all values in key order.",
+];
+
+// --- BTreeSet ---
+
+pub const BTREESET_METHODS: &[MethodInfo] = methods![
+    "clone": "() -> BTreeSet<T>" => "Create a shallow copy.",
+    "contains": "(val: T) -> bool" => "Check if the set contains `val`.",
+    "difference": "(other: BTreeSet<T>) -> BTreeSet<T>" => "Return elements in self but not in other.",
+    "insert": "(val: T) -> bool" => "Insert a value. Returns true if new.",
+    "intersection": "(other: BTreeSet<T>) -> BTreeSet<T>" => "Return elements in both sets.",
+    "is_empty": "() -> bool" => "Check if the set is empty.",
+    "len": "() -> i64" => "Return the number of elements.",
+    "remove": "(val: T) -> bool" => "Remove a value. Returns true if it existed.",
+    "to_vec": "() -> Vec<T>" => "Return a Vec of all elements in sorted order.",
+    "union": "(other: BTreeSet<T>) -> BTreeSet<T>" => "Return elements in either set.",
 ];
 
 // --- BinaryHeap ---
@@ -437,6 +471,18 @@ pub const ALL_TYPES: &[TypeInfo] = &[
         methods: HASHSET_METHODS,
     },
     TypeInfo {
+        name: "BTreeMap",
+        detail: "Ordered map collection",
+        hover_text: "**BTreeMap\\<K, V\\>** — Sorted key-value map",
+        methods: BTREEMAP_METHODS,
+    },
+    TypeInfo {
+        name: "BTreeSet",
+        detail: "Ordered set collection",
+        hover_text: "**BTreeSet\\<T\\>** — Sorted unique set",
+        methods: BTREESET_METHODS,
+    },
+    TypeInfo {
         name: "BinaryHeap",
         detail: "Priority queue (max-heap)",
         hover_text: "**BinaryHeap\\<T\\>** — Max-heap priority queue",
@@ -553,6 +599,32 @@ pub mod hashmap_m {
 }
 
 pub mod hashset_m {
+    pub const LEN: &str = "len";
+    pub const IS_EMPTY: &str = "is_empty";
+    pub const CONTAINS: &str = "contains";
+    pub const INSERT: &str = "insert";
+    pub const REMOVE: &str = "remove";
+    pub const TO_VEC: &str = "to_vec";
+    pub const UNION: &str = "union";
+    pub const INTERSECTION: &str = "intersection";
+    pub const DIFFERENCE: &str = "difference";
+    pub const CLONE: &str = "clone";
+}
+
+pub mod btreemap_m {
+    pub const LEN: &str = "len";
+    pub const IS_EMPTY: &str = "is_empty";
+    pub const GET: &str = "get";
+    pub const GET_OR: &str = "get_or";
+    pub const CONTAINS_KEY: &str = "contains_key";
+    pub const INSERT: &str = "insert";
+    pub const REMOVE: &str = "remove";
+    pub const KEYS: &str = "keys";
+    pub const VALUES: &str = "values";
+    pub const CLONE: &str = "clone";
+}
+
+pub mod btreeset_m {
     pub const LEN: &str = "len";
     pub const IS_EMPTY: &str = "is_empty";
     pub const CONTAINS: &str = "contains";

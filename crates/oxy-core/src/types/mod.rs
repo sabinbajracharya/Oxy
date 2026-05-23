@@ -5,7 +5,7 @@
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -97,6 +97,10 @@ pub enum Value {
     HashMap(Rc<RefCell<HashMap<Value, Value>>>),
     /// A hash set — shared mutable via Rc<RefCell<>>.
     HashSet(Rc<RefCell<HashSet<Value>>>),
+    /// A B-tree map (ordered) — shared mutable via Rc<RefCell<>>.
+    BTreeMap(Rc<RefCell<BTreeMap<Value, Value>>>),
+    /// A B-tree set (ordered) — shared mutable via Rc<RefCell<>>.
+    BTreeSet(Rc<RefCell<BTreeSet<Value>>>),
     /// A binary heap (max-heap by default) — shared mutable via Rc<RefCell<>>.
     BinaryHeap(Rc<RefCell<BinaryHeap<Value>>>),
     /// A double-ended queue — shared mutable via Rc<RefCell<>>.
@@ -254,6 +258,8 @@ impl Clone for Value {
             Value::Array(a) => Value::Array(a.clone()),
             Value::HashMap(rc) => Value::HashMap(Rc::clone(rc)),
             Value::HashSet(rc) => Value::HashSet(Rc::clone(rc)),
+            Value::BTreeMap(rc) => Value::BTreeMap(Rc::clone(rc)),
+            Value::BTreeSet(rc) => Value::BTreeSet(Rc::clone(rc)),
             Value::BinaryHeap(rc) => Value::BinaryHeap(Rc::clone(rc)),
             Value::VecDeque(rc) => Value::VecDeque(Rc::clone(rc)),
             Value::Iterator(it) => Value::Iterator(it.clone()),
@@ -455,6 +461,8 @@ impl Value {
             Value::EnumVariant { enum_name, .. } => enum_name.clone(),
             Value::HashMap(_) => "HashMap".into(),
             Value::HashSet(_) => "HashSet".into(),
+            Value::BTreeMap(_) => "BTreeMap".into(),
+            Value::BTreeSet(_) => "BTreeSet".into(),
             Value::BinaryHeap(_) => "BinaryHeap".into(),
             Value::VecDeque(_) => "VecDeque".into(),
             Value::Iterator(_) => "Iterator".into(),
@@ -548,6 +556,18 @@ impl Value {
                 v.sort();
                 Ok(v)
             }
+            Value::BTreeMap(rc) => {
+                let m = rc.borrow();
+                let pairs: Vec<_> = m
+                    .iter()
+                    .map(|(k, v)| Value::Tuple(vec![k.clone(), v.clone()]))
+                    .collect();
+                Ok(pairs)
+            }
+            Value::BTreeSet(rc) => {
+                let s = rc.borrow();
+                Ok(s.iter().cloned().collect())
+            }
             Value::BinaryHeap(rc) => Ok(rc.borrow().clone().into_sorted_vec()),
             Value::VecDeque(rc) => Ok(rc.borrow().clone().into_iter().collect()),
             Value::Iterator(mut iter) => Ok(iter.collect_all()),
@@ -576,16 +596,18 @@ impl Value {
             Value::Tuple(_) => 8,
             Value::HashMap(_) => 9,
             Value::HashSet(_) => 10,
-            Value::BinaryHeap(_) => 11,
-            Value::VecDeque(_) => 12,
-            Value::Iterator(_) => 13,
-            Value::Struct { .. } => 14,
-            Value::EnumVariant { .. } => 15,
-            Value::Function(_) => 16,
-            Value::Future(_) => 17,
-            Value::JoinHandle(_) => 18,
-            Value::Array(_) => 20,
-            Value::Cell(_) => 19,
+            Value::BTreeMap(_) => 11,
+            Value::BTreeSet(_) => 12,
+            Value::BinaryHeap(_) => 13,
+            Value::VecDeque(_) => 14,
+            Value::Iterator(_) => 15,
+            Value::Struct { .. } => 16,
+            Value::EnumVariant { .. } => 17,
+            Value::Function(_) => 18,
+            Value::Future(_) => 19,
+            Value::JoinHandle(_) => 20,
+            Value::Array(_) => 22,
+            Value::Cell(_) => 21,
         }
     }
 
@@ -610,6 +632,8 @@ impl Value {
             Value::EnumVariant { .. } => true,
             Value::HashMap(rc) => !rc.borrow().is_empty(),
             Value::HashSet(rc) => !rc.borrow().is_empty(),
+            Value::BTreeMap(rc) => !rc.borrow().is_empty(),
+            Value::BTreeSet(rc) => !rc.borrow().is_empty(),
             Value::BinaryHeap(rc) => !rc.borrow().is_empty(),
             Value::VecDeque(rc) => !rc.borrow().is_empty(),
             Value::Iterator(_) => true,
@@ -744,6 +768,28 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
+            Value::BTreeMap(rc) => {
+                let m = rc.borrow();
+                write!(f, "{{")?;
+                for (i, (k, v)) in m.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::BTreeSet(rc) => {
+                let s = rc.borrow();
+                write!(f, "{{")?;
+                for (i, elem) in s.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "}}")
+            }
             Value::BinaryHeap(rc) => {
                 write!(f, "BinaryHeap([")?;
                 let sorted = rc.borrow().clone().into_sorted_vec();
@@ -823,6 +869,8 @@ impl PartialEq for Value {
             ) => ea == eb && va == vb && da == db,
             (Value::HashMap(a), Value::HashMap(b)) => *a.borrow() == *b.borrow(),
             (Value::HashSet(a), Value::HashSet(b)) => *a.borrow() == *b.borrow(),
+            (Value::BTreeMap(a), Value::BTreeMap(b)) => *a.borrow() == *b.borrow(),
+            (Value::BTreeSet(a), Value::BTreeSet(b)) => *a.borrow() == *b.borrow(),
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
                 let va = a.borrow().clone().into_sorted_vec();
                 let vb = b.borrow().clone().into_sorted_vec();
@@ -987,6 +1035,32 @@ impl Ord for Value {
                 }
                 av.len().cmp(&bv.len())
             }
+            (Value::BTreeMap(a), Value::BTreeMap(b)) => {
+                let ma = a.borrow();
+                let mb = b.borrow();
+                for ((ak, av), (bk, bv)) in ma.iter().zip(mb.iter()) {
+                    match ak.cmp(bk) {
+                        Ordering::Equal => {}
+                        non_eq => return non_eq,
+                    }
+                    match av.cmp(bv) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                ma.len().cmp(&mb.len())
+            }
+            (Value::BTreeSet(a), Value::BTreeSet(b)) => {
+                let sa = a.borrow();
+                let sb = b.borrow();
+                for (ai, bi) in sa.iter().zip(sb.iter()) {
+                    match ai.cmp(bi) {
+                        Ordering::Equal => continue,
+                        non_eq => return non_eq,
+                    }
+                }
+                sa.len().cmp(&sb.len())
+            }
             (Value::BinaryHeap(a), Value::BinaryHeap(b)) => {
                 let va = a.borrow().clone().into_sorted_vec();
                 let vb = b.borrow().clone().into_sorted_vec();
@@ -1101,6 +1175,19 @@ impl Hash for Value {
                 let mut items: Vec<&Value> = s.iter().collect();
                 items.sort();
                 for item in items {
+                    item.hash(state);
+                }
+            }
+            Value::BTreeMap(rc) => {
+                let m = rc.borrow();
+                for (k, v) in m.iter() {
+                    k.hash(state);
+                    v.hash(state);
+                }
+            }
+            Value::BTreeSet(rc) => {
+                let s = rc.borrow();
+                for item in s.iter() {
                     item.hash(state);
                 }
             }

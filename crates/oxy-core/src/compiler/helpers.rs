@@ -421,6 +421,8 @@ pub(crate) fn is_builtin_path(path: &[String]) -> bool {
             | ["String", "from"]
             | ["HashMap", "new"]
             | ["HashSet", "new"]
+            | ["BTreeMap", "new"]
+            | ["BTreeSet", "new"]
             | ["BinaryHeap", "new"]
             | ["VecDeque", "new"]
             | ["ListNode", "new"]

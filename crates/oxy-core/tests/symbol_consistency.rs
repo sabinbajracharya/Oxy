@@ -65,6 +65,16 @@ fn test_hashset_methods_in_symbols() {
 }
 
 #[test]
+fn test_btreemap_methods_in_symbols() {
+    check_builtins_in_symbols(builtins::btreemap::method_names(), "BTreeMap");
+}
+
+#[test]
+fn test_btreeset_methods_in_symbols() {
+    check_builtins_in_symbols(builtins::btreeset::method_names(), "BTreeSet");
+}
+
+#[test]
 fn test_binaryheap_methods_in_symbols() {
     check_builtins_in_symbols(builtins::binary_heap::method_names(), "BinaryHeap");
 }
@@ -123,6 +133,16 @@ fn test_symbols_in_hashmap_builtins() {
 #[test]
 fn test_symbols_in_hashset_builtins() {
     check_symbols_in_builtins(builtins::hashset::method_names(), "HashSet");
+}
+
+#[test]
+fn test_symbols_in_btreemap_builtins() {
+    check_symbols_in_builtins(builtins::btreemap::method_names(), "BTreeMap");
+}
+
+#[test]
+fn test_symbols_in_btreeset_builtins() {
+    check_symbols_in_builtins(builtins::btreeset::method_names(), "BTreeSet");
 }
 
 #[test]

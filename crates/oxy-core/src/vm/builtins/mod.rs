@@ -5,6 +5,8 @@
 //! method calls through these functions.
 
 pub mod binary_heap;
+pub mod btreemap;
+pub mod btreeset;
 pub mod hashmap;
 pub mod hashset;
 pub mod iterator;

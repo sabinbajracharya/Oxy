@@ -79,6 +79,19 @@ fn serialize_value(value: &Value) -> Result<String, String> {
                 rc.borrow().iter().map(serialize_value).collect();
             Ok(format!("[{}]", items?.join(", ")))
         }
+        Value::BTreeMap(rc) => {
+            let m = rc.borrow();
+            let hm: HashMap<String, Value> = m
+                .iter()
+                .map(|(k, v)| (format!("{}", k), v.clone()))
+                .collect();
+            serialize_map(&hm)
+        }
+        Value::BTreeSet(rc) => {
+            let items: Result<Vec<String>, String> =
+                rc.borrow().iter().map(serialize_value).collect();
+            Ok(format!("[{}]", items?.join(", ")))
+        }
         Value::Cell(rc) => serialize_value(&rc.borrow()),
         Value::Future(_) => Err("cannot serialize future".to_string()),
         Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
@@ -182,6 +195,31 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
                 .map(|item| {
                     let s = serialize_value_pretty(item, inner_indent)?;
                     Ok(format!("{pad}{s}"))
+                })
+                .collect();
+            Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))
+        }
+        Value::BTreeMap(rc) => {
+            let m = rc.borrow();
+            let hm: HashMap<String, Value> = m
+                .iter()
+                .map(|(k, v)| (format!("{}", k), v.clone()))
+                .collect();
+            serialize_map_pretty(&hm, indent)
+        }
+        Value::BTreeSet(rc) => {
+            let s = rc.borrow();
+            if s.is_empty() {
+                return Ok("[]".to_string());
+            }
+            let inner_indent = indent + 2;
+            let pad = " ".repeat(inner_indent);
+            let close_pad = " ".repeat(indent);
+            let items: Result<Vec<String>, String> = s
+                .iter()
+                .map(|item| {
+                    let val = serialize_value_pretty(item, inner_indent)?;
+                    Ok(format!("{pad}{val}"))
                 })
                 .collect();
             Ok(format!("[\n{}\n{close_pad}]", items?.join(",\n")))

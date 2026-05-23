@@ -48,7 +48,7 @@
 //! `docs/architecture/vm-locals-stack-separation.md`.
 
 use std::cell::RefCell;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
 use crate::lexer::IntegerSuffix;
@@ -807,6 +807,10 @@ impl Vm {
                             Some(val) => self.stack.push(val),
                             None => self.stack.push(Value::Unit),
                         },
+                        Value::BTreeMap(rc) => match rc.borrow().get(&key).cloned() {
+                            Some(val) => self.stack.push(val),
+                            None => self.stack.push(Value::Unit),
+                        },
                         Value::Vec(rc) => {
                             let idx = match key {
                                 Value::I64(i) => i as usize,
@@ -1455,6 +1459,8 @@ impl Vm {
             Value::String(_) => builtins::string::dispatch(receiver, method_name, &args),
             Value::HashMap(_) => builtins::hashmap::dispatch(receiver, method_name, &args),
             Value::HashSet(_) => builtins::hashset::dispatch(receiver, method_name, &args),
+            Value::BTreeMap(_) => builtins::btreemap::dispatch(receiver, method_name, &args),
+            Value::BTreeSet(_) => builtins::btreeset::dispatch(receiver, method_name, &args),
             Value::VecDeque(_) => builtins::vec_deque::dispatch(receiver, method_name, &args),
             Value::BinaryHeap(_) => builtins::binary_heap::dispatch(receiver, method_name, &args),
             Value::Char(c) => match method_name {
@@ -1568,6 +1574,12 @@ impl Vm {
             )))),
             ["HashSet", "new"] => Ok(Value::HashSet(std::rc::Rc::new(std::cell::RefCell::new(
                 HashSet::new(),
+            )))),
+            ["BTreeMap", "new"] => Ok(Value::BTreeMap(std::rc::Rc::new(std::cell::RefCell::new(
+                BTreeMap::new(),
+            )))),
+            ["BTreeSet", "new"] => Ok(Value::BTreeSet(std::rc::Rc::new(std::cell::RefCell::new(
+                BTreeSet::new(),
             )))),
             ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(std::rc::Rc::new(
                 std::cell::RefCell::new(BinaryHeap::new()),
@@ -2222,6 +2234,24 @@ fn debug_format(val: &Value) -> String {
                 .collect();
             format!("{{{}}}", items.join(", "))
         }
+        Value::BTreeMap(rc) => {
+            let m = rc.borrow();
+            let items: Vec<String> = m
+                .iter()
+                .map(|(k, v)| {
+                    format!(
+                        "{}: {}",
+                        debug_format(&Value::String(k.to_string())),
+                        debug_format(v)
+                    )
+                })
+                .collect();
+            format!("{{{}}}", items.join(", "))
+        }
+        Value::BTreeSet(rc) => {
+            let items: Vec<String> = rc.borrow().iter().map(debug_format).collect();
+            format!("{{{}}}", items.join(", "))
+        }
         Value::BinaryHeap(rc) => {
             let sorted = rc.borrow().clone().into_sorted_vec();
             let items: Vec<String> = sorted.iter().map(debug_format).collect();
@@ -2248,6 +2278,8 @@ pub fn dispatched_type_names() -> Vec<&'static str> {
         "String",
         "HashMap",
         "HashSet",
+        "BTreeMap",
+        "BTreeSet",
         "VecDeque",
         "BinaryHeap",
         "char",
