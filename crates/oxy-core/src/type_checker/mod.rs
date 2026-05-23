@@ -352,6 +352,13 @@ pub struct TypeChecker {
     use_aliases: HashMap<String, String>,
     /// Current impl type name for `Self` resolution (qualified).
     current_impl_type: Option<String>,
+    /// Names of generic-type parameters in scope (from the enclosing fn,
+    /// impl, or struct definition). Allowed as user-struct type names without
+    /// triggering "unknown type" errors.
+    current_generics: Vec<String>,
+    /// Known enum names (qualified). Populated alongside struct_defs so the
+    /// type-name validator can accept them.
+    enum_defs: std::collections::HashSet<String>,
 }
 
 impl TypeChecker {
@@ -365,6 +372,8 @@ impl TypeChecker {
             module_stack: Vec::new(),
             use_aliases: HashMap::new(),
             current_impl_type: None,
+            current_generics: Vec::new(),
+            enum_defs: std::collections::HashSet::new(),
         }
     }
 }
@@ -401,6 +410,74 @@ impl TypeChecker {
         // Try module-qualified struct name
         let resolved = self.resolve_struct_name(name);
         TypeInfo::from_name(&resolved)
+    }
+
+    /// True if `name` refers to a known user-defined type (struct, enum,
+    /// type alias, use-alias) or an in-scope generic parameter / `Self`.
+    fn is_known_user_type(&self, name: &str) -> bool {
+        if name == "Self" || name == "_" {
+            return true;
+        }
+        // Strip any inline generic-arg suffix (`Pair<i64, i64>` → `Pair`),
+        // which `current_impl_type` and a few legacy parser paths still
+        // produce as a single string.
+        let bare = match name.find('<') {
+            Some(i) => &name[..i],
+            None => name,
+        };
+        if self.current_generics.iter().any(|g| g == bare) {
+            return true;
+        }
+        if self.struct_defs.contains_key(bare) || self.enum_defs.contains(bare) {
+            return true;
+        }
+        if self.type_aliases.contains_key(bare) || self.use_aliases.contains_key(bare) {
+            return true;
+        }
+        // Module-qualified lookup (e.g. `database::Record` when inside `database`).
+        let module_prefix = self.module_stack.join("::");
+        if !module_prefix.is_empty() {
+            let qualified = format!("{}::{}", module_prefix, bare);
+            if self.struct_defs.contains_key(&qualified)
+                || self.enum_defs.contains(&qualified)
+                || self.type_aliases.contains_key(&qualified)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Walk a TypeInfo and error on any nested `UserStruct(name)` whose name
+    /// isn't a known type. Used at type-annotation sites to surface
+    /// `let v: Vec<bogus_name> = …` as a clean "unknown type" diagnostic
+    /// instead of a downstream "type mismatch".
+    fn validate_type_known(&self, ty: &TypeInfo, span: Span) -> Result<(), FerriError> {
+        match ty {
+            TypeInfo::UserStruct(name) => {
+                if !self.is_known_user_type(name) {
+                    return Err(FerriError::TypeError {
+                        message: format!("unknown type `{name}`"),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(())
+            }
+            TypeInfo::Vec(t) | TypeInfo::Option(t) => self.validate_type_known(t, span),
+            TypeInfo::HashMap(k, v) | TypeInfo::BTreeMap(k, v) | TypeInfo::Result(k, v) => {
+                self.validate_type_known(k, span)?;
+                self.validate_type_known(v, span)
+            }
+            TypeInfo::Array(elem, _) => self.validate_type_known(elem, span),
+            TypeInfo::Function { params, ret } => {
+                for p in params {
+                    self.validate_type_known(p, span)?;
+                }
+                self.validate_type_known(ret, span)
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Resolve a TypeAnnotation to TypeInfo, handling Named and Array variants.
@@ -677,6 +754,14 @@ impl TypeChecker {
                     };
                     self.struct_defs.insert(qualified, s.clone());
                 }
+                Item::Enum(e) => {
+                    let qualified = if prefix.is_empty() {
+                        e.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, e.name)
+                    };
+                    self.enum_defs.insert(qualified);
+                }
                 Item::TypeAlias { name, target, .. } => {
                     let qualified = if prefix.is_empty() {
                         name.clone()
@@ -914,31 +999,44 @@ impl TypeChecker {
     }
 
     fn check_function(&mut self, f: &FnDef) -> Result<(), FerriError> {
+        // Track the function's own generic params, plus any inherited from
+        // an enclosing impl block, while we walk its body.
+        let impl_generics = self
+            .current_impl_type
+            .as_deref()
+            .map(|t| self.struct_generic_names(t))
+            .unwrap_or_default();
+        let saved_generics = self.current_generics.clone();
+        for p in &f.generic_params {
+            self.current_generics.push(p.name.clone());
+        }
+        for g in &impl_generics {
+            self.current_generics.push(g.clone());
+        }
+
         let ret_ty = if let Some(ref ann) = f.return_type {
-            // If return type is a generic param, treat as Unknown (type-erased generics)
             let is_generic = match ann {
                 TypeAnnotation::Named { name, .. } => {
-                    let generic_names: Vec<&str> =
-                        f.generic_params.iter().map(|p| p.name.as_str()).collect();
-                    generic_names.contains(&name.as_str())
+                    self.current_generics.iter().any(|g| g == name)
                 }
                 TypeAnnotation::Array { .. } => false,
             };
             if is_generic {
                 TypeInfo::Unknown
             } else {
-                self.resolve_annotation(ann)
+                let ty = self.resolve_annotation(ann);
+                self.validate_type_known(&ty, ann.span())?;
+                ty
             }
         } else {
             TypeInfo::Unit
         };
         self.fn_return_types.insert(f.name.clone(), ret_ty.clone());
-        let impl_generics = self
-            .current_impl_type
-            .as_deref()
-            .map(|t| self.struct_generic_names(t))
-            .unwrap_or_default();
         let param_tys = self.resolve_param_types(f, &impl_generics);
+        // Validate every declared param type for unknown names.
+        for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
+            self.validate_type_known(p_ty, param.span)?;
+        }
         self.fn_param_types
             .insert(f.name.clone(), param_tys.clone());
 
@@ -950,12 +1048,16 @@ impl TypeChecker {
         let saved_env = self.env.clone();
         self.env = fn_env;
 
-        for stmt in &f.body.stmts {
-            self.check_stmt(stmt, &ret_ty)?;
-        }
+        let body_result = (|| -> Result<(), FerriError> {
+            for stmt in &f.body.stmts {
+                self.check_stmt(stmt, &ret_ty)?;
+            }
+            Ok(())
+        })();
 
         self.env = saved_env;
-        Ok(())
+        self.current_generics = saved_generics;
+        body_result
     }
 
     fn check_stmt(&mut self, stmt: &Stmt, fn_ret: &TypeInfo) -> Result<(), FerriError> {
@@ -968,7 +1070,9 @@ impl TypeChecker {
                 ..
             } => {
                 let declared = if let Some(ann) = type_ann {
-                    self.resolve_annotation(ann)
+                    let ty = self.resolve_annotation(ann);
+                    self.validate_type_known(&ty, ann.span())?;
+                    ty
                 } else {
                     TypeInfo::Unknown
                 };
@@ -981,7 +1085,7 @@ impl TypeChecker {
                     return Err(FerriError::TypeError {
                         message: format!(
                             "type mismatch: variable `{name}` declared as `{}`, but value has type `{}`",
-                            declared.name(), inferred.name()
+                            declared.display_name(), inferred.display_name()
                         ),
                         line: span.line,
                         column: span.column,
