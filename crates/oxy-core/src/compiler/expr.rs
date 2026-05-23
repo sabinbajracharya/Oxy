@@ -1000,6 +1000,11 @@ impl Compiler {
                         } else {
                             self.emit(OpCode::Print);
                         }
+                        // Macro call is an expression — leave a Unit on the
+                        // stack so the surrounding statement's Pop has a
+                        // value to discard (otherwise Pop dips into the
+                        // caller's frame).
+                        self.emit(OpCode::ConstUnit);
                         return Ok(());
                     }
                     // Follow use_aliases chain (handles pub use re-exports)
@@ -2025,8 +2030,13 @@ impl Compiler {
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last = i == arms.len() - 1;
 
-                    // Pop leftover scrutinee from a previous failed arm
-                    self.emit(OpCode::Pop);
+                    // Pop leftover scrutinee from a previous failed arm.
+                    // The first arm has no predecessor — StoreLocal above
+                    // already drained the stack — so don't pop into the
+                    // caller's frame.
+                    if i > 0 {
+                        self.emit(OpCode::Pop);
+                    }
                     // Push scrutinee for this arm
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
 
@@ -2203,14 +2213,18 @@ impl Compiler {
                         } else {
                             self.emit(OpCode::Print);
                         }
+                        // See note above: leave Unit on the stack.
+                        self.emit(OpCode::ConstUnit);
                     }
                 } else if (is_println || is_format) && args.len() == 1 {
                     // No format args — just print/format the literal
                     self.compile_expr(&args[0])?;
                     if name == "println" {
                         self.emit(OpCode::PrintLn);
+                        self.emit(OpCode::ConstUnit);
                     } else if name == "print" {
                         self.emit(OpCode::Print);
+                        self.emit(OpCode::ConstUnit);
                     }
                     // format! with no args just returns the string
                 } else if name == "vec" {
@@ -2230,6 +2244,9 @@ impl Compiler {
                         self.compile_expr(arg)?;
                     }
                     self.emit(OpCode::Panic);
+                    // Unreachable, but the surrounding expression context
+                    // expects a value to be left on the stack.
+                    self.emit(OpCode::ConstUnit);
                 } else if name == "assert" {
                     // assert!(cond) or assert!(cond, "message")
                     self.compile_expr(&args[0])?; // compile condition
@@ -2241,6 +2258,7 @@ impl Compiler {
                     }
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                    self.emit(OpCode::ConstUnit);
                 } else if name == "assert_eq" {
                     // assert_eq!(left, right) or assert_eq!(left, right, "message")
                     self.compile_expr(&args[0])?;
@@ -2256,6 +2274,7 @@ impl Compiler {
                     }
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                    self.emit(OpCode::ConstUnit);
                 } else if name == "assert_ne" {
                     // assert_ne!(left, right) or assert_ne!(left, right, "message")
                     self.compile_expr(&args[0])?;
@@ -2271,6 +2290,7 @@ impl Compiler {
                     }
                     self.emit(OpCode::Panic);
                     self.patch(skip, OpCode::JumpIfTrue(self.code.len()));
+                    self.emit(OpCode::ConstUnit);
                 } else if name == "dbg" {
                     // dbg!(expr) — print debug representation and return the value
                     self.compile_expr(&args[0])?;
