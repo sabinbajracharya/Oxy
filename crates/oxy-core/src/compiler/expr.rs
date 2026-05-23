@@ -408,7 +408,7 @@ impl Compiler {
                 } else {
                     self.emit(OpCode::ConstUnit);
                 }
-                self.emit(OpCode::Return);
+                self.emit_return();
                 Ok(())
             }
 
@@ -2332,7 +2332,7 @@ impl Compiler {
                 } else {
                     self.emit(OpCode::ConstUnit);
                 }
-                self.emit(OpCode::Return);
+                self.emit_return();
                 Ok(())
             }
         }

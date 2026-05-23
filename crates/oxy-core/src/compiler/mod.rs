@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::errors::FerriError;
 use crate::lexer::{FloatSuffix, IntegerSuffix};
+use crate::types::IntegerWidth;
 use crate::vm::{Chunk, OpCode};
 
 pub(crate) use loop_context::LoopContext;
@@ -98,6 +99,32 @@ pub struct Compiler {
     pub(crate) pub_vis: HashMap<String, Visibility>,
     /// Module qualified names (for checking path visibility through modules).
     pub(crate) module_names: HashSet<String>,
+    /// Declared integer return width of the function currently being compiled.
+    /// Used to truncate the return value at every `Return` so the declared
+    /// width (e.g. `u8`, `u64`) actually matters at runtime, instead of every
+    /// integer silently widening to `i64`.
+    pub(crate) current_fn_return_width: Option<IntegerWidth>,
+}
+
+/// Extract the integer width from a bare type annotation, if it names one.
+/// Returns `None` for non-integer or parameterized/array types.
+pub(crate) fn integer_width_of(ann: &TypeAnnotation) -> Option<IntegerWidth> {
+    match ann {
+        TypeAnnotation::Named {
+            name, generic_args, ..
+        } if generic_args.is_empty() => match name.as_str() {
+            "i8" => Some(IntegerWidth::I8),
+            "i16" => Some(IntegerWidth::I16),
+            "i32" => Some(IntegerWidth::I32),
+            "i64" | "isize" => Some(IntegerWidth::I64),
+            "u8" => Some(IntegerWidth::U8),
+            "u16" => Some(IntegerWidth::U16),
+            "u32" => Some(IntegerWidth::U32),
+            "u64" | "usize" => Some(IntegerWidth::U64),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 impl Compiler {
@@ -160,11 +187,37 @@ impl Default for Compiler {
             deferred_globs: Vec::new(),
             pub_vis: HashMap::new(),
             module_names: HashSet::new(),
+            current_fn_return_width: None,
         }
     }
 }
 
 impl Compiler {
+    /// Emit a `Return`, prefixed by an integer-truncation cast if the
+    /// surrounding function declared an integer return type. This makes
+    /// `fn f() -> u8 { ... }` actually wrap the return value to `u8`
+    /// instead of silently leaking the inner `i64`.
+    pub(crate) fn emit_return(&mut self) {
+        if let Some(w) = self.current_fn_return_width {
+            self.emit(OpCode::CastInt(w));
+        }
+        self.emit(OpCode::Return);
+    }
+
+    /// At a function's entry, coerce each integer-typed parameter to its
+    /// declared width. Args are otherwise stored verbatim in the locals
+    /// frame, so without this step `fn f(n: u32)` called with `i64(5)`
+    /// would carry an `i64` value throughout the body.
+    pub(crate) fn emit_param_coercions(&mut self, params: &[Param]) {
+        for (i, param) in params.iter().enumerate() {
+            if let Some(w) = integer_width_of(&param.type_ann) {
+                self.emit(OpCode::LoadLocal(i));
+                self.emit(OpCode::CastInt(w));
+                self.emit(OpCode::StoreLocal(i));
+            }
+        }
+    }
+
     /// Compile a full program. Returns a [`Chunk`] ready for the VM.
     pub fn compile(mut self, program: &Program) -> Result<Chunk, FerriError> {
         // Pre-scan: register all function names so forward references resolve.
@@ -573,6 +626,12 @@ impl Compiler {
         let saved_generic_params =
             std::mem::replace(&mut self.current_generic_params, f.generic_params.clone());
 
+        // Coerce integer params to their declared widths; track the declared
+        // return width so every `Return` truncates accordingly.
+        self.emit_param_coercions(&f.params);
+        let saved_return_width = self.current_fn_return_width;
+        self.current_fn_return_width = f.return_type.as_ref().and_then(integer_width_of);
+
         self.compile_block(&f.body)?;
         // For methods with self parameter and no explicit tail expression,
         // implicitly return self so mutations propagate to caller.
@@ -588,7 +647,8 @@ impl Compiler {
         if !has_tail_expr && f.params.first().map(|p| p.name.as_str()) == Some("self") {
             self.emit(OpCode::LoadLocal(0));
         }
-        self.emit(OpCode::Return);
+        self.emit_return();
+        self.current_fn_return_width = saved_return_width;
 
         if f.name == "main" {
             self.main_local_names = self.sym.build_slot_names();
@@ -1070,8 +1130,13 @@ impl Compiler {
                             self.sym.define(&param.name);
                         }
                     }
+                    self.emit_param_coercions(&f.params);
+                    let saved_return_width = self.current_fn_return_width;
+                    self.current_fn_return_width =
+                        f.return_type.as_ref().and_then(integer_width_of);
                     self.compile_block(&f.body)?;
-                    self.emit(OpCode::Return);
+                    self.emit_return();
+                    self.current_fn_return_width = saved_return_width;
                     self.fn_local_names.insert(ip, self.sym.build_slot_names());
                     self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                     self.sym = saved_sym;
@@ -1154,8 +1219,13 @@ impl Compiler {
                                 self.sym.define(&param.name);
                             }
                         }
+                        self.emit_param_coercions(&method.params);
+                        let saved_return_width = self.current_fn_return_width;
+                        self.current_fn_return_width =
+                            method.return_type.as_ref().and_then(integer_width_of);
                         self.compile_block(&method.body)?;
-                        self.emit(OpCode::Return);
+                        self.emit_return();
+                        self.current_fn_return_width = saved_return_width;
                         self.fn_local_names.insert(ip, self.sym.build_slot_names());
                         self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                         self.sym = saved_sym;
@@ -1253,8 +1323,13 @@ impl Compiler {
                                 self.sym.define(&param.name);
                             }
                         }
+                        self.emit_param_coercions(&method.params);
+                        let saved_return_width = self.current_fn_return_width;
+                        self.current_fn_return_width =
+                            method.return_type.as_ref().and_then(integer_width_of);
                         self.compile_block(&method.body)?;
-                        self.emit(OpCode::Return);
+                        self.emit_return();
+                        self.current_fn_return_width = saved_return_width;
                         self.fn_local_names.insert(ip, self.sym.build_slot_names());
                         self.fn_frame_sizes.insert(ip, self.sym.next_slot);
                         self.sym = saved_sym;
