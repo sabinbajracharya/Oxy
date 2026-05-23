@@ -39,7 +39,12 @@ pub enum TypeInfo {
     Option(Box<TypeInfo>),
     /// `Result<T, E>`.
     Result(Box<TypeInfo>, Box<TypeInfo>),
-    UserStruct(String),
+    /// A user-defined struct or enum, optionally parameterized by generic
+    /// type arguments (`Box<i64>` → name = "Box", generic_args = [I64]).
+    UserStruct {
+        name: String,
+        generic_args: Vec<TypeInfo>,
+    },
     Function {
         params: Vec<TypeInfo>,
         ret: Box<TypeInfo>,
@@ -90,7 +95,7 @@ impl TypeInfo {
             TypeInfo::BTreeMap(..) => "BTreeMap",
             TypeInfo::Option(_) => "Option",
             TypeInfo::Result(..) => "Result",
-            TypeInfo::UserStruct(name) => name.as_str(),
+            TypeInfo::UserStruct { name, .. } => name.as_str(),
             TypeInfo::Function { .. } => "fn",
             TypeInfo::Array(..) => "[...]",
             TypeInfo::Unknown => "?",
@@ -135,6 +140,14 @@ impl TypeInfo {
         }
     }
 
+    /// Construct an un-parameterized user struct/enum type.
+    pub fn user_struct(name: impl Into<String>) -> TypeInfo {
+        TypeInfo::UserStruct {
+            name: name.into(),
+            generic_args: Vec::new(),
+        }
+    }
+
     /// Substitute the user-supplied generic arguments into a parameterized
     /// container type. Non-container heads ignore their generic args.
     pub fn apply_generics(
@@ -153,6 +166,16 @@ impl TypeInfo {
             TypeInfo::HashMap(..) => TypeInfo::HashMap(Box::new(arg(0)?), Box::new(arg(1)?)),
             TypeInfo::BTreeMap(..) => TypeInfo::BTreeMap(Box::new(arg(0)?), Box::new(arg(1)?)),
             TypeInfo::Result(..) => TypeInfo::Result(Box::new(arg(0)?), Box::new(arg(1)?)),
+            TypeInfo::UserStruct { name, .. } if !generic_args.is_empty() => {
+                let mut resolved = Vec::with_capacity(generic_args.len());
+                for a in generic_args {
+                    resolved.push(Self::from_annotation(&Some(a.clone()))?);
+                }
+                TypeInfo::UserStruct {
+                    name,
+                    generic_args: resolved,
+                }
+            }
             other => other,
         })
     }
@@ -211,7 +234,10 @@ impl TypeInfo {
             "Option" => TypeInfo::Option(Box::new(TypeInfo::Unknown)),
             "Result" => TypeInfo::Result(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown)),
             "_" => TypeInfo::Unknown,
-            n => TypeInfo::UserStruct(n.to_string()),
+            n => TypeInfo::UserStruct {
+                name: n.to_string(),
+                generic_args: Vec::new(),
+            },
         }
     }
 
@@ -291,6 +317,32 @@ impl TypeInfo {
         }
         if let (TypeInfo::HashMap(sk, sv), TypeInfo::HashMap(ok, ov)) = (self, other) {
             return sk.accepts(ok) && sv.accepts(ov);
+        }
+        // User-defined structs/enums: same head name, with generic-args
+        // compared element-wise. An empty generic-args list on either side
+        // acts as a wildcard, so legacy paths that didn't set args still
+        // unify with newly-parameterized values.
+        if let (
+            TypeInfo::UserStruct {
+                name: sn,
+                generic_args: sa,
+            },
+            TypeInfo::UserStruct {
+                name: on,
+                generic_args: oa,
+            },
+        ) = (self, other)
+        {
+            if sn != on {
+                return false;
+            }
+            if sa.is_empty() || oa.is_empty() {
+                return true;
+            }
+            if sa.len() != oa.len() {
+                return false;
+            }
+            return sa.iter().zip(oa.iter()).all(|(s, o)| s.accepts(o));
         }
         if let (TypeInfo::BTreeMap(sk, sv), TypeInfo::BTreeMap(ok, ov)) = (self, other) {
             return sk.accepts(ok) && sv.accepts(ov);
@@ -390,7 +442,10 @@ impl TypeChecker {
         // `Self` resolves to the current impl type
         if name == "Self" {
             if let Some(ref impl_type) = self.current_impl_type {
-                return TypeInfo::UserStruct(impl_type.clone());
+                return TypeInfo::UserStruct {
+                    name: impl_type.clone(),
+                    generic_args: Vec::new(),
+                };
             }
         }
         if let Some(alias) = self.type_aliases.get(name) {
@@ -454,13 +509,16 @@ impl TypeChecker {
     /// instead of a downstream "type mismatch".
     fn validate_type_known(&self, ty: &TypeInfo, span: Span) -> Result<(), FerriError> {
         match ty {
-            TypeInfo::UserStruct(name) => {
+            TypeInfo::UserStruct { name, generic_args } => {
                 if !self.is_known_user_type(name) {
                     return Err(FerriError::TypeError {
                         message: format!("unknown type `{name}`"),
                         line: span.line,
                         column: span.column,
                     });
+                }
+                for g in generic_args {
+                    self.validate_type_known(g, span)?;
                 }
                 Ok(())
             }
@@ -493,6 +551,130 @@ impl TypeChecker {
                 let inner_ty = self.resolve_annotation(inner);
                 TypeInfo::Array(Box::new(inner_ty), *size)
             }
+        }
+    }
+
+    /// Type of the trailing semicolon-less expression in a block, or `Unit`
+    /// if the block has no producing tail.
+    fn block_tail_type(&mut self, block: &Block) -> Result<TypeInfo, FerriError> {
+        let block_env = TypeEnv::child(&self.env);
+        let saved = self.env.clone();
+        self.env = block_env;
+        let mut result = TypeInfo::Unit;
+        let body_result = (|| -> Result<(), FerriError> {
+            for stmt in &block.stmts {
+                if let Stmt::Expr {
+                    expr,
+                    has_semicolon,
+                } = stmt
+                {
+                    if !has_semicolon {
+                        result = self.infer_expr(expr)?;
+                        continue;
+                    }
+                }
+                self.check_stmt(stmt, &TypeInfo::Unknown)?;
+            }
+            Ok(())
+        })();
+        self.env = saved;
+        body_result?;
+        Ok(result)
+    }
+
+    /// Combine two branch types from an `if`/`match`. `Unknown` and `Unit`
+    /// arms are absorbed into the other side; otherwise the two must be
+    /// mutually `accepts`-compatible.
+    fn unify_branch_types(
+        &self,
+        a: &TypeInfo,
+        b: &TypeInfo,
+        kind: &str,
+        span: Span,
+    ) -> Result<TypeInfo, FerriError> {
+        if *a == TypeInfo::Unknown {
+            return Ok(b.clone());
+        }
+        if *b == TypeInfo::Unknown {
+            return Ok(a.clone());
+        }
+        if *a == TypeInfo::Unit {
+            return Ok(b.clone());
+        }
+        if *b == TypeInfo::Unit {
+            return Ok(a.clone());
+        }
+        if a.accepts(b) {
+            return Ok(a.clone());
+        }
+        if b.accepts(a) {
+            return Ok(b.clone());
+        }
+        Err(FerriError::TypeError {
+            message: format!(
+                "{kind} branches produce incompatible types `{}` and `{}`",
+                a.display_name(),
+                b.display_name()
+            ),
+            line: span.line,
+            column: span.column,
+        })
+    }
+
+    /// Substitute generic-parameter names with their resolved types.
+    /// `param_names[i]` maps to `arg_types[i]`. The substitution happens on
+    /// the raw `TypeAnnotation` so nested generics in field types like
+    /// `Vec<T>` get properly recursed through.
+    fn substitute_generics(
+        &self,
+        ann: &TypeAnnotation,
+        param_names: &[String],
+        arg_types: &[TypeInfo],
+    ) -> TypeInfo {
+        match ann {
+            TypeAnnotation::Named {
+                name, generic_args, ..
+            } => {
+                if let Some(idx) = param_names.iter().position(|p| p == name) {
+                    return arg_types.get(idx).cloned().unwrap_or(TypeInfo::Unknown);
+                }
+                let head = self.resolve_type(name);
+                let resolved_args: Vec<TypeInfo> = generic_args
+                    .iter()
+                    .map(|a| self.substitute_generics(a, param_names, arg_types))
+                    .collect();
+                match head {
+                    TypeInfo::Vec(_) if !resolved_args.is_empty() => {
+                        TypeInfo::Vec(Box::new(resolved_args[0].clone()))
+                    }
+                    TypeInfo::Option(_) if !resolved_args.is_empty() => {
+                        TypeInfo::Option(Box::new(resolved_args[0].clone()))
+                    }
+                    TypeInfo::HashMap(..) if resolved_args.len() >= 2 => TypeInfo::HashMap(
+                        Box::new(resolved_args[0].clone()),
+                        Box::new(resolved_args[1].clone()),
+                    ),
+                    TypeInfo::BTreeMap(..) if resolved_args.len() >= 2 => TypeInfo::BTreeMap(
+                        Box::new(resolved_args[0].clone()),
+                        Box::new(resolved_args[1].clone()),
+                    ),
+                    TypeInfo::Result(..) if resolved_args.len() >= 2 => TypeInfo::Result(
+                        Box::new(resolved_args[0].clone()),
+                        Box::new(resolved_args[1].clone()),
+                    ),
+                    TypeInfo::UserStruct { name, .. } if !resolved_args.is_empty() => {
+                        TypeInfo::UserStruct {
+                            name,
+                            generic_args: resolved_args,
+                        }
+                    }
+                    other => other,
+                }
+            }
+            TypeAnnotation::Array { inner, size, .. } => TypeInfo::Array(
+                Box::new(self.substitute_generics(inner, param_names, arg_types)),
+                *size,
+            ),
         }
     }
 
@@ -802,19 +984,18 @@ impl TypeChecker {
     /// generics from an enclosing impl block) become `TypeInfo::Unknown`
     /// so call-site checks don't false-positive against monomorphic args.
     fn resolve_param_types(&self, f: &FnDef, extra_generics: &[String]) -> Vec<TypeInfo> {
-        let mut generic_names: Vec<&str> =
-            f.generic_params.iter().map(|p| p.name.as_str()).collect();
+        let mut param_names: Vec<String> =
+            f.generic_params.iter().map(|p| p.name.clone()).collect();
         for n in extra_generics {
-            generic_names.push(n.as_str());
+            param_names.push(n.clone());
         }
+        // Generic params resolve to Unknown so call-site accepts() passes for
+        // any concrete arg; substitution recurses so `Vec<T>` and `Wrapper<T>`
+        // also widen their inner T to Unknown.
+        let unknowns: Vec<TypeInfo> = param_names.iter().map(|_| TypeInfo::Unknown).collect();
         f.params
             .iter()
-            .map(|p| match &p.type_ann {
-                TypeAnnotation::Named { name, .. } if generic_names.contains(&name.as_str()) => {
-                    TypeInfo::Unknown
-                }
-                ann => self.resolve_annotation(ann),
-            })
+            .map(|p| self.substitute_generics(&p.type_ann, &param_names, &unknowns))
             .collect()
     }
 
@@ -1380,13 +1561,13 @@ impl TypeChecker {
                 // Try use_aliases -> struct_defs
                 if let Some(resolved) = self.use_aliases.get(name) {
                     if self.struct_defs.contains_key(resolved) {
-                        return Ok(TypeInfo::UserStruct(resolved.clone()));
+                        return Ok(TypeInfo::user_struct(resolved.clone()));
                     }
                 }
                 // Try module-qualified struct name
                 let resolved = self.resolve_struct_name(name);
                 if self.struct_defs.contains_key(&resolved) {
-                    return Ok(TypeInfo::UserStruct(resolved));
+                    return Ok(TypeInfo::user_struct(resolved));
                 }
                 Ok(TypeInfo::Unknown)
             }
@@ -1482,7 +1663,7 @@ impl TypeChecker {
                 // or user-defined structs (which may implement operator
                 // overloading via traits).
                 let arithmetic_ok = |t: &TypeInfo| {
-                    *t == TypeInfo::Unknown || is_num(t) || matches!(t, TypeInfo::UserStruct(_))
+                    *t == TypeInfo::Unknown || is_num(t) || matches!(t, TypeInfo::UserStruct { .. })
                 };
                 if !arithmetic_ok(&lt) {
                     return Err(mk_err(format!(
@@ -1498,10 +1679,10 @@ impl TypeChecker {
                 }
                 // User-struct operator overloading: result type is the struct
                 // (Add/Sub on Vec2 -> Vec2, etc).
-                if let TypeInfo::UserStruct(_) = &lt {
+                if let TypeInfo::UserStruct { .. } = &lt {
                     return Ok(lt);
                 }
-                if let TypeInfo::UserStruct(_) = &rt {
+                if let TypeInfo::UserStruct { .. } = &rt {
                     return Ok(rt);
                 }
                 if matches!(lt, TypeInfo::F32 | TypeInfo::F64)
@@ -1526,7 +1707,7 @@ impl TypeChecker {
                         let ok = inner_ty == TypeInfo::Unknown
                             || inner_ty.is_integer()
                             || inner_ty.is_float()
-                            || matches!(inner_ty, TypeInfo::UserStruct(_));
+                            || matches!(inner_ty, TypeInfo::UserStruct { .. });
                         if !ok {
                             return Err(FerriError::TypeError {
                                 message: format!(
@@ -1659,31 +1840,16 @@ impl TypeChecker {
                 condition,
                 then_block,
                 else_block,
-                ..
+                span,
             } => {
                 self.infer_expr(condition)?;
-                let block_env = TypeEnv::child(&self.env);
-                let saved = self.env.clone();
-                self.env = block_env;
-                let mut result = TypeInfo::Unit;
-                for stmt in &then_block.stmts {
-                    if let Stmt::Expr {
-                        expr,
-                        has_semicolon,
-                    } = stmt
-                    {
-                        if !has_semicolon {
-                            result = self.infer_expr(expr)?;
-                        }
-                    }
-                }
-                self.env = saved;
-                if let Some(else_expr) = else_block {
+                let then_ty = self.block_tail_type(then_block)?;
+                let result = if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;
-                    if result == TypeInfo::Unit {
-                        result = else_ty;
-                    }
-                }
+                    self.unify_branch_types(&then_ty, &else_ty, "if", *span)?
+                } else {
+                    then_ty
+                };
                 Ok(result)
             }
 
@@ -1691,31 +1857,17 @@ impl TypeChecker {
                 expr: inner,
                 then_block,
                 else_block,
+                span,
                 ..
             } => {
                 let _ = self.infer_expr(inner)?;
-                let block_env = TypeEnv::child(&self.env);
-                let saved = self.env.clone();
-                self.env = block_env;
-                let mut result = TypeInfo::Unit;
-                for stmt in &then_block.stmts {
-                    if let Stmt::Expr {
-                        expr,
-                        has_semicolon,
-                    } = stmt
-                    {
-                        if !has_semicolon {
-                            result = self.infer_expr(expr)?;
-                        }
-                    }
-                }
-                self.env = saved;
-                if let Some(else_expr) = else_block {
+                let then_ty = self.block_tail_type(then_block)?;
+                let result = if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;
-                    if result == TypeInfo::Unit {
-                        result = else_ty;
-                    }
-                }
+                    self.unify_branch_types(&then_ty, &else_ty, "if let", *span)?
+                } else {
+                    then_ty
+                };
                 Ok(result)
             }
 
@@ -1807,7 +1959,10 @@ impl TypeChecker {
                         span: fspan,
                     } => {
                         let obj_ty = self.infer_expr(object)?;
-                        if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                        if let TypeInfo::UserStruct {
+                            name: struct_name, ..
+                        } = &obj_ty
+                        {
                             let resolved = self.resolve_struct_name(struct_name);
                             if let Some(def) = self.struct_defs.get(&resolved) {
                                 let generic_names: Vec<String> =
@@ -1850,21 +2005,32 @@ impl TypeChecker {
             Expr::Match {
                 expr: matched,
                 arms,
-                span: _span,
+                span,
             } => {
                 let _ = self.infer_expr(matched)?;
-                let mut result = TypeInfo::Unit;
+                let mut arm_types: Vec<TypeInfo> = Vec::with_capacity(arms.len());
                 for arm in arms {
                     let arm_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
                     self.env = arm_env;
                     let arm_ty = self.infer_expr(&arm.body)?;
                     self.env = saved;
-                    if result == TypeInfo::Unit {
-                        result = arm_ty;
-                    }
+                    arm_types.push(arm_ty);
                 }
-                Ok(result)
+                // Pick the first non-Unit/non-Unknown arm as the leader,
+                // then require all other producing-arms to unify with it.
+                let mut leader: TypeInfo = TypeInfo::Unit;
+                for t in &arm_types {
+                    if *t == TypeInfo::Unknown || *t == TypeInfo::Unit {
+                        continue;
+                    }
+                    if leader == TypeInfo::Unit {
+                        leader = t.clone();
+                        continue;
+                    }
+                    leader = self.unify_branch_types(&leader, t, "match", *span)?;
+                }
+                Ok(leader)
             }
 
             Expr::PathCall {
@@ -1921,7 +2087,10 @@ impl TypeChecker {
                 ..
             } => {
                 let obj_ty = self.infer_expr(object)?;
-                if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                if let TypeInfo::UserStruct {
+                    name: struct_name, ..
+                } = &obj_ty
+                {
                     let resolved = self.resolve_struct_name(struct_name);
                     let qualified = format!("{}::{}", resolved, method);
                     let module_qualified = if self.module_stack.is_empty() {
@@ -1982,7 +2151,7 @@ impl TypeChecker {
                         // signature to compare against) or a UserStruct (handled
                         // above; impl methods may not be in symbols).
                         if obj_ty != TypeInfo::Unknown
-                            && !matches!(obj_ty, TypeInfo::UserStruct(_))
+                            && !matches!(obj_ty, TypeInfo::UserStruct { .. })
                             && !self.method_exists_on(&obj_ty, method)
                         {
                             return Err(FerriError::TypeError {
@@ -2034,15 +2203,27 @@ impl TypeChecker {
                 ..
             } => {
                 let obj_ty = self.infer_expr(object)?;
-                if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                if let TypeInfo::UserStruct {
+                    name: struct_name,
+                    generic_args,
+                } = &obj_ty
+                {
                     let resolved = self.resolve_struct_name(struct_name);
                     self.check_field_visible(&resolved, field, *span)?;
                     if let Some(def) = self.struct_defs.get(&resolved) {
+                        let generic_param_names: Vec<String> =
+                            def.generic_params.iter().map(|p| p.name.clone()).collect();
+                        let generic_args_owned = generic_args.clone();
+                        let def = def.clone();
                         match &def.kind {
                             StructKind::Named(fields) => {
                                 for f in fields {
                                     if f.name == *field {
-                                        return Ok(self.resolve_annotation(&f.type_ann));
+                                        return Ok(self.substitute_generics(
+                                            &f.type_ann,
+                                            &generic_param_names,
+                                            &generic_args_owned,
+                                        ));
                                     }
                                 }
                                 return Err(FerriError::TypeError {
@@ -2052,10 +2233,13 @@ impl TypeChecker {
                                 });
                             }
                             StructKind::Tuple(types) => {
-                                // Tuple-struct field access: `Pair.0`, `Pair.1`.
                                 if let Ok(idx) = field.parse::<usize>() {
                                     if let Some(ann) = types.get(idx) {
-                                        return Ok(self.resolve_annotation(ann));
+                                        return Ok(self.substitute_generics(
+                                            ann,
+                                            &generic_param_names,
+                                            &generic_args_owned,
+                                        ));
                                     }
                                     return Err(FerriError::TypeError {
                                         message: format!(
@@ -2088,7 +2272,7 @@ impl TypeChecker {
                 // Builtin types (Vec, String, primitives, ...) have no
                 // user-accessible fields. If the receiver type is known and
                 // concrete, an unknown field is a compile error.
-                if obj_ty != TypeInfo::Unknown && !matches!(obj_ty, TypeInfo::UserStruct(_)) {
+                if obj_ty != TypeInfo::Unknown && !matches!(obj_ty, TypeInfo::UserStruct { .. }) {
                     return Err(FerriError::TypeError {
                         message: format!("no field `{field}` on type `{}`", obj_ty.name()),
                         line: span.line,
@@ -2173,46 +2357,72 @@ impl TypeChecker {
                 name, fields, span, ..
             } => {
                 let resolved = self.resolve_struct_name(name);
-                // Pre-collect declared field types so we can borrow self mutably
-                // inside the inference loop. Generic parameter names (e.g. `T`)
-                // resolve to Unknown so call-site checks pass.
-                let field_types: HashMap<String, TypeInfo> =
-                    if let Some(def) = self.struct_defs.get(&resolved) {
-                        let generic_names: Vec<String> =
-                            def.generic_params.iter().map(|p| p.name.clone()).collect();
-                        if let StructKind::Named(decl_fields) = &def.kind {
+                // Pre-collect declared field types AND each field's raw
+                // annotation, so we can infer concrete generic-arg types
+                // from the supplied values (`Box { value: 5 }` → T = i64).
+                let generic_param_names: Vec<String> = self
+                    .struct_defs
+                    .get(&resolved)
+                    .map(|def| def.generic_params.iter().map(|p| p.name.clone()).collect())
+                    .unwrap_or_default();
+                let decl_field_info: HashMap<String, (TypeAnnotation, TypeInfo)> = self
+                    .struct_defs
+                    .get(&resolved)
+                    .and_then(|def| match &def.kind {
+                        StructKind::Named(decl_fields) => Some(
                             decl_fields
                                 .iter()
                                 .map(|f| {
                                     let ty = match &f.type_ann {
                                         TypeAnnotation::Named { name, .. }
-                                            if generic_names.contains(name) =>
+                                            if generic_param_names.contains(name) =>
                                         {
                                             TypeInfo::Unknown
                                         }
                                         ann => self.resolve_annotation(ann),
                                     };
-                                    (f.name.clone(), ty)
+                                    (f.name.clone(), (f.type_ann.clone(), ty))
                                 })
-                                .collect()
-                        } else {
-                            HashMap::new()
-                        }
-                    } else {
-                        HashMap::new()
-                    };
+                                .collect(),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                // First pass: infer field values, capture generic-arg bindings.
+                let mut inferred_generics: Vec<TypeInfo> =
+                    vec![TypeInfo::Unknown; generic_param_names.len()];
+                let mut field_value_types: Vec<(String, TypeInfo, Span)> =
+                    Vec::with_capacity(fields.len());
                 for (field_name, f_expr) in fields {
                     self.check_field_visible(&resolved, field_name, *span)?;
                     let val_ty = self.infer_expr(f_expr)?;
-                    if let Some(decl_ty) = field_types.get(field_name) {
-                        if !decl_ty.accepts(&val_ty) {
-                            let fspan = f_expr.span();
+                    if let Some((ann, _)) = decl_field_info.get(field_name) {
+                        if let TypeAnnotation::Named { name: tname, .. } = ann {
+                            if let Some(idx) = generic_param_names.iter().position(|g| g == tname) {
+                                if inferred_generics[idx] == TypeInfo::Unknown {
+                                    inferred_generics[idx] = val_ty.clone();
+                                }
+                            }
+                        }
+                    }
+                    field_value_types.push((field_name.clone(), val_ty, f_expr.span()));
+                }
+                // Second pass: validate each field against the substituted
+                // declared type.
+                for (field_name, val_ty, fspan) in &field_value_types {
+                    if let Some((raw_ann, _)) = decl_field_info.get(field_name) {
+                        let decl_ty = self.substitute_generics(
+                            raw_ann,
+                            &generic_param_names,
+                            &inferred_generics,
+                        );
+                        if !decl_ty.accepts(val_ty) {
                             return Err(FerriError::TypeError {
                                 message: format!(
                                     "type mismatch: field `{}.{field_name}` declared as `{}`, got `{}`",
                                     resolved,
-                                    decl_ty.name(),
-                                    val_ty.name()
+                                    decl_ty.display_name(),
+                                    val_ty.display_name()
                                 ),
                                 line: fspan.line,
                                 column: fspan.column,
@@ -2220,7 +2430,10 @@ impl TypeChecker {
                         }
                     }
                 }
-                Ok(TypeInfo::UserStruct(resolved))
+                Ok(TypeInfo::UserStruct {
+                    name: resolved,
+                    generic_args: inferred_generics,
+                })
             }
 
             Expr::Try { expr: inner, .. } => {
@@ -2320,14 +2533,14 @@ impl TypeChecker {
                     return Ok(ret.clone());
                 }
                 if self.struct_defs.contains_key(&qualified) {
-                    return Ok(TypeInfo::UserStruct(qualified));
+                    return Ok(TypeInfo::user_struct(qualified));
                 }
                 // Try through use_aliases for the first segment
                 if segments.len() == 2 {
                     if let Some(resolved) = self.use_aliases.get(&segments[0]) {
                         let full = format!("{}::{}", resolved, segments[1]);
                         if self.struct_defs.contains_key(&full) {
-                            return Ok(TypeInfo::UserStruct(full));
+                            return Ok(TypeInfo::user_struct(full));
                         }
                     }
                 }
@@ -2335,7 +2548,7 @@ impl TypeChecker {
             }
             Expr::SelfRef { .. } => {
                 if let Some(ref impl_type) = self.current_impl_type {
-                    Ok(TypeInfo::UserStruct(impl_type.clone()))
+                    Ok(TypeInfo::user_struct(impl_type.clone()))
                 } else {
                     Ok(TypeInfo::Unknown)
                 }
