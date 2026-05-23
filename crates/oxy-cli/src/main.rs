@@ -91,13 +91,41 @@ fn run_file(path: &str) {
         }
     };
 
-    // Run on the bytecode VM
+    // Run on the bytecode VM. If `main` is declared as `-> Result<_, _>`
+    // (or `-> Option<_>`) and returns `Err(_)` / `None`, surface that to
+    // the user — otherwise `?` in main would silently exit 0.
     match oxy_core::vm::run_compiled(&source) {
-        Ok(_) => {}
+        Ok(v) => {
+            if let Some(msg) = main_error_message(&v) {
+                eprintln!("{} {}", "error:".red().bold(), msg);
+                process::exit(1);
+            }
+        }
         Err(e) => {
             display_error(&e, &source, &[]);
             process::exit(1);
         }
+    }
+}
+
+/// If main returned `Result::Err(_)` or `Option::None`, format the carried
+/// value as a user-facing error message. `Ok(_)` / `Some(_)` / any other
+/// return value yields `None` (nothing to report).
+fn main_error_message(v: &oxy_core::types::Value) -> Option<String> {
+    use oxy_core::types::Value;
+    match v {
+        Value::EnumVariant {
+            enum_name,
+            variant,
+            data,
+        } if enum_name == "Result" && variant == "Err" => {
+            let inner = data.first().map(|d| d.to_string()).unwrap_or_default();
+            Some(format!("main returned Err({inner})"))
+        }
+        Value::EnumVariant {
+            enum_name, variant, ..
+        } if enum_name == "Option" && variant == "None" => Some("main returned None".to_string()),
+        _ => None,
     }
 }
 

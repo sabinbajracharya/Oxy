@@ -563,6 +563,16 @@ impl Parser {
                 span,
             });
         }
+        // Accept `()` as the Unit type — e.g. `fn main() -> Result<(), String>`
+        if self.check(&TokenKind::LParen) {
+            self.advance();
+            self.expect(TokenKind::RParen)?;
+            return Ok(TypeAnnotation::Named {
+                name: "()".to_string(),
+                generic_args: Vec::new(),
+                span,
+            });
+        }
         // Accept `[T; N]` array type
         if self.check(&TokenKind::LBracket) {
             self.advance();
