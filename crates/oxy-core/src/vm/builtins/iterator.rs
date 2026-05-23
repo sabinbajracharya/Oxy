@@ -177,7 +177,7 @@ pub fn dispatch(
             Ok(total)
         }
         symbols::iterator_m::COUNT => {
-            let mut n = 0i64;
+            let mut n = 0;
             while drive_next(&mut iter).is_some() {
                 n += 1;
             }
@@ -235,7 +235,7 @@ pub fn dispatch(
                     Ok(Value::none())
                 }
                 symbols::iterator_m::POSITION => {
-                    let mut idx = 0i64;
+                    let mut idx = 0;
                     while let Some(val) = drive_next(&mut iter) {
                         if call_fn(&closure, &[val])?.is_truthy() {
                             return Ok(Value::some(Value::I64(idx)));

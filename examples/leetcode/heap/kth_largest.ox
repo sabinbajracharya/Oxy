@@ -32,7 +32,7 @@ fn find_kth_largest(nums: Vec, k: int) -> int {
     for num in nums {
         heap.push(num);
     }
-    let mut i = 1i64;
+    let mut i = 1;
     while i < k {
         heap.pop();
         i = i + 1;

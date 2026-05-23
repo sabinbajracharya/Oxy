@@ -38,7 +38,7 @@ fn three_sum(nums: Vec) -> Vec {
     });
     let mut result = vec![];
     let n = sorted.len();
-    let mut i = 0i64;
+    let mut i = 0;
     while i < n - 2 {
         let a = sorted[i];
         if a > 0 {

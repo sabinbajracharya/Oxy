@@ -35,10 +35,10 @@ fn daily_temperatures(temps: Vec) -> Vec {
     let n = temps.len();
     let mut answer = vec![];
     for i in 0..n {
-        answer.push(0i64);
+        answer.push(0);
     }
     let mut stack = vec![];
-    let mut i = 0i64;
+    let mut i = 0;
     while i < n {
         while !stack.is_empty() {
             let prev_idx = stack.last().unwrap();

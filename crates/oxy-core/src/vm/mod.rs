@@ -569,19 +569,10 @@ impl Vm {
             OpCode::ConstUnit => self.stack.push(Value::Unit),
             OpCode::ConstBool(b) => self.stack.push(Value::Bool(b)),
             OpCode::ConstInt(n, w) => self.stack.push(match w {
-                IntegerWidth::I8 => Value::I8(n as i8),
-                IntegerWidth::I16 => Value::I16(n as i16),
-                IntegerWidth::I32 => Value::I32(n as i32),
                 IntegerWidth::I64 => Value::I64(n),
                 IntegerWidth::U8 => Value::U8(n as u8),
-                IntegerWidth::U16 => Value::U16(n as u16),
-                IntegerWidth::U32 => Value::U32(n as u32),
-                IntegerWidth::U64 => Value::U64(n as u64),
             }),
-            OpCode::ConstFloat(f, w) => self.stack.push(match w {
-                FloatWidth::F32 => Value::F32(f as f32),
-                FloatWidth::F64 => Value::F64(f),
-            }),
+            OpCode::ConstFloat(f, _w) => self.stack.push(Value::F64(f)),
             OpCode::ConstString(s) => self.stack.push(Value::String(s)),
             OpCode::ConstChar(c) => self.stack.push(Value::Char(c)),
             OpCode::Pop => {
@@ -1493,16 +1484,9 @@ impl Vm {
                 "to_string" => Ok(Value::String(c.to_string())),
                 _ => Err(format!("no method '{}' on type char", method_name)),
             },
-            Value::I8(_)
-            | Value::I16(_)
-            | Value::I32(_)
-            | Value::I64(_)
-            | Value::U8(_)
-            | Value::U16(_)
-            | Value::U32(_)
-            | Value::U64(_)
-            | Value::F32(_)
-            | Value::F64(_) => builtins::numeric::dispatch(receiver, method_name, &args),
+            Value::I64(_) | Value::U8(_) | Value::F64(_) => {
+                builtins::numeric::dispatch(receiver, method_name, &args)
+            }
             Value::EnumVariant { enum_name, .. }
                 if enum_name == "Option" || enum_name == "Result" =>
             {
@@ -1829,15 +1813,8 @@ impl Vm {
 fn trace_compact_val(v: &Value) -> String {
     match v {
         Value::Cell(rc) => format!("Cell({})", trace_compact_val(&rc.borrow())),
-        Value::I8(n) => n.to_string(),
-        Value::I16(n) => n.to_string(),
-        Value::I32(n) => n.to_string(),
         Value::I64(n) => n.to_string(),
         Value::U8(n) => n.to_string(),
-        Value::U16(n) => n.to_string(),
-        Value::U32(n) => n.to_string(),
-        Value::U64(n) => n.to_string(),
-        Value::F32(n) => format!("{:.1}", n),
         Value::F64(n) => format!("{:.1}", n),
         Value::Bool(b) => b.to_string(),
         Value::String(s) => format!("\"{:.20}\"", s),
@@ -1964,41 +1941,21 @@ fn method_name_from_op(f: fn(Value, Value) -> Result<Value, String>) -> &'static
 
 // --- Width-aware integer helpers ---
 
-/// Returns the bit-width of an integer type (for promotion decisions).
-fn integer_rank(v: &Value) -> Option<u32> {
-    match v {
-        Value::I8(_) | Value::U8(_) => Some(8),
-        Value::I16(_) | Value::U16(_) => Some(16),
-        Value::I32(_) | Value::U32(_) => Some(32),
-        Value::I64(_) | Value::U64(_) => Some(64),
-        _ => None,
-    }
-}
-
-/// Promote two integers to a common type, returning (widened_a, widened_b, result_width).
-/// Same-width stays same-width. Cross-width promotes to the wider signed type.
+/// Promote two integers to a common type. Same-type (byte+byte) stays as
+/// byte; any int+byte mix widens to int, since int is the wider type and
+/// arithmetic between mixed widths conceptually happens at int.
 fn promote_ints(a: Value, b: Value) -> (Value, Value) {
-    let ra = integer_rank(&a).unwrap_or(64);
-    let rb = integer_rank(&b).unwrap_or(64);
-    if ra == rb && std::mem::discriminant(&a) == std::mem::discriminant(&b) {
-        (a, b) // same type, no promotion needed
+    if std::mem::discriminant(&a) == std::mem::discriminant(&b) {
+        (a, b)
     } else {
-        // Promote both to I64 for simplicity (widest signed type)
         (Value::I64(a.as_i64()), Value::I64(b.as_i64()))
     }
 }
 
-/// Wrap an i64 result back to the target integer variant.
+/// Wrap an i64 result back to the target integer variant (byte or int).
 fn wrap_to(v: i64, target: &Value) -> Value {
     match target {
-        Value::I8(_) => Value::I8(v as i8),
-        Value::I16(_) => Value::I16(v as i16),
-        Value::I32(_) => Value::I32(v as i32),
-        Value::I64(_) => Value::I64(v),
         Value::U8(_) => Value::U8(v as u8),
-        Value::U16(_) => Value::U16(v as u16),
-        Value::U32(_) => Value::U32(v as u32),
-        Value::U64(_) => Value::U64(v as u64),
         _ => Value::I64(v),
     }
 }
@@ -2107,11 +2064,8 @@ fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
 
 fn vm_neg(v: Value) -> Value {
     match v {
-        Value::I8(n) => Value::I8(n.wrapping_neg()),
-        Value::I16(n) => Value::I16(n.wrapping_neg()),
-        Value::I32(n) => Value::I32(n.wrapping_neg()),
         Value::I64(n) => Value::I64(n.wrapping_neg()),
-        Value::F32(n) => Value::F32(-n),
+        Value::U8(n) => Value::U8(n.wrapping_neg()),
         Value::F64(n) => Value::F64(-n),
         v => v,
     }
@@ -2119,14 +2073,8 @@ fn vm_neg(v: Value) -> Value {
 
 fn vm_bitnot(v: Value) -> Value {
     match v {
-        Value::I8(n) => Value::I8(!n),
-        Value::I16(n) => Value::I16(!n),
-        Value::I32(n) => Value::I32(!n),
         Value::I64(n) => Value::I64(!n),
         Value::U8(n) => Value::U8(!n),
-        Value::U16(n) => Value::U16(!n),
-        Value::U32(n) => Value::U32(!n),
-        Value::U64(n) => Value::U64(!n),
         v => v,
     }
 }
@@ -2465,15 +2413,8 @@ pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::err
 /// Extract an i64 from any Value type (for cast/conversion purposes).
 fn value_to_i64(val: &Value) -> i64 {
     match val {
-        Value::I8(n) => *n as i64,
-        Value::I16(n) => *n as i64,
-        Value::I32(n) => *n as i64,
         Value::I64(n) => *n,
         Value::U8(n) => *n as i64,
-        Value::U16(n) => *n as i64,
-        Value::U32(n) => *n as i64,
-        Value::U64(n) => *n as i64,
-        Value::F32(n) => *n as i64,
         Value::F64(n) => *n as i64,
         Value::Char(c) => *c as u32 as i64,
         _ => 0,
@@ -2484,29 +2425,19 @@ fn value_to_i64(val: &Value) -> i64 {
 fn cast_to_int(val: &Value, width: IntegerWidth) -> Value {
     let bits = value_to_i64(val);
     match width {
-        IntegerWidth::I8 => Value::I8(bits as i8),
-        IntegerWidth::I16 => Value::I16(bits as i16),
-        IntegerWidth::I32 => Value::I32(bits as i32),
         IntegerWidth::I64 => Value::I64(bits),
         IntegerWidth::U8 => Value::U8(bits as u8),
-        IntegerWidth::U16 => Value::U16(bits as u16),
-        IntegerWidth::U32 => Value::U32(bits as u32),
-        IntegerWidth::U64 => Value::U64(bits as u64),
     }
 }
 
 /// Cast a Value to a specific float width.
-fn cast_to_float(val: &Value, width: FloatWidth) -> Value {
+fn cast_to_float(val: &Value, _width: FloatWidth) -> Value {
     let f = match val {
-        Value::F32(n) => *n as f64,
         Value::F64(n) => *n,
         Value::Char(c) => *c as u32 as f64,
         _ => value_to_i64(val) as f64,
     };
-    match width {
-        FloatWidth::F32 => Value::F32(f as f32),
-        FloatWidth::F64 => Value::F64(f),
-    }
+    Value::F64(f)
 }
 
 pub mod builtins;

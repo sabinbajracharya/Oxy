@@ -33,16 +33,16 @@ fn longest_common_subsequence(text1: String, text2: String) -> int {
     // Use two rows for O(n) space
     let mut prev = vec![];
     let mut cur = vec![];
-    let mut j = 0i64;
+    let mut j = 0;
     while j <= n {
-        prev.push(0i64);
-        cur.push(0i64);
+        prev.push(0);
+        cur.push(0);
         j = j + 1;
     }
-    let mut i = 1i64;
+    let mut i = 1;
     while i <= m {
         cur[0] = 0;
-        let mut j = 1i64;
+        let mut j = 1;
         while j <= n {
             if text1.char_at(i - 1) == text2.char_at(j - 1) {
                 cur[j] = prev[j - 1] + 1;

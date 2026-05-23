@@ -28,7 +28,7 @@ fn backtrack(nums: Vec, current: Vec, used: Vec, result: Vec) {
         result.push(current.clone());
         return;
     }
-    let mut i = 0i64;
+    let mut i = 0;
     while i < nums.len() {
         if !used[i] {
             used[i] = true;
@@ -44,7 +44,7 @@ fn backtrack(nums: Vec, current: Vec, used: Vec, result: Vec) {
 fn permute(nums: Vec) -> Vec {
     let n = nums.len();
     let mut used = vec![];
-    let mut i = 0i64;
+    let mut i = 0;
     while i < n {
         used.push(false);
         i = i + 1;

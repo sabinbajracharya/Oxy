@@ -45,25 +45,17 @@ impl Token {
     }
 }
 
-/// Integer type suffix for width-annotated literals.
+/// Integer/float literals no longer carry a width-annotated suffix —
+/// the Rust-style suffixes (`5`, `255`, `3.14`, etc.) were
+/// retired alongside the corresponding types. The enums are kept with
+/// a single `None` variant so the token/AST shapes don't churn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntegerSuffix {
-    I8,
-    I16,
-    I32,
-    I64,
-    U8,
-    U16,
-    U32,
-    U64,
     None,
 }
 
-/// Float type suffix for width-annotated literals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FloatSuffix {
-    F32,
-    F64,
     None,
 }
 
@@ -73,7 +65,7 @@ pub enum TokenKind {
     // === Literals ===
     /// Integer literal, e.g. `42`, `0xFF`, `0b1010`, `1_000`
     IntLiteral(i64, IntegerSuffix),
-    /// Float literal, e.g. `3.14`, `1e10`, `2.5f64`
+    /// Float literal, e.g. `3.14`, `1e10`, `2.5`
     FloatLiteral(f64, FloatSuffix),
     /// String literal, e.g. `"hello"`
     StringLiteral(String),

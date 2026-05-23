@@ -28,9 +28,9 @@ fn main() {
 }
 
 fn max_area(height: Vec) -> int {
-    let mut left = 0i64;
+    let mut left = 0;
     let mut right = height.len() - 1;
-    let mut max_water = 0i64;
+    let mut max_water = 0;
     while left < right {
         let h_left = height[left];
         let h_right = height[right];

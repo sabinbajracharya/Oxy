@@ -31,7 +31,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
     // Count frequencies
     let mut counts = HashMap::new();
     for num in nums {
-        let count = counts.get(num).unwrap_or(0i64);
+        let count = counts.get(num).unwrap_or(0);
         counts.insert(num, count + 1);
     }
     // Collect as (freq, num) pairs and sort by frequency descending
@@ -45,7 +45,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
         if fa > fb { -1 } else if fa < fb { 1 } else { 0 }
     });
     let mut result = vec![];
-    let mut i = 0i64;
+    let mut i = 0;
     while i < k && i < pairs.len() {
         let (_, num) = pairs[i];
         result.push(num);

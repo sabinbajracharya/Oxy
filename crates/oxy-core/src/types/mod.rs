@@ -27,22 +27,17 @@ pub const OK_VARIANT: &str = "Ok";
 pub const ERR_VARIANT: &str = "Err";
 
 /// Integer width: tracks the size/signedness of an integer value.
+/// Oxy has exactly two integer storage shapes — `I64` (the `int` type)
+/// and `U8` (the `byte` type).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntegerWidth {
-    I8,
-    I16,
-    I32,
     I64,
     U8,
-    U16,
-    U32,
-    U64,
 }
 
-/// Float width: single or double precision.
+/// Float width: Oxy has a single float type (`float` = `f64`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FloatWidth {
-    F32,
     F64,
 }
 
@@ -52,17 +47,11 @@ pub enum FloatWidth {
 // Primitives are cheap to copy. The interpreter cannot statically track ownership.
 #[derive(Debug)]
 pub enum Value {
-    // -- Width-specific integer variants --
-    I8(i8),
-    I16(i16),
-    I32(i32),
+    /// Signed 64-bit integer — surface name `int`.
     I64(i64),
+    /// Unsigned 8-bit integer — surface name `byte`.
     U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    // -- Width-specific float variants --
-    F32(f32),
+    /// 64-bit IEEE float — surface name `float`.
     F64(f64),
     /// Boolean.
     Bool(bool),
@@ -132,14 +121,8 @@ impl Value {
     /// Extract i64 from any integer variant (widening, wrapping for unsigned).
     pub fn as_i64(&self) -> i64 {
         match self {
-            Value::I8(n) => *n as i64,
-            Value::I16(n) => *n as i64,
-            Value::I32(n) => *n as i64,
             Value::I64(n) => *n,
             Value::U8(n) => *n as i64,
-            Value::U16(n) => *n as i64,
-            Value::U32(n) => *n as i64,
-            Value::U64(n) => *n as i64,
             other => panic!("as_i64 called on non-integer: {:?}", other),
         }
     }
@@ -147,14 +130,8 @@ impl Value {
     /// Extract u64 from any integer variant (wrapping for signed negative values).
     pub fn as_u64(&self) -> u64 {
         match self {
-            Value::I8(n) => *n as u64,
-            Value::I16(n) => *n as u64,
-            Value::I32(n) => *n as u64,
             Value::I64(n) => *n as u64,
             Value::U8(n) => *n as u64,
-            Value::U16(n) => *n as u64,
-            Value::U32(n) => *n as u64,
-            Value::U64(n) => *n,
             other => panic!("as_u64 called on non-integer: {:?}", other),
         }
     }
@@ -162,15 +139,8 @@ impl Value {
     /// Extract f64 from any numeric variant.
     pub fn to_f64(&self) -> f64 {
         match self {
-            Value::I8(n) => *n as f64,
-            Value::I16(n) => *n as f64,
-            Value::I32(n) => *n as f64,
             Value::I64(n) => *n as f64,
             Value::U8(n) => *n as f64,
-            Value::U16(n) => *n as f64,
-            Value::U32(n) => *n as f64,
-            Value::U64(n) => *n as f64,
-            Value::F32(n) => *n as f64,
             Value::F64(n) => *n,
             other => panic!("to_f64 called on non-numeric: {:?}", other),
         }
@@ -178,35 +148,19 @@ impl Value {
 
     /// True for any integer variant.
     pub fn is_integer(&self) -> bool {
-        matches!(
-            self,
-            Value::I8(_)
-                | Value::I16(_)
-                | Value::I32(_)
-                | Value::I64(_)
-                | Value::U8(_)
-                | Value::U16(_)
-                | Value::U32(_)
-                | Value::U64(_)
-        )
+        matches!(self, Value::I64(_) | Value::U8(_))
     }
 
     /// True for any float variant.
     pub fn is_float(&self) -> bool {
-        matches!(self, Value::F32(_) | Value::F64(_))
+        matches!(self, Value::F64(_))
     }
 
     /// Extract i128 from any integer variant for cross-width comparison.
     fn as_i128(&self) -> Option<i128> {
         match self {
-            Value::I8(n) => Some(*n as i128),
-            Value::I16(n) => Some(*n as i128),
-            Value::I32(n) => Some(*n as i128),
             Value::I64(n) => Some(*n as i128),
             Value::U8(n) => Some(*n as i128),
-            Value::U16(n) => Some(*n as i128),
-            Value::U32(n) => Some(*n as i128),
-            Value::U64(n) => Some(*n as i128),
             _ => None,
         }
     }
@@ -214,7 +168,6 @@ impl Value {
     /// Extract f64 from any float variant for cross-width comparison.
     fn as_f64(&self) -> Option<f64> {
         match self {
-            Value::F32(n) => Some(*n as f64),
             Value::F64(n) => Some(*n),
             _ => None,
         }
@@ -224,15 +177,8 @@ impl Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
-            Value::I8(n) => Value::I8(*n),
-            Value::I16(n) => Value::I16(*n),
-            Value::I32(n) => Value::I32(*n),
             Value::I64(n) => Value::I64(*n),
             Value::U8(n) => Value::U8(*n),
-            Value::U16(n) => Value::U16(*n),
-            Value::U32(n) => Value::U32(*n),
-            Value::U64(n) => Value::U64(*n),
-            Value::F32(f) => Value::F32(*f),
             Value::F64(f) => Value::F64(*f),
             Value::Bool(b) => Value::Bool(*b),
             Value::String(s) => Value::String(s.clone()),
@@ -441,10 +387,9 @@ impl Value {
             // Surface integer types are just `int` and `byte` — the
             // dead-but-not-yet-removed width variants present under the
             // same surface names (unreachable from user code).
-            Value::I8(_) | Value::I16(_) | Value::I32(_) | Value::I64(_) => "int".into(),
+            Value::I64(_) => "int".into(),
             Value::U8(_) => "byte".into(),
-            Value::U16(_) | Value::U32(_) | Value::U64(_) => "int".into(),
-            Value::F32(_) | Value::F64(_) => "float".into(),
+            Value::F64(_) => "float".into(),
             Value::Bool(_) => "bool".into(),
             Value::String(_) => "String".into(),
             Value::Char(_) => "char".into(),
@@ -577,15 +522,8 @@ impl Value {
         match self {
             Value::Unit => 0,
             Value::Bool(_) => 1,
-            Value::I8(_)
-            | Value::I16(_)
-            | Value::I32(_)
-            | Value::I64(_)
-            | Value::U8(_)
-            | Value::U16(_)
-            | Value::U32(_)
-            | Value::U64(_) => 2,
-            Value::F32(_) | Value::F64(_) => 3,
+            Value::I64(_) | Value::U8(_) => 2,
+            Value::F64(_) => 3,
             Value::Char(_) => 4,
             Value::String(_) => 5,
             Value::Range(_, _) => 6,
@@ -612,14 +550,9 @@ impl Value {
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Bool(b) => *b,
-            Value::I8(n) => *n != 0,
-            Value::I16(n) => *n != 0,
-            Value::I32(n) => *n != 0,
             Value::I64(n) => *n != 0,
             Value::U8(n) => *n != 0,
-            Value::U16(n) => *n != 0,
-            Value::U32(n) => *n != 0,
-            Value::U64(n) => *n != 0,
+            Value::F64(n) => *n != 0.0,
             Value::Unit => false,
             Value::Range(_, _) => true,
             Value::Vec(rc) => !rc.borrow().is_empty(),
@@ -654,15 +587,8 @@ fn float_display(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::I8(n) => write!(f, "{n}"),
-            Value::I16(n) => write!(f, "{n}"),
-            Value::I32(n) => write!(f, "{n}"),
             Value::I64(n) => write!(f, "{n}"),
             Value::U8(n) => write!(f, "{n}"),
-            Value::U16(n) => write!(f, "{n}"),
-            Value::U32(n) => write!(f, "{n}"),
-            Value::U64(n) => write!(f, "{n}"),
-            Value::F32(n) => float_display(*n as f64, f),
             Value::F64(n) => float_display(*n, f),
             Value::Bool(b) => write!(f, "{b}"),
             Value::String(s) => write!(f, "{s}"),
@@ -1096,20 +1022,10 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
         match self {
-            Value::I8(n) => n.hash(state),
-            Value::I16(n) => n.hash(state),
-            Value::I32(n) => n.hash(state),
             Value::I64(n) => n.hash(state),
             Value::U8(n) => n.hash(state),
-            Value::U16(n) => n.hash(state),
-            Value::U32(n) => n.hash(state),
-            Value::U64(n) => n.hash(state),
-            Value::F32(x) => {
-                let bits = if *x == 0.0 { 0u32 } else { f32::to_bits(*x) };
-                bits.hash(state);
-            }
             Value::F64(x) => {
-                let bits = if *x == 0.0 { 0u64 } else { f64::to_bits(*x) };
+                let bits = if *x == 0.0 { 0 } else { f64::to_bits(*x) };
                 bits.hash(state);
             }
             Value::Bool(b) => b.hash(state),

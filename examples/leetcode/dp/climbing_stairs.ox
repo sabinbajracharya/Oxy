@@ -29,9 +29,9 @@ fn climb_stairs(n: int) -> int {
     if n <= 2 {
         return n;
     }
-    let mut prev2 = 1i64;
-    let mut prev1 = 2i64;
-    let mut i = 3i64;
+    let mut prev2 = 1;
+    let mut prev1 = 2;
+    let mut i = 3;
     while i <= n {
         let current = prev1 + prev2;
         prev2 = prev1;

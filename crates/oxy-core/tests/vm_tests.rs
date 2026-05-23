@@ -2958,63 +2958,23 @@ fn main() {
     assert_eq!(output, vec!["123123\n"]);
 }
 
+// === Number literals ===
+
 #[test]
-fn test_large_u64_literal() {
+fn test_int_and_float_literals() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = 12312312312312312311u64;
-    println!("{}", x);
-}"#,
-    );
-    assert_eq!(output, vec!["12312312312312312311\n"]);
-}
-
-#[test]
-fn test_hex_literal_with_suffix() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    let x = 0xFFu8;
-    println!("{}", x);
-}"#,
-    );
-    assert_eq!(output, vec!["255\n"]);
-}
-
-// === Number width and cast tests ===
-
-#[test]
-fn test_suffixed_literal_all_widths() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    println!("{}", 42i8);
-    println!("{}", 1000i16);
-    println!("{}", 50000i32);
-    println!("{}", 1000000i64);
-    println!("{}", 255u8);
-    println!("{}", 60000u16);
-    println!("{}", 3000000000u32);
-    println!("{}", 123123123123u64);
-    println!("{}", 3.14f32);
-    println!("{}", 2.718f64);
+    println!("{}", 42);
+    println!("{}", 1000000);
+    println!("{}", 123123123123);
+    println!("{}", 3.14);
+    println!("{}", 2.718);
 }"#,
     );
     assert_eq!(
         output,
-        vec![
-            "42\n",
-            "1000\n",
-            "50000\n",
-            "1000000\n",
-            "255\n",
-            "60000\n",
-            "3000000000\n",
-            "123123123123\n",
-            "3.140000104904175\n",
-            "2.718\n"
-        ]
+        vec!["42\n", "1000000\n", "123123123123\n", "3.14\n", "2.718\n"]
     );
 }
 

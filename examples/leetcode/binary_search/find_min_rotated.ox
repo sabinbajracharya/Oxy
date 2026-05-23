@@ -28,7 +28,7 @@ fn main() {
 }
 
 fn find_min(nums: Vec) -> int {
-    let mut left = 0i64;
+    let mut left = 0;
     let mut right = nums.len() - 1;
     while left < right {
         let mid = left + (right - left) / 2;

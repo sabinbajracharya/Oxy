@@ -117,7 +117,7 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         "lookup_host" => {
             check_arg_count("std::net::lookup_host", 1, args, span)?;
             let host = expect_string(&args[0], "std::net::lookup_host", span)?;
-            match std::net::ToSocketAddrs::to_socket_addrs(&(host, 0u16)) {
+            match std::net::ToSocketAddrs::to_socket_addrs(&(host, 0)) {
                 Ok(addrs) => {
                     let ips: Vec<Value> =
                         addrs.map(|a| Value::String(a.ip().to_string())).collect();

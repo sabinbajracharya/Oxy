@@ -244,47 +244,6 @@ pub(crate) fn try_eval_const(expr: &crate::ast::Expr) -> Option<crate::types::Va
     }
 }
 
-/// Known built-in paths that the VM can dispatch natively.
-/// Validate that an integer literal value fits in the target width (for suffixed literals).
-/// Note: the lexer stores u64 values > i64::MAX as negative i64 via wrapping `as i64`,
-/// so we reinterpret bits as u64 for unsigned width checks.
-pub(crate) fn validate_int_literal(
-    n: i64,
-    width: &IntegerWidth,
-    span: crate::lexer::Span,
-) -> Result<(), FerriError> {
-    let fits = match width {
-        IntegerWidth::I8 => (i8::MIN as i64..=i8::MAX as i64).contains(&n),
-        IntegerWidth::I16 => (i16::MIN as i64..=i16::MAX as i64).contains(&n),
-        IntegerWidth::I32 => (i32::MIN as i64..=i32::MAX as i64).contains(&n),
-        IntegerWidth::I64 => true,
-        // For unsigned widths: reinterpret the bits as u64 to handle
-        // values > i64::MAX that the lexer stored via wrapping as i64.
-        IntegerWidth::U8 => (n as u64) <= u8::MAX as u64,
-        IntegerWidth::U16 => (n as u64) <= u16::MAX as u64,
-        IntegerWidth::U32 => (n as u64) <= u32::MAX as u64,
-        IntegerWidth::U64 => true,
-    };
-    if !fits {
-        return Err(FerriError::Runtime {
-            message: format!("literal out of range for `{}`", width_to_str(width)),
-            line: span.line,
-            column: span.column,
-        });
-    }
-    Ok(())
-}
-
-pub(crate) fn width_to_str(w: &IntegerWidth) -> &str {
-    match w {
-        IntegerWidth::U8 => "byte",
-        // All signed widths plus the unsigned wider widths are presented
-        // under the surface name `int` — Oxy collapsed the Rust-like
-        // width zoo to two integer types.
-        _ => "int",
-    }
-}
-
 /// Check that a constant integer literal fits in the target integer type's range.
 /// Returns an error if the literal value is outside the type's bounds (matches Rust).
 pub(crate) fn check_literal_fits_type(

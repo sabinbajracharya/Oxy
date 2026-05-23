@@ -27,7 +27,7 @@ fn main() {
 }
 
 fn single_number(nums: Vec) -> int {
-    let mut result = 0i64;
+    let mut result = 0;
     for num in nums {
         result = result ^ num;
     }

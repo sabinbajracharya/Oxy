@@ -9,21 +9,19 @@ use std::rc::Rc;
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::{FloatSuffix, IntegerSuffix, Span};
+use crate::lexer::Span;
 use crate::symbols;
 
 /// Internal representation of an Oxy type.
+///
+/// Numeric variants `I64`, `U8`, `F64` map to the surface names
+/// `int`, `byte`, `float`. They keep the storage-shaped names to mirror
+/// the corresponding `Value::I64 / U8 / F64` variants. There are no other
+/// numeric widths — the Rust-style width zoo was retired.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeInfo {
-    I8,
-    I16,
-    I32,
     I64,
     U8,
-    U16,
-    U32,
-    U64,
-    F32,
     F64,
     Bool,
     String,
@@ -55,34 +53,18 @@ pub enum TypeInfo {
 
 impl TypeInfo {
     pub fn is_integer(&self) -> bool {
-        matches!(
-            self,
-            TypeInfo::I8
-                | TypeInfo::I16
-                | TypeInfo::I32
-                | TypeInfo::I64
-                | TypeInfo::U8
-                | TypeInfo::U16
-                | TypeInfo::U32
-                | TypeInfo::U64
-        )
+        matches!(self, TypeInfo::I64 | TypeInfo::U8)
     }
 
     pub fn is_float(&self) -> bool {
-        matches!(self, TypeInfo::F32 | TypeInfo::F64)
+        matches!(self, TypeInfo::F64)
     }
 
     pub fn name(&self) -> &str {
         match self {
-            // Internal storage variants `I8 .. U64` are unreachable from
-            // user code — Oxy's surface integer types are just `int` and
-            // `byte` (mapped to I64 and U8). Other variants are reported
-            // under their bare width name only when produced by internal
-            // machinery (very rare); avoid leaking them where possible.
-            TypeInfo::I8 | TypeInfo::I16 | TypeInfo::I32 | TypeInfo::I64 => "int",
+            TypeInfo::I64 => "int",
             TypeInfo::U8 => "byte",
-            TypeInfo::U16 | TypeInfo::U32 | TypeInfo::U64 => "int",
-            TypeInfo::F32 | TypeInfo::F64 => "float",
+            TypeInfo::F64 => "float",
             TypeInfo::Bool => "bool",
             TypeInfo::String => "String",
             TypeInfo::Char => "char",
@@ -248,10 +230,6 @@ impl TypeInfo {
         // Any integer type accepts any other integer type (suffixed literals,
         // cross-sign assignments — wrapping happens at runtime).
         if self.is_integer() && other.is_integer() {
-            return true;
-        }
-        // Float promotion
-        if matches!((self, other), (TypeInfo::F64, TypeInfo::F32)) {
             return true;
         }
         // Integer → float
@@ -1532,22 +1510,8 @@ impl TypeChecker {
 
     fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, FerriError> {
         match expr {
-            Expr::IntLiteral(_, suffix, _) => Ok(match suffix {
-                IntegerSuffix::I8 => TypeInfo::I8,
-                IntegerSuffix::I16 => TypeInfo::I16,
-                IntegerSuffix::I32 => TypeInfo::I32,
-                IntegerSuffix::I64 => TypeInfo::I64,
-                IntegerSuffix::U8 => TypeInfo::U8,
-                IntegerSuffix::U16 => TypeInfo::U16,
-                IntegerSuffix::U32 => TypeInfo::U32,
-                IntegerSuffix::U64 => TypeInfo::U64,
-                IntegerSuffix::None => TypeInfo::I64,
-            }),
-            Expr::FloatLiteral(_, suffix, _) => Ok(match suffix {
-                FloatSuffix::F32 => TypeInfo::F32,
-                FloatSuffix::F64 => TypeInfo::F64,
-                FloatSuffix::None => TypeInfo::F64,
-            }),
+            Expr::IntLiteral(..) => Ok(TypeInfo::I64),
+            Expr::FloatLiteral(..) => Ok(TypeInfo::F64),
             Expr::BoolLiteral(..) => Ok(TypeInfo::Bool),
             Expr::StringLiteral(..) => Ok(TypeInfo::String),
             Expr::CharLiteral(..) => Ok(TypeInfo::Char),
@@ -1696,9 +1660,7 @@ impl TypeChecker {
                 if let TypeInfo::UserStruct { .. } = &rt {
                     return Ok(rt);
                 }
-                if matches!(lt, TypeInfo::F32 | TypeInfo::F64)
-                    || matches!(rt, TypeInfo::F32 | TypeInfo::F64)
-                {
+                if matches!(lt, TypeInfo::F64) || matches!(rt, TypeInfo::F64) {
                     Ok(TypeInfo::F64)
                 } else {
                     Ok(TypeInfo::I64)

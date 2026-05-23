@@ -51,7 +51,7 @@ fn level_order(root: Option) -> Vec {
     while !queue.is_empty() {
         let level_size = queue.len();
         let mut level = vec![];
-        let mut i = 0i64;
+        let mut i = 0;
         while i < level_size {
             let mut node = queue.pop_front().unwrap();
             level.push(node.val);

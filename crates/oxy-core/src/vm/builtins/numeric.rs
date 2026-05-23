@@ -14,29 +14,15 @@ fn float_to_value(f: f64) -> Value {
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
     let to_f64 = |v: &Value| match v {
-        Value::I8(n) => *n as f64,
-        Value::I16(n) => *n as f64,
-        Value::I32(n) => *n as f64,
         Value::I64(n) => *n as f64,
         Value::U8(n) => *n as f64,
-        Value::U16(n) => *n as f64,
-        Value::U32(n) => *n as f64,
-        Value::U64(n) => *n as f64,
-        Value::F32(x) => *x as f64,
         Value::F64(x) => *x,
         _ => 0.0,
     };
     match method {
         symbols::numeric_m::ABS => match &receiver {
-            Value::I8(n) => Ok(Value::I64(n.abs() as i64)),
-            Value::I16(n) => Ok(Value::I64(n.abs() as i64)),
-            Value::I32(n) => Ok(Value::I64(n.abs() as i64)),
             Value::I64(n) => Ok(Value::I64(n.abs())),
             Value::U8(n) => Ok(Value::I64(*n as i64)),
-            Value::U16(n) => Ok(Value::I64(*n as i64)),
-            Value::U32(n) => Ok(Value::I64(*n as i64)),
-            Value::U64(n) => Ok(Value::I64(*n as i64)),
-            Value::F32(x) => Ok(float_to_value(x.abs() as f64)),
             Value::F64(x) => Ok(float_to_value(x.abs())),
             _ => Ok(Value::I64(0)),
         },

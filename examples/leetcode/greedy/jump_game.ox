@@ -27,9 +27,9 @@ fn main() {
 }
 
 fn can_jump(nums: Vec) -> bool {
-    let mut farthest = 0i64;
+    let mut farthest = 0;
     let n = nums.len();
-    let mut i = 0i64;
+    let mut i = 0;
     while i < n {
         if i > farthest {
             return false;

@@ -30,9 +30,9 @@ fn main() {
 
 fn length_of_longest_substring(s: String) -> int {
     let mut seen = HashMap::new();
-    let mut left = 0i64;
-    let mut max_len = 0i64;
-    let mut right = 0i64;
+    let mut left = 0;
+    let mut max_len = 0;
+    let mut right = 0;
     let n = s.len();
     while right < n {
         let ch = s.char_at(right);

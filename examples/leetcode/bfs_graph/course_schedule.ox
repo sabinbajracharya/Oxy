@@ -33,10 +33,10 @@ fn can_finish(num_courses: int, prerequisites: Vec) -> bool {
     let n = num_courses;
     let mut graph = vec![];
     let mut indegree = vec![];
-    let mut i = 0i64;
+    let mut i = 0;
     while i < n {
         graph.push(vec![]);
-        indegree.push(0i64);
+        indegree.push(0);
         i = i + 1;
     }
     for pr in prerequisites {
@@ -47,14 +47,14 @@ fn can_finish(num_courses: int, prerequisites: Vec) -> bool {
     }
     // BFS: start with all 0 in-degree nodes
     let mut queue = VecDeque::new();
-    let mut j = 0i64;
+    let mut j = 0;
     while j < n {
         if indegree[j] == 0 {
             queue.push_back(j);
         }
         j = j + 1;
     }
-    let mut processed = 0i64;
+    let mut processed = 0;
     while !queue.is_empty() {
         let node = queue.pop_front().unwrap();
         processed = processed + 1;

@@ -11,13 +11,12 @@ use std::collections::HashSet;
 
 use crate::ast::*;
 use crate::errors::FerriError;
-use crate::lexer::{FloatSuffix, IntegerSuffix};
+use crate::lexer::IntegerSuffix;
 use crate::types::{FloatWidth, IntegerWidth};
 use crate::vm::OpCode;
 
 use super::helpers::{
-    check_literal_fits_type, emit_narrowing_cast, find_free_vars, is_builtin_path,
-    resolve_use_path, validate_int_literal,
+    check_literal_fits_type, emit_narrowing_cast, find_free_vars, is_builtin_path, resolve_use_path,
 };
 use super::{Compiler, LoopContext, SymTable};
 
@@ -740,32 +739,14 @@ impl Compiler {
 
     pub(crate) fn compile_expr(&mut self, expr: &Expr) -> Result<(), FerriError> {
         match expr {
-            Expr::IntLiteral(n, suffix, span) => {
-                let width = match suffix {
-                    IntegerSuffix::I8 => IntegerWidth::I8,
-                    IntegerSuffix::I16 => IntegerWidth::I16,
-                    IntegerSuffix::I32 => IntegerWidth::I32,
-                    IntegerSuffix::I64 => IntegerWidth::I64,
-                    IntegerSuffix::U8 => IntegerWidth::U8,
-                    IntegerSuffix::U16 => IntegerWidth::U16,
-                    IntegerSuffix::U32 => IntegerWidth::U32,
-                    IntegerSuffix::U64 => IntegerWidth::U64,
-                    IntegerSuffix::None => IntegerWidth::I64,
-                };
-                // Check that suffixed literals fit in their declared type
-                if *suffix != IntegerSuffix::None {
-                    validate_int_literal(*n, &width, *span)?;
-                }
-                self.emit(OpCode::ConstInt(*n, width));
+            Expr::IntLiteral(n, _suffix, _span) => {
+                // Literals always start life as `int` (i64). A surrounding
+                // typed binding or `as` cast may narrow to byte later.
+                self.emit(OpCode::ConstInt(*n, IntegerWidth::I64));
                 Ok(())
             }
-            Expr::FloatLiteral(n, suffix, _) => {
-                let width = match suffix {
-                    FloatSuffix::F32 => FloatWidth::F32,
-                    FloatSuffix::F64 => FloatWidth::F64,
-                    FloatSuffix::None => FloatWidth::F64,
-                };
-                self.emit(OpCode::ConstFloat(*n, width));
+            Expr::FloatLiteral(n, _suffix, _) => {
+                self.emit(OpCode::ConstFloat(*n, FloatWidth::F64));
                 Ok(())
             }
             Expr::BoolLiteral(b, _) => {
@@ -1474,7 +1455,6 @@ impl Compiler {
             } => {
                 let n = match crate::compiler::helpers::try_eval_const(count) {
                     Some(crate::types::Value::I64(n)) if n >= 0 => n as usize,
-                    Some(crate::types::Value::U64(n)) => n as usize,
                     _ => {
                         return Err(crate::errors::FerriError::Runtime {
                             message: "array repeat count must be a non-negative integer constant"

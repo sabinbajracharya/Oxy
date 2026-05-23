@@ -613,15 +613,14 @@ impl<'src> Lexer<'src> {
                             num_str.push(ch);
                         }
                     }
-                    let (isuffix, _) = self.parse_suffix(&mut false);
-                    let val = parse_int_with_suffix(&num_str[2..], 16, &isuffix).map_err(|_| {
-                        FerriError::Lexer {
+                    self.reject_literal_suffix()?;
+                    let val =
+                        parse_int_literal(&num_str[2..], 16).map_err(|_| FerriError::Lexer {
                             message: format!("invalid hex literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
-                        }
-                    })?;
-                    return Ok(TokenKind::IntLiteral(val, isuffix));
+                        })?;
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 'o' | 'O' => {
                     num_str.push(self.advance());
@@ -631,15 +630,14 @@ impl<'src> Lexer<'src> {
                             num_str.push(ch);
                         }
                     }
-                    let (isuffix, _) = self.parse_suffix(&mut false);
-                    let val = parse_int_with_suffix(&num_str[2..], 8, &isuffix).map_err(|_| {
-                        FerriError::Lexer {
+                    self.reject_literal_suffix()?;
+                    let val =
+                        parse_int_literal(&num_str[2..], 8).map_err(|_| FerriError::Lexer {
                             message: format!("invalid octal literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
-                        }
-                    })?;
-                    return Ok(TokenKind::IntLiteral(val, isuffix));
+                        })?;
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 'b' | 'B' => {
                     num_str.push(self.advance());
@@ -651,15 +649,14 @@ impl<'src> Lexer<'src> {
                             num_str.push(ch);
                         }
                     }
-                    let (isuffix, _) = self.parse_suffix(&mut false);
-                    let val = parse_int_with_suffix(&num_str[2..], 2, &isuffix).map_err(|_| {
-                        FerriError::Lexer {
+                    self.reject_literal_suffix()?;
+                    let val =
+                        parse_int_literal(&num_str[2..], 2).map_err(|_| FerriError::Lexer {
                             message: format!("invalid binary literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
-                        }
-                    })?;
-                    return Ok(TokenKind::IntLiteral(val, isuffix));
+                        })?;
+                    return Ok(TokenKind::IntLiteral(val, IntegerSuffix::None));
                 }
                 _ => {}
             }
@@ -718,79 +715,31 @@ impl<'src> Lexer<'src> {
             }
         }
 
+        if !suffix_str.is_empty() {
+            return Err(FerriError::Lexer {
+                message: format!(
+                    "literal suffix `{suffix_str}` is not supported in Oxy. \
+                     Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
+                ),
+                line: self.line,
+                column: self.column,
+            });
+        }
         if is_float {
             let val: f64 = num_str.parse().map_err(|_| FerriError::Lexer {
                 message: format!("invalid float literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
             })?;
-            let fsuffix = match suffix_str.as_str() {
-                "f32" => FloatSuffix::F32,
-                "f64" => FloatSuffix::F64,
-                _ => FloatSuffix::None,
-            };
-            Ok(TokenKind::FloatLiteral(val, fsuffix))
+            Ok(TokenKind::FloatLiteral(val, FloatSuffix::None))
         } else {
-            let isuffix = match suffix_str.as_str() {
-                "i8" => IntegerSuffix::I8,
-                "i16" => IntegerSuffix::I16,
-                "i32" => IntegerSuffix::I32,
-                "i64" => IntegerSuffix::I64,
-                "u8" => IntegerSuffix::U8,
-                "u16" => IntegerSuffix::U16,
-                "u32" => IntegerSuffix::U32,
-                "u64" => IntegerSuffix::U64,
-                _ => IntegerSuffix::None,
-            };
-            // Parse as i64 first; if that fails and the suffix is unsigned,
-            // parse as u64 to handle values > i64::MAX (e.g. 12312312312312312311u64)
-            let val: i64 = match num_str.parse::<i64>() {
-                Ok(v) => v,
-                Err(_) if is_unsigned_suffix(&isuffix) => num_str
-                    .parse::<u64>()
-                    .map(|v| v as i64)
-                    .map_err(|_| FerriError::Lexer {
-                        message: format!("invalid integer literal '{num_str}'"),
-                        line: self.line,
-                        column: self.column,
-                    })?,
-                Err(_) => {
-                    return Err(FerriError::Lexer {
-                        message: format!("invalid integer literal '{num_str}'"),
-                        line: self.line,
-                        column: self.column,
-                    });
-                }
-            };
-            Ok(TokenKind::IntLiteral(val, isuffix))
+            let val: i64 = num_str.parse::<i64>().map_err(|_| FerriError::Lexer {
+                message: format!("invalid integer literal '{num_str}'"),
+                line: self.line,
+                column: self.column,
+            })?;
+            Ok(TokenKind::IntLiteral(val, IntegerSuffix::None))
         }
-    }
-
-    /// Parse a type suffix (i8, u32, etc.) from the current position.
-    fn parse_suffix(&mut self, is_float: &mut bool) -> (IntegerSuffix, bool) {
-        let mut suffix_str = String::new();
-        if !self.is_at_end() && (self.peek() == 'i' || self.peek() == 'u' || self.peek() == 'f') {
-            if self.peek() == 'f' {
-                *is_float = true;
-            }
-            suffix_str.push(self.advance());
-            while !self.is_at_end() && self.peek().is_ascii_digit() {
-                suffix_str.push(self.advance());
-            }
-        }
-        let float_forced = suffix_str.starts_with('f');
-        let isuffix = match suffix_str.as_str() {
-            "i8" => IntegerSuffix::I8,
-            "i16" => IntegerSuffix::I16,
-            "i32" => IntegerSuffix::I32,
-            "i64" => IntegerSuffix::I64,
-            "u8" => IntegerSuffix::U8,
-            "u16" => IntegerSuffix::U16,
-            "u32" => IntegerSuffix::U32,
-            "u64" => IntegerSuffix::U64,
-            _ => IntegerSuffix::None,
-        };
-        (isuffix, float_forced)
     }
 
     fn scan_identifier(&mut self, first: char, _start_offset: usize) -> TokenKind {
@@ -908,6 +857,29 @@ impl<'src> Lexer<'src> {
         }
     }
 
+    /// If a literal is immediately followed by an identifier-like suffix
+    /// (e.g. `123`, `0xFFu8`, `3.14`), reject it with a fix-it
+    /// error. Oxy's only integer/float types are `int`, `byte`, `float`,
+    /// reached via typed bindings or `as` casts — never via suffixes.
+    fn reject_literal_suffix(&mut self) -> Result<(), FerriError> {
+        if !self.is_at_end() && (self.peek() == 'i' || self.peek() == 'u' || self.peek() == 'f') {
+            let mut suffix = String::new();
+            suffix.push(self.advance());
+            while !self.is_at_end() && self.peek().is_ascii_digit() {
+                suffix.push(self.advance());
+            }
+            return Err(FerriError::Lexer {
+                message: format!(
+                    "literal suffix `{suffix}` is not supported in Oxy. \
+                     Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
+                ),
+                line: self.line,
+                column: self.column,
+            });
+        }
+        Ok(())
+    }
+
     fn make_token(&self, kind: TokenKind, start_offset: usize) -> Token {
         // Calculate the start line/column from the start_offset
         let (start_line, start_col) = self.line_col_at(start_offset);
@@ -940,22 +912,16 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, FerriError> {
     Lexer::new(source).tokenize()
 }
 
-fn is_unsigned_suffix(suffix: &IntegerSuffix) -> bool {
-    matches!(
-        suffix,
-        IntegerSuffix::U8 | IntegerSuffix::U16 | IntegerSuffix::U32 | IntegerSuffix::U64
-    )
-}
-
-/// Parse an integer string in the given radix, handling overflow for unsigned suffixes.
-fn parse_int_with_suffix(digits: &str, radix: u32, suffix: &IntegerSuffix) -> Result<i64, ()> {
-    if is_unsigned_suffix(suffix) {
-        u64::from_str_radix(digits, radix)
-            .map(|v| v as i64)
-            .map_err(|_| ())
-    } else {
-        i64::from_str_radix(digits, radix).map_err(|_| ())
+/// Parse an integer string in the given radix.
+/// Accepts values that fit in i64 OR u64 (for hex/binary patterns like
+/// 0xFFFFFFFFFFFFFFFF where the bit pattern is what matters, not the sign).
+fn parse_int_literal(digits: &str, radix: u32) -> Result<i64, ()> {
+    if let Ok(v) = i64::from_str_radix(digits, radix) {
+        return Ok(v);
     }
+    u64::from_str_radix(digits, radix)
+        .map(|v| v as i64)
+        .map_err(|_| ())
 }
 
 #[cfg(test)]

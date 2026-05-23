@@ -38,7 +38,7 @@ fn merge(intervals: Vec) -> Vec {
     intervals.sort_by_key(|iv| iv[0]);
     let mut result = vec![];
     let mut current = intervals[0];
-    let mut i = 1i64;
+    let mut i = 1;
     while i < n {
         let next = intervals[i];
         if next[0] <= current[1] {

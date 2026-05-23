@@ -29,7 +29,7 @@ fn main() {
 }
 
 fn is_palindrome(s: String) -> bool {
-    let mut left = 0i64;
+    let mut left = 0;
     let mut right = s.len() - 1;
     while left < right {
         let lch = s.char_at(left);

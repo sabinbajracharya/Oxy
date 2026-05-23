@@ -31,10 +31,10 @@ fn main() {
 
 fn can_complete_circuit(gas: Vec, cost: Vec) -> int {
     let n = gas.len();
-    let mut total = 0i64;
-    let mut tank = 0i64;
-    let mut start = 0i64;
-    let mut i = 0i64;
+    let mut total = 0;
+    let mut tank = 0;
+    let mut start = 0;
+    let mut i = 0;
     while i < n {
         let net = gas[i] - cost[i];
         total = total + net;

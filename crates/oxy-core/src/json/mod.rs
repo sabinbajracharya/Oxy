@@ -20,15 +20,8 @@ pub fn serialize_pretty(value: &Value) -> Result<String, String> {
 
 fn serialize_value(value: &Value) -> Result<String, String> {
     match value {
-        Value::I8(n) => Ok(n.to_string()),
-        Value::I16(n) => Ok(n.to_string()),
-        Value::I32(n) => Ok(n.to_string()),
         Value::I64(n) => Ok(n.to_string()),
         Value::U8(n) => Ok(n.to_string()),
-        Value::U16(n) => Ok(n.to_string()),
-        Value::U32(n) => Ok(n.to_string()),
-        Value::U64(n) => Ok(n.to_string()),
-        Value::F32(x) => Ok(format_float(*x as f64)),
         Value::F64(x) => Ok(format_float(*x)),
         Value::Bool(b) => Ok(b.to_string()),
         Value::String(s) => Ok(escape_json_string(s)),
@@ -100,15 +93,8 @@ fn serialize_value(value: &Value) -> Result<String, String> {
 
 fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String> {
     match value {
-        Value::I8(n) => Ok(n.to_string()),
-        Value::I16(n) => Ok(n.to_string()),
-        Value::I32(n) => Ok(n.to_string()),
         Value::I64(n) => Ok(n.to_string()),
         Value::U8(n) => Ok(n.to_string()),
-        Value::U16(n) => Ok(n.to_string()),
-        Value::U32(n) => Ok(n.to_string()),
-        Value::U64(n) => Ok(n.to_string()),
-        Value::F32(x) => Ok(format_float(*x as f64)),
         Value::F64(x) => Ok(format_float(*x)),
         Value::Bool(b) => Ok(b.to_string()),
         Value::String(s) => Ok(escape_json_string(s)),

@@ -30,16 +30,16 @@ fn main() {
 fn coin_change(coins: Vec, amount: int) -> int {
     let inf = amount + 1;
     let mut dp = vec![];
-    let mut i = 0i64;
+    let mut i = 0;
     while i <= amount {
         if i == 0 {
-            dp.push(0i64);
+            dp.push(0);
         } else {
             dp.push(inf);
         }
         i = i + 1;
     }
-    let mut a = 1i64;
+    let mut a = 1;
     while a <= amount {
         for coin in coins {
             if coin <= a {

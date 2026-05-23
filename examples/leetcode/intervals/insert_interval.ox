@@ -34,7 +34,7 @@ fn main() {
 fn insert(intervals: Vec, new_interval: Vec) -> Vec {
     let mut result = vec![];
     let n = intervals.len();
-    let mut i = 0i64;
+    let mut i = 0;
     // Phase 1: add all before overlap
     while i < n && intervals[i][1] < new_interval[0] {
         result.push(intervals[i]);

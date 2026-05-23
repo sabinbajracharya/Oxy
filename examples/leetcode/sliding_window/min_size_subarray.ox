@@ -29,10 +29,10 @@ fn main() {
 
 fn min_sub_array_len(target: int, nums: Vec) -> int {
     let n = nums.len();
-    let mut left = 0i64;
-    let mut sum = 0i64;
+    let mut left = 0;
+    let mut sum = 0;
     let mut min_len = n + 1; // sentinel
-    let mut right = 0i64;
+    let mut right = 0;
     while right < n {
         sum = sum + nums[right];
         while sum >= target {

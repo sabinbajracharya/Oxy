@@ -28,15 +28,15 @@ fn main() {
 }
 
 fn subarray_sum(nums: Vec, k: int) -> int {
-    let mut count = 0i64;
-    let mut sum = 0i64;
+    let mut count = 0;
+    let mut sum = 0;
     let mut seen = HashMap::new();
-    seen.insert(0i64, 1i64);
+    seen.insert(0, 1);
     for num in nums {
         sum = sum + num;
         let target = sum - k;
-        count = count + seen.get(target).unwrap_or(0i64);
-        let existing = seen.get(sum).unwrap_or(0i64);
+        count = count + seen.get(target).unwrap_or(0);
+        let existing = seen.get(sum).unwrap_or(0);
         seen.insert(sum, existing + 1);
     }
     count
