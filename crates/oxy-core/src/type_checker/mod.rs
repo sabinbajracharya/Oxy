@@ -1413,6 +1413,11 @@ impl TypeChecker {
                 Ok(())
             }
             Stmt::Break { .. } | Stmt::Continue { .. } => Ok(()),
+            // Nested items are hoisted to top-level by the parser when they
+            // appear inside a fn body; a Stmt::Item only survives in unusual
+            // call paths (e.g. tests that invoke parse_stmt directly). Skip
+            // it here — the hoisted copy is type-checked at the program level.
+            Stmt::Item(_) => Ok(()),
             Stmt::Use(use_def) => {
                 let base_path = use_def.path.join("::");
                 match &use_def.tree {

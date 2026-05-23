@@ -389,6 +389,12 @@ pub enum Stmt {
     },
     /// `use path::to::item;` — local import within a function body
     Use(UseDef),
+    /// A nested item (fn, struct, enum, etc.) declared inside a function body.
+    /// At compile time the item is hoisted to a synthetic qualified name based
+    /// on the enclosing fn, and a local alias is added so calls inside the
+    /// body resolve. Forward references within the body work because the
+    /// prescan walks Stmt::Item before compiling expressions.
+    Item(Box<Item>),
 }
 
 impl Stmt {
@@ -406,6 +412,7 @@ impl Stmt {
             | Stmt::ForDestructure { span, .. }
             | Stmt::LetPattern { span, .. } => *span,
             Stmt::Use(use_def) => use_def.span,
+            Stmt::Item(item) => item.span(),
             Stmt::Expr { expr, .. } => expr.span(),
         }
     }
@@ -1271,6 +1278,9 @@ impl Stmt {
                         out.push_str(&format!("{pad}use {}::{{{}}};\n", path, names.join(", ")));
                     }
                 }
+            }
+            Stmt::Item(item) => {
+                item.pretty_print(out, indent);
             }
         }
     }

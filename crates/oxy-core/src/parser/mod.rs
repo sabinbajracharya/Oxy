@@ -11,6 +11,13 @@ use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TY
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    /// Stack of enclosing fn names while parsing nested fn bodies. Used to
+    /// mangle nested item names so they can be hoisted to top-level without
+    /// colliding (`fn outer() { fn inner() {} }` → top-level `outer__inner`).
+    fn_name_stack: Vec<String>,
+    /// Nested items extracted from fn bodies during parsing; appended to
+    /// `Program::items` at the end of `parse()`.
+    hoisted_items: Vec<Item>,
 }
 
 /// Operator precedence levels (lower number = lower precedence = binds less tightly).
@@ -71,7 +78,12 @@ impl Precedence {
 impl Parser {
     /// Create a new parser from a token stream.
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            fn_name_stack: Vec::new(),
+            hoisted_items: Vec::new(),
+        }
     }
 
     /// Parse the tokens into a [`Program`].
@@ -82,6 +94,10 @@ impl Parser {
         while !self.is_at_end() {
             items.push(self.parse_item()?);
         }
+
+        // Append any items hoisted from nested fn bodies. Their names are
+        // mangled (e.g. `outer__inner`) so they coexist with user items.
+        items.append(&mut self.hoisted_items);
 
         let end_span = if items.is_empty() {
             start_span
@@ -411,7 +427,9 @@ impl Parser {
             }
         }
 
+        self.fn_name_stack.push(name.clone());
         let body = self.parse_block()?;
+        self.fn_name_stack.pop();
 
         Ok(FnDef {
             name,
@@ -636,8 +654,28 @@ impl Parser {
                 break;
             }
         }
-        self.expect(TokenKind::Gt)?;
+        self.expect_gt_split_shr()?;
         Ok(args)
+    }
+
+    /// Close a `<...>` clause, splitting a leading `>>` (Shr) into two `>`s
+    /// when needed. Lets `Vec<Option<int>>` parse without forcing users to
+    /// space-separate `> >`.
+    fn expect_gt_split_shr(&mut self) -> Result<(), FerriError> {
+        if self.check(&TokenKind::Gt) {
+            self.advance();
+            Ok(())
+        } else if self.check(&TokenKind::Shr) {
+            // Replace the `>>` token in place with a single `>` so the
+            // next outer generic-closing call sees the remaining `>`.
+            self.tokens[self.pos].kind = TokenKind::Gt;
+            Ok(())
+        } else {
+            Err(self.error(format!(
+                "expected '>', found {}",
+                self.peek_kind().description()
+            )))
+        }
     }
 
     fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, FerriError> {
@@ -675,7 +713,7 @@ impl Parser {
             }
         }
 
-        self.expect(TokenKind::Gt)?;
+        self.expect_gt_split_shr()?;
         Ok(params)
     }
 
@@ -869,6 +907,14 @@ impl Parser {
     fn parse_impl_or_impl_trait(&mut self) -> Result<Item, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Impl)?;
+        // Optional generic parameters on the impl block itself, e.g.
+        // `impl<T> Foo<T> { ... }`. Currently we parse-and-discard them —
+        // the existing inherent-impl machinery infers the type parameter
+        // from the methods' signatures, so the leading `<T>` is just
+        // additional structure that needs to be accepted.
+        if self.check(&TokenKind::Lt) {
+            let _ = self.parse_generic_params()?;
+        }
         let first_name = self.parse_type_name_with_args()?;
 
         // Check for `impl Trait for Type { ... }`
@@ -1061,6 +1107,37 @@ impl Parser {
             TokenKind::Use => {
                 let use_def = self.parse_use_def(Visibility::Private)?;
                 Ok(Stmt::Use(use_def))
+            }
+            // Nested items: `fn`, `struct`, `enum` inside a function body.
+            // Hoist the item to top-level with a mangled name based on the
+            // enclosing fn stack (e.g. `fn outer() { fn inner() {} }` →
+            // top-level `outer__inner`), and leave a `Stmt::Use` in place to
+            // alias the original name into the body's scope. Forward
+            // references within the body Just Work because the hoisted item
+            // is registered globally during the compiler's prescan, before
+            // any body is compiled.
+            TokenKind::Fn | TokenKind::Struct | TokenKind::Enum => {
+                let span = self.current_span();
+                let item = self.parse_item()?;
+                let original_name = item_name(&item).to_string();
+                if self.fn_name_stack.is_empty() {
+                    // Not actually nested — keep as a regular Stmt::Item so
+                    // top-level callers (e.g. tests that call parse_stmt
+                    // directly) still get the AST node. Production callers
+                    // never hit this branch because parse_stmt is only
+                    // invoked inside a fn body.
+                    return Ok(Stmt::Item(Box::new(item)));
+                }
+                let prefix = self.fn_name_stack.join("__");
+                let mangled = format!("{}__{}", prefix, original_name);
+                let renamed = rename_item(item, mangled.clone());
+                self.hoisted_items.push(renamed);
+                Ok(Stmt::Use(UseDef {
+                    path: vec![mangled],
+                    tree: UseTree::Simple(Some(original_name)),
+                    visibility: Visibility::Private,
+                    span,
+                }))
             }
             _ => self.parse_expr_stmt(),
         }
@@ -1331,7 +1408,24 @@ impl Parser {
     }
 
     fn parse_expr_stmt(&mut self) -> Result<Stmt, FerriError> {
-        let expr = self.parse_expr(Precedence::None)?;
+        // Expression-with-block (`if`, `match`, `{ ... }`) at statement
+        // position is a self-contained statement — it does NOT chain infix
+        // operators with the following tokens. This matches Rust:
+        //
+        //     if c { return 1; }
+        //     -1                          // separate trailing expression
+        //
+        // is two statements, not `if-expr - 1`. To use such an expression
+        // as the LHS of an operator, wrap it in parentheses.
+        let starts_block = matches!(
+            self.peek_kind(),
+            TokenKind::If | TokenKind::Match | TokenKind::LBrace
+        );
+        let expr = if starts_block {
+            self.parse_prefix()?
+        } else {
+            self.parse_expr(Precedence::None)?
+        };
 
         let has_semicolon = self.match_token(&TokenKind::Semicolon);
 
@@ -2907,6 +3001,44 @@ impl Parser {
 pub fn parse(source: &str) -> Result<Program, FerriError> {
     let tokens = crate::lexer::tokenize(source)?;
     Parser::new(tokens).parse()
+}
+
+/// Read the declared name from an Item (for the nested-item hoist machinery).
+/// Only Function/Struct/Enum are reachable from `parse_stmt`'s nested-item
+/// branch today; other variants are not currently parseable inside a fn body.
+fn item_name(item: &Item) -> &str {
+    match item {
+        Item::Function(f) => &f.name,
+        Item::Struct(s) => &s.name,
+        Item::Enum(e) => &e.name,
+        Item::Impl(i) => &i.type_name,
+        Item::ImplTrait(i) => &i.type_name,
+        Item::Trait(t) => &t.name,
+        Item::Module(m) => &m.name,
+        Item::TypeAlias { name, .. } => name,
+        Item::Const { name, .. } => name,
+        Item::Use(_) => "",
+    }
+}
+
+/// Replace an Item's declared name (used to rename hoisted nested items
+/// before they're appended to the program's top-level items).
+fn rename_item(item: Item, new_name: String) -> Item {
+    match item {
+        Item::Function(mut f) => {
+            f.name = new_name;
+            Item::Function(f)
+        }
+        Item::Struct(mut s) => {
+            s.name = new_name;
+            Item::Struct(s)
+        }
+        Item::Enum(mut e) => {
+            e.name = new_name;
+            Item::Enum(e)
+        }
+        other => other,
+    }
 }
 
 #[cfg(test)]

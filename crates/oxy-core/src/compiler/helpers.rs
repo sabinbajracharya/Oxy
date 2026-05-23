@@ -186,7 +186,120 @@ pub(crate) fn collect_free_vars(
             }
             collect_free_vars(body, &new_params, vars);
         }
-        _ => {} // Skip other expression types for now
+        crate::ast::Expr::FieldAccess { object, .. } => {
+            collect_free_vars(object, params, vars);
+        }
+        crate::ast::Expr::Tuple { elements, .. } | crate::ast::Expr::Array { elements, .. } => {
+            for e in elements {
+                collect_free_vars(e, params, vars);
+            }
+        }
+        crate::ast::Expr::StructInit { fields, .. } => {
+            for (_, v) in fields {
+                collect_free_vars(v, params, vars);
+            }
+        }
+        crate::ast::Expr::Grouped(inner, _) => {
+            collect_free_vars(inner, params, vars);
+        }
+        crate::ast::Expr::Range { start, end, .. } => {
+            if let Some(s) = start.as_deref() {
+                collect_free_vars(s, params, vars);
+            }
+            if let Some(e) = end.as_deref() {
+                collect_free_vars(e, params, vars);
+            }
+        }
+        crate::ast::Expr::Repeat { value, count, .. } => {
+            collect_free_vars(value, params, vars);
+            collect_free_vars(count, params, vars);
+        }
+        crate::ast::Expr::Match { expr, arms, .. } => {
+            collect_free_vars(expr, params, vars);
+            for arm in arms {
+                // Pattern bindings become new locals — extend params for this arm.
+                let mut arm_params = params.to_vec();
+                pattern_bindings(&arm.pattern, &mut arm_params);
+                if let Some(g) = &arm.guard {
+                    collect_free_vars(g, &arm_params, vars);
+                }
+                collect_free_vars(&arm.body, &arm_params, vars);
+            }
+        }
+        crate::ast::Expr::IfLet {
+            pattern,
+            expr: scrutinee,
+            then_block,
+            else_block,
+            ..
+        } => {
+            collect_free_vars(scrutinee, params, vars);
+            let mut inner_params = params.to_vec();
+            pattern_bindings(pattern, &mut inner_params);
+            for s in &then_block.stmts {
+                collect_free_vars_in_stmt(s, &inner_params, vars);
+            }
+            if let Some(eb) = else_block {
+                collect_free_vars(eb, params, vars);
+            }
+        }
+        crate::ast::Expr::PathCall { args, .. } => {
+            for a in args {
+                collect_free_vars(a, params, vars);
+            }
+        }
+        crate::ast::Expr::As { expr: inner, .. }
+        | crate::ast::Expr::Try { expr: inner, .. }
+        | crate::ast::Expr::Await { expr: inner, .. } => {
+            collect_free_vars(inner, params, vars);
+        }
+        crate::ast::Expr::FString { parts, .. } => {
+            for part in parts {
+                if let crate::ast::FStringPart::Expr(e) = part {
+                    collect_free_vars(e, params, vars);
+                }
+            }
+        }
+        crate::ast::Expr::Return { value, .. } => {
+            if let Some(v) = value {
+                collect_free_vars(v, params, vars);
+            }
+        }
+        // Path, SelfRef, literals — no free variables.
+        crate::ast::Expr::Path { .. }
+        | crate::ast::Expr::SelfRef(_)
+        | crate::ast::Expr::IntLiteral(..)
+        | crate::ast::Expr::FloatLiteral(..)
+        | crate::ast::Expr::BoolLiteral(..)
+        | crate::ast::Expr::StringLiteral(..)
+        | crate::ast::Expr::CharLiteral(..) => {}
+    }
+}
+
+/// Collect names that a pattern introduces as bindings. Used by closure
+/// capture analysis so match-arm / if-let bound names don't get treated as
+/// free variables when they're actually local to the arm.
+fn pattern_bindings(pattern: &crate::ast::Pattern, out: &mut Vec<String>) {
+    match pattern {
+        crate::ast::Pattern::Ident(name, _) => out.push(name.clone()),
+        crate::ast::Pattern::EnumVariant { fields, .. }
+        | crate::ast::Pattern::Tuple(fields, _)
+        | crate::ast::Pattern::Slice(fields, _) => {
+            for f in fields {
+                pattern_bindings(f, out);
+            }
+        }
+        crate::ast::Pattern::Struct { fields, .. } => {
+            for (_, p) in fields {
+                pattern_bindings(p, out);
+            }
+        }
+        crate::ast::Pattern::Or(pats, _) => {
+            if let Some(first) = pats.first() {
+                pattern_bindings(first, out);
+            }
+        }
+        _ => {}
     }
 }
 

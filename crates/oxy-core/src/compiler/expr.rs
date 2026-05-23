@@ -199,8 +199,23 @@ impl Compiler {
                 self.emit(OpCode::LoadLocal(alt_tmp));
                 Ok(())
             }
+            Pattern::Struct { fields, .. } => {
+                // Input: [scrutinee]. Output: [bool]. Scrutinee is consumed —
+                // the match-arm site reloads it from scrutinee_slot before
+                // bind_pattern_data (same protocol as EnumVariant/Tuple).
+                //
+                // The type checker ensures the scrutinee is the named struct
+                // type, so the pattern always matches. We only need to
+                // pre-define slots for the field bindings here; the actual
+                // FieldAccess + BindIdent happens in bind_pattern_data.
+                self.emit(OpCode::Pop);
+                self.emit(OpCode::ConstBool(true));
+                let sub_pats: Vec<Pattern> = fields.iter().map(|(_, p)| p.clone()).collect();
+                self.define_pattern_slots(&sub_pats);
+                Ok(())
+            }
             _ => {
-                // For Struct, Tuple, Slice, Rest — fall back to const false
+                // For Slice, Rest — fall back to const false
                 // (will be handled properly in subsequent iterations)
                 self.emit(OpCode::ConstBool(false));
                 Ok(())
@@ -217,6 +232,10 @@ impl Compiler {
                 }
                 Pattern::EnumVariant { fields, .. } | Pattern::Tuple(fields, _) => {
                     self.define_pattern_slots(fields);
+                }
+                Pattern::Struct { fields, .. } => {
+                    let sub_pats: Vec<Pattern> = fields.iter().map(|(_, p)| p.clone()).collect();
+                    self.define_pattern_slots(&sub_pats);
                 }
                 _ => {}
             }
@@ -251,6 +270,20 @@ impl Compiler {
                 Ok(())
             }
             Pattern::Literal(_) => Ok(()), // no binding needed
+            Pattern::Struct { fields, .. } => {
+                // Stack: [struct_value]. Stash in temp, then for each
+                // (field_name, sub_pattern): reload, FieldAccess, recurse.
+                let temp = self.sym.define("__struct_pat_tmp");
+                self.emit(OpCode::StoreLocal(temp));
+                for (field_name, sub_pat) in fields {
+                    self.emit(OpCode::LoadLocal(temp));
+                    self.emit(OpCode::FieldAccess {
+                        field_name: field_name.clone(),
+                    });
+                    self.bind_pattern_data(sub_pat)?;
+                }
+                Ok(())
+            }
             Pattern::Tuple(patterns, _) => {
                 // Stack: [Tuple_value]. Extract elements by index and bind sub-patterns.
                 let temp = self.sym.define("__tuple_tmp");
@@ -734,6 +767,10 @@ impl Compiler {
                 self.compile_letpattern_unsupported(pattern, value, *span, *mutable)
             }
             Stmt::Use(use_def) => self.compile_use(use_def),
+            // Nested items are hoisted to top-level by the parser; the
+            // hoisted copy is compiled via the normal `compile_item` walk,
+            // so a Stmt::Item that survives into compile time is a no-op.
+            Stmt::Item(_) => Ok(()),
         }
     }
 
@@ -2041,7 +2078,7 @@ impl Compiler {
                     // Compile pattern check → leaves Bool(true)+data or Bool(false)
                     let consumes_scrutinee = matches!(
                         arm.pattern,
-                        Pattern::EnumVariant { .. } | Pattern::Tuple(..)
+                        Pattern::EnumVariant { .. } | Pattern::Tuple(..) | Pattern::Struct { .. }
                     );
                     prev_consumed_scrutinee = consumes_scrutinee;
                     self.compile_pattern(&arm.pattern, &mut vec![], is_last)?;

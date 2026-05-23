@@ -733,7 +733,11 @@ impl<'src> Lexer<'src> {
             })?;
             Ok(TokenKind::FloatLiteral(val, FloatSuffix::None))
         } else {
-            let val: i64 = num_str.parse::<i64>().map_err(|_| FerriError::Lexer {
+            // Use parse_int_literal so decimal accepts the full u64 range
+            // (reinterpreted as i64) — matches hex/octal/binary behavior so
+            // `9223372036854775808` (= i64::MIN as u64) tokenizes successfully
+            // and a unary `-` in front of it produces i64::MIN.
+            let val: i64 = parse_int_literal(&num_str, 10).map_err(|_| FerriError::Lexer {
                 message: format!("invalid integer literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
