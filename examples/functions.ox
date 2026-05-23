@@ -1,13 +1,13 @@
 // functions.ox — Functions, recursion, and tail expressions
-fn add(a: i64, b: i64) -> i64 {
+fn add(a: int, b: int) -> int {
     a + b
 }
 
-fn multiply(a: i64, b: i64) -> i64 {
+fn multiply(a: int, b: int) -> int {
     a * b
 }
 
-fn factorial(n: i64) -> i64 {
+fn factorial(n: int) -> int {
     if n <= 1 {
         return 1;
     }

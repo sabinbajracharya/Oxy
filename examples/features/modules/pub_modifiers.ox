@@ -5,15 +5,15 @@
 // === pub(crate): accessible from root and sibling modules ===
 
 mod crate_lib {
-    pub(crate) fn get_value() -> i64 {
+    pub(crate) fn get_value() -> int {
         42
     }
 
     pub(crate) struct CrateData {
-        pub x: i64,
+        pub x: int,
     }
 
-    pub(crate) fn make_data(v: i64) -> CrateData {
+    pub(crate) fn make_data(v: int) -> CrateData {
         CrateData { x: v }
     }
 }
@@ -32,7 +32,7 @@ fn test_pub_crate_struct_accessible_from_root() {
 // === pub(crate) accessible from a different (sibling) module ===
 
 mod other_mod {
-    pub fn use_crate_lib() -> i64 {
+    pub fn use_crate_lib() -> int {
         crate_lib::get_value()
     }
 }
@@ -45,15 +45,15 @@ fn test_pub_crate_from_sibling_module() {
 // === pub(super): accessible from parent module ===
 
 mod parent_lib {
-    pub(super) fn super_data() -> i64 {
+    pub(super) fn super_data() -> int {
         100
     }
 
     pub(super) struct SuperInfo {
-        pub val: i64,
+        pub val: int,
     }
 
-    pub fn public_data() -> i64 {
+    pub fn public_data() -> int {
         200
     }
 }
@@ -79,12 +79,12 @@ fn test_regular_pub_still_works() {
 // === pub(super): child modules can access parent's pub(super) ===
 
 mod container {
-    pub(super) fn parent_visible() -> i64 {
+    pub(super) fn parent_visible() -> int {
         300
     }
 
     pub mod child {
-        pub fn access_parent() -> i64 {
+        pub fn access_parent() -> int {
             super::parent_visible()
         }
     }

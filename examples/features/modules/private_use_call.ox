@@ -3,11 +3,11 @@
 // `use module::*` glob imports, or direct qualified paths.
 
 mod secret {
-    pub fn public_fn() -> i64 {
+    pub fn public_fn() -> int {
         42
     }
 
-    fn hidden() -> i64 {
+    fn hidden() -> int {
         99
     }
 }
@@ -55,7 +55,7 @@ mod warehouse {
     }
 
     struct PrivateItem {
-        pub id: i64,
+        pub id: int,
     }
 
     pub fn make_private() -> PrivateItem {

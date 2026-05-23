@@ -2,7 +2,7 @@
 // `return` exits a function early, optionally with a value. The last
 // expression in a function (without semicolon) is an implicit return.
 
-fn add_one(x: i64) -> i64 {
+fn add_one(x: int) -> int {
     return x + 1;
 }
 
@@ -11,7 +11,7 @@ fn test_explicit_return() {
     assert_eq!(add_one(41), 42);
 }
 
-fn early_return(x: i64) -> i64 {
+fn early_return(x: int) -> int {
     if x < 0 {
         return 0;
     }
@@ -24,7 +24,7 @@ fn test_early_return_guard() {
     assert_eq!(early_return(10), 10);
 }
 
-fn return_unit(x: i64) {
+fn return_unit(x: int) {
     if x == 0 {
         return;
     }
@@ -40,7 +40,7 @@ fn test_return_unit() {
 
 // Implicit return (last expression, no semicolon)
 
-fn implicit_return(x: i64) -> i64 {
+fn implicit_return(x: int) -> int {
     x * 2
 }
 
@@ -51,7 +51,7 @@ fn test_implicit_return() {
 
 // Return from inside if/else
 
-fn max(a: i64, b: i64) -> i64 {
+fn max(a: int, b: int) -> int {
     if a > b {
         return a;
     }
@@ -66,7 +66,7 @@ fn test_return_from_if_else() {
 
 // Return from inside loop
 
-fn find_first_even(nums: Vec<i64>) -> i64 {
+fn find_first_even(nums: Vec<int>) -> int {
     for n in nums {
         if n % 2 == 0 {
             return n;
@@ -83,7 +83,7 @@ fn test_return_from_loop() {
 
 // Return from inside match
 
-fn match_return(x: i64) -> String {
+fn match_return(x: int) -> String {
     match x {
         0 => return "zero",
         _ => "non-zero",
@@ -98,7 +98,7 @@ fn test_return_from_match() {
 
 // Return with no value from nested scope
 
-fn bail_if_negative(x: i64) -> i64 {
+fn bail_if_negative(x: int) -> int {
     if x < 0 {
         if x < -100 {
             return -100;
@@ -117,7 +117,7 @@ fn test_nested_returns() {
 
 // Return from while loop
 
-fn sum_until_limit(limit: i64) -> i64 {
+fn sum_until_limit(limit: int) -> int {
     let mut sum = 0;
     let mut i = 0;
     while i < 100 {

@@ -27,7 +27,7 @@ fn main() {
     println!("{}", min_sub_array_len(7, nums));
 }
 
-fn min_sub_array_len(target: i64, nums: Vec) -> i64 {
+fn min_sub_array_len(target: int, nums: Vec) -> int {
     let n = nums.len();
     let mut left = 0i64;
     let mut sum = 0i64;

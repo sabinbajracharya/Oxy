@@ -3,23 +3,23 @@
 // and private items are not (can only be accessed through public wrappers).
 
 mod api {
-    pub fn public_fn() -> i64 {
+    pub fn public_fn() -> int {
         42
     }
 
-    fn private_fn() -> i64 {
+    fn private_fn() -> int {
         99
     }
 
     pub struct PublicStruct {
-        pub x: i64,
+        pub x: int,
     }
 
     struct PrivateStruct {
-        pub x: i64,
+        pub x: int,
     }
 
-    pub fn call_private() -> i64 {
+    pub fn call_private() -> int {
         private_fn()
     }
 
@@ -27,7 +27,7 @@ mod api {
         PrivateStruct { x: 7 }
     }
 
-    pub fn get_private_x(s: PrivateStruct) -> i64 {
+    pub fn get_private_x(s: PrivateStruct) -> int {
         s.x
     }
 }
@@ -52,23 +52,23 @@ fn test_private_struct_via_wrapper() {
 // === Visibility with nested modules ===
 
 mod parent {
-    pub fn parent_fn() -> i64 {
+    pub fn parent_fn() -> int {
         10
     }
 
     pub mod child {
-        pub fn child_fn() -> i64 {
+        pub fn child_fn() -> int {
             20
         }
     }
 
     mod private_child {
-        pub fn hidden_fn() -> i64 {
+        pub fn hidden_fn() -> int {
             30
         }
     }
 
-    pub fn access_private_child() -> i64 {
+    pub fn access_private_child() -> int {
         private_child::hidden_fn()
     }
 }
@@ -88,15 +88,15 @@ fn test_private_child_via_wrapper() {
 mod store {
     pub struct Item {
         pub name: String,
-        price: i64,
+        price: int,
     }
 
     impl Item {
-        pub fn new(name: String, price: i64) -> Item {
+        pub fn new(name: String, price: int) -> Item {
             Item { name, price }
         }
 
-        pub fn get_price(self) -> i64 {
+        pub fn get_price(self) -> int {
             self.price
         }
     }

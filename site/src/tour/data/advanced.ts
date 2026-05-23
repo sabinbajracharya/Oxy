@@ -59,8 +59,8 @@ Derivable traits: \`Debug\`, \`Clone\`, \`PartialEq\`, \`Eq\`, \`PartialOrd\`, \
       ],
       initialCode: `#[derive(Debug, Clone)]
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -81,15 +81,15 @@ fn main() {
 - \`static NAME: Type = expr;\` — global variable with a fixed address
 - \`type Name = Type;\` — create a type alias
 
-**Try it:** Add a type alias \`Point3D = (f64, f64, f64)\` and use it.`,
+**Try it:** Add a type alias \`Point3D = (float, float, float)\` and use it.`,
       hints: [
         '`const` values must be computable at compile time.',
         '`type` aliases don\'t create new types — they\'re transparent.',
       ],
-      initialCode: `const MAX_SIZE: i64 = 100;
-const PI: f64 = 3.14159265359;
+      initialCode: `const MAX_SIZE: int = 100;
+const PI: float = 3.14159265359;
 
-type Score = i64;
+type Score = int;
 type Name = String;
 
 fn main() {

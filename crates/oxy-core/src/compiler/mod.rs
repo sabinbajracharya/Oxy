@@ -113,14 +113,8 @@ pub(crate) fn integer_width_of(ann: &TypeAnnotation) -> Option<IntegerWidth> {
         TypeAnnotation::Named {
             name, generic_args, ..
         } if generic_args.is_empty() => match name.as_str() {
-            "i8" => Some(IntegerWidth::I8),
-            "i16" => Some(IntegerWidth::I16),
-            "i32" => Some(IntegerWidth::I32),
-            "i64" | "isize" => Some(IntegerWidth::I64),
-            "u8" => Some(IntegerWidth::U8),
-            "u16" => Some(IntegerWidth::U16),
-            "u32" => Some(IntegerWidth::U32),
-            "u64" | "usize" => Some(IntegerWidth::U64),
+            "int" => Some(IntegerWidth::I64),
+            "byte" => Some(IntegerWidth::U8),
             _ => None,
         },
         _ => None,

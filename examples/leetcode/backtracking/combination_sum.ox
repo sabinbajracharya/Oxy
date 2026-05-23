@@ -24,7 +24,7 @@ fn main() {
     }
 }
 
-fn backtrack(candidates: Vec, start: i64, target: i64, current: Vec, result: Vec) {
+fn backtrack(candidates: Vec, start: int, target: int, current: Vec, result: Vec) {
     if target == 0 {
         result.push(current.clone());
         return;
@@ -41,7 +41,7 @@ fn backtrack(candidates: Vec, start: i64, target: i64, current: Vec, result: Vec
     }
 }
 
-fn combination_sum(candidates: Vec, target: i64) -> Vec {
+fn combination_sum(candidates: Vec, target: int) -> Vec {
     let result = vec![];
     let current = vec![];
     backtrack(candidates, 0, target, current, result);

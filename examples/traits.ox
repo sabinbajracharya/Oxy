@@ -14,11 +14,11 @@ trait Describable {
 
 struct Person {
     name: String,
-    age: i64,
+    age: int,
 }
 
 impl Person {
-    fn new(name: String, age: i64) -> Self {
+    fn new(name: String, age: int) -> Self {
         Person { name, age }
     }
 }
@@ -48,12 +48,12 @@ fn print_value<T: Display>(val: T) {
 
 // Operator overloading via traits
 struct Vec2 {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Vec2 {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Vec2 { x, y }
     }
 }

@@ -27,7 +27,7 @@ fn main() {
     println!("{}", max_area(heights));
 }
 
-fn max_area(height: Vec) -> i64 {
+fn max_area(height: Vec) -> int {
     let mut left = 0i64;
     let mut right = height.len() - 1;
     let mut max_water = 0i64;

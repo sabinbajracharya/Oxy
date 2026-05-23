@@ -24,19 +24,19 @@ fn test_reassign_variable() {
 
 // === Pass as Argument to Function ===
 
-fn apply_twice(f: fn(i64) -> i64, x: i64) -> i64 {
+fn apply_twice(f: fn(int) -> int, x: int) -> int {
     f(f(x))
 }
 
 #[test]
 fn test_pass_as_argument() {
-    let double = |x: i64| x * 2;
+    let double = |x: int| x * 2;
     assert_eq!(apply_twice(double, 5), 20);
 }
 
 // === Return from Function ===
 
-fn make_adder(n: i64) -> fn(i64) -> i64 {
+fn make_adder(n: int) -> fn(int) -> int {
     |x| x + n
 }
 
@@ -49,7 +49,7 @@ fn test_return_from_function() {
 
 // === Multiple Closures from Same Factory ===
 
-fn make_multiplier(factor: i64) -> fn(i64) -> i64 {
+fn make_multiplier(factor: int) -> fn(int) -> int {
     |x| x * factor
 }
 
@@ -65,8 +65,8 @@ fn test_closure_factory() {
 
 #[test]
 fn test_closure_in_vec() {
-    let add_one = |x: i64| x + 1;
-    let double = |x: i64| x * 2;
+    let add_one = |x: int| x + 1;
+    let double = |x: int| x * 2;
     let ops = vec![add_one, double];
     let result = ops[0](10);
     assert_eq!(result, 11);

@@ -27,7 +27,7 @@ fn main() {
     println!("{}", find_min(nums));
 }
 
-fn find_min(nums: Vec) -> i64 {
+fn find_min(nums: Vec) -> int {
     let mut left = 0i64;
     let mut right = nums.len() - 1;
     while left < right {

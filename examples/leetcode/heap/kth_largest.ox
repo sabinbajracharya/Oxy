@@ -27,7 +27,7 @@ fn main() {
     println!("{}", find_kth_largest(nums, 2));
 }
 
-fn find_kth_largest(nums: Vec, k: i64) -> i64 {
+fn find_kth_largest(nums: Vec, k: int) -> int {
     let mut heap = BinaryHeap::new();
     for num in nums {
         heap.push(num);

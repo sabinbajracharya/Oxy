@@ -27,7 +27,7 @@ fn main() {
     println!("{}", longest_common_subsequence("abcde", "ace"));
 }
 
-fn longest_common_subsequence(text1: String, text2: String) -> i64 {
+fn longest_common_subsequence(text1: String, text2: String) -> int {
     let m = text1.len();
     let n = text2.len();
     // Use two rows for O(n) space

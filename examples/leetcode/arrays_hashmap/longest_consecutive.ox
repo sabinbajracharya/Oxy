@@ -27,7 +27,7 @@ fn main() {
     println!("{}", longest_consecutive(nums));
 }
 
-fn longest_consecutive(nums: Vec) -> i64 {
+fn longest_consecutive(nums: Vec) -> int {
     let mut set = HashSet::new();
     for n in nums {
         set.insert(n);

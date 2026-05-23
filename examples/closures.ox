@@ -1,11 +1,11 @@
 // Oxy Closures & Higher-Order Functions Example
 // Demonstrates closure syntax, variable capture, and iterator methods
 
-fn apply(f: Fn, x: i64) -> i64 {
+fn apply(f: Fn, x: int) -> int {
     f(x)
 }
 
-fn make_adder(n: i64) -> Fn {
+fn make_adder(n: int) -> Fn {
     |x| x + n
 }
 
@@ -15,7 +15,7 @@ fn main() {
     println!("double(5) = {}", double(5));
 
     // Closure with type annotations
-    let add = |a: i64, b: i64| -> i64 { a + b };
+    let add = |a: int, b: int| -> int { a + b };
     println!("add(3, 4) = {}", add(3, 4));
 
     // No-param closure

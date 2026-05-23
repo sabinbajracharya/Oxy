@@ -28,7 +28,7 @@ fn main() {
     println!("{}", can_finish(4, prereqs));
 }
 
-fn can_finish(num_courses: i64, prerequisites: Vec) -> bool {
+fn can_finish(num_courses: int, prerequisites: Vec) -> bool {
     // Build adjacency list and in-degree array
     let n = num_courses;
     let mut graph = vec![];

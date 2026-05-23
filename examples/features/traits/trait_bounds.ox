@@ -8,7 +8,7 @@ trait AsText {
     fn as_text(self) -> String;
 }
 
-impl AsText for i64 {
+impl AsText for int {
     fn as_text(self) -> String {
         self.to_string()
     }
@@ -30,8 +30,8 @@ trait Doublable {
     fn double(self) -> Self;
 }
 
-impl Doublable for i64 {
-    fn double(self) -> i64 {
+impl Doublable for int {
+    fn double(self) -> int {
         self * 2
     }
 }

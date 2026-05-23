@@ -13,15 +13,15 @@ Define a struct with \`struct Name { fields }\`. Create instances with \`Name { 
 
 Struct fields can have type annotations. Use \`pub\` to make fields publicly accessible.
 
-**Try it:** Add a \`z: f64\` field to Point for a 3D point.`,
+**Try it:** Add a \`z: float\` field to Point for a 3D point.`,
       hints: [
         'Struct field access: `point.x`.',
-        'Tuple structs: `struct Pair(i64, i64);`.',
+        'Tuple structs: `struct Pair(int, int);`.',
         'Unit structs: `struct Marker;`.',
       ],
       initialCode: `struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -33,7 +33,7 @@ fn main() {
     println!("Pair({}, {})", pair.0, pair.1);
 }
 
-struct Pair(i64, i64);
+struct Pair(int, int);
 `,
     },
     {
@@ -45,22 +45,22 @@ Add methods to structs with \`impl Type { ... }\`. Methods take \`self\` as the 
 
 Use \`Self\` inside impl blocks to refer to the implementing type. \`Self\` works in return types too.
 
-**Try it:** Add a \`scale(factor: f64)\` method that multiplies both x and y.`,
+**Try it:** Add a \`scale(factor: float)\` method that multiplies both x and y.`,
       hints: [
         '`self` gives access to fields.',
         'Associated functions (no `self`) are called with `Type::func()`.',
       ],
       initialCode: `struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Point {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Self { x, y }
     }
 
-    fn distance_from_origin(self) -> f64 {
+    fn distance_from_origin(self) -> float {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 }
@@ -86,12 +86,12 @@ Variants can hold data: no data (unit variant), unnamed data (tuple variant), or
         'Match on enums to extract the inner data.',
       ],
       initialCode: `enum Shape {
-    Circle(f64),            // radius
-    Rectangle { w: f64, h: f64 },
+    Circle(float),            // radius
+    Rectangle { w: float, h: float },
     Nothing,                // no data
 }
 
-fn area(s: Shape) -> f64 {
+fn area(s: Shape) -> float {
     match s {
         Shape::Circle(r) => 3.14159 * r * r,
         Shape::Rectangle { w, h } => w * h,
@@ -117,14 +117,14 @@ Each enum variant can carry different types of data: nothing (unit), positional 
 
 This is the foundation of \`Option<T>\` and \`Result<T, E>\`.
 
-**Try it:** Add a \`Resize(i64, i64)\` variant for window resizes and handle it in \`process()\`.`,
+**Try it:** Add a \`Resize(int, int)\` variant for window resizes and handle it in \`process()\`.`,
       hints: [
         'Variants can be unit (no data), tuple (positional), or struct-shaped (named fields).',
         'Pattern matching destructures variant data into local bindings.',
       ],
       initialCode: `enum Message {
     Quit,
-    Move { x: i64, y: i64 },
+    Move { x: int, y: int },
     Write(String),
 }
 
@@ -163,7 +163,7 @@ Match supports many pattern types:
         '`|` in patterns means "or": `1 | 2 | 3`.',
         'Guards: `n if n % 2 == 0 => ...`.',
       ],
-      initialCode: `fn describe(n: i64) -> String {
+      initialCode: `fn describe(n: int) -> String {
     match n {
         0 => "zero".to_string(),
         1 | 2 => "one or two".to_string(),

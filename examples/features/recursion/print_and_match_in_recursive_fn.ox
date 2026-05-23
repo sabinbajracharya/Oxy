@@ -4,15 +4,15 @@
 // top level (Pop on empty is a no-op) but corrupts the *caller's* frame in
 // recursive calls. Each call to a function with `println!` would silently
 // consume a value from its caller's stack, eventually leading to bizarre
-// runtime errors like "cannot add () and i64" or a VM-level subtract overflow.
+// runtime errors like "cannot add () and int" or a VM-level subtract overflow.
 
-fn go(n: i64) -> i64 {
+fn go(n: int) -> int {
     if n <= 0 { return 0; }
     println!("step {}", n);
     go(n - 1) + 1
 }
 
-fn pick(n: i64) -> i64 {
+fn pick(n: int) -> int {
     if n <= 0 { return 0; }
     match n {
         1 => 1,
@@ -20,7 +20,7 @@ fn pick(n: i64) -> i64 {
     }
 }
 
-fn classify(n: i64) -> i64 {
+fn classify(n: int) -> int {
     match n {
         0 => 10,
         1 => 20,
@@ -28,7 +28,7 @@ fn classify(n: i64) -> i64 {
     }
 }
 
-fn fib_match(n: i64) -> i64 {
+fn fib_match(n: int) -> int {
     if n <= 1 { return n; }
     println!("fib({})", n);
     match n {
@@ -37,7 +37,7 @@ fn fib_match(n: i64) -> i64 {
     }
 }
 
-fn label(n: i64) -> String {
+fn label(n: int) -> String {
     if n <= 0 { return "done".to_string(); }
     let _ = format!("{}", n);
     label(n - 1)

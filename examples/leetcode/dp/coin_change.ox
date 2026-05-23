@@ -27,7 +27,7 @@ fn main() {
     println!("{}", coin_change(coins, 11));
 }
 
-fn coin_change(coins: Vec, amount: i64) -> i64 {
+fn coin_change(coins: Vec, amount: int) -> int {
     let inf = amount + 1;
     let mut dp = vec![];
     let mut i = 0i64;

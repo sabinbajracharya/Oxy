@@ -1,7 +1,7 @@
 // Oxy Error Handling Example
 // Demonstrates Option, Result, ? operator, if let, while let, and panic!
 
-fn divide(a: f64, b: f64) -> Result<f64, String> {
+fn divide(a: float, b: float) -> Result<float, String> {
     if b == 0.0 {
         Err(String::from("division by zero"))
     } else {
@@ -9,7 +9,7 @@ fn divide(a: f64, b: f64) -> Result<f64, String> {
     }
 }
 
-fn find_item(items: Vec<String>, target: String) -> Option<i64> {
+fn find_item(items: Vec<String>, target: String) -> Option<int> {
     let mut i = 0;
     for item in items {
         if item == target {
@@ -20,7 +20,7 @@ fn find_item(items: Vec<String>, target: String) -> Option<i64> {
     None
 }
 
-fn safe_divide(a: f64, b: f64) -> Result<f64, String> {
+fn safe_divide(a: float, b: float) -> Result<float, String> {
     let result = divide(a, b)?;
     Ok(result * 2.0)
 }
@@ -39,7 +39,7 @@ fn main() {
     }
 
     // Result methods
-    let ok_val: Result<i64, String> = Ok(42);
+    let ok_val: Result<int, String> = Ok(42);
     println!("is_ok: {}", ok_val.is_ok());
     println!("unwrap: {}", ok_val.unwrap());
 
@@ -56,7 +56,7 @@ fn main() {
 
     // Option methods
     let some_val = Some(10);
-    let none_val: Option<i64> = None;
+    let none_val: Option<int> = None;
     println!("some is_some: {}", some_val.is_some());
     println!("none is_none: {}", none_val.is_none());
     println!("unwrap_or: {}", none_val.unwrap_or(99));

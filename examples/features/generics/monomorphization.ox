@@ -8,8 +8,8 @@ trait Zero {
     fn zero() -> Self;
 }
 
-impl Zero for i64 {
-    fn zero() -> i64 {
+impl Zero for int {
+    fn zero() -> int {
         0
     }
 }
@@ -20,22 +20,22 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_mono_single_impl() {
-    let z = make_zero::<i64>();
+    let z = make_zero::<int>();
     assert_eq!(z, 0);
 }
 
 // === Monomorphization: Single Type Arg, Multiple Impls ===
 
-impl Zero for f64 {
-    fn zero() -> f64 {
+impl Zero for float {
+    fn zero() -> float {
         0.0
     }
 }
 
 #[test]
 fn test_mono_multi_impl_different_types() {
-    let i: i64 = make_zero::<i64>();
-    let f: f64 = make_zero::<f64>();
+    let i: int = make_zero::<int>();
+    let f: float = make_zero::<float>();
     assert_eq!(i, 0);
     assert_eq!(f, 0.0);
 }
@@ -45,8 +45,8 @@ fn test_mono_multi_impl_different_types() {
 
 #[test]
 fn test_mono_dedup() {
-    let a = make_zero::<i64>();
-    let b = make_zero::<i64>();
+    let a = make_zero::<int>();
+    let b = make_zero::<int>();
     assert_eq!(a, 0);
     assert_eq!(b, 0);
 }
@@ -57,8 +57,8 @@ trait DefaultValue {
     fn default_val() -> Self;
 }
 
-impl DefaultValue for i64 {
-    fn default_val() -> i64 {
+impl DefaultValue for int {
+    fn default_val() -> int {
         42
     }
 }
@@ -87,7 +87,7 @@ where
 
 #[test]
 fn test_mono_multi_type_args() {
-    let p = make_pair::<i64, String>();
+    let p = make_pair::<int, String>();
     assert_eq!(p.first, 42);
     assert_eq!(p.second, "hello");
 }
@@ -100,7 +100,7 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_mono_with_inference() {
-    let a = identity::<i64>(10);
+    let a = identity::<int>(10);
     let b = identity("hello".to_string());
     assert_eq!(a, 10);
     assert_eq!(b, "hello");

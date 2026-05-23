@@ -110,7 +110,7 @@ fn test_option_in_condition() {
 
 // === Option as function return ===
 
-fn safe_divide(a: i64, b: i64) -> Option<i64> {
+fn safe_divide(a: int, b: int) -> Option<int> {
     if b == 0 {
         None
     } else {

@@ -23,7 +23,7 @@ fn main() {
     }
 }
 
-fn backtrack(nums: Vec, start: i64, current: Vec, result: Vec) {
+fn backtrack(nums: Vec, start: int, current: Vec, result: Vec) {
     result.push(current.clone());
     let mut i = start;
     while i < nums.len() {

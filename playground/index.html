@@ -186,7 +186,7 @@ const basicSetup = [
   ]),
 ];
 
-const defaultCode = `fn fib(n: i64) -> i64 {
+const defaultCode = `fn fib(n: int) -> int {
     if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
 }
 
@@ -194,7 +194,7 @@ fn main() {
     println!("fib(20) = {}", fib(20));
 
     let numbers = vec![1, 2, 3, 4, 5];
-    let doubled = numbers.iter().map(|x| x * 2).collect::<Vec<i64>>();
+    let doubled = numbers.iter().map(|x| x * 2).collect::<Vec<int>>();
     println!("doubled = {:?}", doubled);
 
     let name = "Oxy";

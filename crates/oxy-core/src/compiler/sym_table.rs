@@ -8,10 +8,16 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::types::IntegerWidth;
+
 #[derive(Clone)]
 pub(crate) struct SymTable {
     pub(crate) locals: HashMap<String, usize>,
     pub(crate) mutable: HashSet<String>,
+    /// Declared integer width per binding name. Set when the binding is
+    /// `let x: u8 = ...` (or similar). Used to narrow reassignments and
+    /// compound updates back to the declared width.
+    pub(crate) declared_widths: HashMap<String, IntegerWidth>,
     pub(crate) next_slot: usize,
 }
 
@@ -20,8 +26,17 @@ impl SymTable {
         Self {
             locals: HashMap::new(),
             mutable: HashSet::new(),
+            declared_widths: HashMap::new(),
             next_slot: start_slot,
         }
+    }
+
+    pub(crate) fn set_width(&mut self, name: &str, width: IntegerWidth) {
+        self.declared_widths.insert(name.to_string(), width);
+    }
+
+    pub(crate) fn width_of(&self, name: &str) -> Option<IntegerWidth> {
+        self.declared_widths.get(name).copied()
     }
 
     pub(crate) fn define(&mut self, name: &str) -> usize {

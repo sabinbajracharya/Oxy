@@ -23,7 +23,7 @@ fn test_multiple_params() {
 
 #[test]
 fn test_type_annotations() {
-    let multiply = |x: i64, y: i64| x * y;
+    let multiply = |x: int, y: int| x * y;
     assert_eq!(multiply(6, 7), 42);
 }
 
@@ -31,7 +31,7 @@ fn test_type_annotations() {
 
 #[test]
 fn test_return_type_annotation() {
-    let identity = |x: i64| -> i64 { x };
+    let identity = |x: int| -> int { x };
     assert_eq!(identity(99), 99);
 }
 
@@ -47,7 +47,7 @@ fn test_empty_closure() {
 
 #[test]
 fn test_block_body() {
-    let compute = |x: i64| -> i64 {
+    let compute = |x: int| -> int {
         let y = x * 2;
         y + 1
     };

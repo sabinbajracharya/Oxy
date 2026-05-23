@@ -2,7 +2,7 @@
 
 #[test]
 fn test_unary_neg_on_int_ok() {
-    let n: i64 = -5;
+    let n: int = -5;
     assert_eq!(n, -5);
 }
 
@@ -14,9 +14,9 @@ fn test_unary_not_on_bool_ok() {
 
 #[test]
 fn test_binary_compare_compatible_types_ok() {
-    let a: i64 = 5;
-    let b: i32 = 5;
-    assert_eq!(a == b as i64, true);
+    let a: int = 5;
+    let b: int = 5;
+    assert_eq!(a == b as int, true);
 }
 
 #[test]

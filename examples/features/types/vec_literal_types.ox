@@ -15,7 +15,7 @@ fn test_vec_macro_homogeneous_strings() {
 
 #[test]
 fn test_vec_macro_empty_ok() {
-    let v: Vec<i64> = vec![];
+    let v: Vec<int> = vec![];
     assert_eq!(v.len(), 0);
 }
 
@@ -39,7 +39,7 @@ fn test_vec_macro_mixed_float_string_rejected() {
 
 #[test]
 fn test_vec_i64_accepts_int_elements() {
-    let v: Vec<i64> = vec![1, 2, 3];
+    let v: Vec<int> = vec![1, 2, 3];
     assert_eq!(v.len(), 3);
 }
 
@@ -51,7 +51,7 @@ fn test_vec_string_accepts_string_elements() {
 
 #[compile_error]
 fn test_vec_i64_rejects_string_elements() {
-    let _v: Vec<i64> = vec!["hi".to_string()];
+    let _v: Vec<int> = vec!["hi".to_string()];
 }
 
 #[compile_error]
@@ -61,19 +61,19 @@ fn test_vec_string_rejects_int_elements() {
 
 #[compile_error]
 fn test_vec_push_wrong_arg_type_rejected() {
-    let mut v: Vec<i64> = vec![1, 2, 3];
+    let mut v: Vec<int> = vec![1, 2, 3];
     v.push("hello".to_string());
 }
 
 #[test]
 fn test_vec_index_returns_element_type() {
-    let v: Vec<i64> = vec![10, 20, 30];
-    let x: i64 = v[1];
+    let v: Vec<int> = vec![10, 20, 30];
+    let x: int = v[1];
     assert_eq!(x, 20);
 }
 
 #[compile_error]
 fn test_vec_index_element_type_mismatch_rejected() {
-    let v: Vec<i64> = vec![10, 20, 30];
+    let v: Vec<int> = vec![10, 20, 30];
     let _x: String = v[1];
 }

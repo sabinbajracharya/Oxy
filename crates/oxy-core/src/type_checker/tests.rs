@@ -6,10 +6,10 @@ mod tests {
     #[test]
     fn test_valid_code_passes_type_checking() {
         let result = run(r#"
-            fn add(x: i64, y: i64) -> i64 { x + y }
+            fn add(x: int, y: int) -> int { x + y }
             fn main() {
-                let a: i64 = 42;
-                let b: i64 = add(a, 10);
+                let a: int = 42;
+                let b: int = add(a, 10);
                 let c: String = "hello";
             }
             "#);
@@ -20,7 +20,7 @@ mod tests {
     fn test_let_type_mismatch_fails() {
         let result = run(r#"
             fn main() {
-                let x: i64 = "not a number";
+                let x: int = "not a number";
             }
             "#);
         let err = result.unwrap_err().to_string();
@@ -28,13 +28,13 @@ mod tests {
             err.contains("type mismatch"),
             "expected type mismatch, got: {err}"
         );
-        assert!(err.contains("i64"), "expected i64 in error, got: {err}");
+        assert!(err.contains("int"), "expected int in error, got: {err}");
     }
 
     #[test]
     fn test_return_type_mismatch_fails() {
         let result = run(r#"
-            fn foo() -> i64 { "wrong" }
+            fn foo() -> int { "wrong" }
             fn main() { foo(); }
             "#);
         let err = result.unwrap_err().to_string();
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn test_const_type_mismatch_fails() {
         let result = run(r#"
-            const X: i64 = "wrong";
+            const X: int = "wrong";
             fn main() {}
             "#);
         let err = result.unwrap_err().to_string();

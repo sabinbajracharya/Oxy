@@ -277,14 +277,11 @@ pub(crate) fn validate_int_literal(
 
 pub(crate) fn width_to_str(w: &IntegerWidth) -> &str {
     match w {
-        IntegerWidth::I8 => "i8",
-        IntegerWidth::I16 => "i16",
-        IntegerWidth::I32 => "i32",
-        IntegerWidth::I64 => "i64",
-        IntegerWidth::U8 => "u8",
-        IntegerWidth::U16 => "u16",
-        IntegerWidth::U32 => "u32",
-        IntegerWidth::U64 => "u64",
+        IntegerWidth::U8 => "byte",
+        // All signed widths plus the unsigned wider widths are presented
+        // under the surface name `int` — Oxy collapsed the Rust-like
+        // width zoo to two integer types.
+        _ => "int",
     }
 }
 
@@ -296,14 +293,8 @@ pub(crate) fn check_literal_fits_type(
     span: crate::lexer::Span,
 ) -> Result<(), FerriError> {
     let (min, max): (i128, i128) = match type_name {
-        "i8" => (i8::MIN as i128, i8::MAX as i128),
-        "i16" => (i16::MIN as i128, i16::MAX as i128),
-        "i32" => (i32::MIN as i128, i32::MAX as i128),
-        "i64" | "isize" => (i64::MIN as i128, i64::MAX as i128),
-        "u8" => (0, u8::MAX as i128),
-        "u16" => (0, u16::MAX as i128),
-        "u32" => (0, u32::MAX as i128),
-        "u64" | "usize" => (0, u64::MAX as i128),
+        "int" => (i64::MIN as i128, i64::MAX as i128),
+        "byte" => (0, u8::MAX as i128),
         _ => return Ok(()),
     };
 
@@ -358,19 +349,13 @@ pub(crate) fn check_literal_fits_type(
     Ok(())
 }
 
-/// Emit a narrowing cast if the type annotation specifies an integer or float width.
+/// Emit a narrowing cast if the type annotation names one of Oxy's two
+/// integer types or its single float type.
 pub(crate) fn emit_narrowing_cast(compiler: &mut Compiler, type_name: &str) {
     let op = match type_name {
-        "i8" => Some(OpCode::CastInt(IntegerWidth::I8)),
-        "i16" => Some(OpCode::CastInt(IntegerWidth::I16)),
-        "i32" => Some(OpCode::CastInt(IntegerWidth::I32)),
-        "i64" | "isize" => Some(OpCode::CastInt(IntegerWidth::I64)),
-        "u8" => Some(OpCode::CastInt(IntegerWidth::U8)),
-        "u16" => Some(OpCode::CastInt(IntegerWidth::U16)),
-        "u32" => Some(OpCode::CastInt(IntegerWidth::U32)),
-        "u64" | "usize" => Some(OpCode::CastInt(IntegerWidth::U64)),
-        "f32" => Some(OpCode::CastFloat(FloatWidth::F32)),
-        "f64" => Some(OpCode::CastFloat(FloatWidth::F64)),
+        "int" => Some(OpCode::CastInt(IntegerWidth::I64)),
+        "byte" => Some(OpCode::CastInt(IntegerWidth::U8)),
+        "float" => Some(OpCode::CastFloat(FloatWidth::F64)),
         _ => None,
     };
     if let Some(o) = op {

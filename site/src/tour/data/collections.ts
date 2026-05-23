@@ -15,7 +15,7 @@ Methods: \`push()\`, \`pop()\`, \`len()\`, \`get()\`, \`first()\`, \`last()\`, \
 
 **Try it:** Add \`sort()\` before printing, or use \`reverse()\`.`,
       hints: [
-        '`vec![1, 2, 3]` creates a `Vec<i64>`.',
+        '`vec![1, 2, 3]` creates a `Vec<int>`.',
         'Index access: `v[0]` returns the first element.',
       ],
       initialCode: `fn main() {
@@ -96,7 +96,7 @@ Methods: \`insert()\`, \`remove()\`, \`contains()\`, \`len()\`, \`union()\`, \`i
       title: 'Fixed-Size Arrays',
       instructions: `## Fixed-Size Arrays [T; N]
 
-Arrays have a fixed size known at compile time. Type annotation: \`[i64; 3]\`.
+Arrays have a fixed size known at compile time. Type annotation: \`[int; 3]\`.
 
 Create with a comma-separated list \`[1, 2, 3]\` or a repeat expression \`[0; 5]\` (five zeros).
 
@@ -108,7 +108,7 @@ Arrays are **value types** — they're copied on assignment, not shared.
         'Arrays work with `for` loops and iterators just like Vec.',
       ],
       initialCode: `fn main() {
-    let arr: [i64; 3] = [10, 20, 30];
+    let arr: [int; 3] = [10, 20, 30];
     println!("arr = {}", arr);
     println!("len = {}", arr.len());
     println!("arr[1] = {}", arr[1]);

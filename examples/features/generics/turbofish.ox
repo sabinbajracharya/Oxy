@@ -10,7 +10,7 @@ struct Box<T> {
 
 #[test]
 fn test_turbofish_struct_init() {
-    let b = Box::<i64> { value: 42 };
+    let b = Box::<int> { value: 42 };
     assert_eq!(b.value, 42);
 }
 
@@ -22,7 +22,7 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_turbofish_function() {
-    let x = identity::<i64>(42);
+    let x = identity::<int>(42);
     assert_eq!(x, 42);
 }
 
@@ -35,7 +35,7 @@ enum MyOption<T> {
 
 #[test]
 fn test_turbofish_enum() {
-    let x: MyOption<i64> = MyOption::<i64>::Some(42);
+    let x: MyOption<int> = MyOption::<int>::Some(42);
     match x {
         MyOption::Some(_) => {},
         MyOption::None => panic!("expected Some"),
@@ -51,6 +51,6 @@ struct Pair<A, B> {
 
 #[test]
 fn test_turbofish_multi_struct() {
-    let p = Pair::<i64, String> { first: 10, second: "ten".to_string() };
+    let p = Pair::<int, String> { first: 10, second: "ten".to_string() };
     assert_eq!(p.first, 10);
 }

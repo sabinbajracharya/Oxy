@@ -144,7 +144,7 @@ fn test_logical_not() {
 fn test_function_call() {
     let output = run_and_capture(
         r#"
-fn add(a: i64, b: i64) -> i64 {
+fn add(a: int, b: int) -> int {
     a + b
 }
 
@@ -161,7 +161,7 @@ fn main() {
 fn test_function_return() {
     let output = run_and_capture(
         r#"
-fn early(x: i64) -> i64 {
+fn early(x: int) -> int {
     if x > 0 {
         return x;
     }
@@ -181,7 +181,7 @@ fn main() {
 fn test_tail_expression() {
     let output = run_and_capture(
         r#"
-fn double(x: i64) -> i64 {
+fn double(x: int) -> int {
     x * 2
 }
 
@@ -196,7 +196,7 @@ fn main() {
 #[test]
 fn test_wrong_arg_count() {
     let result = run(r#"
-fn foo(a: i64) -> i64 { a }
+fn foo(a: int) -> int { a }
 fn main() { foo(1, 2); }
 "#);
     assert!(result.is_err());
@@ -210,7 +210,7 @@ fn main() { foo(1, 2); }
 fn test_recursive_function() {
     let output = run_and_capture(
         r#"
-fn factorial(n: i64) -> i64 {
+fn factorial(n: int) -> int {
     if n <= 1 {
         return 1;
     }
@@ -250,7 +250,7 @@ fn test_if_else() {
 fn test_if_else_if() {
     let output = run_and_capture(
         r#"
-fn classify(x: i64) -> i64 {
+fn classify(x: int) -> int {
     if x > 0 {
         1
     } else if x < 0 {
@@ -338,7 +338,7 @@ fn main() {
 fn test_fibonacci() {
     let output = run_and_capture(
         r#"
-fn fib(n: i64) -> i64 {
+fn fib(n: int) -> int {
     if n <= 1 {
         n
     } else {
@@ -648,7 +648,7 @@ fn main() {
 fn test_loop_in_function() {
     let output = run_and_capture(
         r#"
-fn find_first_multiple(n: i64, target: i64) -> i64 {
+fn find_first_multiple(n: int, target: int) -> int {
     let mut i = 1;
     loop {
         if i * n >= target {
@@ -1040,8 +1040,8 @@ fn test_struct_basic() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -1058,8 +1058,8 @@ fn test_struct_field_assignment() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -1077,12 +1077,12 @@ fn test_struct_with_impl() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Point {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Point { x, y }
     }
 
@@ -1105,12 +1105,12 @@ fn test_struct_method_with_args() {
     let out = run_and_capture(
         r#"
 struct Rect {
-    w: f64,
-    h: f64,
+    w: float,
+    h: float,
 }
 
 impl Rect {
-    fn area(self) -> f64 {
+    fn area(self) -> float {
         self.w * self.h
     }
 }
@@ -1129,8 +1129,8 @@ fn test_struct_debug_format() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -1168,8 +1168,8 @@ fn test_enum_tuple_variant() {
     let out = run_and_capture(
         r#"
 enum Shape {
-    Circle(f64),
-    Rectangle(f64, f64),
+    Circle(float),
+    Rectangle(float, float),
 }
 
 fn main() {
@@ -1186,12 +1186,12 @@ fn test_enum_match() {
     let out = run_and_capture(
         r#"
 enum Shape {
-    Circle(f64),
-    Rectangle(f64, f64),
+    Circle(float),
+    Rectangle(float, float),
 }
 
 impl Shape {
-    fn area(self) -> f64 {
+    fn area(self) -> float {
         match self {
             Shape::Circle(r) => 3.14159 * r * r,
             Shape::Rectangle(w, h) => w * h,
@@ -1217,7 +1217,7 @@ fn test_enum_match_three_field_tuple_variant() {
     // into stack positions that collided with the binding slots.
     let out = run_and_capture(
         r#"
-enum E { Three(i64, i64, i64), Four(i64, i64, i64, i64) }
+enum E { Three(int, int, int), Four(int, int, int, int) }
 
 fn main() {
     let v = E::Three(10, 20, 30);
@@ -1269,7 +1269,7 @@ fn test_enum_debug_format() {
     let out = run_and_capture(
         r#"
 enum Shape {
-    Circle(f64),
+    Circle(float),
     Point,
 }
 
@@ -1291,12 +1291,12 @@ fn test_point_distance() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Point {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Point { x, y }
     }
 }
@@ -1319,7 +1319,7 @@ fn test_struct_self_type_resolution() {
     let out = run_and_capture(
         r#"
 struct Counter {
-    count: i64,
+    count: int,
 }
 
 impl Counter {
@@ -1327,7 +1327,7 @@ impl Counter {
         Self { count: 0 }
     }
 
-    fn value(self) -> i64 {
+    fn value(self) -> int {
         self.count
     }
 }
@@ -1346,8 +1346,8 @@ fn test_struct_shorthand_init() {
     let out = run_and_capture(
         r#"
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 fn main() {
@@ -1395,16 +1395,16 @@ fn test_trait_multiple_methods() {
     let out = run_and_capture(
         r#"
 trait Shape {
-    fn area(self) -> f64;
+    fn area(self) -> float;
     fn name(self) -> String;
 }
 
 struct Circle {
-    radius: f64,
+    radius: float,
 }
 
 impl Shape for Circle {
-    fn area(self) -> f64 {
+    fn area(self) -> float {
         3.14159 * self.radius * self.radius
     }
 
@@ -1473,12 +1473,12 @@ fn test_operator_overloading_add() {
     let out = run_and_capture(
         r#"
 struct Vec2 {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Vec2 {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Vec2 { x, y }
     }
 }
@@ -1505,8 +1505,8 @@ fn test_operator_overloading_mul() {
     let out = run_and_capture(
         r#"
 struct Vec2 {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Mul for Vec2 {
@@ -1983,7 +1983,7 @@ fn main() {
 fn test_option_map() {
     let out = run_and_capture(
         r#"
-fn double(x: i64) -> i64 { x * 2 }
+fn double(x: int) -> int { x * 2 }
 
 fn main() {
     let x = Some(21);
@@ -2003,7 +2003,7 @@ fn main() {
 fn test_result_map() {
     let out = run_and_capture(
         r#"
-fn double(x: i64) -> i64 { x * 2 }
+fn double(x: int) -> int { x * 2 }
 
 fn main() {
     let x = Ok(21);
@@ -2050,7 +2050,7 @@ fn main() {
 fn test_option_function_return() {
     let out = run_and_capture(
         r#"
-fn find_item(items: Vec, target: i64) -> Option {
+fn find_item(items: Vec, target: int) -> Option {
     for i in 0..items.len() {
         if items[i] == target {
             return Some(i);
@@ -2137,7 +2137,7 @@ fn main() {
 fn test_closure_basic() {
     let output = run_and_capture(
         r#"fn main() {
-let add = |a: i64, b: i64| a + b;
+let add = |a: int, b: int| a + b;
 println!("{}", add(3, 4));
 }"#,
     );
@@ -2170,7 +2170,7 @@ println!("{}", greet());
 fn test_closure_block_body() {
     let output = run_and_capture(
         r#"fn main() {
-let compute = |x: i64| {
+let compute = |x: int| {
     let y = x * 2;
     y + 1
 };
@@ -2195,7 +2195,7 @@ println!("{}", multiply(5));
 #[test]
 fn test_closure_as_argument() {
     let output = run_and_capture(
-        r#"fn apply(f: Fn, x: i64) -> i64 {
+        r#"fn apply(f: Fn, x: int) -> int {
     f(x)
 }
 fn main() {
@@ -2209,7 +2209,7 @@ fn main() {
 #[test]
 fn test_closure_returned_from_function() {
     let output = run_and_capture(
-        r#"fn make_adder(n: i64) -> Fn {
+        r#"fn make_adder(n: int) -> Fn {
     |x| x + n
 }
 fn main() {
@@ -2363,7 +2363,7 @@ fn test_bitwise_op_inside_closure() {
         r#"
 fn main() {
     let v = vec![0xFF, 0x0F, 0xF0];
-    let masked: Vec<i64> = v.iter().map(|x| x & 0x0F).collect::<Vec<_>>();
+    let masked: Vec<int> = v.iter().map(|x| x & 0x0F).collect::<Vec<_>>();
     for m in masked { println!("{}", m); }
 }
 "#,
@@ -2380,7 +2380,7 @@ fn test_enum_match_inside_closure() {
         r#"
 fn main() {
     let opts = vec![Some(1), None, Some(3)];
-    let unwrapped: Vec<i64> = opts.iter().map(|o| match o {
+    let unwrapped: Vec<int> = opts.iter().map(|o| match o {
         Some(v) => v,
         None => 0,
     }).collect::<Vec<_>>();
@@ -2398,7 +2398,7 @@ fn test_option_map_with_closure() {
 let val = Some(5);
 let doubled = val.map(|x| x * 2);
 println!("{:?}", doubled);
-let none_val: Option<i64> = None;
+let none_val: Option<int> = None;
 let mapped = none_val.map(|x| x * 2);
 println!("{:?}", mapped);
 }"#,
@@ -2410,7 +2410,7 @@ println!("{:?}", mapped);
 fn test_result_map_with_closure() {
     let output = run_and_capture(
         r#"fn main() {
-let val: Result<i64, String> = Ok(5);
+let val: Result<int, String> = Ok(5);
 let doubled = val.map(|x| x * 2);
 println!("{:?}", doubled);
 }"#,
@@ -2450,7 +2450,7 @@ fn test_inline_module() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn add(a: i64, b: i64) -> i64 {
+    pub fn add(a: int, b: int) -> int {
         a + b
     }
 }
@@ -2467,7 +2467,7 @@ fn test_module_path_call() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn multiply(a: i64, b: i64) -> i64 {
+    pub fn multiply(a: int, b: int) -> int {
         a * b
     }
 }
@@ -2504,9 +2504,9 @@ fn test_use_group_import() {
     let output = run_and_capture(
         r#"
 mod ops {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
-    pub fn sub(a: i64, b: i64) -> i64 { a - b }
-    pub fn mul(a: i64, b: i64) -> i64 { a * b }
+    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn sub(a: int, b: int) -> int { a - b }
+    pub fn mul(a: int, b: int) -> int { a * b }
 }
 use ops::{add, sub};
 fn main() {
@@ -2521,9 +2521,9 @@ fn test_module_with_struct() {
     let output = run_and_capture(
         r#"
 mod geometry {
-    pub struct Point { x: f64, y: f64 }
+    pub struct Point { x: float, y: float }
     impl Point {
-        pub fn new(x: f64, y: f64) -> Self {
+        pub fn new(x: float, y: float) -> Self {
             Point { x, y }
         }
         pub fn to_string(self) -> String {
@@ -2565,7 +2565,7 @@ fn test_pub_keyword_accepted() {
     let output = run_and_capture(
         r#"
 pub mod math {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
+    pub fn add(a: int, b: int) -> int { a + b }
 }
 use math::add;
 fn main() {
@@ -2579,7 +2579,7 @@ fn main() {
 fn test_pub_fn_accepted() {
     let output = run_and_capture(
         r#"
-pub fn helper() -> i64 { 42 }
+pub fn helper() -> int { 42 }
 fn main() {
     println!("{}", helper());
 }"#,
@@ -2592,10 +2592,10 @@ fn test_multiple_modules() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn foo() -> i64 { 1 }
+    pub fn foo() -> int { 1 }
 }
 mod b {
-    pub fn bar() -> i64 { 2 }
+    pub fn bar() -> int { 2 }
 }
 use a::foo;
 use b::bar;
@@ -2613,11 +2613,11 @@ fn test_use_inside_module() {
     let output = run_and_capture(
         r#"
 mod outer {
-    pub fn value() -> i64 { 42 }
+    pub fn value() -> int { 42 }
 }
 mod inner {
     use outer::value;
-    pub fn call() -> i64 { value() }
+    pub fn call() -> int { value() }
 }
 use inner::call;
 fn main() {
@@ -2632,7 +2632,7 @@ fn test_type_alias_inside_module() {
     let output = run_and_capture(
         r#"
 mod types {
-    pub type Num = i64;
+    pub type Num = int;
     pub fn make() -> Num { 10 }
 }
 use types::make;
@@ -2665,7 +2665,7 @@ fn test_glob_after_module_definition() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn double(x: i64) -> i64 { x * 2 }
+    pub fn double(x: int) -> int { x * 2 }
 }
 use math::*;
 fn main() {
@@ -2682,7 +2682,7 @@ fn test_glob_before_module_definition() {
         r#"
 use math::*;
 mod math {
-    pub fn triple(x: i64) -> i64 { x * 3 }
+    pub fn triple(x: int) -> int { x * 3 }
 }
 fn main() {
     println!("{}", triple(7));
@@ -2697,7 +2697,7 @@ fn test_self_in_use_path() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn val() -> i64 { 42 }
+    pub fn val() -> int { 42 }
     pub use self::val;
 }
 use m::val;
@@ -2714,10 +2714,10 @@ fn test_super_in_use_path() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn val() -> i64 { 99 }
+    pub fn val() -> int { 99 }
     pub mod b {
         use super::val;
-        pub fn call() -> i64 { val() }
+        pub fn call() -> int { val() }
     }
 }
 use a::b::call;
@@ -2751,7 +2751,7 @@ fn test_struct_init_with_use_import() {
     let output = run_and_capture(
         r#"
 mod geom {
-    pub struct Point { pub x: f64, pub y: f64 }
+    pub struct Point { pub x: float, pub y: float }
 }
 use geom::Point;
 fn main() {
@@ -2767,7 +2767,7 @@ fn test_use_as_rename_simple() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
+    pub fn add(a: int, b: int) -> int { a + b }
 }
 use math::add as sum;
 fn main() {
@@ -2782,8 +2782,8 @@ fn test_use_as_rename_group() {
     let output = run_and_capture(
         r#"
 mod ops {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
-    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn sub(a: int, b: int) -> int { a - b }
 }
 use ops::{add as plus, sub as minus};
 fn main() {
@@ -2816,12 +2816,12 @@ fn test_sibling_module_path_call() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn get_value() -> i64 {
+    pub fn get_value() -> int {
         b::helper()
     }
 }
 mod b {
-    pub fn helper() -> i64 { 42 }
+    pub fn helper() -> int { 42 }
 }
 use a::get_value;
 fn main() {
@@ -2836,13 +2836,13 @@ fn test_sibling_module_nested_path_call() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn get_value() -> i64 {
+    pub fn get_value() -> int {
         b::c::deep()
     }
 }
 mod b {
     pub mod c {
-        pub fn deep() -> i64 { 77 }
+        pub fn deep() -> int { 77 }
     }
 }
 use a::get_value;
@@ -2858,10 +2858,10 @@ fn test_self_qualified_path_call_in_module() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn outer() -> i64 {
+    pub fn outer() -> int {
         m::inner()
     }
-    pub fn inner() -> i64 { 11 }
+    pub fn inner() -> int { 11 }
 }
 use m::outer;
 fn main() {
@@ -2876,8 +2876,8 @@ fn test_pub_use_glob_re_export() {
     let output = run_and_capture(
         r#"
 mod inner {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
-    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn sub(a: int, b: int) -> int { a - b }
 }
 mod middle {
     pub use inner::*;
@@ -2896,7 +2896,7 @@ fn test_pub_use_glob_re_export_single_import() {
     let output = run_and_capture(
         r#"
 mod lib {
-    pub fn version() -> i64 { 1 }
+    pub fn version() -> int { 1 }
     pub fn name() -> String { "oxy".to_string() }
 }
 mod prelude {
@@ -2916,7 +2916,7 @@ fn test_pub_crate_visibility() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub(crate) fn val() -> i64 { 42 }
+    pub(crate) fn val() -> int { 42 }
 }
 use m::val;
 fn main() {
@@ -2932,10 +2932,10 @@ fn test_pub_super_visibility() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub(super) fn val() -> i64 { 99 }
+    pub(super) fn val() -> int { 99 }
     pub mod b {
         use super::val;
-        pub fn call() -> i64 { val() }
+        pub fn call() -> int { val() }
     }
 }
 use a::b::call;
@@ -2951,7 +2951,7 @@ fn test_integer_type_annotation_accepts_unsuffixed_literal() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x: u32 = 123123;
+    let x: int = 123123;
     println!("{}", x);
 }"#,
     );
@@ -3023,169 +3023,68 @@ fn test_type_annotation_narrowing() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: i8 = 127;
-    let b: i16 = 32767;
-    let c: i32 = 100000;
-    let d: u8 = 255;
-    let e: u16 = 60000;
-    let f: u32 = 3000000000;
+    let a: int = 127;
+    let b: int = 32767;
+    let c: int = 100000;
+    let d: byte = 255;
+    let e: int = 60000;
+    let f: int = 3000000000;
     println!("{} {} {} {} {} {}", a, b, c, d, e, f);
 }"#,
     );
     assert_eq!(output, vec!["127 32767 100000 255 60000 3000000000\n"]);
 }
 
+// Numeric wrap tests for Oxy's two integer types: `int` and `byte`.
+// (The old per-width wrapping tests were removed when `i8/i16/i32/u16/u32/u64`
+// were retired from the surface language; only int/byte semantics remain.)
+
 #[test]
-fn test_wrapping_add_all_widths() {
+fn test_byte_wraps_modulo_256() {
+    // To get byte-width wrapping the result has to land back in a
+    // byte-typed binding (or be cast). Intermediate arithmetic still
+    // promotes to int. This is intentional — the declared type matters
+    // at the binding boundary, not for every intermediate.
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: i8 = 127;
-    println!("{}", a + 1i8);
-    let b: u8 = 255;
-    println!("{}", b + 1u8);
-    let c: i16 = 32767;
-    println!("{}", c + 1i16);
-    let d: u16 = 65535;
-    println!("{}", d + 1u16);
+    let a: byte = 255;
+    let r1: byte = a + 1;     // 256 -> wraps to 0 on store
+    let r2: byte = a + 45;    // 300 -> wraps to 44 on store
+    let b: byte = 0;
+    let r3: byte = b - 1;     // -1 -> wraps to 255 on store
+    println!("{}", r1);
+    println!("{}", r2);
+    println!("{}", r3);
 }"#,
     );
-    assert_eq!(output, vec!["-128\n", "0\n", "-32768\n", "0\n"]);
+    assert_eq!(output, vec!["0\n", "44\n", "255\n"]);
 }
 
 #[test]
-fn test_wrapping_sub_all_widths() {
+fn test_as_cast_narrowing_to_byte() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: i8 = -128;
-    println!("{}", a - 1i8);
-    let b: u8 = 0;
-    println!("{}", b - 1u8);
-    let c: u32 = 0;
-    println!("{}", c - 1u32);
+    println!("{}", 300 as byte);      // 300 mod 256 = 44
+    println!("{}", (-1) as byte);     // wraps to 255
+    println!("{}", 256 as byte);      // wraps to 0
 }"#,
     );
-    assert_eq!(output, vec!["127\n", "255\n", "4294967295\n"]);
+    assert_eq!(output, vec!["44\n", "255\n", "0\n"]);
 }
 
 #[test]
-fn test_wrapping_mul() {
+fn test_as_cast_widening_byte_to_int() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: u8 = 16;
-    println!("{}", a * 16u8);
-    let b: i8 = 64;
-    println!("{}", b * 2i8);
+    let b: byte = 200;
+    println!("{}", b as int);
+    println!("{}", (b as int) * 100);
 }"#,
     );
-    assert_eq!(output, vec!["0\n", "-128\n"]);
-}
-
-#[test]
-fn test_as_cast_narrowing() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    println!("{}", 300u16 as u8);
-    println!("{}", 1000i16 as i8);
-    println!("{}", 50000u32 as u16);
-    println!("{}", (-1i32) as u32);
-}"#,
-    );
-    assert_eq!(output, vec!["44\n", "-24\n", "50000\n", "4294967295\n"]);
-}
-
-#[test]
-fn test_as_cast_widening() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    println!("{}", 42i8 as i64);
-    println!("{}", 255u8 as u64);
-    println!("{}", 1i8 as f64);
-    println!("{}", 1.5f32 as i64);
-}"#,
-    );
-    assert_eq!(output, vec!["42\n", "255\n", "1.0\n", "1\n"]);
-}
-
-#[test]
-fn test_cross_type_arithmetic_promotion() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    println!("{}", 5i8 + 10i32);
-    println!("{}", 255u8 + 1000u32);
-    println!("{}", 5i8 + 1.5f32);
-    println!("{}", 10u16 + 20i64);
-}"#,
-    );
-    assert_eq!(output, vec!["15\n", "1255\n", "6.5\n", "30\n"]);
-}
-
-#[test]
-fn test_unsigned_wrapping_at_boundaries() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    let a: u8 = 255;
-    let b: u8 = 0;
-    println!("{}", a);
-    println!("{}", b);
-    println!("{}", a + 1u8);
-    println!("{}", b - 1u8);
-}"#,
-    );
-    assert_eq!(output, vec!["255\n", "0\n", "0\n", "255\n"]);
-}
-
-#[test]
-fn test_signed_wrapping_at_boundaries() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    let a: i8 = 127;
-    let b: i8 = -128;
-    println!("{}", a);
-    println!("{}", b);
-    println!("{}", a + a);
-    println!("{}", b + b);
-}"#,
-    );
-    assert_eq!(output, vec!["127\n", "-128\n", "-2\n", "0\n"]);
-}
-
-#[test]
-fn test_negation_wrapping() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    let x: i8 = -128;
-    println!("{}", -x);
-    let y: i16 = -32768;
-    println!("{}", -y);
-}"#,
-    );
-    assert_eq!(output, vec!["-128\n", "-32768\n"]);
-}
-
-#[test]
-fn test_large_hex_literal_with_suffix() {
-    let output = run_and_capture(
-        r#"
-fn main() {
-    println!("{}", 0xFFu8);
-    println!("{}", 0xFFFFu16);
-    println!("{}", 0xFFFFFFFFu32);
-    println!("{}", 0xFFFFFFFFFFFFFFFFu64 as u64);
-}"#,
-    );
-    assert_eq!(
-        output,
-        vec!["255\n", "65535\n", "4294967295\n", "18446744073709551615\n"]
-    );
+    assert_eq!(output, vec!["200\n", "20000\n"]);
 }
 
 #[test]
@@ -3194,15 +3093,15 @@ fn test_literal_coercion_to_all_types() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: i8 = 42;
-    let b: i16 = 42;
-    let c: i32 = 42;
-    let d: i64 = 42;
-    let e: u8 = 42;
-    let f: u16 = 42;
-    let g: u32 = 42;
-    let h: u64 = 42;
-    let sum = a as i64 + b as i64 + c as i64 + d + e as i64 + f as i64 + g as i64 + h as i64;
+    let a: int = 42;
+    let b: int = 42;
+    let c: int = 42;
+    let d: int = 42;
+    let e: byte = 42;
+    let f: int = 42;
+    let g: int = 42;
+    let h: int = 42;
+    let sum = a as int + b as int + c as int + d + e as int + f as int + g as int + h as int;
     println!("{}", sum);
 }"#,
     );
@@ -3215,7 +3114,7 @@ fn main() {
 fn test_type_alias() {
     let output = run_and_capture(
         r#"
-type Meters = f64;
+type Meters = float;
 fn main() {
     let d: Meters = 42.0;
     println!("{}", d);
@@ -3231,7 +3130,7 @@ fn main() {
 fn test_const() {
     let output = run_and_capture(
         r#"
-const MAX: i64 = 100;
+const MAX: int = 100;
 fn main() {
     println!("{}", MAX);
 }
@@ -3244,7 +3143,7 @@ fn main() {
 fn test_static() {
     let output = run_and_capture(
         r#"
-static PI: f64 = 3.14;
+static PI: float = 3.14;
 fn main() {
     println!("{}", PI);
 }
@@ -3270,8 +3169,8 @@ fn main() {
 fn test_const_used_in_function() {
     let output = run_and_capture(
         r#"
-const FACTOR: i64 = 10;
-fn multiply(x: i64) -> i64 {
+const FACTOR: int = 10;
+fn multiply(x: int) -> int {
     x * FACTOR
 }
 fn main() {
@@ -4030,7 +3929,7 @@ fn main() {
 fn test_recursion_limit() {
     let output = run_and_capture(
         r#"
-fn recurse(n: i64) -> i64 {
+fn recurse(n: int) -> int {
     if n == 0 { 0 } else { 1 + recurse(n - 1) }
 }
 fn main() {
@@ -4165,8 +4064,8 @@ fn test_json_serialize_struct() {
     let output = run_and_capture(
         r#"
 struct Point {
-    x: i64,
-    y: i64,
+    x: int,
+    y: int,
 }
 fn main() {
     let p = Point { x: 10, y: 20 };
@@ -4185,7 +4084,7 @@ enum Color {
     Red,
     Green,
     Blue,
-    Rgb(i64, i64, i64),
+    Rgb(int, int, int),
 }
 fn main() {
     let a = json::serialize(Color::Red).unwrap();
@@ -4358,7 +4257,7 @@ fn test_json_from_struct() {
         r#"
 struct Person {
     name: String,
-    age: i64,
+    age: int,
 }
 fn main() {
     let json_str = "{\"name\": \"Alice\", \"age\": 30}";
@@ -4713,7 +4612,7 @@ fn test_fstring_method_call() {
 #[test]
 fn test_fstring_nested_function() {
     let out = run_and_capture(
-        r#"fn double(x: i64) -> i64 { x * 2 } fn main() { println!("{}", f"double(5) = {double(5)}"); }"#,
+        r#"fn double(x: int) -> int { x * 2 } fn main() { println!("{}", f"double(5) = {double(5)}"); }"#,
     );
     assert_eq!(out, vec!["double(5) = 10\n"]);
 }
@@ -4732,7 +4631,7 @@ fn test_derive_debug() {
     let out = run_and_capture(
         r#"
 #[derive(Debug)]
-struct Point { x: f64, y: f64 }
+struct Point { x: float, y: float }
 
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
@@ -4748,7 +4647,7 @@ fn test_derive_clone() {
     let out = run_and_capture(
         r#"
 #[derive(Clone)]
-struct Point { x: f64, y: f64 }
+struct Point { x: float, y: float }
 
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
@@ -4765,7 +4664,7 @@ fn test_derive_partial_eq() {
     let out = run_and_capture(
         r#"
 #[derive(PartialEq)]
-struct Point { x: f64, y: f64 }
+struct Point { x: float, y: float }
 
 fn main() {
     let a = Point { x: 1.0, y: 2.0 };
@@ -4784,7 +4683,7 @@ fn test_derive_multiple() {
     let out = run_and_capture(
         r#"
 #[derive(Debug, Clone, PartialEq)]
-struct Color { r: i64, g: i64, b: i64 }
+struct Color { r: int, g: int, b: int }
 
 fn main() {
     let c1 = Color { r: 255, g: 0, b: 0 };
@@ -4802,7 +4701,7 @@ fn test_derive_default() {
     let out = run_and_capture(
         r#"
 #[derive(Default, Debug)]
-struct Config { width: i64, height: i64, title: String }
+struct Config { width: int, height: int, title: String }
 
 fn main() {
     let c = Config::default();
@@ -4852,7 +4751,7 @@ fn test_no_derive_clone_error() {
     // This test verifies the current behavior.
     let out = run_and_capture(
         r#"
-struct Foo { x: i64 }
+struct Foo { x: int }
 
 fn main() {
     let f = Foo { x: 1 };
@@ -4869,7 +4768,7 @@ fn test_attribute_ignored_unknown() {
     let out = run_and_capture(
         r#"
 #[serde(rename_all)]
-struct Foo { x: i64 }
+struct Foo { x: int }
 
 fn main() {
     let f = Foo { x: 42 };
@@ -4885,7 +4784,7 @@ fn test_derive_enum_clone() {
     let out = run_and_capture(
         r#"
 #[derive(Clone, Debug)]
-enum Shape { Circle(f64), Square(f64) }
+enum Shape { Circle(float), Square(float) }
 
 fn main() {
     let s = Shape::Circle(5.0);
@@ -5265,7 +5164,7 @@ fn test_pub_fn() {
 #[test]
 fn test_pub_struct() {
     run_capturing(
-        "pub struct Point { pub x: i64, pub y: i64 } fn main() { let p = Point { x: 1, y: 2 }; }",
+        "pub struct Point { pub x: int, pub y: int } fn main() { let p = Point { x: 1, y: 2 }; }",
     )
     .unwrap();
 }
@@ -5281,7 +5180,7 @@ fn test_pub_enum() {
 fn test_type_alias_struct() {
     let output = run_and_capture(
         r#"
-            struct Point { x: f64, y: f64 }
+            struct Point { x: float, y: float }
             type Pos = Point;
             fn main() {
                 let p = Pos { x: 1.0, y: 2.0 };
@@ -5308,7 +5207,7 @@ fn test_type_alias_enum() {
 fn test_type_alias_associated_fn() {
     let output = run_and_capture(
         r#"
-            struct Point { x: f64, y: f64 }
+            struct Point { x: float, y: float }
             impl Point { fn origin() -> Point { Point { x: 0.0, y: 0.0 } } }
             type P = Point;
             fn main() {
@@ -5582,7 +5481,7 @@ fn test_match_guard_with_binding() {
 fn test_operator_overload_add() {
     let output = run_and_capture(
         r#"
-            struct Point { x: i64, y: i64 }
+            struct Point { x: int, y: int }
 
             trait Add {
                 fn add(self, other: Point) -> Point;
@@ -5609,7 +5508,7 @@ fn test_operator_overload_add() {
 fn test_impl_display() {
     let output = run_and_capture(
         r#"
-            struct Point { x: i64, y: i64 }
+            struct Point { x: int, y: int }
 
             trait Display {
                 fn fmt(self) -> String;
@@ -5669,7 +5568,7 @@ fn test_struct_field_mutation_via_method() {
     let output = run_and_capture(
         r#"
             struct Counter {
-                count: i64,
+                count: int,
             }
 
             impl Counter {
@@ -5706,7 +5605,7 @@ fn test_struct_field_mutation_via_self_push() {
                     Stack { items: vec![] }
                 }
 
-                fn push(mut self, val: i64) {
+                fn push(mut self, val: int) {
                     self.items.push(val);
                 }
             }
@@ -5845,19 +5744,19 @@ fn test_match_range_exclusive() {
 
 #[test]
 fn test_as_cast_int_to_float() {
-    let output = run_and_capture(r#"fn main() { let x = 42 as f64; println!("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 42 as float; println!("{}", x); }"#);
     assert_eq!(output, vec!["42.0\n"]);
 }
 
 #[test]
 fn test_as_cast_float_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 3.9 as i64; println!("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 3.9 as int; println!("{}", x); }"#);
     assert_eq!(output, vec!["3\n"]);
 }
 
 #[test]
 fn test_as_cast_char_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 'a' as i64; println!("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 'a' as int; println!("{}", x); }"#);
     assert_eq!(output, vec!["97\n"]);
 }
 
@@ -5942,7 +5841,7 @@ fn test_cannot_read_private_field_from_outside_module() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: i64,
+        secret_key: int,
     }
     pub fn make_record() -> Record {
         Record { name: "x".to_string(), secret_key: 42 }
@@ -5969,7 +5868,7 @@ fn test_cannot_write_private_field_in_struct_init_from_outside() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: i64,
+        secret_key: int,
     }
 }
 fn main() {
@@ -5995,9 +5894,9 @@ fn test_can_access_private_field_inside_same_module() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: i64,
+        secret_key: int,
     }
-    pub fn get_key(r: Record) -> i64 {
+    pub fn get_key(r: Record) -> int {
         r.secret_key  // Allowed: inside the same module
     }
     pub fn make_record() -> Record {
@@ -6018,8 +5917,8 @@ fn test_pub_fields_always_accessible() {
         r#"
 mod shapes {
     pub struct Point {
-        pub x: f64,
-        pub y: f64,
+        pub x: float,
+        pub y: float,
     }
 }
 fn main() {
@@ -6067,7 +5966,7 @@ fn main() {
     let doubled = xs.iter().map(|x| match x {
         Some(n) => n * 2,
         None => 0,
-    }).collect::<Vec<i64>>();
+    }).collect::<Vec<int>>();
     for v in doubled {
         println!("{}", v);
     }
@@ -6084,7 +5983,7 @@ fn test_closure_mutating_captured_in_loop() {
         r#"
 fn main() {
     let mut total = 0;
-    let add = |x: i64| { total = total + x; };
+    let add = |x: int| { total = total + x; };
     for n in [1, 2, 3, 4, 5] {
         add(n);
     }
@@ -6120,12 +6019,12 @@ fn test_recursive_call_inside_closure() {
     // frame-stack discipline between the iterator builtin path and nested calls.
     let output = run_and_capture(
         r#"
-fn fib(n: i64) -> i64 {
+fn fib(n: int) -> int {
     if n < 2 { return n; }
     fib(n - 1) + fib(n - 2)
 }
 fn main() {
-    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<Vec<i64>>();
+    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<Vec<int>>();
     for v in results {
         println!("{}", v);
     }
@@ -6151,9 +6050,9 @@ fn test_reject_amp_in_type_position() {
 #[test]
 fn test_reject_amp_self_in_method_receiver() {
     let result = run(r#"
-struct Foo { n: i64 }
+struct Foo { n: int }
 impl Foo {
-    fn get(&self) -> i64 { self.n }
+    fn get(&self) -> int { self.n }
 }
 fn main() {}
 "#);
@@ -6182,9 +6081,9 @@ fn test_reject_amp_prefix_expression() {
 fn test_mut_self_method_works() {
     let output = run_and_capture(
         r#"
-struct Counter { n: i64 }
+struct Counter { n: int }
 impl Counter {
-    fn bump(mut self) -> i64 {
+    fn bump(mut self) -> int {
         self.n = self.n + 1;
         self.n
     }
@@ -6201,7 +6100,7 @@ fn main() {
 fn test_mut_param_works() {
     let output = run_and_capture(
         r#"
-fn double_in_place(mut x: i64) -> i64 {
+fn double_in_place(mut x: int) -> int {
     x = x * 2;
     x
 }
@@ -6217,9 +6116,9 @@ fn test_immutable_self_field_assign_rejected() {
     // Method declared `fn ...(self) { self.field = X }` must error —
     // mutating a field of `self` requires `mut self`.
     let result = run(r#"
-struct Counter { n: i64 }
+struct Counter { n: int }
 impl Counter {
-    fn try_bump(self) -> i64 {
+    fn try_bump(self) -> int {
         self.n = self.n + 1;
         self.n
     }
@@ -6241,7 +6140,7 @@ fn main() {
 fn test_immutable_let_field_assign_rejected() {
     // `let x = Struct { ... }; x.field = Y;` must error — same logic.
     let result = run(r#"
-struct Point { x: i64 }
+struct Point { x: int }
 fn main() {
     let p = Point { x: 1 };
     p.x = 42;
@@ -6260,7 +6159,7 @@ fn test_mut_let_field_assign_works() {
     // `let mut p = ...; p.x = ...;` should be permitted (the binding is mut).
     let output = run_and_capture(
         r#"
-struct Point { x: i64 }
+struct Point { x: int }
 fn main() {
     let mut p = Point { x: 1 };
     p.x = 42;

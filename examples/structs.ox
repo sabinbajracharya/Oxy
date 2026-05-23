@@ -1,12 +1,12 @@
 // Example: Structs, Enums, and Impl Blocks in Oxy
 
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Point {
-    fn new(x: f64, y: f64) -> Self {
+    fn new(x: float, y: float) -> Self {
         Point { x, y }
     }
 
@@ -16,12 +16,12 @@ impl Point {
 }
 
 enum Shape {
-    Circle(f64),
-    Rectangle(f64, f64),
+    Circle(float),
+    Rectangle(float, float),
 }
 
 impl Shape {
-    fn area(self) -> f64 {
+    fn area(self) -> float {
         match self {
             Shape::Circle(r) => 3.14159 * r * r,
             Shape::Rectangle(w, h) => w * h,

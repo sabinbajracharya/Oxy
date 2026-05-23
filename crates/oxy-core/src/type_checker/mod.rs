@@ -74,16 +74,15 @@ impl TypeInfo {
 
     pub fn name(&self) -> &str {
         match self {
-            TypeInfo::I8 => "i8",
-            TypeInfo::I16 => "i16",
-            TypeInfo::I32 => "i32",
-            TypeInfo::I64 => "i64",
-            TypeInfo::U8 => "u8",
-            TypeInfo::U16 => "u16",
-            TypeInfo::U32 => "u32",
-            TypeInfo::U64 => "u64",
-            TypeInfo::F32 => "f32",
-            TypeInfo::F64 => "f64",
+            // Internal storage variants `I8 .. U64` are unreachable from
+            // user code — Oxy's surface integer types are just `int` and
+            // `byte` (mapped to I64 and U8). Other variants are reported
+            // under their bare width name only when produced by internal
+            // machinery (very rare); avoid leaking them where possible.
+            TypeInfo::I8 | TypeInfo::I16 | TypeInfo::I32 | TypeInfo::I64 => "int",
+            TypeInfo::U8 => "byte",
+            TypeInfo::U16 | TypeInfo::U32 | TypeInfo::U64 => "int",
+            TypeInfo::F32 | TypeInfo::F64 => "float",
             TypeInfo::Bool => "bool",
             TypeInfo::String => "String",
             TypeInfo::Char => "char",
@@ -206,16 +205,12 @@ impl TypeInfo {
             }
         }
         match name {
-            "i8" => TypeInfo::I8,
-            "i16" => TypeInfo::I16,
-            "i32" => TypeInfo::I32,
-            "i64" | "isize" => TypeInfo::I64,
-            "u8" => TypeInfo::U8,
-            "u16" => TypeInfo::U16,
-            "u32" => TypeInfo::U32,
-            "u64" | "usize" => TypeInfo::U64,
-            "f32" => TypeInfo::F32,
-            "f64" => TypeInfo::F64,
+            // Oxy has exactly two integer types: `int` (= i64 internally)
+            // and `byte` (= u8). The Rust-style width zoo was retired in
+            // favour of a single sensible default — see CLAUDE.md.
+            "int" => TypeInfo::I64,
+            "byte" => TypeInfo::U8,
+            "float" => TypeInfo::F64,
             "bool" => TypeInfo::Bool,
             "String" | "str" => TypeInfo::String,
             "char" => TypeInfo::Char,
@@ -511,8 +506,24 @@ impl TypeChecker {
         match ty {
             TypeInfo::UserStruct { name, generic_args } => {
                 if !self.is_known_user_type(name) {
+                    // Specific fix-it for the retired Rust-style width zoo
+                    // (i8 .. u64, isize, usize, f32) — point users at the
+                    // single replacement they should use instead.
+                    let suggestion = match name.as_str() {
+                        "i8" | "i16" | "i32" | "i64" | "u16" | "u32" | "u64" | "isize"
+                        | "usize" => Some("int"),
+                        "u8" => Some("byte"),
+                        "f32" | "f64" => Some("float"),
+                        _ => None,
+                    };
+                    let message = match suggestion {
+                        Some(repl) => format!(
+                            "`{name}` is not an Oxy type — use `{repl}` instead. Oxy has only `int`, `byte`, and `float`."
+                        ),
+                        None => format!("unknown type `{name}`"),
+                    };
                     return Err(FerriError::TypeError {
-                        message: format!("unknown type `{name}`"),
+                        message,
                         line: span.line,
                         column: span.column,
                     });

@@ -19,11 +19,11 @@ export const modules: Chapter = {
         '`use math::add;` brings `add` into scope without qualification.',
       ],
       initialCode: `mod math {
-    pub fn add(a: i64, b: i64) -> i64 {
+    pub fn add(a: int, b: int) -> int {
         a + b
     }
 
-    pub fn square(x: i64) -> i64 {
+    pub fn square(x: int) -> int {
         x * x
     }
 }
@@ -87,9 +87,9 @@ Use supports:
         '`use module::{a, b};` imports multiple items in one line.',
       ],
       initialCode: `mod math {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
-    pub fn mul(a: i64, b: i64) -> i64 { a * b }
-    pub fn sub(a: i64, b: i64) -> i64 { a - b }
+    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn mul(a: int, b: int) -> int { a * b }
+    pub fn sub(a: int, b: int) -> int { a - b }
 }
 
 use math::{add, mul};
@@ -117,7 +117,7 @@ This lets you flatten deep module hierarchies or expose internal items under a d
         'Re-exports can glob: `pub use inner::*;`.',
       ],
       initialCode: `mod inner {
-    pub fn compute(x: i64) -> i64 {
+    pub fn compute(x: int) -> int {
         x * x + 2 * x + 1
     }
     pub fn helper() -> String { "helper".to_string() }

@@ -4,7 +4,7 @@
 
 // === Custom map function ===
 
-fn my_map(v: Vec<i64>, f: fn(i64) -> i64) -> Vec<i64> {
+fn my_map(v: Vec<int>, f: fn(int) -> int) -> Vec<int> {
     let mut result = vec![];
     let mut i = 0;
     while i < v.len() {
@@ -23,7 +23,7 @@ fn test_custom_map() {
 
 // === Custom filter ===
 
-fn my_filter(v: Vec<i64>, pred: fn(i64) -> bool) -> Vec<i64> {
+fn my_filter(v: Vec<int>, pred: fn(int) -> bool) -> Vec<int> {
     let mut result = vec![];
     let mut i = 0;
     while i < v.len() {
@@ -44,7 +44,7 @@ fn test_custom_filter() {
 
 // === Custom fold ===
 
-fn my_fold(v: Vec<i64>, init: i64, f: fn(i64, i64) -> i64) -> i64 {
+fn my_fold(v: Vec<int>, init: int, f: fn(int, int) -> int) -> int {
     let mut acc = init;
     let mut i = 0;
     while i < v.len() {
@@ -63,21 +63,21 @@ fn test_custom_fold() {
 
 // === Closure That Returns a Closure ===
 
-fn compose(f: fn(i64) -> i64, g: fn(i64) -> i64) -> fn(i64) -> i64 {
+fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {
     |x| f(g(x))
 }
 
 #[test]
 fn test_compose() {
-    let double = |x: i64| x * 2;
-    let add_one = |x: i64| x + 1;
+    let double = |x: int| x * 2;
+    let add_one = |x: int| x + 1;
     let double_then_add = compose(add_one, double);
     assert_eq!(double_then_add(5), 11); // (5*2)+1
 }
 
 // === Callback Pattern ===
 
-fn with_callback(cb: fn(i64) -> String) -> String {
+fn with_callback(cb: fn(int) -> String) -> String {
     cb(42)
 }
 

@@ -5,17 +5,17 @@
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: i64,  // private field
+        secret_key: int,  // private field
     }
 
     impl Record {
         // Public constructor — creates the struct (allowed inside module)
-        pub fn new(name: String, key: i64) -> Record {
+        pub fn new(name: String, key: int) -> Record {
             Record { name, secret_key: key }
         }
 
         // Public accessor for private field
-        pub fn get_key(self) -> i64 {
+        pub fn get_key(self) -> int {
             self.secret_key
         }
     }
@@ -51,8 +51,8 @@ fn test_public_constructor() {
 
 mod geometry {
     pub struct Point {
-        pub x: f64,
-        pub y: f64,
+        pub x: float,
+        pub y: float,
     }
 
     pub fn origin() -> Point {
@@ -80,16 +80,16 @@ fn test_pub_struct_init_from_outside() {
 mod config {
     pub struct Settings {
         pub debug: bool,
-        pub max_connections: i64,
-        internal_counter: i64,
+        pub max_connections: int,
+        internal_counter: int,
     }
 
     impl Settings {
-        pub fn new(debug: bool, max: i64) -> Settings {
+        pub fn new(debug: bool, max: int) -> Settings {
             Settings { debug, max_connections: max, internal_counter: 0 }
         }
 
-        pub fn get_counter(self) -> i64 {
+        pub fn get_counter(self) -> int {
             self.internal_counter
         }
     }

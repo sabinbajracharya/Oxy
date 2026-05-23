@@ -100,8 +100,13 @@ pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
 // Well-known type name constants (used by compiler, LSP, and type system)
 // ---------------------------------------------------------------------------
 
-pub const I64_TYPE: &str = "i64";
-pub const F64_TYPE: &str = "f64";
+/// Canonical name for Oxy's only signed integer type (`int` = 64-bit
+/// internally). The constant name keeps `I64` to mirror the underlying
+/// `IntegerWidth::I64`/`Value::I64` storage, but the *string* is `"int"`.
+pub const I64_TYPE: &str = "int";
+pub const BYTE_TYPE: &str = "byte";
+/// Canonical name for Oxy's only float type (`float` = 64-bit internally).
+pub const F64_TYPE: &str = "float";
 pub const STRING_TYPE: &str = "String";
 pub const BOOL_TYPE: &str = "bool";
 pub const CHAR_TYPE: &str = "char";
@@ -120,16 +125,9 @@ pub const UNIT_TYPE: &str = "()";
 // ---------------------------------------------------------------------------
 
 pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
-    ("i8", "8-bit signed integer"),
-    ("i16", "16-bit signed integer"),
-    ("i32", "32-bit signed integer"),
-    ("i64", "64-bit signed integer"),
-    ("u8", "8-bit unsigned integer"),
-    ("u16", "16-bit unsigned integer"),
-    ("u32", "32-bit unsigned integer"),
-    ("u64", "64-bit unsigned integer"),
-    ("f32", "32-bit floating point"),
-    ("f64", "64-bit floating point"),
+    ("int", "Signed integer (64-bit wrapping)"),
+    ("byte", "Unsigned 8-bit integer (wraps modulo 256)"),
+    ("float", "64-bit floating point"),
     ("bool", "Boolean type (true / false)"),
     ("char", "Unicode scalar value"),
     ("String", "Owned UTF-8 string"),

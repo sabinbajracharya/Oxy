@@ -3,11 +3,11 @@
 // qualified path calls, nested modules.
 
 mod calculator {
-    pub fn add(a: i64, b: i64) -> i64 {
+    pub fn add(a: int, b: int) -> int {
         a + b
     }
 
-    pub fn sub(a: i64, b: i64) -> i64 {
+    pub fn sub(a: int, b: int) -> int {
         a - b
     }
 }
@@ -47,11 +47,11 @@ fn test_qualified_path_call() {
 
 mod shapes {
     pub struct Point {
-        pub x: f64,
-        pub y: f64,
+        pub x: float,
+        pub y: float,
     }
 
-    pub fn make_point(x: f64, y: f64) -> Point {
+    pub fn make_point(x: float, y: float) -> Point {
         Point { x, y }
     }
 }
@@ -120,7 +120,7 @@ fn test_use_from_nested() {
 
 mod counter {
     pub struct Counter {
-        pub count: i64,
+        pub count: int,
     }
 
     impl Counter {

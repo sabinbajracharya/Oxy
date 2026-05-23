@@ -26,7 +26,7 @@ fn main() {
     println!("{}", single_number(nums));
 }
 
-fn single_number(nums: Vec) -> i64 {
+fn single_number(nums: Vec) -> int {
     let mut result = 0i64;
     for num in nums {
         result = result ^ num;

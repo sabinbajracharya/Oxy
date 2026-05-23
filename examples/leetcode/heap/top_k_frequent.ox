@@ -27,7 +27,7 @@ fn main() {
     println!("{:?}", top_k_frequent(nums, 2));
 }
 
-fn top_k_frequent(nums: Vec, k: i64) -> Vec {
+fn top_k_frequent(nums: Vec, k: int) -> Vec {
     // Count frequencies
     let mut counts = HashMap::new();
     for num in nums {

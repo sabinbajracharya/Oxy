@@ -54,20 +54,20 @@ fn test_override_default() {
 // === Default Method Calls Another Default ===
 
 trait Calculator {
-    fn add(self, other: i64) -> i64 {
+    fn add(self, other: int) -> int {
         self.value() + other
     }
-    fn value(self) -> i64 {
+    fn value(self) -> int {
         0
     }
 }
 
 struct Counter {
-    count: i64,
+    count: int,
 }
 
 impl Calculator for Counter {
-    fn value(self) -> i64 {
+    fn value(self) -> int {
         self.count
     }
 }
@@ -82,13 +82,13 @@ fn test_default_calls_other_method() {
 // === Multiple Traits with Default Methods ===
 
 trait A {
-    fn a(self) -> i64 {
+    fn a(self) -> int {
         10
     }
 }
 
 trait B {
-    fn b(self) -> i64 {
+    fn b(self) -> int {
         20
     }
 }

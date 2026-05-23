@@ -27,7 +27,7 @@ fn main() {
     println!("{}", subarray_sum(nums, 2));
 }
 
-fn subarray_sum(nums: Vec, k: i64) -> i64 {
+fn subarray_sum(nums: Vec, k: int) -> int {
     let mut count = 0i64;
     let mut sum = 0i64;
     let mut seen = HashMap::new();

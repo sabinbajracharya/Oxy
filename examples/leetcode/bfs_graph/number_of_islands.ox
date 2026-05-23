@@ -26,7 +26,7 @@ fn main() {
     println!("{}", num_islands(grid));
 }
 
-fn dfs(grid: Vec, i: i64, j: i64) -> Vec {
+fn dfs(grid: Vec, i: int, j: int) -> Vec {
     let rows = grid.len();
     let cols = grid[0].len();
     if i < 0 || i >= rows || j < 0 || j >= cols {
@@ -47,7 +47,7 @@ fn dfs(grid: Vec, i: i64, j: i64) -> Vec {
     g
 }
 
-fn num_islands(grid: Vec) -> i64 {
+fn num_islands(grid: Vec) -> int {
     if grid.len() == 0 {
         return 0;
     }

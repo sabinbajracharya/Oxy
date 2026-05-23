@@ -438,16 +438,13 @@ impl Value {
     /// Returns the type name of this value for error messages.
     pub fn type_name(&self) -> String {
         match self {
-            Value::I8(_) => "i8".into(),
-            Value::I16(_) => "i16".into(),
-            Value::I32(_) => "i32".into(),
-            Value::I64(_) => "i64".into(),
-            Value::U8(_) => "u8".into(),
-            Value::U16(_) => "u16".into(),
-            Value::U32(_) => "u32".into(),
-            Value::U64(_) => "u64".into(),
-            Value::F32(_) => "f32".into(),
-            Value::F64(_) => "f64".into(),
+            // Surface integer types are just `int` and `byte` — the
+            // dead-but-not-yet-removed width variants present under the
+            // same surface names (unreachable from user code).
+            Value::I8(_) | Value::I16(_) | Value::I32(_) | Value::I64(_) => "int".into(),
+            Value::U8(_) => "byte".into(),
+            Value::U16(_) | Value::U32(_) | Value::U64(_) => "int".into(),
+            Value::F32(_) | Value::F64(_) => "float".into(),
             Value::Bool(_) => "bool".into(),
             Value::String(_) => "String".into(),
             Value::Char(_) => "char".into(),
@@ -1227,7 +1224,7 @@ mod tests {
 
     #[test]
     fn test_type_name() {
-        assert_eq!(Value::I64(0).type_name(), "i64");
+        assert_eq!(Value::I64(0).type_name(), "int");
         assert_eq!(Value::String("".into()).type_name(), "String");
         assert_eq!(Value::Unit.type_name(), "()");
     }

@@ -21,7 +21,7 @@
 //
 // === Tips ===
 // - Use `HashMap::new()` with integer keys — no hashing issues
-// - Return `Option<(i64, i64)>` so the caller can handle "not found"
+// - Return `Option<(int, int)>` so the caller can handle "not found"
 // - The map stores value → index so we can retrieve positions directly
 
 fn main() {
@@ -33,7 +33,7 @@ fn main() {
     }
 }
 
-fn two_sum(nums: Vec, target: i64) -> Option {
+fn two_sum(nums: Vec, target: int) -> Option {
     let mut seen = HashMap::new();
     for (i, num) in nums.iter().enumerate() {
         let complement = target - num;

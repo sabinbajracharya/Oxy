@@ -23,7 +23,7 @@
 // - Track level_size before processing each level
 
 struct TreeNode {
-    val: i64,
+    val: int,
     left: Option,
     right: Option,
 }

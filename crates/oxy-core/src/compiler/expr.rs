@@ -380,6 +380,11 @@ impl Compiler {
                 } else {
                     self.sym.define(name)
                 };
+                if let Some(ann) = type_ann {
+                    if let Some(w) = super::integer_width_of(ann) {
+                        self.sym.set_width(name, w);
+                    }
+                }
                 self.emit(OpCode::StoreLocal(slot));
                 if *mutable && self.captured_mutable.contains(name) {
                     self.emit(OpCode::MakeCell(slot));
@@ -1305,6 +1310,9 @@ impl Compiler {
                         });
                     }
                     self.compile_expr(value)?;
+                    if let Some(w) = self.sym.width_of(name) {
+                        self.emit(OpCode::CastInt(w));
+                    }
                     if let Some(slot) = self.sym.get(name) {
                         self.emit(OpCode::Dup);
                         self.emit(OpCode::StoreLocal(slot));
@@ -1414,6 +1422,9 @@ impl Compiler {
                             }
                         };
                         self.emit(opcode);
+                        if let Some(w) = self.sym.width_of(name) {
+                            self.emit(OpCode::CastInt(w));
+                        }
                         self.emit(OpCode::StoreLocal(slot));
                         Ok(())
                     } else {
@@ -2311,16 +2322,9 @@ impl Compiler {
             } => {
                 self.compile_expr(inner)?;
                 match type_name.as_str() {
-                    "i8" => self.emit(OpCode::CastInt(IntegerWidth::I8)),
-                    "i16" => self.emit(OpCode::CastInt(IntegerWidth::I16)),
-                    "i32" => self.emit(OpCode::CastInt(IntegerWidth::I32)),
-                    "i64" | "isize" | "Integer" => self.emit(OpCode::CastInt(IntegerWidth::I64)),
-                    "u8" => self.emit(OpCode::CastInt(IntegerWidth::U8)),
-                    "u16" => self.emit(OpCode::CastInt(IntegerWidth::U16)),
-                    "u32" => self.emit(OpCode::CastInt(IntegerWidth::U32)),
-                    "u64" | "usize" => self.emit(OpCode::CastInt(IntegerWidth::U64)),
-                    "f32" => self.emit(OpCode::CastFloat(FloatWidth::F32)),
-                    "f64" | "Float" => self.emit(OpCode::CastFloat(FloatWidth::F64)),
+                    "int" => self.emit(OpCode::CastInt(IntegerWidth::I64)),
+                    "byte" => self.emit(OpCode::CastInt(IntegerWidth::U8)),
+                    "float" => self.emit(OpCode::CastFloat(FloatWidth::F64)),
                     "char" => self.emit(OpCode::CastToChar),
                     _ => return Ok(()),
                 };

@@ -28,7 +28,7 @@ fn main() {
     println!("{}", search(nums, 3));
 }
 
-fn search(nums: Vec, target: i64) -> i64 {
+fn search(nums: Vec, target: int) -> int {
     let mut left = 0i64;
     let mut right = nums.len() - 1;
     while left <= right {

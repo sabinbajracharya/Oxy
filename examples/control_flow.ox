@@ -1,6 +1,6 @@
 // control_flow.ox — Demonstrates Phase 5 control flow features
 
-fn classify(n: i64) -> i64 {
+fn classify(n: int) -> int {
     match n {
         0 => 0,
         1 => 1,

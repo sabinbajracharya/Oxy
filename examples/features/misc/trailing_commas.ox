@@ -1,11 +1,11 @@
 // === Feature: Trailing Commas ===
 // Like Rust, Oxy accepts a trailing comma in argument and field lists.
 
-fn add3(a: i64, b: i64, c: i64) -> i64 { a + b + c }
+fn add3(a: int, b: int, c: int) -> int { a + b + c }
 
-struct Point { x: i64, y: i64 }
+struct Point { x: int, y: int }
 
-enum E { Tri(i64, i64, i64) }
+enum E { Tri(int, int, int) }
 
 #[test]
 fn test_trailing_comma_in_function_call() {

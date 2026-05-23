@@ -29,7 +29,7 @@ fn main() {
     println!("{}", can_complete_circuit(gas, cost));
 }
 
-fn can_complete_circuit(gas: Vec, cost: Vec) -> i64 {
+fn can_complete_circuit(gas: Vec, cost: Vec) -> int {
     let n = gas.len();
     let mut total = 0i64;
     let mut tank = 0i64;

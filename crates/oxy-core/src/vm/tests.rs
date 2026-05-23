@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn test_compiled_function_call() {
         let source = r#"
-        fn add(x: i64, y: i64) -> i64 { x + y }
+        fn add(x: int, y: int) -> int { x + y }
         fn main() {
             let r = add(3, 4);
             println!("{}", r);
@@ -365,7 +365,7 @@ mod tests {
     fn test_compiled_simple_if_no_recursion() {
         // Non-recursive else branch — should work
         let source = r#"
-        fn check(n: i64) -> i64 {
+        fn check(n: int) -> int {
             if n <= 1 { n } else { 99 }
         }
         fn main() {
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn test_compiled_fib_2() {
         let source = r#"
-        fn fib(n: i64) -> i64 {
+        fn fib(n: int) -> int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() { println!("{}", fib(2)); }
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn test_compiled_fibonacci() {
         let source = r#"
-        fn fib(n: i64) -> i64 {
+        fn fib(n: int) -> int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn test_compiled_if_else() {
         let source = r#"
-        fn is_even(n: i64) -> bool {
+        fn is_even(n: int) -> bool {
             if n % 2 == 0 { true } else { false }
         }
         fn main() {
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn test_compiled_vs_interpreted_equivalent() {
         let source = r#"
-        fn fib(n: i64) -> i64 {
+        fn fib(n: int) -> int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
@@ -592,8 +592,8 @@ mod tests {
     #[test]
     fn test_compiled_struct_and_enum_define() {
         let source = r#"
-        struct Point { x: i64, y: i64 }
-        enum Shape { Circle, Square(i64) }
+        struct Point { x: int, y: int }
+        enum Shape { Circle, Square(int) }
         fn main() {
             println!("ok");
         }
@@ -611,7 +611,7 @@ mod tests {
     #[test]
     fn test_compiled_impl_method() {
         let source = r#"
-        struct Counter { n: i64 }
+        struct Counter { n: int }
         impl Counter {
             fn inc(self) -> Counter {
                 Counter { n: self.n + 1 }
@@ -632,9 +632,9 @@ mod tests {
     #[test]
     fn test_compiled_self_ref() {
         let source = r#"
-        struct Value { x: i64 }
+        struct Value { x: int }
         impl Value {
-            fn get(self) -> i64 {
+            fn get(self) -> int {
                 self.x
             }
         }
@@ -711,7 +711,7 @@ mod tests {
     #[test]
     fn test_compiled_match_enum_variant() {
         let source = r#"
-        enum Opt { Some(i64), None }
+        enum Opt { Some(int), None }
         fn main() {
             let x = Opt::Some(10);
             let r = match x {
@@ -736,7 +736,7 @@ mod tests {
     #[test]
     fn test_compiled_if_let_some() {
         let source = r#"
-        enum Opt { Some(i64), None }
+        enum Opt { Some(int), None }
         fn main() {
             let x = Opt::Some(42);
             if let Opt::Some(v) = x {
@@ -753,7 +753,7 @@ mod tests {
     #[test]
     fn test_compiled_if_let_none_else() {
         let source = r#"
-        enum Opt { Some(i64), None }
+        enum Opt { Some(int), None }
         fn main() {
             let x = Opt::None;
             if let Opt::Some(v) = x {
@@ -843,7 +843,7 @@ mod tests {
     fn test_compiled_inline_module_call() {
         let source = r#"
         mod math {
-            pub fn double(x: i64) -> i64 { x * 2 }
+            pub fn double(x: int) -> int { x * 2 }
         }
         fn main() {
             println!("{}", math::double(21));
@@ -864,7 +864,7 @@ mod tests {
         let source = r#"
         mod outer {
             pub mod inner {
-                pub fn val() -> i64 { 99 }
+                pub fn val() -> int { 99 }
             }
         }
         fn main() {
@@ -881,7 +881,7 @@ mod tests {
     fn test_compiled_module_with_use() {
         let source = r#"
         mod calc {
-            pub fn triple(x: i64) -> i64 { x * 3 }
+            pub fn triple(x: int) -> int { x * 3 }
         }
         use calc::triple;
         fn main() {
@@ -898,10 +898,10 @@ mod tests {
     fn test_compiled_module_chain() {
         let source = r#"
         mod a {
-            pub fn one() -> i64 { 1 }
+            pub fn one() -> int { 1 }
         }
         mod b {
-            pub fn two() -> i64 { a::one() + a::one() }
+            pub fn two() -> int { a::one() + a::one() }
         }
         fn main() {
             println!("{}", b::two());

@@ -1,13 +1,13 @@
 // === Feature: struct field type checking on init and assignment ===
 
 struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 struct Person {
     name: String,
-    age: u32,
+    age: int,
 }
 
 #[test]

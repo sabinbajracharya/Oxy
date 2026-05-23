@@ -2,11 +2,11 @@
 // The type checker must reject calls whose arguments don't match the
 // declared parameter types (or whose arity is wrong).
 
-fn sum(x: u32) -> u32 {
+fn sum(x: int) -> int {
     x + x
 }
 
-fn add(a: i64, b: i64) -> i64 {
+fn add(a: int, b: int) -> int {
     a + b
 }
 
@@ -16,14 +16,14 @@ fn greet(name: String) -> String {
 
 #[test]
 fn test_call_matching_arg_types() {
-    let a: u32 = 21;
+    let a: int = 21;
     assert_eq!(sum(a), 42);
 }
 
 #[test]
 fn test_call_int_promotion_ok() {
     // Any-integer-accepts-any-integer is allowed (wrapping at runtime).
-    let n: i32 = 10;
+    let n: int = 10;
     assert_eq!(add(n, 5), 15);
 }
 
@@ -34,7 +34,7 @@ fn test_call_string_arg_ok() {
 
 #[compile_error]
 fn test_call_string_for_int_param_rejected() {
-    // The original bug: sum expects u32 but got a String → "stringstring".
+    // The original bug: sum expects int but got a String → "stringstring".
     // After the fix this must be a compile-time TypeError.
     let _ = sum("string");
 }

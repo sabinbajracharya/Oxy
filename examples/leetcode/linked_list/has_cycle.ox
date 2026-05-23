@@ -21,7 +21,7 @@
 // - If slow == fast at any point → cycle detected
 
 struct ListNode {
-    val: i64,
+    val: int,
     next: Option,
 }
 

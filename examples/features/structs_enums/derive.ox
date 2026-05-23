@@ -6,8 +6,8 @@
 
 #[derive(Debug)]
 struct DebugPoint {
-    x: i64,
-    y: i64,
+    x: int,
+    y: int,
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn test_derive_debug() {
 
 #[derive(Clone)]
 struct CloneData {
-    value: i64,
+    value: int,
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_derive_clone() {
 
 #[derive(PartialEq)]
 struct EqData {
-    id: i64,
+    id: int,
     name: String,
 }
 
@@ -59,7 +59,7 @@ fn test_derive_partial_eq_not_equal() {
 
 #[derive(Default)]
 struct Config {
-    port: i64,
+    port: int,
     host: String,
     debug: bool,
 }
@@ -76,7 +76,7 @@ fn test_derive_default() {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct FullData {
-    count: i64,
+    count: int,
     label: String,
 }
 

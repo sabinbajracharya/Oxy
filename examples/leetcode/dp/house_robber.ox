@@ -26,7 +26,7 @@ fn main() {
     println!("{}", rob(nums));
 }
 
-fn rob(nums: Vec) -> i64 {
+fn rob(nums: Vec) -> int {
     let n = nums.len();
     if n == 0 {
         return 0;

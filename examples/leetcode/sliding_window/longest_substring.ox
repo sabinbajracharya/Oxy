@@ -19,7 +19,7 @@
 // - Window validity check O(1) → remove leftmost char on shrink
 //
 // === Tips ===
-// - HashMap<char, i64> for char → index mapping
+// - HashMap<char, int> for char → index mapping
 // - When duplicate found, jump left past the previous occurrence
 // - max_len = max(max_len, right - left + 1)
 
@@ -28,7 +28,7 @@ fn main() {
     println!("{}", length_of_longest_substring("bbbbb"));
 }
 
-fn length_of_longest_substring(s: String) -> i64 {
+fn length_of_longest_substring(s: String) -> int {
     let mut seen = HashMap::new();
     let mut left = 0i64;
     let mut max_len = 0i64;

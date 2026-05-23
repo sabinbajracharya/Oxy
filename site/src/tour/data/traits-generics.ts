@@ -13,7 +13,7 @@ Use angle brackets to define and use generic types: \`struct Box<T> { ... }\`.
 
 Generics work on structs, enums, and functions. The compiler **monomorphizes** — it generates a concrete version for each set of type arguments used.
 
-**Try it:** Create a \`Pair<f64, f64>\` and a \`Pair<String, bool>\`.`,
+**Try it:** Create a \`Pair<float, float>\` and a \`Pair<String, bool>\`.`,
       hints: [
         'Generic params: `<T>`, `<K, V>`, `<T, U>`.',
         'The compiler checks that all type arguments are known at compile time.',
@@ -92,7 +92,7 @@ Multiple bounds: \`T: Clone + Display\`. This limits what types can be used and 
     fn display(self) -> String;
 }
 
-impl Display for i64 {
+impl Display for int {
     fn display(self) -> String {
         f"int({self})"
     }
@@ -126,14 +126,14 @@ Common overloadable traits: \`Add\`, \`Sub\`, \`Mul\`, \`Div\`, \`Neg\`, \`Rem\`
 
 These traits are defined in the prelude — no import needed.
 
-**Try it:** Implement \`Mul\` (multiply) for \`Point\` to scale by a \`f64\`.`,
+**Try it:** Implement \`Mul\` (multiply) for \`Point\` to scale by a \`float\`.`,
       hints: [
         'Trait impls must implement all required methods.',
         'Operator traits are regular traits — use `impl Trait for Type { ... }`.',
       ],
       initialCode: `struct Point {
-    x: f64,
-    y: f64,
+    x: float,
+    y: float,
 }
 
 impl Add for Point {

@@ -20,7 +20,7 @@ Methods: \`is_some()\`, \`is_none()\`, \`unwrap()\`, \`unwrap_or(default)\`, \`m
         '`unwrap()` panics on None — only use when sure.',
         '`map()` transforms the inner value if Some, passes through None.',
       ],
-      initialCode: `fn find_even(nums: Vec<i64>) -> Option<i64> {
+      initialCode: `fn find_even(nums: Vec<int>) -> Option<int> {
     for n in nums {
         if n % 2 == 0 {
             return Some(n);
@@ -57,7 +57,7 @@ Methods: \`is_ok()\`, \`is_err()\`, \`unwrap()\`, \`unwrap_err()\`, \`map()\`, \
         '`Ok` and `Err` are the constructors.',
         'Match on Result to handle both success and failure paths.',
       ],
-      initialCode: `fn divide(a: f64, b: f64) -> Result<f64, String> {
+      initialCode: `fn divide(a: float, b: float) -> Result<float, String> {
     if b == 0.0 {
         return Err("division by zero".to_string());
     }
@@ -91,7 +91,7 @@ This works with both \`Option\` and \`Result\`. The enclosing function must retu
         '`expr?` is short for: match expr { ok(v) => v, err(e) => return err(e) }.',
         '`?` works on Option too — None propagates as None.',
       ],
-      initialCode: `fn parse_and_divide(a_str: String, b_str: String) -> Result<f64, String> {
+      initialCode: `fn parse_and_divide(a_str: String, b_str: String) -> Result<float, String> {
     let a = a_str.parse_float().map_err(|e| f"parse error: {e}")?;
     let b = b_str.parse_float().map_err(|e| f"parse error: {e}")?;
     if b == 0.0 {
@@ -124,7 +124,7 @@ Both Option and Result have chainable methods:
         'Combinators avoid deeply nested match expressions.',
         '`and_then` is flat_map — the callback must return Option/Result.',
       ],
-      initialCode: `fn first_even(nums: Vec<i64>) -> Option<i64> {
+      initialCode: `fn first_even(nums: Vec<int>) -> Option<int> {
     nums.iter().filter(|x| x % 2 == 0).collect::<Vec<_>>().first().clone()
 }
 
@@ -138,7 +138,7 @@ fn main() {
     println!("{}", result.unwrap_or("no even found".to_string()));
 
     // Using unwrap_or
-    let empty: [i64; 0] = [];
+    let empty: [int; 0] = [];
     println!("{}", first_even(empty).unwrap_or(-1));
 }
 `,

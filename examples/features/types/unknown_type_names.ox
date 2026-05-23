@@ -1,7 +1,7 @@
 // === Feature: unknown type names in annotations are rejected ===
 
 struct Foo {
-    x: i64,
+    x: int,
 }
 
 #[test]
@@ -14,7 +14,7 @@ fn test_vec_of_known_type_ok() {
     let _v: Vec<Foo> = vec![Foo { x: 1 }];
 }
 
-fn identity(x: i64) -> i64 {
+fn identity(x: int) -> int {
     x
 }
 

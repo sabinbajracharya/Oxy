@@ -34,7 +34,7 @@ Oxy has **type inference** — types are inferred from the value, but you can al
 **Try it:** Uncomment the line that tries to change \`x\`. What happens? Then add \`mut\` to fix it.`,
       hints: [
         'Add `mut` before the variable name to make it reassignable.',
-        'Type annotations go after a colon: `let x: i64 = 42;`',
+        'Type annotations go after a colon: `let x: int = 42;`',
       ],
       initialCode: `fn main() {
     let x = 42;
@@ -57,26 +57,26 @@ Oxy has **type inference** — types are inferred from the value, but you can al
 Oxy is statically typed. The compiler infers types for you, but you can (and sometimes must) write them explicitly.
 
 Common built-in types:
-- \`i64\`, \`f64\` — integers and floats
+- \`int\`, \`float\` — integers and floats
 - \`bool\` — \`true\` or \`false\`
 - \`String\` — heap-allocated text
 - \`char\` — a single Unicode character
 
 **Try it:** Change the return type annotation to something wrong and see the error.`,
       hints: [
-        'Integer literals default to `i64`. Use type suffixes like `42u64` for other widths.',
+        'Integer literals default to `int`. Use type suffixes like `42u64` for other widths.',
         'Function return types go after `->`.',
       ],
-      initialCode: `fn square(x: i64) -> i64 {
+      initialCode: `fn square(x: int) -> int {
     x * x
 }
 
 fn main() {
-    let n: i64 = 7;
-    let result: i64 = square(n);
+    let n: int = 7;
+    let result: int = square(n);
     println!("{} squared is {}", n, result);
 
-    let pi: f64 = 3.14159;
+    let pi: float = 3.14159;
     let flag: bool = true;
     println!("pi = {}, flag = {}", pi, flag);
 }

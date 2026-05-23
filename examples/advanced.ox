@@ -1,10 +1,10 @@
 // Advanced Oxy features demo
 
-type Distance = f64;
+type Distance = float;
 type Name = String;
 
-const MAX_ITEMS: i64 = 10;
-static VERSION: i64 = 1;
+const MAX_ITEMS: int = 10;
+static VERSION: int = 1;
 
 fn main() {
     // Constants

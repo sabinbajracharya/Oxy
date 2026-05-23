@@ -19,7 +19,7 @@
 // - Three sum → fix one, two-sum the rest
 //
 // === Tips ===
-// - sort_by with i64 ordering
+// - sort_by with int ordering
 // - Skip duplicate i values
 // - Skip duplicate left/right values after finding a match
 

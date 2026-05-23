@@ -17,10 +17,12 @@ Oxy is **dynamic Rust** — Rust-like syntax WITHOUT ownership, lifetimes, or bo
 - **Lifetimes**: `'a`, `<'a>`. Not parsed, not supported.
 - **Borrow checker**, move semantics, ownership-tracking rules. None of it.
 - **Slice types**: `[T]` as a parameter type. Use `Vec<T>` instead.
+- **Rust-style integer width zoo**: `i8 / i16 / i32 / i64 / u16 / u32 / u64 / isize / usize` are **not Oxy types**. The type checker rejects them with a fix-it suggesting `int`. `u8` is rejected too (use `byte`). `f32` is rejected (use `float`). The full width zoo was retired in favour of three numeric types: `int`, `byte`, `float`.
 
 ### What Oxy DOES have
 - **Variable-level mutability**: `let mut x`, `mut self` for methods, `mut param: T` for fn parameters. Controls whether the binding can be reassigned. This is independent of borrow checking — it's the same as `const`/`let` in JS or `final` in Java.
 - `Vec<T>` for dynamic-length lists. `String` for text. `[T; N]` for fixed-size arrays (coerce to `Vec` at fn boundaries). `Option<T>` and `Result<T, E>` for absence/error.
+- **Exactly three numeric types**: `int` (signed, 64-bit wrapping), `byte` (unsigned, 8-bit wrapping), `float` (64-bit IEEE-754). Width semantics are enforced at function-call boundaries (entry and return) and at typed `let` bindings; intermediate arithmetic widens to `int` to keep mixed-type expressions ergonomic.
 
 ### If a user asks to add reference / borrow / lifetime features
 **Push back before implementing.** Quote this section. Ask:
@@ -28,6 +30,9 @@ Oxy is **dynamic Rust** — Rust-like syntax WITHOUT ownership, lifetimes, or bo
 > Oxy's identity is dynamic-Rust-without-borrow-checking. Adding references/borrows/lifetimes would contradict that. Are you sure that's the direction you want?
 
 Only proceed if they explicitly confirm and can articulate a coherent reason — and even then, flag the divergence in the commit message and update this section to document the policy change.
+
+### If a user asks to reintroduce a Rust-style integer width (i8/i16/i32/u16/u32/u64/...)
+**Push back.** Same protocol: Oxy chose `int + byte + float` deliberately — see the discussion above. Adding a width back is a language-design decision that needs a clear reason (e.g., binary protocol parsing where a specific width is load-bearing). Default answer is no; if accepted, document the rationale and update this section.
 
 ### Syntax mapping (for migration)
 | Rust-ish | Oxy |
@@ -39,6 +44,10 @@ Only proceed if they explicitly confirm and can articulate a coherent reason —
 | `&str` | `String` |
 | `&[T]` | `Vec<T>` |
 | `&expr` | `expr` |
+| `i8` / `i16` / `i32` / `i64` / `u16` / `u32` / `u64` / `isize` / `usize` | `int` |
+| `u8` | `byte` |
+| `f32` / `f64` | `float` |
+| Suffixed literals (`5i8`, `255u8`, `3.14f32`) | bare literal, optionally `as int` / `as byte` / `as float` |
 
 ## Build & Test (Docker)
 

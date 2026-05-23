@@ -25,8 +25,8 @@ fn test_enum_unit_variants() {
 // === Enum with Tuple Variants ===
 
 enum Shape {
-    Circle(f64),
-    Rectangle(f64, f64),
+    Circle(float),
+    Rectangle(float, float),
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn test_enum_match_rectangle() {
 
 enum Message {
     Quit,
-    Move { x: i64, y: i64 },
+    Move { x: int, y: int },
 }
 
 #[test]

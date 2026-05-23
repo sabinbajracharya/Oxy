@@ -26,7 +26,7 @@ fn main() {
     println!("{}", hamming_weight(128));
 }
 
-fn hamming_weight(n: i64) -> i64 {
+fn hamming_weight(n: int) -> int {
     let mut count = 0i64;
     let mut x = n;
     while x != 0 {

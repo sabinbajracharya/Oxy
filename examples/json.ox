@@ -2,7 +2,7 @@
 
 struct Person {
     name: String,
-    age: i64,
+    age: int,
 }
 
 enum Status {

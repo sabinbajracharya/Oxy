@@ -18,7 +18,7 @@ The last expression in a function body (without a semicolon) is the **return val
         'Parameters are written as `name: Type`.',
         'The return type comes after `->`. If omitted, the function returns `()` (unit).',
       ],
-      initialCode: `fn add(a: i64, b: i64) -> i64 {
+      initialCode: `fn add(a: int, b: int) -> int {
     a + b
 }
 
@@ -48,7 +48,7 @@ For functions that return \`()\` (unit), a bare \`return;\` exits immediately.
         '`return expr;` exits the function with that value.',
         'A block\'s last expression without semicolon is also a return.',
       ],
-      initialCode: `fn safe_divide(a: f64, b: f64) -> Option<f64> {
+      initialCode: `fn safe_divide(a: float, b: float) -> Option<float> {
     if b == 0.0 {
         return None();
     }
@@ -88,7 +88,7 @@ Pass closures to higher-order functions like \`map\`, \`filter\`, and \`sort_by\
 
     println!("doubled: {}", doubled);
 
-    let add = |a: i64, b: i64| -> i64 { a + b };
+    let add = |a: int, b: int| -> int { a + b };
     println!("3 + 4 = {}", add(3, 4));
 }
 `,
@@ -107,13 +107,13 @@ The \`fn(T) -> R\` type annotation specifies a function parameter type.
 Use the \`apply_twice\` pattern with a different function.`,
       hints: [
         'Named functions can be passed as values by referencing them without `()`.',
-        'Function type syntax: `fn(i64) -> i64`.',
+        'Function type syntax: `fn(int) -> int`.',
       ],
-      initialCode: `fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+      initialCode: `fn apply(f: fn(int) -> int, x: int) -> int {
     f(x)
 }
 
-fn square(x: i64) -> i64 {
+fn square(x: int) -> int {
     x * x
 }
 

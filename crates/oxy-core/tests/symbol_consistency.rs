@@ -219,8 +219,8 @@ fn test_type_name_constants() {
 fn test_primitive_types_not_empty() {
     assert!(!symbols::PRIMITIVE_TYPES.is_empty());
     let names: Vec<&str> = symbols::PRIMITIVE_TYPES.iter().map(|(n, _)| *n).collect();
-    assert!(names.contains(&"i64"));
-    assert!(names.contains(&"f64"));
+    assert!(names.contains(&"int"));
+    assert!(names.contains(&"float"));
     assert!(names.contains(&"String"));
     assert!(names.contains(&"Vec"));
     assert!(names.contains(&"bool"));
