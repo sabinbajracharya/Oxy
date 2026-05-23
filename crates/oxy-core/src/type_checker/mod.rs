@@ -260,6 +260,10 @@ pub struct TypeChecker {
     struct_defs: HashMap<String, StructDef>,
     type_aliases: HashMap<String, TypeAnnotation>,
     fn_return_types: HashMap<String, TypeInfo>,
+    /// Declared parameter types per function/method, keyed by the same
+    /// qualified name as `fn_return_types`. Generic params are stored as
+    /// `TypeInfo::Unknown` so the caller-side accepts() check passes.
+    fn_param_types: HashMap<String, Vec<TypeInfo>>,
     /// Tracks the current module nesting for field visibility checks.
     module_stack: Vec<String>,
     /// Import aliases: short_name → qualified_name (e.g. "Record" → "database::Record").
@@ -275,6 +279,7 @@ impl TypeChecker {
             struct_defs: HashMap::new(),
             type_aliases: HashMap::new(),
             fn_return_types: HashMap::new(),
+            fn_param_types: HashMap::new(),
             module_stack: Vec::new(),
             use_aliases: HashMap::new(),
             current_impl_type: None,
@@ -439,6 +444,38 @@ impl TypeChecker {
     }
 
     /// Recursively register function return types with module prefix.
+    /// Generic-parameter names declared on the struct identified by
+    /// `qualified` (or its bare type name). Empty if not a known struct.
+    fn struct_generic_names(&self, qualified: &str) -> Vec<String> {
+        let bare = qualified.rsplit("::").next().unwrap_or(qualified);
+        self.struct_defs
+            .get(qualified)
+            .or_else(|| self.struct_defs.get(bare))
+            .map(|def| def.generic_params.iter().map(|p| p.name.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// Resolve each param's declared type to `TypeInfo`. Names that match
+    /// either the function's own generic params or `extra_generics` (e.g.
+    /// generics from an enclosing impl block) become `TypeInfo::Unknown`
+    /// so call-site checks don't false-positive against monomorphic args.
+    fn resolve_param_types(&self, f: &FnDef, extra_generics: &[String]) -> Vec<TypeInfo> {
+        let mut generic_names: Vec<&str> =
+            f.generic_params.iter().map(|p| p.name.as_str()).collect();
+        for n in extra_generics {
+            generic_names.push(n.as_str());
+        }
+        f.params
+            .iter()
+            .map(|p| match &p.type_ann {
+                TypeAnnotation::Named { name, .. } if generic_names.contains(&name.as_str()) => {
+                    TypeInfo::Unknown
+                }
+                ann => self.resolve_annotation(ann),
+            })
+            .collect()
+    }
+
     fn collect_fn_types(&mut self, items: &[Item], prefix: &str) {
         let saved_stack = self.module_stack.clone();
         self.module_stack = if prefix.is_empty() {
@@ -471,7 +508,9 @@ impl TypeChecker {
                     } else {
                         TypeInfo::Unit
                     };
-                    self.fn_return_types.insert(qualified, ret_ty);
+                    let param_tys = self.resolve_param_types(f, &[]);
+                    self.fn_return_types.insert(qualified.clone(), ret_ty);
+                    self.fn_param_types.insert(qualified, param_tys);
                 }
                 Item::Module(m) => {
                     let nested_prefix = if prefix.is_empty() {
@@ -489,17 +528,22 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, i.type_name)
                     };
+                    let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
+                        let unqualified = format!("{}::{}", i.type_name, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {
                             TypeInfo::Unit
                         };
+                        let param_tys = self.resolve_param_types(method, &impl_generics);
                         // Also register under unqualified type name (for use-aliased lookups)
                         self.fn_return_types
-                            .insert(format!("{}::{}", i.type_name, method.name), ret_ty.clone());
-                        self.fn_return_types.insert(qualified, ret_ty);
+                            .insert(unqualified.clone(), ret_ty.clone());
+                        self.fn_return_types.insert(qualified.clone(), ret_ty);
+                        self.fn_param_types.insert(unqualified, param_tys.clone());
+                        self.fn_param_types.insert(qualified, param_tys);
                     }
                 }
                 Item::ImplTrait(i) => {
@@ -508,16 +552,21 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, i.type_name)
                     };
+                    let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
+                        let unqualified = format!("{}::{}", i.type_name, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {
                             TypeInfo::Unit
                         };
+                        let param_tys = self.resolve_param_types(method, &impl_generics);
                         self.fn_return_types
-                            .insert(format!("{}::{}", i.type_name, method.name), ret_ty.clone());
-                        self.fn_return_types.insert(qualified, ret_ty);
+                            .insert(unqualified.clone(), ret_ty.clone());
+                        self.fn_return_types.insert(qualified.clone(), ret_ty);
+                        self.fn_param_types.insert(unqualified, param_tys.clone());
+                        self.fn_param_types.insert(qualified, param_tys);
                     }
                 }
                 _ => {}
@@ -627,11 +676,18 @@ impl TypeChecker {
             TypeInfo::Unit
         };
         self.fn_return_types.insert(f.name.clone(), ret_ty.clone());
+        let impl_generics = self
+            .current_impl_type
+            .as_deref()
+            .map(|t| self.struct_generic_names(t))
+            .unwrap_or_default();
+        let param_tys = self.resolve_param_types(f, &impl_generics);
+        self.fn_param_types
+            .insert(f.name.clone(), param_tys.clone());
 
         let fn_env = TypeEnv::child(&self.env);
-        for param in &f.params {
-            let param_ty = self.resolve_annotation(&param.type_ann);
-            fn_env.borrow_mut().define(&param.name, param_ty);
+        for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
+            fn_env.borrow_mut().define(&param.name, p_ty.clone());
         }
 
         let saved_env = self.env.clone();
@@ -873,6 +929,54 @@ impl TypeChecker {
         Ok(())
     }
 
+    /// Check arity + per-arg type compatibility against the declared
+    /// `params`. `display_name` and `span` are used for error messages.
+    /// `skip_self` drops the first param (for method-call syntax where
+    /// the receiver is implicit). Returns the first mismatch as a
+    /// `TypeError`, or `Ok(())` if all args fit.
+    fn check_args_against_params(
+        &mut self,
+        params: &[TypeInfo],
+        args: &[Expr],
+        skip_self: bool,
+        display_name: &str,
+        span: Span,
+    ) -> Result<(), FerriError> {
+        let effective: &[TypeInfo] = if skip_self && !params.is_empty() {
+            &params[1..]
+        } else {
+            params
+        };
+        if args.len() != effective.len() {
+            return Err(FerriError::TypeError {
+                message: format!(
+                    "wrong number of arguments to `{display_name}`: expected {}, got {}",
+                    effective.len(),
+                    args.len()
+                ),
+                line: span.line,
+                column: span.column,
+            });
+        }
+        for (i, (param_ty, arg)) in effective.iter().zip(args.iter()).enumerate() {
+            let arg_ty = self.infer_expr(arg)?;
+            if !param_ty.accepts(&arg_ty) {
+                let arg_span = arg.span();
+                return Err(FerriError::TypeError {
+                    message: format!(
+                        "type mismatch in call to `{display_name}`: argument {} expected `{}`, got `{}`",
+                        i + 1,
+                        param_ty.name(),
+                        arg_ty.name()
+                    ),
+                    line: arg_span.line,
+                    column: arg_span.column,
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, FerriError> {
         match expr {
             Expr::IntLiteral(_, suffix, _) => Ok(match suffix {
@@ -926,9 +1030,25 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
 
-            Expr::BinaryOp { left, right, .. } => {
+            Expr::BinaryOp {
+                op, left, right, ..
+            } => {
                 let lt = self.infer_expr(left)?;
                 let rt = self.infer_expr(right)?;
+                // Comparisons and logical ops always produce Bool.
+                if matches!(
+                    op,
+                    BinOp::Eq
+                        | BinOp::NotEq
+                        | BinOp::Lt
+                        | BinOp::Gt
+                        | BinOp::LtEq
+                        | BinOp::GtEq
+                        | BinOp::And
+                        | BinOp::Or
+                ) {
+                    return Ok(TypeInfo::Bool);
+                }
                 // String concatenation
                 if lt == TypeInfo::String || rt == TypeInfo::String {
                     return Ok(TypeInfo::String);
@@ -949,29 +1069,50 @@ impl TypeChecker {
 
             Expr::UnaryOp { expr: inner, .. } => self.infer_expr(inner),
 
-            Expr::Call { callee, args, .. } => {
-                for arg in args {
-                    self.infer_expr(arg)?;
-                }
+            Expr::Call {
+                callee, args, span, ..
+            } => {
                 if let Expr::Ident(name, _) = callee.as_ref() {
-                    if let Some(ret) = self.fn_return_types.get(name) {
-                        return Ok(ret.clone());
-                    }
-                    // Try module-qualified name
-                    if !name.contains("::") {
+                    // Resolve the callee's qualified name and look up its params.
+                    let resolved_key = if self.fn_param_types.contains_key(name) {
+                        Some(name.clone())
+                    } else if !name.contains("::") {
                         let module_prefix = self.module_stack.join("::");
                         if !module_prefix.is_empty() {
                             let qualified = format!("{}::{}", module_prefix, name);
-                            if let Some(ret) = self.fn_return_types.get(&qualified) {
-                                return Ok(ret.clone());
+                            if self.fn_param_types.contains_key(&qualified) {
+                                Some(qualified)
+                            } else {
+                                None
                             }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(key) = resolved_key {
+                        let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                        self.check_args_against_params(&params, args, false, name, *span)?;
+                        if let Some(ret) = self.fn_return_types.get(&key) {
+                            return Ok(ret.clone());
+                        }
+                    } else {
+                        // Unknown callee — fall back to inferring args without
+                        // checking against any signature.
+                        for arg in args {
+                            self.infer_expr(arg)?;
+                        }
+                        // Built-in constructors
+                        match name.as_str() {
+                            "Some" => return Ok(TypeInfo::Option),
+                            "Ok" | "Err" => return Ok(TypeInfo::Result),
+                            _ => {}
                         }
                     }
-                    // Built-in constructors
-                    match name.as_str() {
-                        "Some" => return Ok(TypeInfo::Option),
-                        "Ok" | "Err" => return Ok(TypeInfo::Result),
-                        _ => {}
+                } else {
+                    for arg in args {
+                        self.infer_expr(arg)?;
                     }
                 }
                 Ok(TypeInfo::Unknown)
@@ -1103,9 +1244,46 @@ impl TypeChecker {
                         }
                         self.env.borrow_mut().define(name, vt);
                     }
-                    Expr::FieldAccess { .. } => {
-                        // Field assignment — type checking deferred
-                        // (would need to look up field type in struct_defs)
+                    Expr::FieldAccess {
+                        object,
+                        field,
+                        span: fspan,
+                    } => {
+                        let obj_ty = self.infer_expr(object)?;
+                        if let TypeInfo::UserStruct(struct_name) = &obj_ty {
+                            let resolved = self.resolve_struct_name(struct_name);
+                            if let Some(def) = self.struct_defs.get(&resolved) {
+                                let generic_names: Vec<String> =
+                                    def.generic_params.iter().map(|p| p.name.clone()).collect();
+                                if let StructKind::Named(decl_fields) = &def.kind {
+                                    for f in decl_fields {
+                                        if f.name == *field {
+                                            let decl_ty = match &f.type_ann {
+                                                TypeAnnotation::Named { name, .. }
+                                                    if generic_names.contains(name) =>
+                                                {
+                                                    TypeInfo::Unknown
+                                                }
+                                                ann => self.resolve_annotation(ann),
+                                            };
+                                            if !decl_ty.accepts(&vt) {
+                                                return Err(FerriError::TypeError {
+                                                    message: format!(
+                                                        "type mismatch: cannot assign `{}` to field `{}.{field}` of type `{}`",
+                                                        vt.name(),
+                                                        resolved,
+                                                        decl_ty.name()
+                                                    ),
+                                                    line: fspan.line,
+                                                    column: fspan.column,
+                                                });
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -1132,29 +1310,47 @@ impl TypeChecker {
                 Ok(result)
             }
 
-            Expr::PathCall { path, args, .. } => {
-                for arg in args {
-                    self.infer_expr(arg)?;
-                }
+            Expr::PathCall {
+                path, args, span, ..
+            } => {
                 let qualified = path.join("::");
-                if let Some(ret) = self.fn_return_types.get(&qualified) {
-                    return Ok(ret.clone());
+                // Resolve key, mirroring the lookup order used for fn_return_types.
+                let resolved_key = if self.fn_param_types.contains_key(&qualified) {
+                    Some(qualified.clone())
+                } else if path.len() == 2 {
+                    self.use_aliases.get(&path[0]).and_then(|prefix| {
+                        let aliased = format!("{}::{}", prefix, &path[1]);
+                        if self.fn_param_types.contains_key(&aliased) {
+                            Some(aliased)
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
                 }
-                // Try resolving first segment through use_aliases
-                if path.len() == 2 {
-                    if let Some(resolved_prefix) = self.use_aliases.get(&path[0]) {
-                        let aliased = format!("{}::{}", resolved_prefix, &path[1]);
-                        if let Some(ret) = self.fn_return_types.get(&aliased) {
-                            return Ok(ret.clone());
+                .or_else(|| {
+                    let module_prefix = self.module_stack.join("::");
+                    if module_prefix.is_empty() {
+                        None
+                    } else {
+                        let module_qualified = format!("{}::{}", module_prefix, qualified);
+                        if self.fn_param_types.contains_key(&module_qualified) {
+                            Some(module_qualified)
+                        } else {
+                            None
                         }
                     }
-                }
-                // Try module-qualified resolution
-                let module_prefix = self.module_stack.join("::");
-                if !module_prefix.is_empty() {
-                    let module_qualified = format!("{}::{}", module_prefix, qualified);
-                    if let Some(ret) = self.fn_return_types.get(&module_qualified) {
+                });
+                if let Some(key) = resolved_key {
+                    let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                    self.check_args_against_params(&params, args, false, &qualified, *span)?;
+                    if let Some(ret) = self.fn_return_types.get(&key) {
                         return Ok(ret.clone());
+                    }
+                } else {
+                    for arg in args {
+                        self.infer_expr(arg)?;
                     }
                 }
                 Ok(TypeInfo::Unknown)
@@ -1164,28 +1360,62 @@ impl TypeChecker {
                 object,
                 method,
                 args,
+                span,
                 ..
             } => {
                 let obj_ty = self.infer_expr(object)?;
-                for arg in args {
-                    self.infer_expr(arg)?;
-                }
                 if let TypeInfo::UserStruct(struct_name) = &obj_ty {
                     let resolved = self.resolve_struct_name(struct_name);
                     let qualified = format!("{}::{}", resolved, method);
-                    if let Some(ret_ty) = self.fn_return_types.get(&qualified) {
-                        return Ok(ret_ty.clone());
-                    }
-                    let module_prefix = self.module_stack.join("::");
-                    if !module_prefix.is_empty() {
-                        let module_qualified =
-                            format!("{}::{}::{}", module_prefix, resolved, method);
-                        if let Some(ret_ty) = self.fn_return_types.get(&module_qualified) {
+                    let module_qualified = if self.module_stack.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "{}::{}::{}",
+                            self.module_stack.join("::"),
+                            resolved,
+                            method
+                        ))
+                    };
+                    let resolved_key = if self.fn_param_types.contains_key(&qualified) {
+                        Some(qualified.clone())
+                    } else if let Some(mq) = module_qualified.as_ref() {
+                        if self.fn_param_types.contains_key(mq) {
+                            Some(mq.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(key) = resolved_key {
+                        let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                        self.check_args_against_params(&params, args, true, method, *span)?;
+                        if let Some(ret_ty) = self.fn_return_types.get(&key) {
                             return Ok(ret_ty.clone());
                         }
+                    } else {
+                        // Unknown user-method — infer args for side effects,
+                        // then fall through to the builtin method table.
+                        for arg in args {
+                            self.infer_expr(arg)?;
+                        }
+                    }
+                } else {
+                    for arg in args {
+                        self.infer_expr(arg)?;
                     }
                 }
-                Ok(TypeInfo::Unknown)
+                // Common built-in method return types. Keeps downstream
+                // type-checking honest when calls are chained through builtins
+                // like `.to_string()`. Anything not listed stays Unknown.
+                Ok(match method.as_str() {
+                    "to_string" => TypeInfo::String,
+                    "len" => TypeInfo::I64,
+                    "is_empty" | "contains" | "starts_with" | "ends_with" => TypeInfo::Bool,
+                    "clone" => obj_ty.clone(),
+                    _ => TypeInfo::Unknown,
+                })
             }
 
             Expr::FieldAccess {
@@ -1227,9 +1457,52 @@ impl TypeChecker {
                 name, fields, span, ..
             } => {
                 let resolved = self.resolve_struct_name(name);
+                // Pre-collect declared field types so we can borrow self mutably
+                // inside the inference loop. Generic parameter names (e.g. `T`)
+                // resolve to Unknown so call-site checks pass.
+                let field_types: HashMap<String, TypeInfo> =
+                    if let Some(def) = self.struct_defs.get(&resolved) {
+                        let generic_names: Vec<String> =
+                            def.generic_params.iter().map(|p| p.name.clone()).collect();
+                        if let StructKind::Named(decl_fields) = &def.kind {
+                            decl_fields
+                                .iter()
+                                .map(|f| {
+                                    let ty = match &f.type_ann {
+                                        TypeAnnotation::Named { name, .. }
+                                            if generic_names.contains(name) =>
+                                        {
+                                            TypeInfo::Unknown
+                                        }
+                                        ann => self.resolve_annotation(ann),
+                                    };
+                                    (f.name.clone(), ty)
+                                })
+                                .collect()
+                        } else {
+                            HashMap::new()
+                        }
+                    } else {
+                        HashMap::new()
+                    };
                 for (field_name, f_expr) in fields {
                     self.check_field_visible(&resolved, field_name, *span)?;
-                    self.infer_expr(f_expr)?;
+                    let val_ty = self.infer_expr(f_expr)?;
+                    if let Some(decl_ty) = field_types.get(field_name) {
+                        if !decl_ty.accepts(&val_ty) {
+                            let fspan = f_expr.span();
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "type mismatch: field `{}.{field_name}` declared as `{}`, got `{}`",
+                                    resolved,
+                                    decl_ty.name(),
+                                    val_ty.name()
+                                ),
+                                line: fspan.line,
+                                column: fspan.column,
+                            });
+                        }
+                    }
                 }
                 Ok(TypeInfo::UserStruct(resolved))
             }
@@ -1284,7 +1557,15 @@ impl TypeChecker {
                 Ok(TypeInfo::Unknown)
             }
             Expr::FString { .. } => Ok(TypeInfo::String),
-            Expr::MacroCall { .. } => Ok(TypeInfo::Unknown),
+            Expr::MacroCall { args, .. } => {
+                // Macros are opaque at type-check time, but their argument
+                // expressions still need to be inferred so any calls or
+                // field accesses inside get their own type checks run.
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+                Ok(TypeInfo::Unknown)
+            }
             Expr::Path { segments, .. } => {
                 let qualified = segments.join("::");
                 if let Some(ret) = self.fn_return_types.get(&qualified) {

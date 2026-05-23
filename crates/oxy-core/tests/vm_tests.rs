@@ -203,7 +203,7 @@ fn main() { foo(1, 2); }
     assert!(result
         .unwrap_err()
         .to_string()
-        .contains("expects 1 argument"));
+        .contains("expected 1, got 2"));
 }
 
 #[test]
