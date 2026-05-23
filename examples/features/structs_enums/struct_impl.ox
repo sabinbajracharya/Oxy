@@ -1,5 +1,5 @@
 // === Feature: Structs — Impl Blocks ===
-// `impl` blocks add methods to structs. Methods can take `&self`
+// `impl` blocks add methods to structs. Methods can take `self`
 // (immutable reference) for read-only access, or `self` for ownership
 // transfer. Associated functions (no `self`) act as constructors.
 
@@ -12,16 +12,16 @@ impl Counter {
         Counter { count: initial }
     }
 
-    fn value(&self) -> i64 {
+    fn value(self) -> i64 {
         self.count
     }
 
-    fn increment(&self) -> Counter {
+    fn increment(self) -> Counter {
         Counter { count: self.count + 1 }
     }
 
-    fn reset(&self) {
-        // Mutable mutation not supported without &mut self,
+    fn reset(self) {
+        // Mutable mutation not supported without mut self,
         // so return a new value instead
         let _ = Counter { count: 0 };
     }
@@ -56,11 +56,11 @@ struct Rect {
 }
 
 impl Rect {
-    fn area(&self) -> i64 {
+    fn area(self) -> i64 {
         self.width * self.height
     }
 
-    fn perimeter(&self) -> i64 {
+    fn perimeter(self) -> i64 {
         2 * (self.width + self.height)
     }
 }
@@ -83,7 +83,7 @@ impl Wrapper {
         Wrapper { value: v }
     }
 
-    fn unwrap(&self) -> i64 {
+    fn unwrap(self) -> i64 {
         self.value
     }
 }

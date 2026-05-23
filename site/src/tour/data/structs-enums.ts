@@ -60,7 +60,7 @@ impl Point {
         Self { x, y }
     }
 
-    fn distance_from_origin(&self) -> f64 {
+    fn distance_from_origin(self) -> f64 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 }

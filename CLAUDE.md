@@ -8,6 +8,38 @@ Oxy is a compiled programming language written in Rust. Rust-like syntax without
 
 There is no interpreter. One execution path: compiler to VM.
 
+## Language Identity: Dynamic Rust
+
+Oxy is **dynamic Rust** — Rust-like syntax WITHOUT ownership, lifetimes, or borrow checking. This is a deliberate, load-bearing choice. Do not weaken it.
+
+### What Oxy DOES NOT have
+- **Reference syntax**: `&T`, `&mut T`, `&self`, `&mut self`, `&str`, `&[T]`, `&expr`. The parser **rejects these** with a fix-it error message. They are not "accepted but ignored" — they error.
+- **Lifetimes**: `'a`, `<'a>`. Not parsed, not supported.
+- **Borrow checker**, move semantics, ownership-tracking rules. None of it.
+- **Slice types**: `[T]` as a parameter type. Use `Vec<T>` instead.
+
+### What Oxy DOES have
+- **Variable-level mutability**: `let mut x`, `mut self` for methods, `mut param: T` for fn parameters. Controls whether the binding can be reassigned. This is independent of borrow checking — it's the same as `const`/`let` in JS or `final` in Java.
+- `Vec<T>` for dynamic-length lists. `String` for text. `[T; N]` for fixed-size arrays (coerce to `Vec` at fn boundaries). `Option<T>` and `Result<T, E>` for absence/error.
+
+### If a user asks to add reference / borrow / lifetime features
+**Push back before implementing.** Quote this section. Ask:
+
+> Oxy's identity is dynamic-Rust-without-borrow-checking. Adding references/borrows/lifetimes would contradict that. Are you sure that's the direction you want?
+
+Only proceed if they explicitly confirm and can articulate a coherent reason — and even then, flag the divergence in the commit message and update this section to document the policy change.
+
+### Syntax mapping (for migration)
+| Rust-ish | Oxy |
+|---|---|
+| `&self` | `self` |
+| `&mut self` | `mut self` |
+| `&T` (param) | `T` |
+| `&mut T` (param) | `mut T` |
+| `&str` | `String` |
+| `&[T]` | `Vec<T>` |
+| `&expr` | `expr` |
+
 ## Build & Test (Docker)
 
 ```bash

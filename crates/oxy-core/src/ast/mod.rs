@@ -117,6 +117,8 @@ pub struct FnDef {
 pub struct Param {
     pub name: String,
     pub type_ann: TypeAnnotation,
+    /// `true` if declared as `mut param: T` (or `mut self`). Mirrors `let mut x`.
+    pub is_mut: bool,
     pub span: Span,
 }
 
@@ -688,10 +690,6 @@ pub enum UnaryOp {
     Not,
     /// Bitwise not: `~`
     BitNot,
-    /// Borrow: `&` (parsed but semantically ignored)
-    Ref,
-    /// Dereference: `*` (parsed but semantically ignored)
-    Deref,
 }
 
 /// A match arm: `pattern => expr` or `pattern if guard => expr`
@@ -851,8 +849,6 @@ impl std::fmt::Display for UnaryOp {
             UnaryOp::Neg => write!(f, "-"),
             UnaryOp::Not => write!(f, "!"),
             UnaryOp::BitNot => write!(f, "~"),
-            UnaryOp::Ref => write!(f, "&"),
-            UnaryOp::Deref => write!(f, "*"),
         }
     }
 }
@@ -1582,7 +1578,7 @@ mod tests {
     fn test_unaryop_display() {
         assert_eq!(format!("{}", UnaryOp::Neg), "-");
         assert_eq!(format!("{}", UnaryOp::Not), "!");
-        assert_eq!(format!("{}", UnaryOp::Ref), "&");
+        assert_eq!(format!("{}", UnaryOp::BitNot), "~");
     }
 
     #[test]

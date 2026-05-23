@@ -436,47 +436,46 @@ impl Parser {
         loop {
             let start_span = self.current_span();
 
-            // Accept optional & or &mut before param name (parse but ignore)
+            // Reject `&` at the start of a parameter. Oxy has no borrow checker,
+            // so `&self` / `&mut self` / `&T` are noise that mislead readers.
             if self.check(&TokenKind::Amp) {
-                self.advance();
-                if self.check(&TokenKind::Mut) {
-                    self.advance();
-                }
+                return Err(self.error(
+                    "references are not supported in Oxy. Use `self` for read-only \
+                     methods, `mut self` for mutating methods, and drop `&` from \
+                     parameter types (e.g., `name: String` instead of `name: &str`). \
+                     Oxy has no borrow checker — see CLAUDE.md."
+                        .to_string(),
+                ));
             }
 
-            // Accept `self` as a parameter (for methods)
-            if self.check(&TokenKind::SelfLower) || self.check(&TokenKind::Mut) {
-                let is_mut = self.check(&TokenKind::Mut);
-                if is_mut {
-                    self.advance(); // consume `mut`
-                }
-                if self.check(&TokenKind::SelfLower) {
-                    self.advance(); // consume `self`
-                    params.push(Param {
-                        name: "self".to_string(),
-                        type_ann: TypeAnnotation::Named {
-                            name: "Self".to_string(),
-                            span: start_span,
-                        },
+            // Optional `mut` prefix (applies to both `mut self` and `mut x: T`).
+            let is_mut = if self.check(&TokenKind::Mut) {
+                self.advance();
+                true
+            } else {
+                false
+            };
+
+            // `self` parameter (for methods).
+            if self.check(&TokenKind::SelfLower) {
+                self.advance();
+                params.push(Param {
+                    name: "self".to_string(),
+                    type_ann: TypeAnnotation::Named {
+                        name: "Self".to_string(),
                         span: start_span,
-                    });
-                    if !self.match_token(&TokenKind::Comma) {
-                        break;
-                    }
-                    continue;
+                    },
+                    is_mut,
+                    span: start_span,
+                });
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
                 }
+                continue;
             }
 
             let name = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-
-            // Accept optional & or &mut in type position (parse but ignore)
-            if self.check(&TokenKind::Amp) {
-                self.advance();
-                if self.check(&TokenKind::Mut) {
-                    self.advance();
-                }
-            }
 
             let type_ann = self.parse_type_annotation()?;
 
@@ -484,6 +483,7 @@ impl Parser {
                 span: self.merge_spans(start_span, type_ann.span()),
                 name,
                 type_ann,
+                is_mut,
             });
 
             if !self.match_token(&TokenKind::Comma) {
@@ -514,12 +514,14 @@ impl Parser {
             let name = self.expect_ident()?;
             return Ok(TypeAnnotation::Named { name, span });
         }
-        // Accept `&` or `&mut` before type
+        // Reject `&` in type position — Oxy has no references.
         if self.check(&TokenKind::Amp) {
-            self.advance();
-            if self.check(&TokenKind::Mut) {
-                self.advance();
-            }
+            return Err(self.error(
+                "references are not supported in Oxy. Drop the `&` (use `T` instead \
+                 of `&T`, `Vec<T>` instead of `&[T]`, `String` instead of `&str`). \
+                 Oxy has no borrow checker — see CLAUDE.md."
+                    .to_string(),
+            ));
         }
         // Accept `fn(T1, T2) -> Ret` function type syntax
         if self.check(&TokenKind::Fn) {
@@ -1800,21 +1802,12 @@ impl Parser {
                     span: self.merge_spans(span, end_span),
                 })
             }
-            TokenKind::Amp => {
-                let span = self.current_span();
-                self.advance();
-                // Accept optional `mut` after `&`
-                if self.check(&TokenKind::Mut) {
-                    self.advance();
-                }
-                let expr = self.parse_expr(Precedence::Unary)?;
-                let end_span = expr.span();
-                Ok(Expr::UnaryOp {
-                    op: UnaryOp::Ref,
-                    expr: Box::new(expr),
-                    span: self.merge_spans(span, end_span),
-                })
-            }
+            TokenKind::Amp => Err(self.error(
+                "the `&` prefix operator is not supported in Oxy. Just pass the \
+                 value directly — there's no borrow checker. (For bitwise AND on \
+                 two values, use `a & b` as a binary operator.) See CLAUDE.md."
+                    .to_string(),
+            )),
 
             // Closure: `|params| expr` or `|params| { body }`
             TokenKind::Pipe => self.parse_closure(),
@@ -3249,24 +3242,17 @@ mod tests {
     // === Reference syntax (parsed but ignored) ===
 
     #[test]
-    fn test_reference_in_param() {
-        let f = parse_fn("fn foo(x: &i64) {}");
-        assert_eq!(f.params[0].type_ann.name(), "i64");
-    }
-
-    #[test]
-    fn test_ref_expr() {
-        let stmts = parse_fn_body("fn main() { &x; }");
-        let Stmt::Expr { expr, .. } = &stmts[0] else {
-            panic!("expected expr stmt");
-        };
-        assert!(matches!(
-            expr,
-            Expr::UnaryOp {
-                op: UnaryOp::Ref,
-                ..
-            }
-        ));
+    fn test_reference_in_param_rejected() {
+        // Oxy rejects `&T` (and `&self`, `&str`, etc.) — Rust-shaped without
+        // borrow checking. See CLAUDE.md "Language Identity".
+        let result = parse("fn foo(x: &i64) {}\nfn main() {}");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("references are not supported"),
+            "expected fix-it error, got: {}",
+            msg
+        );
     }
 
     // === Full program ===
@@ -3695,7 +3681,7 @@ fn main() {}
         let program = parse(
             r#"
 impl Foo {
-    fn bar(&self) -> i64 {
+    fn bar(self) -> i64 {
         42
     }
 }
@@ -3759,7 +3745,7 @@ fn main() {}
 
     #[test]
     fn test_trait_def() {
-        let program = parse("trait Greet { fn greet(&self) -> String; }\nfn main() {}").unwrap();
+        let program = parse("trait Greet { fn greet(self) -> String; }\nfn main() {}").unwrap();
         let Item::Trait(t) = &program.items[0] else {
             panic!("expected trait");
         };
@@ -3771,7 +3757,7 @@ fn main() {}
     #[test]
     fn test_trait_with_default_method() {
         let program = parse(
-            r#"trait Foo { fn bar(&self) -> i64 { 42 } }
+            r#"trait Foo { fn bar(self) -> i64 { 42 } }
 fn main() {}"#,
         )
         .unwrap();
@@ -3787,9 +3773,9 @@ fn main() {}"#,
     #[test]
     fn test_impl_trait_for_type() {
         let program = parse(
-            r#"trait Greet { fn greet(&self) -> String; }
+            r#"trait Greet { fn greet(self) -> String; }
 struct Person { name: String }
-impl Greet for Person { fn greet(&self) -> String { self.name } }
+impl Greet for Person { fn greet(self) -> String { self.name } }
 fn main() {}"#,
         )
         .unwrap();
@@ -3843,7 +3829,7 @@ fn main() {}"#,
     fn test_impl_trait_for_add() {
         let program = parse(
             r#"struct Vec2 { x: f64, y: f64 }
-impl Add for Vec2 { fn add(&self, other: &Vec2) -> Vec2 { Vec2 { x: 0.0, y: 0.0 } } }
+impl Add for Vec2 { fn add(self, other: Vec2) -> Vec2 { Vec2 { x: 0.0, y: 0.0 } } }
 fn main() {}"#,
         )
         .unwrap();

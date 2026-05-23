@@ -948,7 +948,7 @@ impl Compiler {
                     UnaryOp::Neg => self.emit(OpCode::Neg),
                     UnaryOp::Not => self.emit(OpCode::Not),
                     UnaryOp::BitNot => self.emit(OpCode::BitNot),
-                    UnaryOp::Ref => return Ok(()), // & is a no-op in Oxy (no ownership/borrowing)
+                    #[allow(unreachable_patterns)]
                     _ => {
                         return Err(FerriError::Runtime {
                             message: format!("unsupported unary op in compiler: {:?}", op),
@@ -1938,7 +1938,8 @@ impl Compiler {
                         })
                     })
                     .collect();
-                // Now define params — they get slots above the captured vars
+                // Now define params — they get slots above the captured vars.
+                // Closures don't have surface `mut` syntax on params yet.
                 for param in params {
                     self.sym.define(&param.name);
                 }

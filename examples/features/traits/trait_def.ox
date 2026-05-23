@@ -81,7 +81,7 @@ fn test_multiple_trait_methods() {
     assert_eq!(c.sub(d).0, 7);
 }
 
-// === Trait with &self Receiver ===
+// === Trait with self Receiver ===
 
 trait Describe {
     fn describe(self) -> String;

@@ -289,15 +289,15 @@ fn test_compound_assignment() {
 // === Reference syntax (no-op) ===
 
 #[test]
-fn test_reference_ignored() {
+fn test_function_call_with_string_param() {
     let output = run_and_capture(
         r#"
-fn greet(name: &String) {
+fn greet(name: String) {
     println!("Hello, {}!", name);
 }
 fn main() {
     let name = "Oxy";
-    greet(&name);
+    greet(name);
 }
 "#,
     );
@@ -1086,7 +1086,7 @@ impl Point {
         Point { x, y }
     }
 
-    fn display(&self) {
+    fn display(self) {
         println!("({}, {})", self.x, self.y);
     }
 }
@@ -1110,7 +1110,7 @@ struct Rect {
 }
 
 impl Rect {
-    fn area(&self) -> f64 {
+    fn area(self) -> f64 {
         self.w * self.h
     }
 }
@@ -1191,7 +1191,7 @@ enum Shape {
 }
 
 impl Shape {
-    fn area(&self) -> f64 {
+    fn area(self) -> f64 {
         match self {
             Shape::Circle(r) => 3.14159 * r * r,
             Shape::Rectangle(w, h) => w * h,
@@ -1327,7 +1327,7 @@ impl Counter {
         Self { count: 0 }
     }
 
-    fn value(&self) -> i64 {
+    fn value(self) -> i64 {
         self.count
     }
 }
@@ -1368,7 +1368,7 @@ fn test_trait_basic() {
     let out = run_and_capture(
         r#"
 trait Greet {
-    fn greet(&self) -> String;
+    fn greet(self) -> String;
 }
 
 struct Person {
@@ -1376,7 +1376,7 @@ struct Person {
 }
 
 impl Greet for Person {
-    fn greet(&self) -> String {
+    fn greet(self) -> String {
         format!("Hello, I'm {}!", self.name)
     }
 }
@@ -1395,8 +1395,8 @@ fn test_trait_multiple_methods() {
     let out = run_and_capture(
         r#"
 trait Shape {
-    fn area(&self) -> f64;
-    fn name(&self) -> String;
+    fn area(self) -> f64;
+    fn name(self) -> String;
 }
 
 struct Circle {
@@ -1404,11 +1404,11 @@ struct Circle {
 }
 
 impl Shape for Circle {
-    fn area(&self) -> f64 {
+    fn area(self) -> f64 {
         3.14159 * self.radius * self.radius
     }
 
-    fn name(&self) -> String {
+    fn name(self) -> String {
         String::from("Circle")
     }
 }
@@ -1427,8 +1427,8 @@ fn test_trait_default_method() {
     let out = run_and_capture(
         r#"
 trait Describable {
-    fn name(&self) -> String;
-    fn describe(&self) -> String {
+    fn name(self) -> String;
+    fn describe(self) -> String {
         format!("I am {}", self.name())
     }
 }
@@ -1438,7 +1438,7 @@ struct Dog {
 }
 
 impl Describable for Dog {
-    fn name(&self) -> String {
+    fn name(self) -> String {
         self.breed.clone()
     }
 }
@@ -1484,7 +1484,7 @@ impl Vec2 {
 }
 
 impl Add for Vec2 {
-    fn add(&self, other: &Vec2) -> Vec2 {
+    fn add(self, other: Vec2) -> Vec2 {
         Vec2::new(self.x + other.x, self.y + other.y)
     }
 }
@@ -1510,7 +1510,7 @@ struct Vec2 {
 }
 
 impl Mul for Vec2 {
-    fn mul(&self, other: &Vec2) -> Vec2 {
+    fn mul(self, other: Vec2) -> Vec2 {
         Vec2 { x: self.x * other.x, y: self.y * other.y }
     }
 }
@@ -1566,7 +1566,7 @@ fn test_trait_with_impl_and_direct_methods() {
     let out = run_and_capture(
         r#"
 trait Summary {
-    fn summarize(&self) -> String;
+    fn summarize(self) -> String;
 }
 
 struct Article {
@@ -1581,7 +1581,7 @@ impl Article {
 }
 
 impl Summary for Article {
-    fn summarize(&self) -> String {
+    fn summarize(self) -> String {
         format!("{}: {}", self.title, self.content)
     }
 }
@@ -1600,11 +1600,11 @@ fn test_multiple_traits_for_type() {
     let out = run_and_capture(
         r#"
 trait Greet {
-    fn greet(&self) -> String;
+    fn greet(self) -> String;
 }
 
 trait Farewell {
-    fn farewell(&self) -> String;
+    fn farewell(self) -> String;
 }
 
 struct Person {
@@ -1612,13 +1612,13 @@ struct Person {
 }
 
 impl Greet for Person {
-    fn greet(&self) -> String {
+    fn greet(self) -> String {
         format!("Hi, I'm {}", self.name)
     }
 }
 
 impl Farewell for Person {
-    fn farewell(&self) -> String {
+    fn farewell(self) -> String {
         format!("Goodbye from {}", self.name)
     }
 }
@@ -1651,7 +1651,7 @@ fn test_trait_on_enum() {
     let out = run_and_capture(
         r#"
 trait Describe {
-    fn describe(&self) -> String;
+    fn describe(self) -> String;
 }
 
 enum Color {
@@ -1661,7 +1661,7 @@ enum Color {
 }
 
 impl Describe for Color {
-    fn describe(&self) -> String {
+    fn describe(self) -> String {
         match self {
             Color::Red => String::from("red"),
             Color::Green => String::from("green"),
@@ -1903,7 +1903,7 @@ fn main() {
 fn test_try_operator_ok() {
     let out = run_and_capture(
         r#"
-fn parse_num(s: &str) -> Result {
+fn parse_num(s: String) -> Result {
     if s == "42" {
         Ok(42)
     } else {
@@ -1929,7 +1929,7 @@ fn main() {
 fn test_try_operator_err() {
     let out = run_and_capture(
         r#"
-fn parse_num(s: &str) -> Result {
+fn parse_num(s: String) -> Result {
     if s == "42" {
         Ok(42)
     } else {
@@ -2526,7 +2526,7 @@ mod geometry {
         pub fn new(x: f64, y: f64) -> Self {
             Point { x, y }
         }
-        pub fn to_string(&self) -> String {
+        pub fn to_string(self) -> String {
             format!("({}, {})", self.x, self.y)
         }
     }
@@ -2648,8 +2648,8 @@ fn test_visibility_filtering_glob() {
     let output = run_and_capture(
         r#"
 mod lib {
-    pub fn visible() -> &str { "yes" }
-    fn hidden() -> &str { "no" }
+    pub fn visible() -> String { "yes" }
+    fn hidden() -> String { "no" }
 }
 use lib::*;
 fn main() {
@@ -5326,9 +5326,9 @@ fn test_type_alias_associated_fn() {
 fn test_where_clause_parses() {
     let output = run_and_capture(
         r#"
-            trait Greet { fn greet(&self) -> String; }
+            trait Greet { fn greet(self) -> String; }
             struct Dog { name: String }
-            impl Greet for Dog { fn greet(&self) -> String { format!("Woof! I'm {}", self.name) } }
+            impl Greet for Dog { fn greet(self) -> String { format!("Woof! I'm {}", self.name) } }
             fn say_hi<T>(item: T) where T: Greet {
                 println!("{}", item.greet());
             }
@@ -5348,7 +5348,7 @@ fn test_enum_impl_methods() {
         r#"
             enum Color { Red, Blue }
             impl Color {
-                fn name(&self) -> String {
+                fn name(self) -> String {
                     match self {
                         Color::Red => "red".to_string(),
                         Color::Blue => "blue".to_string(),
@@ -5612,11 +5612,11 @@ fn test_impl_display() {
             struct Point { x: i64, y: i64 }
 
             trait Display {
-                fn fmt(&self) -> String;
+                fn fmt(self) -> String;
             }
 
             impl Display for Point {
-                fn fmt(&self) -> String {
+                fn fmt(self) -> String {
                     format!("({}, {})", self.x, self.y)
                 }
             }
@@ -5642,7 +5642,7 @@ fn test_enum_methods() {
             }
 
             impl Direction {
-                fn is_horizontal(&self) -> bool {
+                fn is_horizontal(self) -> bool {
                     match self {
                         Direction::East => true,
                         Direction::West => true,
@@ -5677,7 +5677,7 @@ fn test_struct_field_mutation_via_method() {
                     Counter { count: 0 }
                 }
 
-                fn inc(&mut self) {
+                fn inc(mut self) {
                     self.count = self.count + 1;
                 }
             }
@@ -5706,7 +5706,7 @@ fn test_struct_field_mutation_via_self_push() {
                     Stack { items: vec![] }
                 }
 
-                fn push(&mut self, val: i64) {
+                fn push(mut self, val: i64) {
                     self.items.push(val);
                 }
             }
@@ -6132,4 +6132,82 @@ fn main() {
 }"#,
     );
     assert_eq!(output, vec!["5\n", "8\n", "13\n"]);
+}
+
+// === Reference syntax is rejected (Oxy is dynamic Rust — see CLAUDE.md) ===
+
+#[test]
+fn test_reject_amp_in_type_position() {
+    let result = run(r#"fn greet(name: &str) { println!("{}", name); } fn main() {}"#);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("references are not supported"),
+        "expected fix-it error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_reject_amp_self_in_method_receiver() {
+    let result = run(r#"
+struct Foo { n: i64 }
+impl Foo {
+    fn get(&self) -> i64 { self.n }
+}
+fn main() {}
+"#);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("references are not supported"),
+        "expected fix-it error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_reject_amp_prefix_expression() {
+    let result = run(r#"fn main() { let x = 5; let r = &x; println!("{}", r); }"#);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("`&` prefix operator is not supported"),
+        "expected fix-it error, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_mut_self_method_works() {
+    let output = run_and_capture(
+        r#"
+struct Counter { n: i64 }
+impl Counter {
+    fn bump(mut self) -> i64 {
+        self.n = self.n + 1;
+        self.n
+    }
+}
+fn main() {
+    let c = Counter { n: 5 };
+    println!("{}", c.bump());
+}"#,
+    );
+    assert_eq!(output, vec!["6\n"]);
+}
+
+#[test]
+fn test_mut_param_works() {
+    let output = run_and_capture(
+        r#"
+fn double_in_place(mut x: i64) -> i64 {
+    x = x * 2;
+    x
+}
+fn main() {
+    println!("{}", double_in_place(21));
+}"#,
+    );
+    assert_eq!(output, vec!["42\n"]);
 }

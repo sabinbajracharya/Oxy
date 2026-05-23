@@ -29,7 +29,7 @@ mod geometry {
             Point { x, y }
         }
 
-        fn distance(&self, other: &Point) -> f64 {
+        fn distance(self, other: Point) -> f64 {
             let dx = self.x - other.x;
             let dy = self.y - other.y;
             (dx * dx + dy * dy).sqrt()
@@ -42,7 +42,7 @@ mod geometry {
     }
 
     impl Shape {
-        fn area(&self) -> f64 {
+        fn area(self) -> f64 {
             match self {
                 Shape::Circle(r) => 3.14159 * r * r,
                 Shape::Rectangle(w, h) => w * h,
@@ -67,7 +67,7 @@ fn main() {
     // Using imported struct
     let p1 = Point::new(0.0, 0.0);
     let p2 = Point::new(3.0, 4.0);
-    println!("Distance: {}", p1.distance(&p2));
+    println!("Distance: {}", p1.distance(p2));
 
     // Using imported enum
     let circle = Shape::Circle(5.0);

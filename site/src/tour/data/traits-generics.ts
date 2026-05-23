@@ -51,8 +51,8 @@ A trait can include **default method implementations** that implementors can ove
         'Default methods: write the body inside the trait.',
       ],
       initialCode: `trait Greet {
-    fn greet(&self) -> String;
-    fn loud_greet(&self) -> String {
+    fn greet(self) -> String;
+    fn loud_greet(self) -> String {
         self.greet().to_uppercase()
     }
 }
@@ -62,7 +62,7 @@ struct Dog {
 }
 
 impl Greet for Dog {
-    fn greet(&self) -> String {
+    fn greet(self) -> String {
         f"Woof! I'm {self.name}!"
     }
 }
@@ -89,17 +89,17 @@ Multiple bounds: \`T: Clone + Display\`. This limits what types can be used and 
         '`+` combines multiple bounds.',
       ],
       initialCode: `trait Display {
-    fn display(&self) -> String;
+    fn display(self) -> String;
 }
 
 impl Display for i64 {
-    fn display(&self) -> String {
+    fn display(self) -> String {
         f"int({self})"
     }
 }
 
 impl Display for String {
-    fn display(&self) -> String {
+    fn display(self) -> String {
         f"str({self})"
     }
 }

@@ -557,7 +557,11 @@ impl Compiler {
 
         let saved_sym = self.sym.clone();
         for param in &f.params {
-            self.sym.define(&param.name);
+            if param.is_mut {
+                self.sym.define_mut(&param.name);
+            } else {
+                self.sym.define(&param.name);
+            }
         }
 
         // Pre-scan: find mutable variables captured by closures
@@ -1059,7 +1063,11 @@ impl Compiler {
                     );
                     let saved_sym = self.sym.clone();
                     for param in &f.params {
-                        self.sym.define(&param.name);
+                        if param.is_mut {
+                            self.sym.define_mut(&param.name);
+                        } else {
+                            self.sym.define(&param.name);
+                        }
                     }
                     self.compile_block(&f.body)?;
                     self.emit(OpCode::Return);
@@ -1139,7 +1147,11 @@ impl Compiler {
                         }
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
-                            self.sym.define(&param.name);
+                            if param.is_mut {
+                                self.sym.define_mut(&param.name);
+                            } else {
+                                self.sym.define(&param.name);
+                            }
                         }
                         self.compile_block(&method.body)?;
                         self.emit(OpCode::Return);
@@ -1234,7 +1246,11 @@ impl Compiler {
                             .insert((i.type_name.clone(), method.name.clone()), ip);
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
-                            self.sym.define(&param.name);
+                            if param.is_mut {
+                                self.sym.define_mut(&param.name);
+                            } else {
+                                self.sym.define(&param.name);
+                            }
                         }
                         self.compile_block(&method.body)?;
                         self.emit(OpCode::Return);

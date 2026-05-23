@@ -1251,6 +1251,7 @@ impl Vm {
                             name: "_".into(),
                             span: blank_span,
                         },
+                        is_mut: false,
                         span: blank_span,
                     })
                     .collect();

@@ -1,13 +1,13 @@
 // Traits & Generics example for Oxy
 
 trait Greet {
-    fn greet(&self) -> String;
+    fn greet(self) -> String;
 }
 
 trait Describable {
-    fn name(&self) -> String;
+    fn name(self) -> String;
     // Default method — uses self.name()
-    fn describe(&self) -> String {
+    fn describe(self) -> String {
         format!("I am {}", self.name())
     }
 }
@@ -24,13 +24,13 @@ impl Person {
 }
 
 impl Greet for Person {
-    fn greet(&self) -> String {
+    fn greet(self) -> String {
         format!("Hello, I'm {} and I'm {} years old!", self.name, self.age)
     }
 }
 
 impl Describable for Person {
-    fn name(&self) -> String {
+    fn name(self) -> String {
         self.name.clone()
     }
     // describe() uses the default implementation from the trait
@@ -59,13 +59,13 @@ impl Vec2 {
 }
 
 impl Add for Vec2 {
-    fn add(&self, other: &Vec2) -> Vec2 {
+    fn add(self, other: Vec2) -> Vec2 {
         Vec2::new(self.x + other.x, self.y + other.y)
     }
 }
 
 impl Mul for Vec2 {
-    fn mul(&self, other: &Vec2) -> Vec2 {
+    fn mul(self, other: Vec2) -> Vec2 {
         Vec2::new(self.x * other.x, self.y * other.y)
     }
 }

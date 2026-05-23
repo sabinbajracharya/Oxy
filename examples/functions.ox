@@ -14,7 +14,7 @@ fn factorial(n: i64) -> i64 {
     n * factorial(n - 1)
 }
 
-fn greet(name: &str) {
+fn greet(name: String) {
     println!("Hello, {}!", name);
 }
 

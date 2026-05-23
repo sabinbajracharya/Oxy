@@ -10,7 +10,7 @@ impl Point {
         Point { x, y }
     }
 
-    fn display(&self) {
+    fn display(self) {
         println!("Point({}, {})", self.x, self.y);
     }
 }
@@ -21,14 +21,14 @@ enum Shape {
 }
 
 impl Shape {
-    fn area(&self) -> f64 {
+    fn area(self) -> f64 {
         match self {
             Shape::Circle(r) => 3.14159 * r * r,
             Shape::Rectangle(w, h) => w * h,
         }
     }
 
-    fn describe(&self) {
+    fn describe(self) {
         match self {
             Shape::Circle(r) => println!("Circle with radius {}", r),
             Shape::Rectangle(w, h) => println!("Rectangle {}x{}", w, h),
