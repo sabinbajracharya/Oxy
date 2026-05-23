@@ -1525,6 +1525,11 @@ impl Vm {
                 "to_string" => Ok(Value::String(receiver.to_string())),
                 _ => Err(format!("no method '{}' on type Array", method_name)),
             },
+            Value::Bool(b) => match method_name {
+                "clone" => Ok(Value::Bool(*b)),
+                "to_string" => Ok(Value::String(b.to_string())),
+                _ => Err(format!("no method '{}' on type bool", method_name)),
+            },
             _ => Err(format!(
                 "no method '{}' on type {}",
                 method_name,
