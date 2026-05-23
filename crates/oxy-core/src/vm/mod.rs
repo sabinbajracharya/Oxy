@@ -1682,29 +1682,32 @@ impl Vm {
                 #[cfg(feature = "http")]
                 {
                     match func.as_ref() {
-                        "get" => return http_call("GET", args, None),
+                        "get" => http_call("GET", args, None),
                         "post" => {
                             let body = args.get(1).map(|v| v.to_string());
-                            return http_call("POST", args, body);
+                            http_call("POST", args, body)
                         }
-                        "delete" => return http_call("DELETE", args, None),
-                        "get_json" => return http_call("GET", args, None),
+                        "delete" => http_call("DELETE", args, None),
+                        "get_json" => http_call("GET", args, None),
                         "post_json" => {
                             let body = args.get(1).map(|v| v.to_string());
-                            return http_call("POST", args, body);
+                            http_call("POST", args, body)
                         }
                         "put_json" => {
                             let body = args.get(1).map(|v| v.to_string());
-                            return http_call("PUT", args, body);
+                            http_call("PUT", args, body)
                         }
-                        _ => {}
+                        other => Err(format!("unknown http function `http::{other}`")),
                     }
                 }
                 #[cfg(not(feature = "http"))]
                 {
                     let _ = (func, args);
+                    Err(
+                        "`http::` is not available in this build (the `http` feature is disabled)"
+                            .into(),
+                    )
                 }
-                Err("http feature not enabled".into())
             }
             // --- stdlib modules ---
             ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
