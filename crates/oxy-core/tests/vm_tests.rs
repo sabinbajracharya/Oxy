@@ -4360,7 +4360,7 @@ fn main() {
 #[test]
 fn test_math_sqrt() {
     let out = run_and_capture("fn main() { println!(\"{}\", math::sqrt(16.0)); }");
-    assert_eq!(out, vec!["4\n"]);
+    assert_eq!(out, vec!["4.0\n"]);
 }
 
 #[test]
@@ -4368,7 +4368,7 @@ fn test_math_trig() {
     let out = run_and_capture(
         "fn main() { println!(\"{}\", math::sin(0.0)); println!(\"{}\", math::cos(0.0)); }",
     );
-    assert_eq!(out, vec!["0\n", "1\n"]);
+    assert_eq!(out, vec!["0.0\n", "1.0\n"]);
 }
 
 #[test]
@@ -4386,7 +4386,7 @@ fn test_math_constant_e() {
 #[test]
 fn test_math_pow() {
     let out = run_and_capture("fn main() { println!(\"{}\", math::pow(2.0, 10.0)); }");
-    assert_eq!(out, vec!["1024\n"]);
+    assert_eq!(out, vec!["1024.0\n"]);
 }
 
 #[test]
@@ -4394,7 +4394,7 @@ fn test_math_floor_ceil_round() {
     let out = run_and_capture(
             "fn main() { println!(\"{}\", math::floor(3.7)); println!(\"{}\", math::ceil(3.2)); println!(\"{}\", math::round(3.5)); }",
         );
-    assert_eq!(out, vec!["3\n", "4\n", "4\n"]);
+    assert_eq!(out, vec!["3.0\n", "4.0\n", "4.0\n"]);
 }
 
 #[test]
@@ -4416,7 +4416,7 @@ fn test_math_min_max() {
 #[test]
 fn test_math_log() {
     let out = run_and_capture("fn main() { println!(\"{}\", math::log(1.0)); }");
-    assert_eq!(out, vec!["0\n"]);
+    assert_eq!(out, vec!["0.0\n"]);
 }
 
 #[test]
@@ -4424,7 +4424,7 @@ fn test_math_log2_log10() {
     let out = run_and_capture(
         "fn main() { println!(\"{}\", math::log2(8.0)); println!(\"{}\", math::log10(100.0)); }",
     );
-    assert_eq!(out, vec!["3\n", "2\n"]);
+    assert_eq!(out, vec!["3.0\n", "2.0\n"]);
 }
 
 #[test]
@@ -4439,7 +4439,7 @@ fn test_f64_methods() {
     println!("{}", z.floor());
 }"#,
     );
-    assert_eq!(out, vec!["4\n", "5\n", "3\n"]);
+    assert_eq!(out, vec!["4.0\n", "5\n", "3.0\n"]);
 }
 
 #[test]
@@ -4464,7 +4464,7 @@ fn test_f64_min_max_method() {
 #[test]
 fn test_f64_pow_method() {
     let out = run_and_capture("fn main() { let x = 2.0; println!(\"{}\", x.pow(10.0)); }");
-    assert_eq!(out, vec!["1024\n"]);
+    assert_eq!(out, vec!["1024.0\n"]);
 }
 
 #[test]
@@ -4476,7 +4476,7 @@ fn test_f64_trig_methods() {
     println!("{}", x.cos());
 }"#,
     );
-    assert_eq!(out, vec!["0\n", "1\n"]);
+    assert_eq!(out, vec!["0.0\n", "1.0\n"]);
 }
 
 #[test]

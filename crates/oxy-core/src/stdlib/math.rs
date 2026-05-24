@@ -26,12 +26,12 @@ pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
 // we convert it back to Integer so the result type matches user expectations—users writing
 // `6 / 3` expect an integer `2`, not `2.0`. This avoids surprising type mismatches in
 // downstream comparisons and pattern matches.
+/// Wrap an f64 math result as a Value. Always returns Value::F64 — never
+/// auto-coerces whole numbers to Value::I64. Previously this collapsed
+/// e.g. `math::sin(0.0)` to int `0`, which surprised users whose code
+/// expected a uniform float return type.
 pub fn float_to_value(f: f64) -> Value {
-    if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
-        Value::I64(f as i64)
-    } else {
-        Value::F64(f)
-    }
+    Value::F64(f)
 }
 
 /// Dispatch math:: function calls.

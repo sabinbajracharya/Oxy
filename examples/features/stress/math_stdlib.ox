@@ -21,6 +21,13 @@ fn test_abs_float() { assert_eq!(math::abs(-2.5), 2.5); }
 fn test_pow() { assert_eq!(math::pow(2.0, 10.0), 1024.0); }
 
 #[test]
+fn test_sin_zero_stays_float() {
+    // Now that math fns always return float, sin(0.0) is F64(0.0) — not
+    // I64(0) like before. Verify the contract.
+    let r = math::sin(0.0);
+    assert!(r > -0.001 && r < 0.001);
+}
+#[test]
 fn test_sin_known_value() {
     // sin(0.5) ≈ 0.479425538604203
     let r = math::sin(0.5);

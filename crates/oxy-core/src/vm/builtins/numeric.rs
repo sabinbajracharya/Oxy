@@ -3,13 +3,11 @@
 use crate::symbols;
 use crate::types::Value;
 
-/// Convert a float result to Integer if it's a whole number (matching interpreter behavior).
+/// Wrap an f64 method result as a Value. Always returns Value::F64 —
+/// never collapses whole-number floats to Value::I64. See the matching
+/// helper in `stdlib::math` for the rationale.
 fn float_to_value(f: f64) -> Value {
-    if f.is_finite() && f.fract() == 0.0 && f.abs() < i64::MAX as f64 {
-        Value::I64(f as i64)
-    } else {
-        Value::F64(f)
-    }
+    Value::F64(f)
 }
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
@@ -31,29 +29,46 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         symbols::numeric_m::CEIL => Ok(float_to_value(to_f64(&receiver).ceil())),
         symbols::numeric_m::ROUND => Ok(float_to_value(to_f64(&receiver).round())),
         symbols::numeric_m::POW => {
-            let base = to_f64(&receiver);
-            let exp = to_f64(args.first().unwrap_or(&Value::Unit));
-            Ok(float_to_value(base.powf(exp)))
+            // Preserve int-receiver type when the exponent is also int and
+            // non-negative; otherwise widen to float. Stops `2.pow(10)`
+            // from sliding into a float.
+            if let (Value::I64(b), Some(Value::I64(e))) = (&receiver, args.first()) {
+                if *e >= 0 {
+                    let mut acc: i64 = 1;
+                    for _ in 0..*e {
+                        acc = acc.wrapping_mul(*b);
+                    }
+                    return Ok(Value::I64(acc));
+                }
+            }
+            Ok(float_to_value(
+                to_f64(&receiver).powf(to_f64(args.first().unwrap_or(&Value::Unit))),
+            ))
         }
         symbols::numeric_m::SIN => Ok(float_to_value(to_f64(&receiver).sin())),
         symbols::numeric_m::COS => Ok(float_to_value(to_f64(&receiver).cos())),
         symbols::numeric_m::TAN => Ok(float_to_value(to_f64(&receiver).tan())),
-        symbols::numeric_m::MIN => {
-            let a = to_f64(&receiver);
-            let b = to_f64(args.first().unwrap_or(&Value::Unit));
-            Ok(float_to_value(a.min(b)))
-        }
-        symbols::numeric_m::MAX => {
-            let a = to_f64(&receiver);
-            let b = to_f64(args.first().unwrap_or(&Value::Unit));
-            Ok(float_to_value(a.max(b)))
-        }
-        symbols::numeric_m::CLAMP => {
-            let v = to_f64(&receiver);
-            let lo = to_f64(args.first().unwrap_or(&Value::Unit));
-            let hi = to_f64(args.get(1).unwrap_or(&Value::Unit));
-            Ok(float_to_value(v.clamp(lo, hi)))
-        }
+        symbols::numeric_m::MIN => match (&receiver, args.first()) {
+            (Value::I64(a), Some(Value::I64(b))) => Ok(Value::I64(*a.min(b))),
+            _ => Ok(float_to_value(
+                to_f64(&receiver).min(to_f64(args.first().unwrap_or(&Value::Unit))),
+            )),
+        },
+        symbols::numeric_m::MAX => match (&receiver, args.first()) {
+            (Value::I64(a), Some(Value::I64(b))) => Ok(Value::I64(*a.max(b))),
+            _ => Ok(float_to_value(
+                to_f64(&receiver).max(to_f64(args.first().unwrap_or(&Value::Unit))),
+            )),
+        },
+        symbols::numeric_m::CLAMP => match (&receiver, args.first(), args.get(1)) {
+            (Value::I64(v), Some(Value::I64(lo)), Some(Value::I64(hi))) => {
+                Ok(Value::I64((*v).clamp(*lo, *hi)))
+            }
+            _ => Ok(float_to_value(to_f64(&receiver).clamp(
+                to_f64(args.first().unwrap_or(&Value::Unit)),
+                to_f64(args.get(1).unwrap_or(&Value::Unit)),
+            ))),
+        },
         symbols::numeric_m::TO_STRING => Ok(Value::String(receiver.to_string())),
         _ => Err(format!(
             "no method '{}' on type {}",
