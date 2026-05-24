@@ -9,7 +9,12 @@ use crate::errors::{check_arg_count, runtime_error, FerriError};
 use crate::lexer::Span;
 use crate::types::Value;
 
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "read_to_string" => {
             check_arg_count("std::io::read_to_string", 0, args, span)?;
@@ -56,21 +61,33 @@ mod tests {
         }
     }
 
+    fn no_cb() -> impl FnMut(&Value, &[Value]) -> Result<Value, String> {
+        |_, _| unreachable!("io module does not invoke closures")
+    }
+
     #[test]
     fn test_read_to_string_rejects_args() {
-        let r = call("read_to_string", &[Value::String("x".into())], &span());
+        let mut cb = no_cb();
+        let r = call(
+            "read_to_string",
+            &[Value::String("x".into())],
+            &span(),
+            &mut cb,
+        );
         assert!(r.is_err());
     }
 
     #[test]
     fn test_read_line_rejects_args() {
-        let r = call("read_line", &[Value::I64(1)], &span());
+        let mut cb = no_cb();
+        let r = call("read_line", &[Value::I64(1)], &span(), &mut cb);
         assert!(r.is_err());
     }
 
     #[test]
     fn test_unknown_function() {
-        let r = call("nope", &[], &span());
+        let mut cb = no_cb();
+        let r = call("nope", &[], &span(), &mut cb);
         assert!(r.is_err());
     }
 }

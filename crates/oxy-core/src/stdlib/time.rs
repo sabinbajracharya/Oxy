@@ -9,7 +9,12 @@ use crate::stdlib::math::value_to_f64;
 use crate::types::Value;
 
 /// Dispatch time:: function calls.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "now" => {
             check_arg_count("time::now", 0, args, span)?;

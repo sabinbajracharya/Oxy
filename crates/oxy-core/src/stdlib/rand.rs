@@ -62,7 +62,12 @@ fn simple_random_f64() -> f64 {
 }
 
 /// Dispatch rand:: function calls.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "random" => {
             check_arg_count("rand::random", 0, args, span)?;

@@ -504,6 +504,232 @@ pub fn response_with_status(status: u16, body: &str, _span: &Span) -> Result<Val
     })
 }
 
+// ===========================================================================
+// User-facing dispatcher: app registry + route registration + listen loop
+// ===========================================================================
+
+use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error};
+use crate::stdlib::registry::ClosureInvoker;
+
+/// A registered web app: a collection of routes the listener will dispatch
+/// against.
+struct App {
+    routes: Vec<Route>,
+}
+
+thread_local! {
+    /// Apps created via `std::server::new()`, keyed by integer handle and
+    /// returned to Oxy as an opaque int.
+    static APPS: RefCell<HashMap<i64, App>> = RefCell::new(HashMap::new());
+    static NEXT_APP_HANDLE: std::cell::Cell<i64> = const { std::cell::Cell::new(1) };
+}
+
+fn register_app() -> i64 {
+    let h = NEXT_APP_HANDLE.with(|c| {
+        let n = c.get();
+        c.set(n + 1);
+        n
+    });
+    APPS.with(|m| m.borrow_mut().insert(h, App { routes: Vec::new() }));
+    h
+}
+
+fn add_route(handle: i64, method: Method, pattern: &str, handler: Value) -> bool {
+    APPS.with(|m| match m.borrow_mut().get_mut(&handle) {
+        Some(app) => {
+            let segments = parse_route_pattern(pattern);
+            app.routes.push(Route {
+                method,
+                pattern: pattern.to_string(),
+                segments,
+                handler,
+            });
+            true
+        }
+        None => false,
+    })
+}
+
+/// Build a Response-struct Value (the shape `value_to_response` expects).
+fn build_response(status: u16, body: String, content_type: &str) -> Value {
+    let mut fields = HashMap::new();
+    fields.insert("status".to_string(), Value::I64(status as i64));
+    fields.insert("body".to_string(), Value::String(body));
+    fields.insert(
+        "content_type".to_string(),
+        Value::String(content_type.to_string()),
+    );
+    Value::Struct {
+        name: "Response".to_string(),
+        fields,
+    }
+}
+
+/// Read `routes` out of the app and run the accept loop. Returns `Err` if
+/// the bind fails; otherwise blocks indefinitely.
+fn run_listen(handle: i64, port: u16, cb: ClosureInvoker<'_>) -> Result<(), String> {
+    // Snapshot the routes so the borrow on APPS is released before we block.
+    let routes: Vec<Route> = APPS.with(|m| {
+        m.borrow()
+            .get(&handle)
+            .map(|a| a.routes.clone())
+            .unwrap_or_default()
+    });
+
+    let listener = std::net::TcpListener::bind(("127.0.0.1", port))
+        .map_err(|e| format!("bind failed on port {port}: {e}"))?;
+
+    for stream in listener.incoming() {
+        let mut stream = match stream {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        let raw = match read_request(&stream) {
+            Ok(r) => r,
+            Err(_) => {
+                let resp = HttpResponse::new(400, "Bad Request".to_string());
+                let _ = std::io::Write::write_all(&mut stream, resp.to_http_string().as_bytes());
+                continue;
+            }
+        };
+
+        let mut req = match parse_request(&raw) {
+            Ok(r) => r,
+            Err(_) => {
+                let resp = HttpResponse::new(400, "Bad Request".to_string());
+                let _ = std::io::Write::write_all(&mut stream, resp.to_http_string().as_bytes());
+                continue;
+            }
+        };
+
+        // Find the first matching route.
+        let mut matched = None;
+        for route in &routes {
+            if route.method != req.method {
+                continue;
+            }
+            if let Some(params) = match_route(&route.segments, &req.path) {
+                matched = Some((route, params));
+                break;
+            }
+        }
+
+        let resp = match matched {
+            Some((route, params)) => {
+                req.params = params;
+                let req_val = request_to_value(&req);
+                match cb(&route.handler, &[req_val]) {
+                    Ok(v) => value_to_response(&v),
+                    Err(e) => HttpResponse::new(500, format!("handler error: {e}")),
+                }
+            }
+            None => HttpResponse::new(404, "Not Found".to_string()),
+        };
+
+        let _ = std::io::Write::write_all(&mut stream, resp.to_http_string().as_bytes());
+    }
+
+    Ok(())
+}
+
+/// Dispatch `std::server::` function calls.
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    cb: ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
+    match func_name {
+        "new" => {
+            check_arg_count("std::server::new", 0, args, span)?;
+            Ok(Value::I64(register_app()))
+        }
+        "get" | "post" | "put" | "delete" | "patch" => {
+            check_arg_count(&format!("std::server::{func_name}"), 3, args, span)?;
+            let handle = expect_integer(&args[0], "std::server (handle)", span)?;
+            let pattern = expect_string(&args[1], "std::server (pattern)", span)?;
+            let method = match func_name {
+                "get" => Method::Get,
+                "post" => Method::Post,
+                "put" => Method::Put,
+                "delete" => Method::Delete,
+                "patch" => Method::Patch,
+                _ => unreachable!(),
+            };
+            if add_route(handle, method, pattern, args[2].clone()) {
+                Ok(Value::Unit)
+            } else {
+                Err(runtime_error(
+                    format!("invalid server handle: {handle}"),
+                    span,
+                ))
+            }
+        }
+        "listen" => {
+            check_arg_count("std::server::listen", 2, args, span)?;
+            let handle = expect_integer(&args[0], "std::server::listen (handle)", span)?;
+            let port = expect_integer(&args[1], "std::server::listen (port)", span)?;
+            if port < 0 || port > u16::MAX as i64 {
+                return Ok(Value::err(Value::String(format!(
+                    "port {port} out of range"
+                ))));
+            }
+            match run_listen(handle, port as u16, cb) {
+                Ok(()) => Ok(Value::ok(Value::Unit)),
+                Err(e) => Ok(Value::err(Value::String(e))),
+            }
+        }
+        "text" => {
+            check_arg_count("std::server::text", 1, args, span)?;
+            let body = expect_string(&args[0], "std::server::text", span)?;
+            Ok(build_response(
+                200,
+                body.to_string(),
+                "text/plain; charset=utf-8",
+            ))
+        }
+        "json" => {
+            check_arg_count("std::server::json", 1, args, span)?;
+            let body = expect_string(&args[0], "std::server::json", span)?;
+            Ok(build_response(
+                200,
+                body.to_string(),
+                "application/json; charset=utf-8",
+            ))
+        }
+        "html" => {
+            check_arg_count("std::server::html", 1, args, span)?;
+            let body = expect_string(&args[0], "std::server::html", span)?;
+            Ok(build_response(
+                200,
+                body.to_string(),
+                "text/html; charset=utf-8",
+            ))
+        }
+        "status" => {
+            check_arg_count("std::server::status", 2, args, span)?;
+            let code = expect_integer(&args[0], "std::server::status (code)", span)?;
+            let body = expect_string(&args[1], "std::server::status (body)", span)?;
+            if !(100..=599).contains(&code) {
+                return Err(runtime_error(
+                    format!("status {code} out of HTTP range"),
+                    span,
+                ));
+            }
+            Ok(build_response(
+                code as u16,
+                body.to_string(),
+                "text/plain; charset=utf-8",
+            ))
+        }
+        other => Err(runtime_error(
+            format!("no function 'std::server::{other}'"),
+            span,
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

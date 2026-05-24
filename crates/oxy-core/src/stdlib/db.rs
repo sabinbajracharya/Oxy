@@ -35,7 +35,12 @@ fn get_conn(handle: i64) -> Option<Rc<Connection>> {
 }
 
 /// Dispatch `std::db::` function calls from Oxy code.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "open" => {
             check_arg_count("std::db::open", 1, args, span)?;

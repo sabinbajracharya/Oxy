@@ -10,7 +10,12 @@ use crate::lexer::Span;
 use crate::types::Value;
 
 /// Dispatch `std::env::` function calls (stateless ones).
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "var" => {
             check_arg_count("std::env::var", 1, args, span)?;

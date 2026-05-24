@@ -10,7 +10,12 @@ use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::Value;
 
-pub fn call(func_name: &str, args: &[Value], _span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    _span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     let map_err = |e: String| Value::err(Value::String(e));
     let result: Value = match func_name {
         "parse" => match crate::json::deserialize(&format_first(args)) {

@@ -34,7 +34,12 @@ pub fn float_to_value(f: f64) -> Value {
 }
 
 /// Dispatch math:: function calls.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "sqrt" => unary_op("sqrt", args, f64::sqrt, span),
         "abs" => {

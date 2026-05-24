@@ -1644,7 +1644,7 @@ impl Vm {
         }
     }
 
-    fn dispatch_pathcall(&self, segments: &[String], args: &[Value]) -> Result<Value, String> {
+    fn dispatch_pathcall(&mut self, segments: &[String], args: &[Value]) -> Result<Value, String> {
         use crate::stdlib::registry;
         let segs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
 
@@ -1656,13 +1656,17 @@ impl Vm {
 
         // 2) Module-style dispatch: `[module, fn]` or `[std, module, fn]`.
         let module_route = match segs.as_slice() {
-            [module, func] => Some((*module, *func)),
-            ["std", module, func] => Some((*module, *func)),
+            [module, func] => Some((module.to_string(), func.to_string())),
+            ["std", module, func] => Some((module.to_string(), func.to_string())),
             _ => None,
         };
         if let Some((module, func)) = module_route {
-            if let Some(call) = registry::lookup_module(module) {
-                return call_stdlib(call, func, args);
+            if let Some(call) = registry::lookup_module(&module) {
+                // Build a closure that re-enters the VM so stdlib modules can
+                // invoke user-supplied closures (server route handlers,
+                // future async hooks, etc.).
+                let mut cb = |f: &Value, fargs: &[Value]| self.run_closure(f, fargs);
+                return call_stdlib(call, &func, args, &mut cb);
             }
         }
 

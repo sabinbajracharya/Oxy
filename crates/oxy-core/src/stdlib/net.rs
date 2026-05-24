@@ -11,7 +11,12 @@ use crate::lexer::Span;
 use crate::types::Value;
 
 /// Dispatch `std::net::` function calls.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         // --- TCP ---
         "tcp_connect" => {

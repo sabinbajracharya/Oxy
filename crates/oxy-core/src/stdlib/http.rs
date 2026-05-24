@@ -10,7 +10,12 @@ use crate::lexer::Span;
 use crate::types::Value;
 
 #[cfg(feature = "http")]
-pub fn call(func_name: &str, args: &[Value], _span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    _span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     let body_arg = || args.get(1).map(|v| v.to_string());
     let lift = |r: Result<Value, String>| {
         r.map_err(|e| FerriError::Runtime {
@@ -33,7 +38,12 @@ pub fn call(func_name: &str, args: &[Value], _span: &Span) -> Result<Value, Ferr
 }
 
 #[cfg(not(feature = "http"))]
-pub fn call(_func_name: &str, _args: &[Value], _span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    _func_name: &str,
+    _args: &[Value],
+    _span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     Err(FerriError::Runtime {
         message: "`http::` is not available in this build (the `http` feature is disabled)".into(),
         line: 0,

@@ -26,7 +26,13 @@ use crate::errors::FerriError;
 use crate::lexer::Span;
 use crate::types::Value;
 
-pub type ModuleCall = fn(&str, &[Value], &Span) -> Result<Value, FerriError>;
+/// Callback used by stdlib modules to invoke a user-supplied closure (for
+/// route handlers, async continuations, etc.). Module implementations that
+/// don't need to call back into user code can ignore this parameter.
+pub type ClosureInvoker<'a> = &'a mut dyn FnMut(&Value, &[Value]) -> Result<Value, String>;
+
+pub type ModuleCall =
+    for<'a> fn(&str, &[Value], &Span, ClosureInvoker<'a>) -> Result<Value, FerriError>;
 pub type ItemHandler = fn(&[Value]) -> Result<Value, String>;
 
 pub struct Module {
@@ -125,6 +131,11 @@ static MODULES: &[Module] = &[
     Module {
         name: "http",
         call: crate::stdlib::http::call,
+    },
+    #[cfg(feature = "server")]
+    Module {
+        name: "server",
+        call: crate::stdlib::server::call,
     },
 ];
 

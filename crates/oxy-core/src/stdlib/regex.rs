@@ -8,7 +8,12 @@ use crate::lexer::Span;
 use crate::types::Value;
 
 /// Dispatch `std::regex::` function calls.
-pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+pub fn call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: crate::stdlib::registry::ClosureInvoker<'_>,
+) -> Result<Value, FerriError> {
     match func_name {
         "is_match" => {
             check_arg_count("std::regex::is_match", 2, args, span)?;
