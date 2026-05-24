@@ -426,6 +426,7 @@ pub const NUMERIC_METHODS: &[MethodInfo] = methods![
     "min": "(other: f64) -> f64" => "Return the smaller of self and `other`.",
     "pow": "(exp: f64) -> f64" => "Raise self to the power `exp`.",
     "round": "() -> f64" => "Round to the nearest integer.",
+    "signum": "() -> Self" => "Return -1, 0, or 1 matching the sign.",
     "sin": "() -> f64" => "Compute the sine (radians).",
     "sqrt": "() -> f64" => "Return the square root.",
     "tan": "() -> f64" => "Compute the tangent (radians).",
@@ -738,6 +739,7 @@ pub mod numeric_m {
     pub const CEIL: &str = "ceil";
     pub const ROUND: &str = "round";
     pub const POW: &str = "pow";
+    pub const SIGNUM: &str = "signum";
     pub const SIN: &str = "sin";
     pub const COS: &str = "cos";
     pub const TAN: &str = "tan";

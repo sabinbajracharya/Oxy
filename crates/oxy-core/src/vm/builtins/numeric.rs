@@ -39,6 +39,12 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 to_f64(&receiver).powf(to_f64(args.first().unwrap_or(&Value::Unit))),
             ))
         }
+        symbols::numeric_m::SIGNUM => match &receiver {
+            Value::I64(n) => Ok(Value::I64(n.signum())),
+            Value::U8(n) => Ok(Value::I64(if *n == 0 { 0 } else { 1 })),
+            Value::F64(x) => Ok(float_to_value(x.signum())),
+            _ => Ok(Value::I64(0)),
+        },
         symbols::numeric_m::SIN => Ok(float_to_value(to_f64(&receiver).sin())),
         symbols::numeric_m::COS => Ok(float_to_value(to_f64(&receiver).cos())),
         symbols::numeric_m::TAN => Ok(float_to_value(to_f64(&receiver).tan())),
@@ -80,6 +86,7 @@ pub fn method_names() -> &'static [&'static str] {
         symbols::numeric_m::CEIL,
         symbols::numeric_m::ROUND,
         symbols::numeric_m::POW,
+        symbols::numeric_m::SIGNUM,
         symbols::numeric_m::SIN,
         symbols::numeric_m::COS,
         symbols::numeric_m::TAN,
