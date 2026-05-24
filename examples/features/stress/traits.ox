@@ -86,6 +86,53 @@ fn test_generic_struct_method() {
     assert_eq!(p.b, 4);
 }
 
+// --- generic impl<T> Pair<T> — impl-level type parameter ---
+struct Cell<T> { v: T }
+
+impl<T> Cell<T> {
+    fn make(v: T) -> Cell<T> { Cell { v } }
+}
+
+#[test]
+fn test_generic_impl_int() {
+    let c = Cell::make(42);
+    assert_eq!(c.v, 42);
+}
+
+#[test]
+fn test_generic_impl_string() {
+    let c = Cell::make("hi".to_string());
+    assert_eq!(c.v, "hi");
+}
+
+// --- impl<T> with method that uses T as a param ---
+struct Box2<T> { v: T }
+
+impl<T> Box2<T> {
+    fn get(self) -> T { self.v }
+}
+
+#[test]
+fn test_generic_impl_method_uses_T_as_return() {
+    let b = Box2 { v: 7 };
+    assert_eq!(b.get(), 7);
+}
+
+// --- impl<A, B> with two type params ---
+struct TwoBox<A, B> { a: A, b: B }
+
+impl<A, B> TwoBox<A, B> {
+    fn swap(self) -> TwoBox<B, A> { TwoBox { a: self.b, b: self.a } }
+}
+
+#[test]
+fn test_generic_impl_two_params() {
+    let t = TwoBox { a: 1, b: "x".to_string() };
+    let s = t.swap();
+    assert_eq!(s.a, "x");
+    assert_eq!(s.b, 1);
+}
+
 // --- derive(Debug) ---
 #[derive(Debug)]
 struct Pt { x: int, y: int }

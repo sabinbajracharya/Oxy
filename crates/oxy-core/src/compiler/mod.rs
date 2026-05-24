@@ -571,10 +571,19 @@ impl Compiler {
                 self.pub_vis.insert(qualified.clone(), f.visibility.clone());
             }
             self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
-            // If type has generic args (e.g. "Pair<i64>"), also register under base name
+            // If type has generic args (e.g. "Pair<i64>" or "Cell<T>"), also
+            // register under the base type name so PathCall lookup with
+            // `Cell::make` (no turbofish on the type) resolves to the same
+            // function. Mirrors the method_ips registration below.
             if let Some(lt_pos) = tn.find('<') {
                 let base_name = tn[..lt_pos].to_string();
-                self.method_ips.insert((base_name, f.name.clone()), ip);
+                self.method_ips
+                    .insert((base_name.clone(), f.name.clone()), ip);
+                let base_qualified = format!("{}::{}", base_name, f.name);
+                self.functions.insert(base_qualified.clone(), ip);
+                if f.visibility.is_pub() {
+                    self.pub_vis.insert(base_qualified, f.visibility.clone());
+                }
             }
         }
         // Store metadata for function-reference-as-value support
@@ -594,7 +603,15 @@ impl Compiler {
         let meta = (f.params.clone(), Box::new(body_expr), f.return_type.clone());
         self.fn_meta.insert(f.name.clone(), meta.clone());
         if let Some(tn) = type_name {
-            self.fn_meta.insert(format!("{}::{}", tn, f.name), meta);
+            self.fn_meta
+                .insert(format!("{}::{}", tn, f.name), meta.clone());
+            // Same base-name registration as above so generic-type methods
+            // resolve via either `Cell::make` or `Cell<T>::make`.
+            if let Some(lt_pos) = tn.find('<') {
+                let base_name = &tn[..lt_pos];
+                self.fn_meta
+                    .insert(format!("{}::{}", base_name, f.name), meta);
+            }
         }
         // Store generic param names for monomorphization
         if !f.generic_params.is_empty() {

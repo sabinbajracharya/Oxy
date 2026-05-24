@@ -932,18 +932,39 @@ impl Parser {
 
     // === Impl block parsing ===
 
+    /// Prepend impl-level generic params to a method's own generic_params.
+    /// Skip duplicates (an `impl<T> Foo<T> { fn bar<T>(...) }` shouldn't
+    /// register T twice — the method's local T shadows the impl's T).
+    fn merge_impl_generics(method: &mut FnDef, impl_generics: &[GenericParam]) {
+        if impl_generics.is_empty() {
+            return;
+        }
+        let mut merged: Vec<GenericParam> =
+            Vec::with_capacity(impl_generics.len() + method.generic_params.len());
+        for gp in impl_generics {
+            if !method.generic_params.iter().any(|m| m.name == gp.name) {
+                merged.push(gp.clone());
+            }
+        }
+        merged.append(&mut method.generic_params);
+        method.generic_params = merged;
+    }
+
     /// Parse `impl Type { ... }` or `impl Trait for Type { ... }`
     fn parse_impl_or_impl_trait(&mut self) -> Result<Item, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Impl)?;
         // Optional generic parameters on the impl block itself, e.g.
-        // `impl<T> Foo<T> { ... }`. Currently we parse-and-discard them —
-        // the existing inherent-impl machinery infers the type parameter
-        // from the methods' signatures, so the leading `<T>` is just
-        // additional structure that needs to be accepted.
-        if self.check(&TokenKind::Lt) {
-            let _ = self.parse_generic_params()?;
-        }
+        // `impl<T> Foo<T> { ... }`. Captured so we can prepend them to
+        // each method's per-method generic_params below — that piggybacks
+        // on the existing per-method generic machinery (monomorphization,
+        // T-resolution in bodies, turbofish) without needing a new
+        // generic_params field on ImplBlock.
+        let impl_generics: Vec<GenericParam> = if self.check(&TokenKind::Lt) {
+            self.parse_generic_params()?
+        } else {
+            Vec::new()
+        };
         let first_name = self.parse_type_name_with_args()?;
 
         // Check for `impl Trait for Type { ... }`
@@ -959,7 +980,9 @@ impl Parser {
                 } else {
                     Visibility::Private
                 };
-                methods.push(self.parse_fn_def(false, vec![], method_vis)?);
+                let mut m = self.parse_fn_def(false, vec![], method_vis)?;
+                Self::merge_impl_generics(&mut m, &impl_generics);
+                methods.push(m);
             }
             let end_span = self.current_span();
             self.expect(TokenKind::RBrace)?;
@@ -982,7 +1005,9 @@ impl Parser {
             } else {
                 Visibility::Private
             };
-            methods.push(self.parse_fn_def(false, vec![], method_vis)?);
+            let mut m = self.parse_fn_def(false, vec![], method_vis)?;
+            Self::merge_impl_generics(&mut m, &impl_generics);
+            methods.push(m);
         }
         let end_span = self.current_span();
         self.expect(TokenKind::RBrace)?;
