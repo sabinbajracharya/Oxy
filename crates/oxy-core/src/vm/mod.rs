@@ -31,15 +31,18 @@
 //!
 //! ## Pattern compilation contract
 //!
-//! Every `Pattern::*` compile path leaves the operand stack in one of two
-//! shapes (see `compiler/expr.rs::compile_pattern`):
+//! Every `Pattern::*` follows a uniform stack contract
+//! (see `compiler/expr.rs::compile_pattern`):
 //!
-//! - Most patterns: `[scrutinee, bool]`. The match-arm dispatcher does
-//!   `JumpIfFalse` then `Pop` before calling `bind_pattern_data`.
-//! - `Pattern::EnumVariant` and `Pattern::Tuple`: `[bool]` — they consume
-//!   the scrutinee during the test. The dispatcher detects these via a
-//!   `consumes_scrutinee` flag and reloads from the outer scrutinee slot
-//!   before binding.
+//! - `compile_pattern`: input `[scrutinee]` → output `[bool]`. The scrutinee
+//!   is always consumed.
+//! - `bind_pattern_data`: input `[value]` → output `[]`. The caller reloads
+//!   the scrutinee before invoking it; the value is always consumed (Pop,
+//!   BindIdent, or StoreLocal-into-temp).
+//!
+//! This uniformity is why the match dispatcher needs no `consumes_scrutinee`
+//! tracking, no prelude Pop between arms, and no sentinel before guards —
+//! both the pattern-fail and guard-fail paths leave the stack empty.
 //!
 //! ## History
 //!

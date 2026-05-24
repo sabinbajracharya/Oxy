@@ -21,6 +21,14 @@ use super::helpers::{
 use super::{Compiler, LoopContext, SymTable};
 
 impl Compiler {
+    /// Compile a pattern check.
+    ///
+    /// Stack contract (uniform across every variant):
+    ///   Input:  [scrutinee]
+    ///   Output: [bool]   — scrutinee is always consumed
+    ///
+    /// Binding sites are reserved here (via `sym.define`) but the actual
+    /// bind happens in `bind_pattern_data` on the match path.
     pub(crate) fn compile_pattern(
         &mut self,
         pattern: &Pattern,
@@ -29,22 +37,21 @@ impl Compiler {
     ) -> Result<(), FerriError> {
         match pattern {
             Pattern::Wildcard(_) => {
+                self.emit(OpCode::Pop);
                 self.emit(OpCode::ConstBool(true));
                 Ok(())
             }
             Pattern::Ident(name, _) => {
-                // Always matches — the binding happens in bind_pattern_data
+                // Always matches. Define the slot; the bind happens in
+                // bind_pattern_data when the caller reloads the scrutinee.
+                self.emit(OpCode::Pop);
                 self.emit(OpCode::ConstBool(true));
-                // Push a copy of the scrutinee as the "data" to bind
-                self.emit(OpCode::Dup);
-                // Define a slot for this binding (will be bound in bind_pattern_data)
                 self.sym.define(name);
                 Ok(())
             }
             Pattern::Literal(expr) => {
-                self.emit(OpCode::Dup);
-                self.compile_expr(expr)?;
-                self.emit(OpCode::Eq);
+                self.compile_expr(expr)?; // [scrut, lit]
+                self.emit(OpCode::Eq); // [bool]
                 Ok(())
             }
             Pattern::EnumVariant {
@@ -53,14 +60,12 @@ impl Compiler {
                 fields,
                 ..
             } => {
-                // Resolve enum_name via type aliases, use aliases, and module prefix
                 let resolved_enum = self
                     .type_aliases
                     .get(enum_name)
                     .cloned()
                     .or_else(|| self.use_aliases.get(enum_name).cloned())
                     .unwrap_or_else(|| {
-                        // Try qualifying with module prefix
                         let module_prefix = self.module_stack.join("::");
                         if !module_prefix.is_empty() {
                             let qualified = format!("{}::{}", module_prefix, enum_name);
@@ -74,7 +79,6 @@ impl Compiler {
                     enum_name: resolved_enum,
                     variant: variant.clone(),
                 });
-                // Pre-define slots for field pattern bindings
                 self.define_pattern_slots(fields);
                 Ok(())
             }
@@ -83,56 +87,44 @@ impl Compiler {
                 end,
                 inclusive,
                 ..
-            } => {
-                // Stack: [scrutinee] → After: [scrutinee, Bool]
-                match (start, end) {
-                    (Some(s), None) => {
-                        self.emit(OpCode::Dup);
-                        self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
-                        self.emit(OpCode::Ge);
-                    }
-                    (None, Some(e)) => {
-                        self.emit(OpCode::Dup);
-                        self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
-                        if *inclusive {
-                            self.emit(OpCode::Le);
-                        } else {
-                            self.emit(OpCode::Lt);
-                        }
-                    }
-                    (Some(s), Some(e)) => {
-                        // Save scrutinee to a fresh slot so we can read it
-                        // twice without clobbering its stack-top position with
-                        // intermediate bools. Then rebuild [scrutinee, bool]
-                        // via a second temp for the result.
-                        let scrut_tmp = self.sym.define("__range_scrut");
-                        self.emit(OpCode::StoreLocal(scrut_tmp));
-                        self.emit(OpCode::LoadLocal(scrut_tmp));
-                        self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
-                        self.emit(OpCode::Ge); // [lower]
-                        self.emit(OpCode::LoadLocal(scrut_tmp));
-                        self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
-                        if *inclusive {
-                            self.emit(OpCode::Le);
-                        } else {
-                            self.emit(OpCode::Lt);
-                        } // [lower, upper]
-                        self.emit(OpCode::And); // [result]
-                        let bool_tmp = self.sym.define("__range_bool");
-                        self.emit(OpCode::StoreLocal(bool_tmp));
-                        self.emit(OpCode::LoadLocal(scrut_tmp));
-                        self.emit(OpCode::LoadLocal(bool_tmp));
-                    }
-                    (None, None) => {
-                        self.emit(OpCode::ConstBool(true));
-                    }
+            } => match (start, end) {
+                (Some(s), None) => {
+                    self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
+                    self.emit(OpCode::Ge);
+                    Ok(())
                 }
-                Ok(())
-            }
+                (None, Some(e)) => {
+                    self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
+                    if *inclusive {
+                        self.emit(OpCode::Le);
+                    } else {
+                        self.emit(OpCode::Lt);
+                    }
+                    Ok(())
+                }
+                (Some(s), Some(e)) => {
+                    let scrut_tmp = self.sym.define("__range_scrut");
+                    self.emit(OpCode::StoreLocal(scrut_tmp));
+                    self.emit(OpCode::LoadLocal(scrut_tmp));
+                    self.emit(OpCode::ConstInt(*s, IntegerWidth::I64));
+                    self.emit(OpCode::Ge); // [lower]
+                    self.emit(OpCode::LoadLocal(scrut_tmp));
+                    self.emit(OpCode::ConstInt(*e, IntegerWidth::I64));
+                    if *inclusive {
+                        self.emit(OpCode::Le);
+                    } else {
+                        self.emit(OpCode::Lt);
+                    } // [lower, upper]
+                    self.emit(OpCode::And); // [result]
+                    Ok(())
+                }
+                (None, None) => {
+                    self.emit(OpCode::Pop);
+                    self.emit(OpCode::ConstBool(true));
+                    Ok(())
+                }
+            },
             Pattern::Tuple(patterns, _) => {
-                // Input: [scrutinee]. Output: [bool]. Scrutinee is consumed —
-                // caller must reload it from the outer scrutinee slot before
-                // bind_pattern_data (same protocol as EnumVariant).
                 let scrut_tmp = self.sym.define("__tuple_scrut");
                 self.emit(OpCode::StoreLocal(scrut_tmp));
                 self.define_pattern_slots(patterns);
@@ -155,9 +147,6 @@ impl Compiler {
                             self.emit(OpCode::StoreLocal(acc_tmp));
                         }
                         _ => {
-                            // Nested Tuple/Range/EnumVariant inside a tuple
-                            // pattern is not yet handled — degrade gracefully
-                            // by failing the match arm.
                             self.emit(OpCode::ConstBool(false));
                             self.emit(OpCode::StoreLocal(acc_tmp));
                         }
@@ -167,47 +156,23 @@ impl Compiler {
                 Ok(())
             }
             Pattern::Or(pats, _) => {
-                // Input: [scrutinee]. Output: [scrutinee, bool] (= OR over alternatives).
-                //
-                // Strategy: stash the scrutinee in a temp; reserve an alt_tmp
-                // slot (initialized with Unit) so its stack position doesn't
-                // collide with the running accumulator above it. Each iteration
-                // recurses into compile_pattern, which leaves [scrutinee, alt_bool] —
-                // we stash alt_bool, pop the inner scrutinee, reload alt_bool,
-                // then OR into the accumulator. Finally, restore the shape
-                // [scrutinee, bool] that the match-arm caller expects.
                 if pats.is_empty() {
+                    self.emit(OpCode::Pop);
                     self.emit(OpCode::ConstBool(false));
                     return Ok(());
                 }
                 let scrut_tmp = self.sym.define("__or_scrut");
-                let alt_tmp = self.sym.define("__or_alt");
                 self.emit(OpCode::StoreLocal(scrut_tmp));
-                self.emit(OpCode::ConstUnit);
-                self.emit(OpCode::StoreLocal(alt_tmp));
                 self.emit(OpCode::ConstBool(false));
                 for pat in pats {
                     self.emit(OpCode::LoadLocal(scrut_tmp));
                     self.compile_pattern(pat, &mut vec![], false)?;
-                    self.emit(OpCode::StoreLocal(alt_tmp));
-                    self.emit(OpCode::Pop);
-                    self.emit(OpCode::LoadLocal(alt_tmp));
                     self.emit(OpCode::Or);
                 }
-                self.emit(OpCode::StoreLocal(alt_tmp));
-                self.emit(OpCode::LoadLocal(scrut_tmp));
-                self.emit(OpCode::LoadLocal(alt_tmp));
                 Ok(())
             }
             Pattern::Struct { fields, .. } => {
-                // Input: [scrutinee]. Output: [bool]. Scrutinee is consumed —
-                // the match-arm site reloads it from scrutinee_slot before
-                // bind_pattern_data (same protocol as EnumVariant/Tuple).
-                //
-                // The type checker ensures the scrutinee is the named struct
-                // type, so the pattern always matches. We only need to
-                // pre-define slots for the field bindings here; the actual
-                // FieldAccess + BindIdent happens in bind_pattern_data.
+                // Type checker guarantees the scrutinee is the named struct.
                 self.emit(OpCode::Pop);
                 self.emit(OpCode::ConstBool(true));
                 let sub_pats: Vec<Pattern> = fields.iter().map(|(_, p)| p.clone()).collect();
@@ -215,8 +180,8 @@ impl Compiler {
                 Ok(())
             }
             _ => {
-                // For Slice, Rest — fall back to const false
-                // (will be handled properly in subsequent iterations)
+                // Slice, Rest — not yet supported. Drop scrutinee, fail match.
+                self.emit(OpCode::Pop);
                 self.emit(OpCode::ConstBool(false));
                 Ok(())
             }
@@ -243,23 +208,25 @@ impl Compiler {
     }
 
     /// Bind pattern variables after a successful match.
-    /// Expects: [scrutinee, data...] on stack (scrutinee and match bool already popped)
-    /// Actually: called after Pop(scrutinee), so stack has [data...]
+    ///
+    /// Stack contract (uniform across every variant):
+    ///   Input:  [value]   — caller pushes the matched value
+    ///   Output: []        — value is always consumed (Pop, BindIdent, or StoreLocal)
     pub(crate) fn bind_pattern_data(&mut self, pattern: &Pattern) -> Result<(), FerriError> {
         match pattern {
-            Pattern::Wildcard(_) => Ok(()),
+            Pattern::Wildcard(_) => {
+                self.emit(OpCode::Pop);
+                Ok(())
+            }
             Pattern::Ident(name, _) => {
-                // Pop the data value and bind it
                 if let Some(slot) = self.sym.get(name) {
                     self.emit(OpCode::BindIdent(slot));
+                } else {
+                    self.emit(OpCode::Pop);
                 }
                 Ok(())
             }
             Pattern::EnumVariant { fields, .. } => {
-                // Stack: [variant_value]. Store in temp, extract each field by
-                // index, and recurse. Mirrors Pattern::Tuple's approach so that
-                // BindIdent always sees exactly one value on top — avoids the
-                // stack-slot collisions that occur if data is bulk-pushed.
                 let temp = self.sym.define("__variant_tmp");
                 self.emit(OpCode::StoreLocal(temp));
                 for (i, field_pat) in fields.iter().enumerate() {
@@ -269,10 +236,11 @@ impl Compiler {
                 }
                 Ok(())
             }
-            Pattern::Literal(_) => Ok(()), // no binding needed
+            Pattern::Literal(_) => {
+                self.emit(OpCode::Pop);
+                Ok(())
+            }
             Pattern::Struct { fields, .. } => {
-                // Stack: [struct_value]. Stash in temp, then for each
-                // (field_name, sub_pattern): reload, FieldAccess, recurse.
                 let temp = self.sym.define("__struct_pat_tmp");
                 self.emit(OpCode::StoreLocal(temp));
                 for (field_name, sub_pat) in fields {
@@ -285,7 +253,6 @@ impl Compiler {
                 Ok(())
             }
             Pattern::Tuple(patterns, _) => {
-                // Stack: [Tuple_value]. Extract elements by index and bind sub-patterns.
                 let temp = self.sym.define("__tuple_tmp");
                 self.emit(OpCode::StoreLocal(temp));
                 for (i, pat) in patterns.iter().enumerate() {
@@ -296,7 +263,11 @@ impl Compiler {
                 }
                 Ok(())
             }
-            _ => Ok(()), // other patterns defer to Eval or not yet supported
+            _ => {
+                // Range, Or, Slice, Rest — no bindings, drop the value.
+                self.emit(OpCode::Pop);
+                Ok(())
+            }
         }
     }
 
@@ -703,27 +674,17 @@ impl Compiler {
                 span: _,
             } => {
                 let loop_start = self.code.len();
-                // Evaluate expression, store in temp
+                // Evaluate expression, store in temp.
                 self.compile_expr(expr)?;
                 let scrut_slot = self.sym.define("__whilelet_scrutinee");
                 let current_slot = self.sym.next_slot;
                 self.emit(OpCode::StoreLocal(scrut_slot));
-                // Pattern check
+                // Pattern check (uniform contract: scrutinee in → [bool] out).
                 self.emit(OpCode::LoadLocal(scrut_slot));
-                let consumes = matches!(
-                    pattern.as_ref(),
-                    Pattern::EnumVariant { .. } | Pattern::Tuple(..)
-                );
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_end = self.emit(OpCode::JumpIfFalse(0));
-                // Matched: clean up, bind, compile body. EnumVariant patterns
-                // need the scrutinee reloaded — see match arm comment for
-                // details.
-                if consumes {
-                    self.emit(OpCode::LoadLocal(scrut_slot));
-                } else {
-                    self.emit(OpCode::Pop);
-                }
+                // Matched: reload scrutinee for bind, then body.
+                self.emit(OpCode::LoadLocal(scrut_slot));
                 self.bind_pattern_data(pattern)?;
                 // Loop context for break/continue
                 self.loop_stack.push(LoopContext {
@@ -2063,110 +2024,65 @@ impl Compiler {
                         column: expr.span().column,
                     });
                 }
-                // Evaluate scrutinee once, store in temp slot
+                // Evaluate scrutinee once, store in temp slot.
                 self.compile_expr(scrutinee)?;
                 let scrutinee_slot = self.sym.define("__match_scrutinee");
                 let current_slot = self.sym.next_slot;
                 self.emit(OpCode::StoreLocal(scrutinee_slot));
 
-                let _match_end_label = self.code.len(); // placeholder
                 let mut arm_jumps: Vec<usize> = vec![];
-                let mut guard_fail_jumps: Vec<usize> = vec![];
 
-                let mut prev_consumed_scrutinee = false;
-                for (i, arm) in arms.iter().enumerate() {
-                    let is_last = i == arms.len() - 1;
-
-                    // Pop leftover scrutinee from a previous failed arm.
-                    // The first arm has no predecessor — StoreLocal above
-                    // already drained the stack — so don't pop into the
-                    // caller's frame. Also skip the pop when the previous
-                    // arm's pattern was EnumVariant or Tuple: their equality
-                    // check already consumed the scrutinee, so there's
-                    // nothing on the stack to clean up. Without this guard
-                    // the spurious Pop would dip into the caller's frame
-                    // and corrupt the stack downstream (e.g. an
-                    // FStringConcat underflow in the caller's println!).
-                    if i > 0 && !prev_consumed_scrutinee {
-                        self.emit(OpCode::Pop);
-                    }
-                    // Push scrutinee for this arm
+                // Stack contract per arm (under the uniform pattern protocol):
+                //   pre-pattern : []           — previous arm's failed branch
+                //                                always leaves the stack clean
+                //   load scrut  : [scrut]
+                //   compile_pat : [bool]       — scrutinee always consumed
+                //   JumpIfFalse : []           — on fail-jump, stack is []
+                //   load scrut  : [scrut]      — reload for binding
+                //   bind        : []           — bind_pattern_data consumes
+                //   guard?      : [bool] → []  — JumpIfFalse consumes
+                //   body        : [result]
+                //   Jump to end
+                for arm in arms.iter() {
                     self.emit(OpCode::LoadLocal(scrutinee_slot));
-
-                    // Compile pattern check → leaves Bool(true)+data or Bool(false)
-                    let consumes_scrutinee = matches!(
-                        arm.pattern,
-                        Pattern::EnumVariant { .. } | Pattern::Tuple(..) | Pattern::Struct { .. }
-                    );
-                    prev_consumed_scrutinee = consumes_scrutinee;
-                    self.compile_pattern(&arm.pattern, &mut vec![], is_last)?;
-
-                    // JumpIfFalse to next arm if pattern didn't match
+                    self.compile_pattern(&arm.pattern, &mut vec![], false)?;
                     let jump_to_next = self.emit(OpCode::JumpIfFalse(0));
 
-                    // Pattern matched. EnumVariant consumed the scrutinee in
-                    // the equality check — reload it from the scrutinee slot
-                    // so bind_pattern_data can extract fields by index. Other
-                    // patterns left the scrutinee on stack → Pop it (Ident
-                    // binds via the existing tail, others don't bind at all).
-                    if consumes_scrutinee {
-                        self.emit(OpCode::LoadLocal(scrutinee_slot));
-                    } else {
-                        self.emit(OpCode::Pop);
-                    }
+                    self.emit(OpCode::LoadLocal(scrutinee_slot));
                     self.bind_pattern_data(&arm.pattern)?;
 
-                    // Compile guard if present.
-                    //
-                    // Stack discipline: after bind_pattern_data the stack is
-                    // empty; the guard pushes a bool which JumpIfFalse pops.
-                    // If the guard fails we jump to the next arm's prelude,
-                    // which unconditionally Pops one leftover-scrutinee
-                    // value (matching the pattern-fail-and-jump shape for
-                    // non-consuming patterns). To keep both exit paths
-                    // shape-compatible — and stop the prelude Pop from
-                    // dipping into the caller's frame — push a sentinel
-                    // unit before evaluating the guard.
-                    if let Some(guard) = &arm.guard {
-                        self.emit(OpCode::ConstUnit);
+                    let guard_fail_jump = if let Some(guard) = &arm.guard {
                         self.compile_expr(guard)?;
-                        let guard_jump = self.emit(OpCode::JumpIfFalse(0));
-                        guard_fail_jumps.push(guard_jump);
-                        // Guard succeeded — drop the sentinel.
-                        self.emit(OpCode::Pop);
-                        // Clean up guard bindings before next arm
-                        self.sym.next_slot = current_slot;
-                    }
+                        Some(self.emit(OpCode::JumpIfFalse(0)))
+                    } else {
+                        None
+                    };
 
-                    // Compile arm body
                     self.compile_expr(&arm.body)?;
-
-                    // Jump to match end
                     arm_jumps.push(self.emit(OpCode::Jump(0)));
 
-                    // Patch the "jump to next arm" from pattern check
-                    self.patch(jump_to_next, OpCode::JumpIfFalse(self.code.len()));
-                    // Patch guard-fail jumps to the next arm too
-                    for gj in &guard_fail_jumps {
-                        self.patch(*gj, OpCode::JumpIfFalse(self.code.len()));
+                    // Pattern-fail and guard-fail both land at the next arm
+                    // (or the no-match epilogue for the last arm).
+                    let next_arm = self.code.len();
+                    self.patch(jump_to_next, OpCode::JumpIfFalse(next_arm));
+                    if let Some(gj) = guard_fail_jump {
+                        self.patch(gj, OpCode::JumpIfFalse(next_arm));
                     }
-                    guard_fail_jumps.clear();
 
-                    // Clean up sym for bindings in this arm
+                    // Clear arm-local bindings.
                     self.sym.next_slot = current_slot;
                 }
 
-                // If we reach here, no arm matched → runtime error
+                // Unreachable in exhaustive matches (checker enforces a
+                // wildcard or full coverage), but emit a sentinel for safety.
                 self.emit(OpCode::ConstString("match: no arm matched".into()));
                 self.emit(OpCode::PrintLn);
+                self.emit(OpCode::ConstUnit);
 
-                // Match end: patch all arm jumps
                 let end = self.code.len();
                 for j in &arm_jumps {
                     self.patch(*j, OpCode::Jump(end));
                 }
-                // Patch the match_end placeholder
-                // (Actually the placeholder was never used since we emit labels dynamically)
 
                 Ok(())
             }
@@ -2178,29 +2094,19 @@ impl Compiler {
                 else_block,
                 ..
             } => {
-                // Evaluate scrutinee, store in temp
+                // Evaluate scrutinee, store in temp.
                 self.compile_expr(scrutinee)?;
                 let scrut_slot = self.sym.define("__iflet_scrutinee");
                 let current_slot = self.sym.next_slot;
                 self.emit(OpCode::StoreLocal(scrut_slot));
 
-                // Pattern check
+                // Pattern check (uniform contract: scrutinee in → [bool] out).
                 self.emit(OpCode::LoadLocal(scrut_slot));
-                let consumes = matches!(
-                    pattern.as_ref(),
-                    Pattern::EnumVariant { .. } | Pattern::Tuple(..)
-                );
                 self.compile_pattern(pattern, &mut vec![], true)?;
                 let jump_to_else = self.emit(OpCode::JumpIfFalse(0));
 
-                // Matched: clean up, bind, compile then block. EnumVariant
-                // patterns need the scrutinee reloaded — see match arm
-                // comment for details.
-                if consumes {
-                    self.emit(OpCode::LoadLocal(scrut_slot));
-                } else {
-                    self.emit(OpCode::Pop);
-                }
+                // Matched: reload scrutinee for bind_pattern_data, then body.
+                self.emit(OpCode::LoadLocal(scrut_slot));
                 self.bind_pattern_data(pattern)?;
                 self.compile_block(then_block)?;
 
