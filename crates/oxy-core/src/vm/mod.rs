@@ -51,7 +51,7 @@
 //! `docs/architecture/vm-locals-stack-separation.md`.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::lexer::IntegerSuffix;
@@ -1604,228 +1604,28 @@ impl Vm {
     }
 
     fn dispatch_pathcall(&self, segments: &[String], args: &[Value]) -> Result<Value, String> {
+        use crate::stdlib::registry;
         let segs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
-        let _to_f64 = |v: &Value| match v {
-            Value::I64(n) => *n as f64,
-            Value::F64(x) => *x,
-            _ => 0.0,
-        };
-        match segs.as_slice() {
-            // math routes through the stdlib module for float_to_value consistency
-            ["math", func] => call_stdlib(crate::stdlib::math::call, func, args),
-            ["json", "parse"] => {
-                let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                match crate::json::deserialize(&s) {
-                    Ok(val) => Ok(Value::ok(val)),
-                    Err(e) => Ok(Value::err(Value::String(format!("json::parse: {}", e)))),
-                }
-            }
-            ["String", "from"] => {
-                let s = args.first().map(|v| format!("{}", v)).unwrap_or_default();
-                Ok(Value::String(s))
-            }
-            ["HashMap", "new"] => Ok(Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(
-                HashMap::new(),
-            )))),
-            ["HashSet", "new"] => Ok(Value::HashSet(std::rc::Rc::new(std::cell::RefCell::new(
-                HashSet::new(),
-            )))),
-            ["BTreeMap", "new"] => Ok(Value::BTreeMap(std::rc::Rc::new(std::cell::RefCell::new(
-                BTreeMap::new(),
-            )))),
-            ["BTreeSet", "new"] => Ok(Value::BTreeSet(std::rc::Rc::new(std::cell::RefCell::new(
-                BTreeSet::new(),
-            )))),
-            ["BinaryHeap", "new"] => Ok(Value::BinaryHeap(std::rc::Rc::new(
-                std::cell::RefCell::new(BinaryHeap::new()),
-            ))),
-            ["VecDeque", "new"] => Ok(Value::VecDeque(std::rc::Rc::new(std::cell::RefCell::new(
-                VecDeque::new(),
-            )))),
-            ["ListNode", "new"] => {
-                let val = args.first().cloned().unwrap_or(Value::Unit);
-                let mut fields = HashMap::new();
-                fields.insert("val".to_string(), val);
-                fields.insert("next".to_string(), Value::none());
-                Ok(Value::Struct {
-                    name: "ListNode".to_string(),
-                    fields,
-                })
-            }
-            ["TreeNode", "new"] => {
-                let val = args.first().cloned().unwrap_or(Value::Unit);
-                let mut fields = HashMap::new();
-                fields.insert("val".to_string(), val);
-                fields.insert("left".to_string(), Value::none());
-                fields.insert("right".to_string(), Value::none());
-                Ok(Value::Struct {
-                    name: "TreeNode".to_string(),
-                    fields,
-                })
-            }
-            ["int", "parse"] => {
-                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                let trimmed = s.trim();
-                let result = if trimmed.starts_with("0x") || trimmed.starts_with("0X") {
-                    i64::from_str_radix(&trimmed[2..], 16).map_err(|_| ())
-                } else {
-                    trimmed.parse::<i64>().map_err(|_| ())
-                };
-                match result {
-                    Ok(n) => Ok(Value::ok(Value::I64(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{s}\" as integer"
-                    )))),
-                }
-            }
-            ["char", "from_code"] => {
-                let n = args
-                    .first()
-                    .and_then(|v| match v {
-                        Value::I64(n) => Some(*n as u32),
-                        _ => None,
-                    })
-                    .unwrap_or(0);
-                match char::from_u32(n) {
-                    Some(c) => Ok(Value::Char(c)),
-                    None => Err(format!("char::from_code: invalid code point {n}")),
-                }
-            }
-            ["float", "parse"] => {
-                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                match s.trim().parse::<f64>() {
-                    Ok(n) => Ok(Value::ok(Value::F64(n))),
-                    Err(_) => Ok(Value::err(Value::String(format!(
-                        "cannot parse \"{s}\" as float"
-                    )))),
-                }
-            }
-            // --- json ---
-            ["json", "serialize"] | ["json", "to_string"] => {
-                let val = args.first().cloned().unwrap_or(Value::Unit);
-                match crate::json::serialize(&val) {
-                    Ok(s) => Ok(Value::ok(Value::String(s))),
-                    Err(e) => Ok(Value::err(Value::String(e))),
-                }
-            }
-            ["json", "to_string_pretty"] => {
-                let val = args.first().cloned().unwrap_or(Value::Unit);
-                match crate::json::serialize_pretty(&val) {
-                    Ok(s) => Ok(Value::ok(Value::String(s))),
-                    Err(e) => Ok(Value::err(Value::String(e))),
-                }
-            }
-            ["json", "deserialize"] | ["json", "from_str"] => {
-                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                match crate::json::deserialize(&s) {
-                    Ok(val) => Ok(Value::ok(val)),
-                    Err(e) => Ok(Value::err(Value::String(format!("json error: {}", e)))),
-                }
-            }
-            ["json", "from_struct"] => {
-                let s = args.first().map(|v| v.to_string()).unwrap_or_default();
-                let type_name = args.get(1).map(|v| v.to_string()).unwrap_or_default();
-                match crate::json::deserialize(&s) {
-                    Ok(val) => {
-                        // Wrap deserialized value as a struct if type_name provided
-                        if !type_name.is_empty() {
-                            if let Value::Struct { fields, .. } = &val {
-                                Ok(Value::ok(Value::Struct {
-                                    name: type_name,
-                                    fields: fields.clone(),
-                                }))
-                            } else {
-                                Ok(Value::ok(val))
-                            }
-                        } else {
-                            Ok(Value::ok(val))
-                        }
-                    }
-                    Err(e) => Ok(Value::err(Value::String(format!("json error: {}", e)))),
-                }
-            }
-            // --- http ---
-            ["http", func] => {
-                #[cfg(feature = "http")]
-                {
-                    match func.as_ref() {
-                        "get" => http_call("GET", args, None),
-                        "post" => {
-                            let body = args.get(1).map(|v| v.to_string());
-                            http_call("POST", args, body)
-                        }
-                        "delete" => http_call("DELETE", args, None),
-                        "get_json" => http_call("GET", args, None),
-                        "post_json" => {
-                            let body = args.get(1).map(|v| v.to_string());
-                            http_call("POST", args, body)
-                        }
-                        "put_json" => {
-                            let body = args.get(1).map(|v| v.to_string());
-                            http_call("PUT", args, body)
-                        }
-                        other => Err(format!("unknown http function `http::{other}`")),
-                    }
-                }
-                #[cfg(not(feature = "http"))]
-                {
-                    let _ = (func, args);
-                    Err(
-                        "`http::` is not available in this build (the `http` feature is disabled)"
-                            .into(),
-                    )
-                }
-            }
-            // --- stdlib modules ---
-            ["fs", func] => call_stdlib(crate::stdlib::fs::call, func, args),
-            ["env", func] => call_stdlib(crate::stdlib::env::call, func, args),
-            ["process", func] => call_stdlib(crate::stdlib::process::call, func, args),
-            ["regex", func] => call_stdlib(crate::stdlib::regex::call, func, args),
-            // OOP-style: `Regex::new(pattern)` returns a thin handle that
-            // remembers the pattern; methods .is_match / .find / .find_all /
-            // .captures live on the resulting struct value.
-            ["Regex", "new"] | ["std", "regex", "Regex", "new"] => {
-                let pattern = args
-                    .first()
-                    .map(|v| match v {
-                        Value::String(s) => s.clone(),
-                        other => other.to_string(),
-                    })
-                    .unwrap_or_default();
-                // Validate the pattern eagerly so bad regexes surface at
-                // construction, not at first .is_match.
-                if let Err(e) = regex::Regex::new(&pattern) {
-                    return Err(format!("Regex::new: invalid pattern: {}", e));
-                }
-                let mut fields: HashMap<String, Value> = HashMap::new();
-                fields.insert("pattern".to_string(), Value::String(pattern));
-                Ok(Value::Struct {
-                    name: "Regex".to_string(),
-                    fields,
-                })
-            }
-            ["net", func] => call_stdlib(crate::stdlib::net::call, func, args),
-            ["time", func] => call_stdlib(crate::stdlib::time::call, func, args),
-            ["rand", func] => call_stdlib(crate::stdlib::rand::call, func, args),
-            ["std", "env", "args"] => {
-                // Return empty args in test environment
-                Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                    Vec::new(),
-                ))))
-            }
-            // std::module::function routes (e.g. std::env::var, std::fs::read_to_string)
-            ["std", module, func] => match *module {
-                "fs" => call_stdlib(crate::stdlib::fs::call, func, args),
-                "env" => call_stdlib(crate::stdlib::env::call, func, args),
-                "process" => call_stdlib(crate::stdlib::process::call, func, args),
-                "regex" => call_stdlib(crate::stdlib::regex::call, func, args),
-                "net" => call_stdlib(crate::stdlib::net::call, func, args),
-                "time" => call_stdlib(crate::stdlib::time::call, func, args),
-                "rand" => call_stdlib(crate::stdlib::rand::call, func, args),
-                _ => Err(format!("unknown std module: std::{}", module)),
-            },
-            _ => Err(format!("unknown built-in path: {}", segments.join("::"))),
+
+        // 1) Exact-path items first — they're more specific than modules
+        // (e.g. `std::env::args` is a one-off, not a generic `env::*` call).
+        if let Some(handler) = registry::lookup_item(&segs) {
+            return handler(args);
         }
+
+        // 2) Module-style dispatch: `[module, fn]` or `[std, module, fn]`.
+        let module_route = match segs.as_slice() {
+            [module, func] => Some((*module, *func)),
+            ["std", module, func] => Some((*module, *func)),
+            _ => None,
+        };
+        if let Some((module, func)) = module_route {
+            if let Some(call) = registry::lookup_module(module) {
+                return call_stdlib(call, func, args);
+            }
+        }
+
+        Err(format!("unknown built-in path: {}", segments.join("::")))
     }
 
     fn pop_two(&mut self) -> (Value, Value) {
@@ -1981,33 +1781,6 @@ fn call_stdlib(
         column: 0,
     };
     f(func, args, &span).map_err(|e| format!("{e}"))
-}
-
-/// HTTP helper: call crate::http::request and wrap result as Ok/Err enum variant.
-#[cfg(feature = "http")]
-fn http_call(method: &str, args: &[Value], body: Option<String>) -> Result<Value, String> {
-    let url = args.first().map(|v| v.to_string()).unwrap_or_default();
-    let result = crate::http::request(method, &url, &[], body.as_deref());
-    match result {
-        Ok((status, resp_body, headers)) => {
-            let mut fields = HashMap::new();
-            fields.insert("status".to_string(), Value::I64(status));
-            fields.insert("body".to_string(), Value::String(resp_body));
-            let mut header_map: HashMap<Value, Value> = HashMap::new();
-            for (k, v) in &headers {
-                header_map.insert(Value::String(k.clone()), Value::String(v.clone()));
-            }
-            fields.insert(
-                "headers".to_string(),
-                Value::HashMap(std::rc::Rc::new(std::cell::RefCell::new(header_map))),
-            );
-            Ok(Value::ok(Value::Struct {
-                name: "HttpResponse".to_string(),
-                fields,
-            }))
-        }
-        Err(e) => Ok(Value::err(Value::String(e))),
-    }
 }
 
 /// Map a binary op function to the corresponding method name for trait dispatch.

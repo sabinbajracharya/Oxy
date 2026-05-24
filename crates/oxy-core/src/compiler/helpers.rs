@@ -620,69 +620,13 @@ pub(crate) fn emit_narrowing_cast(compiler: &mut Compiler, type_name: &str) {
     }
 }
 
+/// Whitelist for paths that the compiler should compile down to
+/// `OpCode::PathCallBuiltin` (handled at runtime by the VM's
+/// `dispatch_pathcall`). The actual list is the registry in
+/// `crate::stdlib::registry` — this function just adapts the path type.
 pub(crate) fn is_builtin_path(path: &[String]) -> bool {
     let segs: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
-    let module = segs.first().copied().unwrap_or("");
-    // Handle std::module::function paths (3+ segments starting with "std")
-    let effective_module = if segs.len() >= 3 && module == "std" {
-        segs.get(1).copied().unwrap_or("")
-    } else {
-        module
-    };
-    matches!(
-        segs.as_slice(),
-        // math
-        ["math", "sqrt"]
-            | ["math", "abs"]
-            | ["math", "sin"]
-            | ["math", "cos"]
-            | ["math", "tan"]
-            | ["math", "asin"]
-            | ["math", "acos"]
-            | ["math", "atan"]
-            | ["math", "pow"]
-            | ["math", "floor"]
-            | ["math", "ceil"]
-            | ["math", "round"]
-            | ["math", "min"]
-            | ["math", "max"]
-            | ["math", "log"]
-            | ["math", "log2"]
-            | ["math", "log10"]
-            | ["math", "gcd"]
-            | ["math", "lcm"]
-            | ["math", "clamp"]
-            // json
-            | ["json", "parse"]
-            | ["json", "to_string"]
-            | ["json", "serialize"]
-            | ["json", "deserialize"]
-            | ["json", "to_string_pretty"]
-            | ["json", "from_str"]
-            | ["json", "from_struct"]
-            // constructors
-            | ["String", "from"]
-            | ["HashMap", "new"]
-            | ["HashSet", "new"]
-            | ["BTreeMap", "new"]
-            | ["BTreeSet", "new"]
-            | ["BinaryHeap", "new"]
-            | ["VecDeque", "new"]
-            | ["ListNode", "new"]
-            | ["TreeNode", "new"]
-            | ["char", "from_code"]
-            | ["int", "parse"]
-
-            | ["float", "parse"]
-            // OOP-style regex builder. `Regex::new(pattern)` returns an
-            // opaque compiled pattern; methods on it (.is_match, .find,
-            // .find_all, .captures) are dispatched at the value level.
-            | ["Regex", "new"]
-            | ["std", "regex", "Regex", "new"]
-    ) || matches!(
-        effective_module,
-        "fs" | "env" | "process" | "regex" | "net" | "time" | "rand" | "http"
-    ) || segs.as_slice() == ["std", "env", "args"]
+    crate::stdlib::registry::is_builtin(&segs)
 }
 
 /// Substitute generic type param names with concrete types in an expression tree.
