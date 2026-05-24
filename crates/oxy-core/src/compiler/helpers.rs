@@ -183,9 +183,12 @@ pub(crate) fn collect_closure_free_vars(
                 collect_closure_free_vars(e, params, out);
             }
         }
-        Expr::StructInit { fields, .. } => {
+        Expr::StructInit { fields, base, .. } => {
             for (_, v) in fields {
                 collect_closure_free_vars(v, params, out);
+            }
+            if let Some(b) = base {
+                collect_closure_free_vars(b, params, out);
             }
         }
         Expr::Grouped(inner, _) => collect_closure_free_vars(inner, params, out),
@@ -322,9 +325,12 @@ pub(crate) fn collect_free_vars(
                 collect_free_vars(e, params, vars);
             }
         }
-        crate::ast::Expr::StructInit { fields, .. } => {
+        crate::ast::Expr::StructInit { fields, base, .. } => {
             for (_, v) in fields {
                 collect_free_vars(v, params, vars);
+            }
+            if let Some(b) = base {
+                collect_free_vars(b, params, vars);
             }
         }
         crate::ast::Expr::Grouped(inner, _) => {
@@ -752,9 +758,12 @@ pub(crate) fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(Stri
                 substitute_type_params(elem, subst);
             }
         }
-        Expr::StructInit { fields, .. } => {
+        Expr::StructInit { fields, base, .. } => {
             for (_, field_expr) in fields {
                 substitute_type_params(field_expr, subst);
+            }
+            if let Some(b) = base {
+                substitute_type_params(b, subst);
             }
         }
         Expr::FieldAccess { object, .. } => substitute_type_params(object, subst),

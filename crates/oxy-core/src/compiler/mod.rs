@@ -527,6 +527,7 @@ impl Compiler {
         let body_expr = Expr::StructInit {
             name: s.name.clone(),
             fields: field_exprs,
+            base: None,
             span: default_span,
         };
         // Build synthetic FnDef

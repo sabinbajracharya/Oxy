@@ -1226,7 +1226,9 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::StructInit { name, fields, .. } => {
+            Expr::StructInit {
+                name, fields, base, ..
+            } => {
                 // Resolve `Self` to the current impl type name, then type aliases, then use aliases
                 let mut resolved_name = if name == "Self" {
                     self.current_impl_type
@@ -1269,7 +1271,6 @@ impl Compiler {
                         }
                     }
                 }
-                let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
                 // Check struct visibility — private structs can't be constructed from outside
                 if !self.is_visible(&resolved_name) {
                     return Err(FerriError::Runtime {
@@ -1278,16 +1279,26 @@ impl Compiler {
                         column: expr.span().column,
                     });
                 }
-                for (field_name, expr) in fields {
-                    // Check field visibility — private fields can't be set from outside
-                    self.check_field_visibility(&resolved_name, field_name, expr.span())?;
-                    self.compile_expr(expr)?;
+                let field_names: Vec<String> = fields.iter().map(|(n, _)| n.clone()).collect();
+                for (field_name, field_expr) in fields {
+                    self.check_field_visibility(&resolved_name, field_name, field_expr.span())?;
+                    self.compile_expr(field_expr)?;
                 }
-                self.emit(OpCode::StructInit {
-                    name: resolved_name,
-                    field_count: fields.len(),
-                    field_names,
-                });
+                if let Some(base_expr) = base {
+                    // Push base on top of explicit fields; VM merges them.
+                    self.compile_expr(base_expr)?;
+                    self.emit(OpCode::StructUpdate {
+                        name: resolved_name,
+                        field_count: fields.len(),
+                        field_names,
+                    });
+                } else {
+                    self.emit(OpCode::StructInit {
+                        name: resolved_name,
+                        field_count: fields.len(),
+                        field_names,
+                    });
+                }
                 Ok(())
             }
 

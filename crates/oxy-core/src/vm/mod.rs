@@ -181,6 +181,13 @@ pub enum OpCode {
         field_count: usize,
         field_names: Vec<String>,
     },
+    /// Pop base struct (top), then `field_count` override values below it.
+    /// Clone base fields, apply overrides, push new Value::Struct.
+    StructUpdate {
+        name: String,
+        field_count: usize,
+        field_names: Vec<String>,
+    },
     /// Pop `arg_count` args + receiver, dispatch method by name on the receiver.
     MethodCall {
         method_name: String,
@@ -1112,6 +1119,39 @@ impl Vm {
                 }
                 self.stack.push(Value::Struct { name, fields });
             }
+            OpCode::StructUpdate {
+                name,
+                field_count,
+                field_names,
+            } => {
+                // Base is on top of the stack; override values are below it.
+                let base = self.stack.pop().unwrap_or(Value::Unit);
+                let start = self.stack.len().saturating_sub(field_count);
+                let values: Vec<Value> = self.stack.drain(start..).collect();
+                let overrides: HashMap<String, Value> =
+                    field_names.into_iter().zip(values).collect();
+                match base {
+                    Value::Struct {
+                        fields: mut base_fields,
+                        ..
+                    } => {
+                        for (k, v) in overrides {
+                            base_fields.insert(k, v);
+                        }
+                        self.stack.push(Value::Struct {
+                            name,
+                            fields: base_fields,
+                        });
+                    }
+                    other => {
+                        return Err(format!(
+                            "struct update `..` requires a `{}` value, got `{}`",
+                            name,
+                            other.type_name()
+                        ));
+                    }
+                }
+            }
             OpCode::ConstEnumVariant {
                 enum_name,
                 variant,
@@ -1706,8 +1746,8 @@ impl Vm {
     }
 }
 
-pub mod builtins;
 pub(super) mod arith;
+pub mod builtins;
 use arith::*;
 mod call;
 use call::*;
@@ -1853,6 +1893,14 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
             field_names,
         } => format!(
             "StructInit(name={:?}, field_count={}, field_names={:?})",
+            name, field_count, field_names
+        ),
+        OpCode::StructUpdate {
+            name,
+            field_count,
+            field_names,
+        } => format!(
+            "StructUpdate(name={:?}, field_count={}, field_names={:?})",
             name, field_count, field_names
         ),
         OpCode::MethodCall {

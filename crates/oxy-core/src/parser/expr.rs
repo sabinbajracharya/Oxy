@@ -4,7 +4,14 @@ impl Parser {
     fn parse_struct_init(&mut self, name: String, start_span: Span) -> Result<Expr, FerriError> {
         self.expect(TokenKind::LBrace)?;
         let mut fields = Vec::new();
+        let mut base = None;
         while !self.check(&TokenKind::RBrace) {
+            // `..base_expr` — must be last item
+            if self.match_token(&TokenKind::DotDot) {
+                base = Some(Box::new(self.parse_expr(Precedence::None)?));
+                self.match_token(&TokenKind::Comma);
+                break;
+            }
             // Accept both identifiers (named fields) and integers (tuple struct fields)
             let is_int_field = matches!(self.peek_kind(), TokenKind::IntLiteral(..));
             let field_name = if is_int_field {
@@ -34,6 +41,7 @@ impl Parser {
         Ok(Expr::StructInit {
             name,
             fields,
+            base,
             span: self.merge_spans(start_span, end_span),
         })
     }

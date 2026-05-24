@@ -918,7 +918,11 @@ impl TypeChecker {
             }
 
             Expr::StructInit {
-                name, fields, span, ..
+                name,
+                fields,
+                base,
+                span,
+                ..
             } => {
                 let resolved = self.resolve_struct_name(name);
                 // Pre-collect declared field types AND each field's raw
@@ -993,6 +997,10 @@ impl TypeChecker {
                             });
                         }
                     }
+                }
+                // Type-check the `..base` expression if present.
+                if let Some(base_expr) = base {
+                    let _ = self.infer_expr(base_expr)?;
                 }
                 // If `resolved` names a struct-style enum variant (e.g.
                 // `Shape::Rectangle`), the produced value's type is the

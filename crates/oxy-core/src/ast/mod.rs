@@ -535,10 +535,12 @@ pub enum Expr {
     },
     /// Tuple literal: `(a, b, c)`
     Tuple { elements: Vec<Expr>, span: Span },
-    /// Struct instantiation: `Point { x: 1.0, y: 2.0 }`
+    /// Struct instantiation: `Point { x: 1.0, y: 2.0 }` or with update `Point { x: 1, ..base }`
     StructInit {
         name: String,
         fields: Vec<(String, Expr)>,
+        /// Optional `..base` expression — remaining fields copied from here.
+        base: Option<Box<Expr>>,
         span: Span,
     },
     /// Path expression: `Type::method(args)` or `Type::method::<T>(args)`
