@@ -1541,16 +1541,34 @@ impl TypeChecker {
                 if let Some(ty) = self.env.borrow().get(name) {
                     return Ok(ty);
                 }
+                // An ident that names a function used as a value (e.g.
+                // `apply(square, 5)`) must infer to a fn-pointer type, NOT
+                // the function's return type. Previously this branch
+                // returned the return type alone, so `square` was typed as
+                // `int` and the apply(fn(int) -> int, …) signature
+                // rejected it.
                 if let Some(ret) = self.fn_return_types.get(name) {
-                    return Ok(ret.clone());
+                    let params = self.fn_param_types.get(name).cloned().unwrap_or_default();
+                    return Ok(TypeInfo::Function {
+                        params,
+                        ret: Box::new(ret.clone()),
+                    });
                 }
-                // Try module-qualified function return type
+                // Try module-qualified function name
                 {
                     let module_prefix = self.module_stack.join("::");
                     if !module_prefix.is_empty() {
                         let qualified = format!("{}::{}", module_prefix, name);
                         if let Some(ret) = self.fn_return_types.get(&qualified) {
-                            return Ok(ret.clone());
+                            let params = self
+                                .fn_param_types
+                                .get(&qualified)
+                                .cloned()
+                                .unwrap_or_default();
+                            return Ok(TypeInfo::Function {
+                                params,
+                                ret: Box::new(ret.clone()),
+                            });
                         }
                     }
                 }
