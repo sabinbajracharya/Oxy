@@ -12,16 +12,33 @@ use crate::types::Value;
 /// Global PRNG state for rand:: module (xorshift64).
 static PRNG_STATE: AtomicU64 = AtomicU64::new(0);
 
+/// Best-effort time-based seed. Returns 0 on platforms where wall-clock time
+/// isn't available (notably `wasm32-unknown-unknown`, where `SystemTime::now()`
+/// panics with "unreachable executed"). The caller handles the zero case.
+fn seed_from_time() -> u64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+}
+
 /// Get the next pseudo-random u64 from the global PRNG.
 fn simple_random_u64() -> u64 {
     let mut state = PRNG_STATE.load(Ordering::Relaxed);
     if state == 0 {
-        // Seed from current time on first use
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64;
-        state = seed | 1; // Ensure non-zero
+        // Seed from current time when available; fall back to a fixed non-zero
+        // constant on platforms without a clock (wasm). The constant means the
+        // wasm playground gets a deterministic sequence per session, but the
+        // PRNG still advances within a session.
+        let raw = seed_from_time();
+        state = if raw == 0 { 0x9E37_79B9_7F4A_7C15 } else { raw | 1 };
         PRNG_STATE.store(state, Ordering::Relaxed);
     }
     // WHY: xorshift64 chosen for its simplicity and speed in an interpreted language context;
