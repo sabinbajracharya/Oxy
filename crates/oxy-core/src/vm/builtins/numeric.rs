@@ -1,14 +1,8 @@
 //! Integer and Float method implementations — shared by interpreter and VM.
 
+use crate::stdlib::math::float_to_value;
 use crate::symbols;
 use crate::types::Value;
-
-/// Wrap an f64 method result as a Value. Always returns Value::F64 —
-/// never collapses whole-number floats to Value::I64. See the matching
-/// helper in `stdlib::math` for the rationale.
-fn float_to_value(f: f64) -> Value {
-    Value::F64(f)
-}
 
 pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, String> {
     let to_f64 = |v: &Value| match v {

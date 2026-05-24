@@ -21,15 +21,14 @@ pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
     }
 }
 
-/// Convert f64 result to Value (integer if whole number).
-// WHY: When arithmetic produces a float that is actually a whole number (e.g. 6.0/3.0 = 2.0),
-// we convert it back to Integer so the result type matches user expectations—users writing
-// `6 / 3` expect an integer `2`, not `2.0`. This avoids surprising type mismatches in
-// downstream comparisons and pattern matches.
-/// Wrap an f64 math result as a Value. Always returns Value::F64 — never
-/// auto-coerces whole numbers to Value::I64. Previously this collapsed
+/// Wrap an f64 math result as a Value. Always returns `Value::F64` — never
+/// auto-coerces whole numbers to `Value::I64`. Previously this collapsed
 /// e.g. `math::sin(0.0)` to int `0`, which surprised users whose code
 /// expected a uniform float return type.
+///
+/// Shared by `vm::builtins::numeric` so float-returning method calls
+/// (`.sqrt()`, `.sin()`, etc.) get the same wrapping as the `math::*`
+/// free functions.
 pub fn float_to_value(f: f64) -> Value {
     Value::F64(f)
 }
