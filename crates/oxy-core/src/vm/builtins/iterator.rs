@@ -176,6 +176,51 @@ pub fn dispatch(
             }
             Ok(total)
         }
+        symbols::iterator_m::PRODUCT => {
+            let mut total: Value = Value::I64(1);
+            while let Some(val) = drive_next(&mut iter) {
+                total = mul_values(total, val);
+            }
+            Ok(total)
+        }
+        symbols::iterator_m::MAX => {
+            let mut best: Option<Value> = None;
+            while let Some(val) = drive_next(&mut iter) {
+                best = Some(match best {
+                    None => val,
+                    Some(cur) => {
+                        if val.cmp(&cur) == std::cmp::Ordering::Greater {
+                            val
+                        } else {
+                            cur
+                        }
+                    }
+                });
+            }
+            Ok(match best {
+                Some(v) => Value::some(v),
+                None => Value::none(),
+            })
+        }
+        symbols::iterator_m::MIN => {
+            let mut best: Option<Value> = None;
+            while let Some(val) = drive_next(&mut iter) {
+                best = Some(match best {
+                    None => val,
+                    Some(cur) => {
+                        if val.cmp(&cur) == std::cmp::Ordering::Less {
+                            val
+                        } else {
+                            cur
+                        }
+                    }
+                });
+            }
+            Ok(match best {
+                Some(v) => Value::some(v),
+                None => Value::none(),
+            })
+        }
         symbols::iterator_m::COUNT => {
             let mut n = 0;
             while drive_next(&mut iter).is_some() {
@@ -281,6 +326,9 @@ pub fn method_names() -> &'static [&'static str] {
         symbols::iterator_m::NEXT,
         symbols::iterator_m::COLLECT,
         symbols::iterator_m::SUM,
+        symbols::iterator_m::PRODUCT,
+        symbols::iterator_m::MAX,
+        symbols::iterator_m::MIN,
         symbols::iterator_m::COUNT,
         symbols::iterator_m::NTH,
         symbols::iterator_m::ANY,
@@ -374,5 +422,15 @@ fn add_values(a: Value, b: Value) -> Value {
         (Value::I64(a), Value::F64(b)) => Value::F64(*a as f64 + b),
         (Value::F64(a), Value::I64(b)) => Value::F64(a + *b as f64),
         _ => Value::I64(0),
+    }
+}
+
+fn mul_values(a: Value, b: Value) -> Value {
+    match (&a, &b) {
+        (Value::I64(a), Value::I64(b)) => Value::I64(a.wrapping_mul(*b)),
+        (Value::F64(a), Value::F64(b)) => Value::F64(a * b),
+        (Value::I64(a), Value::F64(b)) => Value::F64(*a as f64 * b),
+        (Value::F64(a), Value::I64(b)) => Value::F64(a * *b as f64),
+        _ => Value::I64(1),
     }
 }

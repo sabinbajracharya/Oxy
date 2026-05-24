@@ -1530,6 +1530,19 @@ impl Vm {
                 "to_string" => Ok(Value::String(b.to_string())),
                 _ => Err(format!("no method '{}' on type bool", method_name)),
             },
+            // Ranges expose every iterator adapter (.map / .filter / .sum /
+            // .collect / .max / etc.) by materialising into an iterator
+            // and delegating. Cheap because Ranges are small int pairs.
+            Value::Range(start, end) => {
+                let data: Vec<Value> = (*start..*end).map(Value::I64).collect();
+                let iter = Value::Iterator(Box::new(crate::types::IteratorState::VecSource {
+                    data,
+                    index: 0,
+                }));
+                builtins::iterator::dispatch(iter, method_name, &args, |func, fargs| {
+                    self.run_closure(func, fargs)
+                })
+            }
             _ => Err(format!(
                 "no method '{}' on type {}",
                 method_name,

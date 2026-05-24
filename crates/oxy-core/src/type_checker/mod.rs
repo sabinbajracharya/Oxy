@@ -2336,7 +2336,13 @@ impl TypeChecker {
                         });
                     }
                 }
-                Ok(TypeInfo::I64)
+                // Treat ranges as Vec<int> for type-checking purposes: at
+                // runtime a Range produces an Iterator, but Iterator and
+                // Vec share the same method surface in our checker, so
+                // pretending the type is `Vec<int>` lets `(0..n).map(...)`,
+                // `.collect()`, `.sum()`, etc. all type-check without
+                // introducing a separate TypeInfo::Range variant.
+                Ok(TypeInfo::Vec(Box::new(TypeInfo::I64)))
             }
 
             Expr::StructInit {

@@ -123,3 +123,12 @@ fn test_enum_in_module() {
     let c = shapes::Color::Green;
     assert_eq!(shapes::name(c), "green");
 }
+
+// --- enum via use ---
+use shapes::Color;
+
+#[test]
+fn test_enum_via_use() {
+    let c = Color::Red;
+    assert_eq!(shapes::name(c), "red");
+}

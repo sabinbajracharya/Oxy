@@ -366,6 +366,9 @@ pub const ITERATOR_METHODS: &[MethodInfo] = methods![
     "rev": "() -> Vec<T>" => "Return elements in reverse order.",
     "skip": "(n: i64) -> Iterator" => "Skip the first `n` elements.",
     "sum": "() -> T" => "Sum all elements.",
+    "product": "() -> T" => "Multiply all elements together.",
+    "max": "() -> Option<T>" => "Return the largest element, or None if empty.",
+    "min": "() -> Option<T>" => "Return the smallest element, or None if empty.",
     "take": "(n: i64) -> Iterator" => "Take the first `n` elements.",
     "zip": "(other: Iterator) -> Iterator" => "Zip two iterators into pairs.",
 ];
@@ -673,6 +676,9 @@ pub mod iterator_m {
     pub const COLLECT: &str = "collect";
     pub const SUM: &str = "sum";
     pub const COUNT: &str = "count";
+    pub const MAX: &str = "max";
+    pub const MIN: &str = "min";
+    pub const PRODUCT: &str = "product";
     pub const NTH: &str = "nth";
     pub const ANY: &str = "any";
     pub const ALL: &str = "all";
