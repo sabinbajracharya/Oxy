@@ -581,12 +581,34 @@ impl Parser {
                 span,
             });
         }
-        // Accept `()` as the Unit type — e.g. `fn main() -> Result<(), String>`
+        // Accept `()` as the Unit type, `(T, U, ...)` as a tuple type.
         if self.check(&TokenKind::LParen) {
             self.advance();
+            if self.match_token(&TokenKind::RParen) {
+                return Ok(TypeAnnotation::Named {
+                    name: "()".to_string(),
+                    generic_args: Vec::new(),
+                    span,
+                });
+            }
+            let mut elements: Vec<String> = Vec::new();
+            loop {
+                elements.push(self.parse_type_annotation()?.name().to_string());
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                if self.check(&TokenKind::RParen) {
+                    break;
+                }
+            }
             self.expect(TokenKind::RParen)?;
+            // Encode as a synthetic named type so downstream code (type
+            // checker, compiler) sees a single string. The runtime tuple
+            // representation handles values; the annotation is mostly
+            // descriptive.
+            let name = format!("({})", elements.join(", "));
             return Ok(TypeAnnotation::Named {
-                name: "()".to_string(),
+                name,
                 generic_args: Vec::new(),
                 span,
             });

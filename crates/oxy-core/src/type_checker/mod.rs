@@ -162,6 +162,14 @@ impl TypeInfo {
     }
 
     pub fn from_name(name: &str) -> TypeInfo {
+        // Tuple type annotations `(T1, T2, ...)` — we don't have a
+        // TypeInfo::Tuple variant, so just type-check them loosely as
+        // Unknown. Runtime tuples Just Work (Value::Tuple); the only thing
+        // this costs is precise element-type tracking, which the existing
+        // `(name)` annotation never expressed anyway.
+        if name.starts_with('(') && name.ends_with(')') && name != "()" {
+            return TypeInfo::Unknown;
+        }
         // Parse function type syntax: fn(P1, P2, ...) -> R
         if let Some(inner) = name.strip_prefix("fn(") {
             if let Some(paren_end) = inner.find(')') {
