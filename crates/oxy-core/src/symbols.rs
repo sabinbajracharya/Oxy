@@ -387,6 +387,8 @@ pub const OPTION_RESULT_METHODS: &[MethodInfo] = methods![
     "map": "(fn: (T) -> U) -> Option<U>" => "Transform the inner value.",
     "map_err": "(fn: (E) -> F) -> Result<T, F>" => "Transform the error value.",
     "ok": "() -> Option<T>" => "Convert Result::Ok(T) to Some(T), Err to None.",
+    "ok_or": "(err: E) -> Result<T, E>" => "Convert Option::Some(T) to Ok(T); None to Err(err).",
+    "ok_or_else": "(fn: () -> E) -> Result<T, E>" => "Like ok_or, but the error is produced by a closure.",
     "or": "(other: Option<T>) -> Option<T>" => "Return self if Some, else `other`.",
     "or_else": "(fn: () -> Option<T>) -> Option<T>" => "Return self if Some, else call closure.",
     "to_string": "() -> String" => "Convert to a string representation.",
@@ -699,6 +701,8 @@ pub mod option_result_m {
     pub const UNWRAP_OR_ELSE: &str = "unwrap_or_else";
     pub const OR: &str = "or";
     pub const OR_ELSE: &str = "or_else";
+    pub const OK_OR: &str = "ok_or";
+    pub const OK_OR_ELSE: &str = "ok_or_else";
     pub const MAP: &str = "map";
     pub const MAP_ERR: &str = "map_err";
     pub const AND_THEN: &str = "and_then";

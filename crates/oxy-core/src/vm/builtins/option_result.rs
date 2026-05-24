@@ -76,6 +76,24 @@ where
             Value::EnumVariant { variant, .. } if variant == "Some" => Ok(receiver.clone()),
             _ => Ok(args.first().cloned().unwrap_or(Value::none())),
         },
+        symbols::option_result_m::OK_OR if is_option => match &receiver {
+            Value::EnumVariant { variant, data, .. } if variant == "Some" => {
+                Ok(Value::ok(data.first().cloned().unwrap_or(Value::Unit)))
+            }
+            _ => Ok(Value::err(args.first().cloned().unwrap_or(Value::Unit))),
+        },
+        symbols::option_result_m::OK_OR_ELSE if is_option => {
+            let closure = args.first().cloned().unwrap_or(Value::Unit);
+            match &receiver {
+                Value::EnumVariant { variant, data, .. } if variant == "Some" => {
+                    Ok(Value::ok(data.first().cloned().unwrap_or(Value::Unit)))
+                }
+                _ => {
+                    let err_val = call_closure(closure, &[])?;
+                    Ok(Value::err(err_val))
+                }
+            }
+        }
         symbols::option_result_m::OR_ELSE => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match &receiver {
@@ -176,6 +194,8 @@ pub fn method_names() -> &'static [&'static str] {
         symbols::option_result_m::UNWRAP_OR_ELSE,
         symbols::option_result_m::OR,
         symbols::option_result_m::OR_ELSE,
+        symbols::option_result_m::OK_OR,
+        symbols::option_result_m::OK_OR_ELSE,
         symbols::option_result_m::MAP,
         symbols::option_result_m::MAP_ERR,
         symbols::option_result_m::AND_THEN,

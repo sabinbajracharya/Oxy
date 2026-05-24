@@ -55,7 +55,19 @@ fn test_option_map_none() {
     assert_eq!(n.map(|x| x * 2), None);
 }
 
-// --- Option::ok_or — covered separately when ok_or is implemented ---
+// --- Option::ok_or ---
+#[test]
+fn test_option_ok_or_some() {
+    let s: Option<int> = Some(5);
+    let r: Result<int, String> = s.ok_or("nope".to_string());
+    assert_eq!(r, Ok(5));
+}
+#[test]
+fn test_option_ok_or_none() {
+    let n: Option<int> = None;
+    let r: Result<int, String> = n.ok_or("nope".to_string());
+    assert_eq!(r, Err("nope".to_string()));
+}
 
 // --- Result::is_ok / is_err ---
 #[test]
