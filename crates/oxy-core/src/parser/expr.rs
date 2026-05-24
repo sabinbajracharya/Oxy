@@ -796,7 +796,16 @@ impl Parser {
         self.expect(TokenKind::Let)?;
         let pattern = self.parse_pattern()?;
         self.expect(TokenKind::Eq)?;
-        let expr = self.parse_expr(Precedence::None)?;
+        // Stop at `&&` so it can separate scrutinee from optional guard condition.
+        let expr = self.with_no_struct_literal(|p| p.parse_expr(Precedence::And))?;
+        // Optional `&& guard_condition` — the bound pattern variables are in scope.
+        let guard = if self.match_token(&TokenKind::AmpAmp) {
+            Some(Box::new(self.with_no_struct_literal(|p| {
+                p.parse_expr(Precedence::None)
+            })?))
+        } else {
+            None
+        };
         let then_block = self.parse_block()?;
 
         let else_block = if self.match_token(&TokenKind::Else) {
@@ -818,6 +827,7 @@ impl Parser {
         Ok(Expr::IfLet {
             pattern: Box::new(pattern),
             expr: Box::new(expr),
+            guard,
             then_block,
             else_block,
             span: self.merge_spans(start_span, end_span),

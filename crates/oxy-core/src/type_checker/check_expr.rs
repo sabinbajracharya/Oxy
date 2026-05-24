@@ -409,12 +409,16 @@ impl TypeChecker {
 
             Expr::IfLet {
                 expr: inner,
+                guard,
                 then_block,
                 else_block,
                 span,
                 ..
             } => {
                 let _ = self.infer_expr(inner)?;
+                if let Some(g) = guard {
+                    let _ = self.infer_expr(g)?;
+                }
                 let then_ty = self.block_tail_type(then_block)?;
                 let result = if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;

@@ -556,6 +556,8 @@ pub enum Expr {
     IfLet {
         pattern: Box<Pattern>,
         expr: Box<Expr>,
+        /// Optional `&& condition` guard after the scrutinee.
+        guard: Option<Box<Expr>>,
         then_block: Block,
         else_block: Option<Box<Expr>>,
         span: Span,

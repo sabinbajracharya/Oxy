@@ -19,7 +19,6 @@ use super::helpers::{
 };
 use super::{Compiler, LoopContext, SymTable};
 
-
 impl Compiler {
     pub(crate) fn compile_block(&mut self, block: &Block) -> Result<(), FerriError> {
         for (i, stmt) in block.stmts.iter().enumerate() {
@@ -1611,6 +1610,7 @@ impl Compiler {
             Expr::IfLet {
                 pattern,
                 expr: scrutinee,
+                guard,
                 then_block,
                 else_block,
                 ..
@@ -1624,18 +1624,31 @@ impl Compiler {
                 // Pattern check (uniform contract: scrutinee in → [bool] out).
                 self.emit(OpCode::LoadLocal(scrut_slot));
                 self.compile_pattern(pattern, &mut vec![], true)?;
-                let jump_to_else = self.emit(OpCode::JumpIfFalse(0));
+                let jump_pattern_fail = self.emit(OpCode::JumpIfFalse(0));
 
-                // Matched: reload scrutinee for bind_pattern_data, then body.
+                // Matched: bind pattern variables (guard and body can use them).
                 self.emit(OpCode::LoadLocal(scrut_slot));
                 self.bind_pattern_data(pattern)?;
+
+                // Optional `&&` guard — evaluated after binding so bound vars are live.
+                let jump_guard_fail = if let Some(guard_expr) = guard {
+                    self.compile_expr(guard_expr)?;
+                    Some(self.emit(OpCode::JumpIfFalse(0)))
+                } else {
+                    None
+                };
+
                 self.compile_block(then_block)?;
 
                 // Jump over else block
                 let jump_to_end = self.emit(OpCode::Jump(0));
 
-                // Else block
-                self.patch(jump_to_else, OpCode::JumpIfFalse(self.code.len()));
+                // Else block — both pattern-miss and guard-fail land here.
+                let else_start = self.code.len();
+                self.patch(jump_pattern_fail, OpCode::JumpIfFalse(else_start));
+                if let Some(jgf) = jump_guard_fail {
+                    self.patch(jgf, OpCode::JumpIfFalse(else_start));
+                }
                 self.sym.next_slot = current_slot;
                 if let Some(else_expr) = else_block {
                     self.compile_expr(else_expr)?;

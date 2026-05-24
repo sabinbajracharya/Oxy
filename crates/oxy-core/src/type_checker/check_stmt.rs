@@ -82,12 +82,16 @@ impl TypeChecker {
                     }
                 } else if let Expr::IfLet {
                     expr: inner,
+                    guard,
                     then_block,
                     else_block,
                     ..
                 } = expr
                 {
                     let _ = self.infer_expr(inner)?;
+                    if let Some(g) = guard {
+                        let _ = self.infer_expr(g)?;
+                    }
                     let block_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
                     self.env = block_env;
