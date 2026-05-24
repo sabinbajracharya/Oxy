@@ -218,6 +218,7 @@ pub const STRING_METHODS: &[MethodInfo] = methods![
     "push_str": "(s: String)" => "Append a string (note: strings are immutable in Oxy).",
     "repeat": "(n: i64) -> String" => "Repeat the string `n` times.",
     "replace": "(from: String, to: String) -> String" => "Replace all occurrences of `from` with `to`.",
+    "lines": "() -> Vec<String>" => "Split the string into lines (strips \\n and \\r\\n, no trailing empty).",
     "split": "(pat: String) -> Vec<String>" => "Split the string by `pat`.",
     "starts_with": "(pat: String) -> bool" => "Check if the string starts with `pat`.",
     "substring": "(start: i64, end: i64) -> String" => "Return the substring from `start` to `end`.",
@@ -562,6 +563,7 @@ pub mod string_m {
     pub const STARTS_WITH: &str = "starts_with";
     pub const ENDS_WITH: &str = "ends_with";
     pub const REPLACE: &str = "replace";
+    pub const LINES: &str = "lines";
     pub const SPLIT: &str = "split";
     pub const CHARS: &str = "chars";
     pub const REPEAT: &str = "repeat";

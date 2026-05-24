@@ -30,6 +30,10 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let to = args.get(1).map(|v| v.to_string()).unwrap_or_default();
             Ok(Value::String(s.replace(&from, &to)))
         }
+        symbols::string_m::LINES => {
+            let parts: Vec<Value> = s.lines().map(|l| Value::String(l.to_string())).collect();
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
+        }
         symbols::string_m::SPLIT => {
             let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
             let parts: Vec<Value> = s
@@ -125,6 +129,7 @@ pub fn method_names() -> &'static [&'static str] {
         "starts_with",
         "ends_with",
         "replace",
+        "lines",
         "split",
         "chars",
         "repeat",
