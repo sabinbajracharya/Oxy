@@ -1,13 +1,34 @@
 //! Environment standard library module.
 //!
 //! Provides access to environment variables and process arguments.
-//! Note: `std::env::args()` requires access to interpreter state (cli_args),
-//! so it is handled in the interpreter's path dispatch. This module handles
-//! the stateless functions.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::errors::{check_arg_count, expect_string, runtime_error, FerriError};
 use crate::lexer::Span;
 use crate::types::Value;
+
+thread_local! {
+    /// CLI arguments visible to the running Oxy program. Index 0 is the
+    /// script path (matching the `sys.argv[0]` convention); indices 1..
+    /// are the user-supplied arguments. Set by the runner (oxy-cli) before
+    /// VM execution; reads default to an empty Vec for embedders or tests
+    /// that don't set it.
+    static CLI_ARGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Install the argv the running program will see via `std::env::args()`.
+/// Conventionally `args[0]` is the script path, `args[1..]` are user args.
+pub fn set_cli_args(args: Vec<String>) {
+    CLI_ARGS.with(|a| *a.borrow_mut() = args);
+}
+
+/// Read the installed CLI arguments. Returns a fresh clone; safe to call
+/// from anywhere.
+pub fn get_cli_args() -> Vec<String> {
+    CLI_ARGS.with(|a| a.borrow().clone())
+}
 
 /// Dispatch `std::env::` function calls (stateless ones).
 pub fn call(
@@ -17,6 +38,12 @@ pub fn call(
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
 ) -> Result<Value, FerriError> {
     match func_name {
+        "args" => {
+            check_arg_count("std::env::args", 0, args, span)?;
+            let argv = get_cli_args();
+            let items: Vec<Value> = argv.into_iter().map(Value::String).collect();
+            Ok(Value::Vec(Rc::new(RefCell::new(items))))
+        }
         "var" => {
             check_arg_count("std::env::var", 1, args, span)?;
             let name = expect_string(&args[0], "std::env::var", span)?;

@@ -105,6 +105,10 @@ static MODULES: &[Module] = &[
         call: crate::stdlib::env::call,
     },
     Module {
+        name: "args",
+        call: crate::stdlib::args::call,
+    },
+    Module {
         name: "process",
         call: crate::stdlib::process::call,
     },
@@ -195,10 +199,6 @@ static ITEMS: &[Item] = &[
     Item {
         path: &["std", "regex", "Regex", "new"],
         handler: regex_new,
-    },
-    Item {
-        path: &["std", "env", "args"],
-        handler: std_env_args,
     },
 ];
 
@@ -315,9 +315,4 @@ fn regex_new(args: &[Value]) -> Result<Value, String> {
         name: "Regex".to_string(),
         fields,
     })
-}
-
-fn std_env_args(_args: &[Value]) -> Result<Value, String> {
-    // Test/REPL stub — return an empty argv.
-    Ok(Value::Vec(Rc::new(RefCell::new(Vec::new()))))
 }

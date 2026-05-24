@@ -4,6 +4,8 @@
 //! operations, environment access, process control, regex, networking,
 //! HTTP server, and SQLite database.
 
+/// Command-line argument parsing (flags + positionals) on top of `env::args`.
+pub mod args;
 /// SQLite database operations (open, query, execute).
 #[cfg(feature = "db")]
 pub mod db;

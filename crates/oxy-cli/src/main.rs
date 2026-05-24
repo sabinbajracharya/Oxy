@@ -19,6 +19,11 @@ fn main() {
                 eprintln!("{} 'run' requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
+            // Install argv visible to `std::env::args()`: script path at
+            // index 0, user-supplied arguments follow.
+            let mut script_argv = vec![file.clone()];
+            script_argv.extend(args.iter().skip(3).cloned());
+            oxy_core::stdlib::env::set_cli_args(script_argv);
             run_file(file);
         }
         Some("repl") => {
