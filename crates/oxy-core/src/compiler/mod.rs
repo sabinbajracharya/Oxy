@@ -1378,6 +1378,7 @@ impl Compiler {
 }
 
 mod expr;
+mod pattern;
 
 mod helpers;
 mod loop_context;
