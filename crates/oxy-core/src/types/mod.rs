@@ -239,41 +239,41 @@ pub enum IteratorState {
         end: i64,
     },
     Map {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         closure: Value,
     },
     Filter {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         closure: Value,
     },
     Take {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         remaining: usize,
     },
     Skip {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         remaining: usize,
     },
     Chain {
-        first: Box<IteratorState>,
-        second: Box<IteratorState>,
+        first: Rc<RefCell<IteratorState>>,
+        second: Rc<RefCell<IteratorState>>,
     },
     Zip {
-        left: Box<IteratorState>,
-        right: Box<IteratorState>,
+        left: Rc<RefCell<IteratorState>>,
+        right: Rc<RefCell<IteratorState>>,
     },
     Enumerate {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         index: usize,
     },
     FlatMap {
-        source: Box<IteratorState>,
+        source: Rc<RefCell<IteratorState>>,
         closure: Value,
-        current: Option<Box<IteratorState>>,
+        current: Option<Rc<RefCell<IteratorState>>>,
     },
     Flatten {
-        source: Box<IteratorState>,
-        current: Option<Box<IteratorState>>,
+        source: Rc<RefCell<IteratorState>>,
+        current: Option<Rc<RefCell<IteratorState>>>,
     },
 }
 
@@ -305,26 +305,27 @@ impl IteratorState {
                     None
                 } else {
                     *remaining -= 1;
-                    source.drive_next()
+                    source.borrow_mut().drive_next()
                 }
             }
             IteratorState::Skip { source, remaining } => {
                 while *remaining > 0 {
                     *remaining -= 1;
-                    source.drive_next()?;
+                    source.borrow_mut().drive_next()?;
                 }
-                source.drive_next()
+                source.borrow_mut().drive_next()
             }
             IteratorState::Chain { first, second } => {
-                first.drive_next().or_else(|| second.drive_next())
+                let left = first.borrow_mut().drive_next();
+                left.or_else(|| second.borrow_mut().drive_next())
             }
             IteratorState::Zip { left, right } => {
-                let l = left.drive_next()?;
-                let r = right.drive_next()?;
+                let l = left.borrow_mut().drive_next()?;
+                let r = right.borrow_mut().drive_next()?;
                 Some(Value::Tuple(vec![l, r]))
             }
             IteratorState::Enumerate { source, index } => {
-                let val = source.drive_next()?;
+                let val = source.borrow_mut().drive_next()?;
                 let pair = Value::Tuple(vec![Value::I64(*index as i64), val]);
                 *index += 1;
                 Some(pair)
@@ -336,18 +337,19 @@ impl IteratorState {
             }
             | IteratorState::Flatten { source, current } => loop {
                 if let Some(inner) = current {
-                    if let Some(val) = inner.drive_next() {
+                    let v = inner.borrow_mut().drive_next();
+                    if let Some(val) = v {
                         return Some(val);
                     }
                     *current = None;
                 }
-                let next = source.drive_next()?;
+                let next = source.borrow_mut().drive_next()?;
                 match next.into_iterable() {
                     Ok(items) => {
-                        *current = Some(Box::new(IteratorState::VecSource {
+                        *current = Some(Rc::new(RefCell::new(IteratorState::VecSource {
                             data: items,
                             index: 0,
-                        }));
+                        })));
                     }
                     Err(_) => continue,
                 }

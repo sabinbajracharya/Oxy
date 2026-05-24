@@ -445,3 +445,41 @@ fn test_aoc_index_of_first_over_threshold() {
     }
     assert_eq!(found_idx, 2);
 }
+
+// --- Shared state through lazy adapters ---
+// A lazy adapter (take/skip/chain/zip/enumerate) shares state with its source
+// iterator: advancing the adapter advances the underlying iterator too.
+
+#[test]
+fn test_take_shares_source_state() {
+    let v = vec![1, 2, 3, 4, 5];
+    let it = v.iter();
+    let t = it.take(2);
+    assert_eq!(t.next().unwrap(), 1);
+    assert_eq!(t.next().unwrap(), 2);
+    assert!(t.next().is_none());
+    // Source advanced through `t`, so `it` resumes at element 3.
+    assert_eq!(it.next().unwrap(), 3);
+    assert_eq!(it.next().unwrap(), 4);
+}
+
+#[test]
+fn test_skip_shares_source_state() {
+    let v = vec![1, 2, 3, 4, 5];
+    let it = v.iter();
+    let s = it.skip(2);
+    assert_eq!(s.next().unwrap(), 3);
+    // Skip consumed 1, 2, 3 from source; `it` resumes at 4.
+    assert_eq!(it.next().unwrap(), 4);
+}
+
+#[test]
+fn test_enumerate_shares_source_state() {
+    let v = vec![10, 20, 30];
+    let it = v.iter();
+    let e = it.enumerate();
+    let pair = e.next().unwrap();
+    assert_eq!(pair.0, 0);
+    assert_eq!(pair.1, 10);
+    assert_eq!(it.next().unwrap(), 20);
+}
