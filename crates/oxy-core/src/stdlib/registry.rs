@@ -111,11 +111,11 @@ static MODULES: &[Module] = &[
     },
     Module {
         name: "json",
-        call: json_dispatch,
+        call: crate::stdlib::json::call,
     },
     Module {
         name: "http",
-        call: http_dispatch,
+        call: crate::stdlib::http::call,
     },
 ];
 
@@ -300,99 +300,4 @@ fn regex_new(args: &[Value]) -> Result<Value, String> {
 fn std_env_args(_args: &[Value]) -> Result<Value, String> {
     // Test/REPL stub — return an empty argv.
     Ok(Value::Vec(Rc::new(RefCell::new(Vec::new()))))
-}
-
-// ---------------------------------------------------------------------------
-// Module-style dispatchers for built-ins that don't already have a `call` fn
-// ---------------------------------------------------------------------------
-
-fn json_dispatch(func: &str, args: &[Value], _span: &Span) -> Result<Value, FerriError> {
-    let map_err = |e: String| Value::err(Value::String(e));
-    let result: Value = match func {
-        "parse" => match crate::json::deserialize(&format_first(args)) {
-            Ok(val) => Value::ok(val),
-            Err(e) => map_err(format!("json::parse: {e}")),
-        },
-        "serialize" | "to_string" => {
-            match crate::json::serialize(args.first().unwrap_or(&Value::Unit)) {
-                Ok(s) => Value::ok(Value::String(s)),
-                Err(e) => map_err(e),
-            }
-        }
-        "to_string_pretty" => {
-            match crate::json::serialize_pretty(args.first().unwrap_or(&Value::Unit)) {
-                Ok(s) => Value::ok(Value::String(s)),
-                Err(e) => map_err(e),
-            }
-        }
-        "deserialize" | "from_str" => match crate::json::deserialize(&format_first(args)) {
-            Ok(val) => Value::ok(val),
-            Err(e) => map_err(format!("json error: {e}")),
-        },
-        "from_struct" => {
-            let s = format_first(args);
-            let type_name = args.get(1).map(|v| v.to_string()).unwrap_or_default();
-            match crate::json::deserialize(&s) {
-                Ok(val) => {
-                    if !type_name.is_empty() {
-                        if let Value::Struct { fields, .. } = &val {
-                            Value::ok(Value::Struct {
-                                name: type_name,
-                                fields: fields.clone(),
-                            })
-                        } else {
-                            Value::ok(val)
-                        }
-                    } else {
-                        Value::ok(val)
-                    }
-                }
-                Err(e) => map_err(format!("json error: {e}")),
-            }
-        }
-        other => {
-            return Err(FerriError::Runtime {
-                message: format!("unknown json function `json::{other}`"),
-                line: 0,
-                column: 0,
-            });
-        }
-    };
-    Ok(result)
-}
-
-fn format_first(args: &[Value]) -> String {
-    args.first().map(|v| format!("{v}")).unwrap_or_default()
-}
-
-#[cfg(feature = "http")]
-fn http_dispatch(func: &str, args: &[Value], _span: &Span) -> Result<Value, FerriError> {
-    let body_arg = || args.get(1).map(|v| v.to_string());
-    let map_str = |r: Result<Value, String>| {
-        r.map_err(|e| FerriError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        })
-    };
-    match func {
-        "get" | "get_json" => map_str(super::http_call("GET", args, None)),
-        "post" | "post_json" => map_str(super::http_call("POST", args, body_arg())),
-        "put_json" => map_str(super::http_call("PUT", args, body_arg())),
-        "delete" => map_str(super::http_call("DELETE", args, None)),
-        other => Err(FerriError::Runtime {
-            message: format!("unknown http function `http::{other}`"),
-            line: 0,
-            column: 0,
-        }),
-    }
-}
-
-#[cfg(not(feature = "http"))]
-fn http_dispatch(_func: &str, _args: &[Value], _span: &Span) -> Result<Value, FerriError> {
-    Err(FerriError::Runtime {
-        message: "`http::` is not available in this build (the `http` feature is disabled)".into(),
-        line: 0,
-        column: 0,
-    })
 }
