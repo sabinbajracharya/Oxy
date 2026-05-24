@@ -7,11 +7,12 @@
 //! # Module structure
 //! ```text
 //! mod.rs  ── struct Compiler, compile() pipeline, item/module compilation
-//!   ├── sym_table.rs     SymTable struct (pub(crate) use'd here)
-//!   ├── loop_context.rs  LoopContext struct (pub(crate) use'd here)
-//!   ├── helpers.rs       free functions (pub(crate) use'd here)
-//!   ├── visibility.rs    impl Compiler { is_visible, check_path_visible_with_leaf, ... }
-//!   └── expr.rs          impl Compiler { compile_expr, compile_stmt, ... }
+//!   ├── sym_table.rs        SymTable struct (pub(crate) use'd here)
+//!   ├── loop_context.rs     LoopContext struct (pub(crate) use'd here)
+//!   ├── helpers.rs          free functions (pub(crate) use'd here)
+//!   ├── visibility.rs       impl Compiler { is_visible, check_path_visible_with_leaf, ... }
+//!   ├── path_resolution.rs  impl Compiler { resolve_path_call } — PathCall name lookup
+//!   └── expr.rs             impl Compiler { compile_expr, compile_stmt, ... }
 //! ```
 //!
 //! All Compiler fields are `pub(crate)` so submodule impl blocks can access them.
@@ -553,43 +554,54 @@ impl Compiler {
         self.compile_fn_item(&fn_def, Some(&s.name))
     }
 
-    /// Compile a function or method body.
-    fn compile_fn_item(&mut self, f: &FnDef, type_name: Option<&str>) -> Result<(), FerriError> {
-        let ip = self.code.len();
-        // Track current impl type so `Self` can be resolved inside method bodies
-        let saved_impl_type = self.current_impl_type.clone();
-        if let Some(tn) = type_name {
-            self.current_impl_type = Some(tn.to_string());
+    /// Register a function at `name`: write the IP into `functions`, the
+    /// metadata into `fn_meta`, and (if pub) the visibility into `pub_vis`.
+    ///
+    /// Always call this rather than touching the three maps directly — it
+    /// keeps them in lockstep so future readers don't get "the IP is here
+    /// but the meta isn't" inconsistencies. The base-name PathCall bug
+    /// from earlier was exactly this: `functions` had `Cell::make` but
+    /// nothing else did, so the lookup found a target with no metadata.
+    fn register_fn(
+        &mut self,
+        name: &str,
+        ip: usize,
+        params: &[crate::ast::Param],
+        body_expr: &crate::ast::Expr,
+        return_type: &Option<crate::ast::TypeAnnotation>,
+        visibility: &crate::ast::Visibility,
+    ) {
+        self.functions.insert(name.to_string(), ip);
+        self.fn_meta.insert(
+            name.to_string(),
+            (
+                params.to_vec(),
+                Box::new(body_expr.clone()),
+                return_type.clone(),
+            ),
+        );
+        if visibility.is_pub() {
+            self.pub_vis.insert(name.to_string(), visibility.clone());
         }
-        // Register as a plain function and as a method if applicable
-        self.functions.insert(f.name.clone(), ip);
-        if let Some(tn) = type_name {
-            // Also register qualified name so PathCall can resolve Type::method
-            let qualified = format!("{}::{}", tn, f.name);
-            self.functions.insert(qualified.clone(), ip);
-            if f.visibility.is_pub() {
-                self.pub_vis.insert(qualified.clone(), f.visibility.clone());
-            }
-            self.method_ips.insert((tn.to_string(), f.name.clone()), ip);
-            // If type has generic args (e.g. "Pair<i64>" or "Cell<T>"), also
-            // register under the base type name so PathCall lookup with
-            // `Cell::make` (no turbofish on the type) resolves to the same
-            // function. Mirrors the method_ips registration below.
-            if let Some(lt_pos) = tn.find('<') {
-                let base_name = tn[..lt_pos].to_string();
-                self.method_ips
-                    .insert((base_name.clone(), f.name.clone()), ip);
-                let base_qualified = format!("{}::{}", base_name, f.name);
-                self.functions.insert(base_qualified.clone(), ip);
-                if f.visibility.is_pub() {
-                    self.pub_vis.insert(base_qualified, f.visibility.clone());
-                }
-            }
-        }
-        // Store metadata for function-reference-as-value support
-        let body_expr = f
-            .body
-            .stmts
+    }
+
+    /// Register a method dispatch entry so `value.method()` can find the
+    /// target by `(type_name, method_name)`.
+    fn register_method(&mut self, type_name: &str, method_name: &str, ip: usize) {
+        self.method_ips
+            .insert((type_name.to_string(), method_name.to_string()), ip);
+    }
+
+    /// Strip a generic-arg suffix from a type identifier:
+    /// `"Pair<i64>"` → `Some("Pair")`. Returns `None` for non-generic types.
+    fn base_type_name(type_name: &str) -> Option<&str> {
+        type_name.find('<').map(|i| &type_name[..i])
+    }
+
+    /// Extract the tail expression of a function body for fn_meta storage.
+    /// Falls back to a dummy `0` literal for empty / non-expression bodies.
+    fn extract_tail_expr(body: &crate::ast::Block) -> crate::ast::Expr {
+        body.stmts
             .last()
             .and_then(|stmt| match stmt {
                 crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
@@ -598,19 +610,55 @@ impl Compiler {
             .unwrap_or(crate::ast::Expr::IntLiteral(
                 0,
                 IntegerSuffix::None,
-                f.body.span,
-            ));
-        let meta = (f.params.clone(), Box::new(body_expr), f.return_type.clone());
-        self.fn_meta.insert(f.name.clone(), meta.clone());
+                body.span,
+            ))
+    }
+
+    /// Compile a function or method body.
+    fn compile_fn_item(&mut self, f: &FnDef, type_name: Option<&str>) -> Result<(), FerriError> {
+        let ip = self.code.len();
+        // Track current impl type so `Self` can be resolved inside method bodies
+        let saved_impl_type = self.current_impl_type.clone();
         if let Some(tn) = type_name {
-            self.fn_meta
-                .insert(format!("{}::{}", tn, f.name), meta.clone());
-            // Same base-name registration as above so generic-type methods
-            // resolve via either `Cell::make` or `Cell<T>::make`.
-            if let Some(lt_pos) = tn.find('<') {
-                let base_name = &tn[..lt_pos];
-                self.fn_meta
-                    .insert(format!("{}::{}", base_name, f.name), meta);
+            self.current_impl_type = Some(tn.to_string());
+        }
+
+        // Register under every name this function can be resolved by.
+        let body_expr = Self::extract_tail_expr(&f.body);
+        self.register_fn(
+            &f.name,
+            ip,
+            &f.params,
+            &body_expr,
+            &f.return_type,
+            &f.visibility,
+        );
+        if let Some(tn) = type_name {
+            let qualified = format!("{}::{}", tn, f.name);
+            self.register_fn(
+                &qualified,
+                ip,
+                &f.params,
+                &body_expr,
+                &f.return_type,
+                &f.visibility,
+            );
+            self.register_method(tn, &f.name, ip);
+            // Generic type ("Pair<i64>", "Cell<T>"): also register under the
+            // base name so a plain `Cell::make` lookup (no turbofish) finds
+            // the same target as `Cell<T>::make`.
+            if let Some(base) = Self::base_type_name(tn) {
+                let base = base.to_string();
+                let base_qualified = format!("{}::{}", base, f.name);
+                self.register_fn(
+                    &base_qualified,
+                    ip,
+                    &f.params,
+                    &body_expr,
+                    &f.return_type,
+                    &f.visibility,
+                );
+                self.register_method(&base, &f.name, ip);
             }
         }
         // Store generic param names for monomorphization
@@ -1111,27 +1159,14 @@ impl Compiler {
                 Item::Function(f) => {
                     let qualified = format!("{}::{}", prefix, f.name);
                     let ip = self.code.len();
-                    self.functions.insert(qualified.clone(), ip);
-                    if f.visibility.is_pub() {
-                        self.pub_vis.insert(qualified.clone(), f.visibility.clone());
-                    }
-                    // Store metadata for function-reference-as-value
-                    let body_expr = f
-                        .body
-                        .stmts
-                        .last()
-                        .and_then(|stmt| match stmt {
-                            crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                            _ => None,
-                        })
-                        .unwrap_or(crate::ast::Expr::IntLiteral(
-                            0,
-                            IntegerSuffix::None,
-                            f.body.span,
-                        ));
-                    self.fn_meta.insert(
-                        qualified,
-                        (f.params.clone(), Box::new(body_expr), f.return_type.clone()),
+                    let body_expr = Self::extract_tail_expr(&f.body);
+                    self.register_fn(
+                        &qualified,
+                        ip,
+                        &f.params,
+                        &body_expr,
+                        &f.return_type,
+                        &f.visibility,
                     );
                     let saved_sym = self.sym.clone();
                     for param in &f.params {
@@ -1173,54 +1208,26 @@ impl Compiler {
                         .or_default()
                         .extend(i.methods.clone());
                     for method in &i.methods {
-                        // Register as qualified_type::method (e.g. geometry::Point::new)
                         let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
-                        self.functions.insert(mname.clone(), ip);
-                        if method.visibility.is_pub() {
-                            self.pub_vis
-                                .insert(mname.clone(), method.visibility.clone());
-                        }
-                        // Store fn_meta for arg count checking
-                        let body_expr = method
-                            .body
-                            .stmts
-                            .last()
-                            .and_then(|stmt| match stmt {
-                                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or(crate::ast::Expr::IntLiteral(
-                                0,
-                                IntegerSuffix::None,
-                                method.body.span,
-                            ));
-                        self.fn_meta.insert(
-                            mname.clone(),
-                            (
-                                method.params.clone(),
-                                Box::new(body_expr),
-                                method.return_type.clone(),
-                            ),
+                        let body_expr = Self::extract_tail_expr(&method.body);
+                        self.register_fn(
+                            &mname,
+                            ip,
+                            &method.params,
+                            &body_expr,
+                            &method.return_type,
+                            &method.visibility,
                         );
-                        // Register under both qualified and unqualified type names
-                        self.method_ips
-                            .insert((qualified_type.clone(), method.name.clone()), ip);
-                        self.method_ips
-                            .insert((i.type_name.clone(), method.name.clone()), ip);
-                        // Also register under base type name (strip type args: "Pair<i64>" → "Pair")
-                        if let Some(lt_pos) = i.type_name.find('<') {
-                            let base_name = i.type_name[..lt_pos].to_string();
-                            self.method_ips
-                                .insert((base_name.clone(), method.name.clone()), ip);
-                            let base_qualified = if qualified_type.contains("::") {
-                                let lt_in_qualified = qualified_type.find('<').unwrap();
-                                qualified_type[..lt_in_qualified].to_string()
-                            } else {
-                                base_name
-                            };
-                            self.method_ips
-                                .insert((base_qualified, method.name.clone()), ip);
+                        self.register_method(&qualified_type, &method.name, ip);
+                        self.register_method(&i.type_name, &method.name, ip);
+                        // Generic type ("Pair<i64>") also dispatches by base name.
+                        if let Some(base) = Self::base_type_name(&i.type_name) {
+                            self.register_method(base, &method.name, ip);
+                            let base_qualified = Self::base_type_name(&qualified_type)
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| base.to_string());
+                            self.register_method(&base_qualified, &method.name, ip);
                         }
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
@@ -1296,36 +1303,17 @@ impl Compiler {
                     for method in &all_methods {
                         let mname = format!("{}::{}", qualified_type, method.name);
                         let ip = self.code.len();
-                        self.functions.insert(mname.clone(), ip);
-                        if method.visibility.is_pub() {
-                            self.pub_vis
-                                .insert(mname.clone(), method.visibility.clone());
-                        }
-                        let body_expr = method
-                            .body
-                            .stmts
-                            .last()
-                            .and_then(|stmt| match stmt {
-                                crate::ast::Stmt::Expr { expr, .. } => Some(expr.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or(crate::ast::Expr::IntLiteral(
-                                0,
-                                IntegerSuffix::None,
-                                method.body.span,
-                            ));
-                        self.fn_meta.insert(
-                            mname.clone(),
-                            (
-                                method.params.clone(),
-                                Box::new(body_expr),
-                                method.return_type.clone(),
-                            ),
+                        let body_expr = Self::extract_tail_expr(&method.body);
+                        self.register_fn(
+                            &mname,
+                            ip,
+                            &method.params,
+                            &body_expr,
+                            &method.return_type,
+                            &method.visibility,
                         );
-                        self.method_ips
-                            .insert((qualified_type.clone(), method.name.clone()), ip);
-                        self.method_ips
-                            .insert((i.type_name.clone(), method.name.clone()), ip);
+                        self.register_method(&qualified_type, &method.name, ip);
+                        self.register_method(&i.type_name, &method.name, ip);
                         let saved_sym = self.sym.clone();
                         for param in &method.params {
                             if param.is_mut {
