@@ -34,6 +34,13 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             let parts: Vec<Value> = s.lines().map(|l| Value::String(l.to_string())).collect();
             Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
         }
+        symbols::string_m::SPLIT_WHITESPACE => {
+            let parts: Vec<Value> = s
+                .split_whitespace()
+                .map(|p| Value::String(p.to_string()))
+                .collect();
+            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(parts))))
+        }
         symbols::string_m::SPLIT => {
             let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
             let parts: Vec<Value> = s
@@ -131,6 +138,7 @@ pub fn method_names() -> &'static [&'static str] {
         "replace",
         "lines",
         "split",
+        "split_whitespace",
         "chars",
         "repeat",
         "push_str",

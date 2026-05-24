@@ -220,6 +220,7 @@ pub const STRING_METHODS: &[MethodInfo] = methods![
     "replace": "(from: String, to: String) -> String" => "Replace all occurrences of `from` with `to`.",
     "lines": "() -> Vec<String>" => "Split the string into lines (strips \\n and \\r\\n, no trailing empty).",
     "split": "(pat: String) -> Vec<String>" => "Split the string by `pat`.",
+    "split_whitespace": "() -> Vec<String>" => "Split on any whitespace, ignoring leading/trailing/consecutive whitespace.",
     "starts_with": "(pat: String) -> bool" => "Check if the string starts with `pat`.",
     "substring": "(start: i64, end: i64) -> String" => "Return the substring from `start` to `end`.",
     "to_lowercase": "() -> String" => "Convert the string to lowercase.",
@@ -565,6 +566,7 @@ pub mod string_m {
     pub const REPLACE: &str = "replace";
     pub const LINES: &str = "lines";
     pub const SPLIT: &str = "split";
+    pub const SPLIT_WHITESPACE: &str = "split_whitespace";
     pub const CHARS: &str = "chars";
     pub const REPEAT: &str = "repeat";
     pub const PUSH_STR: &str = "push_str";
