@@ -86,6 +86,15 @@ static MODULES: &[Module] = &[
         call: crate::stdlib::fs::call,
     },
     Module {
+        name: "io",
+        call: crate::stdlib::io::call,
+    },
+    #[cfg(feature = "db")]
+    Module {
+        name: "db",
+        call: crate::stdlib::db::call,
+    },
+    Module {
         name: "env",
         call: crate::stdlib::env::call,
     },

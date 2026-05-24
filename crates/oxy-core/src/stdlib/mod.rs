@@ -11,6 +11,8 @@ pub mod db;
 pub mod env;
 /// File system operations (read, write, directory manipulation).
 pub mod fs;
+/// Standard input reading (read_line, read_to_string from stdin).
+pub mod io;
 /// Mathematical functions and constants (e.g. `sqrt`, `sin`, `PI`).
 pub mod math;
 /// TCP/UDP networking and DNS lookup.

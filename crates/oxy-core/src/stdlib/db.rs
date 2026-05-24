@@ -9,9 +9,115 @@ use std::rc::Rc;
 
 use rusqlite::{params_from_iter, types::Value as SqlValue, Connection};
 
-use crate::errors::FerriError;
+use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, FerriError};
 use crate::lexer::Span;
 use crate::types::Value;
+
+thread_local! {
+    /// Open SQLite connections keyed by integer handle. Returned to Oxy
+    /// code as an opaque int; subsequent calls look up the connection here.
+    static CONNS: RefCell<HashMap<i64, Rc<Connection>>> = RefCell::new(HashMap::new());
+    static NEXT_HANDLE: std::cell::Cell<i64> = const { std::cell::Cell::new(1) };
+}
+
+fn register_conn(conn: Connection) -> i64 {
+    let h = NEXT_HANDLE.with(|c| {
+        let n = c.get();
+        c.set(n + 1);
+        n
+    });
+    CONNS.with(|m| m.borrow_mut().insert(h, Rc::new(conn)));
+    h
+}
+
+fn get_conn(handle: i64) -> Option<Rc<Connection>> {
+    CONNS.with(|m| m.borrow().get(&handle).cloned())
+}
+
+/// Dispatch `std::db::` function calls from Oxy code.
+pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, FerriError> {
+    match func_name {
+        "open" => {
+            check_arg_count("std::db::open", 1, args, span)?;
+            let path = expect_string(&args[0], "std::db::open", span)?;
+            match Connection::open(path) {
+                Ok(c) => Ok(Value::ok(Value::I64(register_conn(c)))),
+                Err(e) => Ok(Value::err(Value::String(e.to_string()))),
+            }
+        }
+        "open_in_memory" => {
+            check_arg_count("std::db::open_in_memory", 0, args, span)?;
+            match Connection::open_in_memory() {
+                Ok(c) => Ok(Value::ok(Value::I64(register_conn(c)))),
+                Err(e) => Ok(Value::err(Value::String(e.to_string()))),
+            }
+        }
+        "execute" => {
+            if args.len() < 2 {
+                return Err(runtime_error(
+                    "std::db::execute(handle, sql, ...params) requires at least 2 arguments",
+                    span,
+                ));
+            }
+            let handle = expect_integer(&args[0], "std::db::execute (handle)", span)?;
+            let sql = expect_string(&args[1], "std::db::execute (sql)", span)?;
+            let conn = match get_conn(handle) {
+                Some(c) => c,
+                None => {
+                    return Ok(Value::err(Value::String(format!(
+                        "invalid db handle: {handle}"
+                    ))))
+                }
+            };
+            match execute(&conn, sql, &args[2..], span) {
+                Ok(v) => Ok(Value::ok(v)),
+                Err(FerriError::Runtime { message, .. }) => Ok(Value::err(Value::String(message))),
+                Err(e) => Err(e),
+            }
+        }
+        "query" => {
+            if args.len() < 2 {
+                return Err(runtime_error(
+                    "std::db::query(handle, sql, ...params) requires at least 2 arguments",
+                    span,
+                ));
+            }
+            let handle = expect_integer(&args[0], "std::db::query (handle)", span)?;
+            let sql = expect_string(&args[1], "std::db::query (sql)", span)?;
+            let conn = match get_conn(handle) {
+                Some(c) => c,
+                None => {
+                    return Ok(Value::err(Value::String(format!(
+                        "invalid db handle: {handle}"
+                    ))))
+                }
+            };
+            match query(&conn, sql, &args[2..], span) {
+                Ok(v) => Ok(Value::ok(v)),
+                Err(FerriError::Runtime { message, .. }) => Ok(Value::err(Value::String(message))),
+                Err(e) => Err(e),
+            }
+        }
+        "last_insert_id" => {
+            check_arg_count("std::db::last_insert_id", 1, args, span)?;
+            let handle = expect_integer(&args[0], "std::db::last_insert_id", span)?;
+            match get_conn(handle) {
+                Some(conn) => Ok(last_insert_id(&conn)),
+                None => Err(runtime_error(format!("invalid db handle: {handle}"), span)),
+            }
+        }
+        "close" => {
+            check_arg_count("std::db::close", 1, args, span)?;
+            let handle = expect_integer(&args[0], "std::db::close", span)?;
+            let existed = CONNS.with(|m| m.borrow_mut().remove(&handle).is_some());
+            Ok(Value::Bool(existed))
+        }
+        other => Err(runtime_error(
+            format!("no function 'std::db::{other}'"),
+            span,
+        )),
+    }
+}
 
 /// Open a SQLite database file. Creates the file if it doesn't exist.
 pub fn open(path: &str, span: &Span) -> Result<Connection, FerriError> {
