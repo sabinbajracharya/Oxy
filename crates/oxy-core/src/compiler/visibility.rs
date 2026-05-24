@@ -1,7 +1,7 @@
 //! Visibility checking for module-level items, path segments, and struct fields.
 //!
 //! ```text
-//! visibility.rs  ── impl Compiler { is_visible, check_path_visible, ... }
+//! visibility.rs  ── impl Compiler { is_visible, check_path_visible_with_leaf, ... }
 //!   uses: mod.rs (reads Compiler fields: functions, pub_vis, module_names, ...)
 //!   used by: mod.rs (compile_use, preresolve_uses), expr.rs (PathCall, StructInit)
 //! ```
@@ -70,19 +70,9 @@ impl Compiler {
     }
 
     /// Check that every segment of a path is visible: intermediate modules
-    /// and the final item (function, struct, enum).
-    pub(crate) fn check_path_visible(
-        &self,
-        path: &[String],
-        span: crate::lexer::Span,
-    ) -> Result<(), FerriError> {
-        let qualified = path.join("::");
-        self.check_path_visible_with_leaf(path, &qualified, span)
-    }
-
-    /// Like check_path_visible, but allows overriding the leaf name for cases
-    /// where the resolved qualified name includes type args (e.g. `Pair<i64, i64>::make`)
-    /// that aren't in the raw path segments.
+    /// and the final item (function, struct, enum). `leaf_qualified` is the
+    /// canonical name we resolved to — it may include type args
+    /// (`Pair<i64, i64>::make`) that aren't in the raw path segments.
     pub(crate) fn check_path_visible_with_leaf(
         &self,
         path: &[String],

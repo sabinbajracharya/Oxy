@@ -16,7 +16,7 @@ use crate::types::{FloatWidth, IntegerWidth};
 use crate::vm::OpCode;
 
 use super::helpers::{
-    check_literal_fits_type, emit_narrowing_cast, find_free_vars, is_builtin_path, resolve_use_path,
+    check_literal_fits_type, emit_narrowing_cast, find_free_vars, resolve_use_path,
 };
 use super::{Compiler, LoopContext, SymTable};
 
@@ -1702,6 +1702,8 @@ impl Compiler {
                 args,
                 ..
             } => {
+                use super::path_resolution::PathResolution;
+
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
@@ -1712,45 +1714,30 @@ impl Compiler {
                 } else {
                     path
                 };
-                // Build type args suffix if turbofish present (e.g. "<i64, i64>")
-                let type_args_suffix: String = turbofish
-                    .as_ref()
-                    .map(|tf| {
-                        let names: Vec<&str> = tf.iter().map(|ta| ta.name()).collect();
-                        format!("<{}>", names.join(", "))
-                    })
-                    .unwrap_or_default();
-                if path.len() == 2 {
-                    let enum_name = &path[0];
-                    let variant = &path[1];
-                    // Resolve enum_name via use aliases, type aliases, and module prefix
-                    let resolved_enum = self
-                        .type_aliases
-                        .get(enum_name)
-                        .cloned()
-                        .or_else(|| self.use_aliases.get(enum_name).cloned())
-                        .unwrap_or_else(|| {
-                            let module_prefix = self.module_stack.join("::");
-                            if !module_prefix.is_empty() {
-                                let qualified = format!("{}::{}", module_prefix, enum_name);
-                                if self.enum_defs.contains_key(&qualified) {
-                                    return qualified;
-                                }
-                            }
-                            enum_name.clone()
-                        });
-                    if self.enum_defs.contains_key(&resolved_enum) {
+
+                match self.resolve_path_call(path, turbofish) {
+                    PathResolution::EnumVariant { enum_name, variant } => {
                         self.emit(OpCode::MakeEnumVariant {
-                            enum_name: resolved_enum,
-                            variant: variant.clone(),
+                            enum_name,
+                            variant,
                             arg_count: args.len(),
                         });
-                        return Ok(());
+                        Ok(())
                     }
-                    let type_name = format!("{}{}", &path[0], type_args_suffix);
-                    let qualified = format!("{}::{}", type_name, &path[1]);
-                    if let Some(&target) = self.functions.get(&qualified) {
-                        self.check_path_visible_with_leaf(path, &qualified, expr.span())?;
+                    PathResolution::Function {
+                        qualified,
+                        target,
+                        is_direct,
+                    } => {
+                        if is_direct {
+                            self.check_path_visible_with_leaf(path, &qualified, expr.span())?;
+                        } else if !self.is_visible(&qualified) {
+                            return Err(FerriError::Runtime {
+                                message: format!("`{}` is private", qualified),
+                                line: expr.span().line,
+                                column: expr.span().column,
+                            });
+                        }
                         let call_idx = self.emit(OpCode::Call {
                             target,
                             arg_count: args.len(),
@@ -1758,197 +1745,36 @@ impl Compiler {
                         if target == usize::MAX {
                             self.forward_calls.push((call_idx, qualified));
                         }
-                        return Ok(());
+                        Ok(())
                     }
-                    // Try type alias + use-aliased prefix
-                    let prefix = &path[0];
-                    let resolved_prefix = self
-                        .type_aliases
-                        .get(prefix)
-                        .cloned()
-                        .or_else(|| self.use_aliases.get(prefix).cloned());
-                    if let Some(rp) = resolved_prefix {
-                        let aliased = format!("{}{}::{}", rp, type_args_suffix, &path[1]);
-                        if let Some(&target) = self.functions.get(&aliased) {
-                            if !self.is_visible(&aliased) {
-                                return Err(FerriError::Runtime {
-                                    message: format!("`{}` is private", aliased),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
-                                });
-                            }
-                            let call_idx = self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            if target == usize::MAX {
-                                self.forward_calls.push((call_idx, aliased));
-                            }
-                            return Ok(());
-                        }
-                    }
-                    // Try resolving the full qualified name through use_aliases
-                    // (handles pub use re-exports like middle::msg -> inner::msg)
-                    if let Some(aliased_target) = self.use_aliases.get(&qualified).cloned() {
-                        if let Some(&target) = self.functions.get(&aliased_target) {
-                            if !self.is_visible(&aliased_target) {
-                                return Err(FerriError::Runtime {
-                                    message: format!("`{}` is private", aliased_target),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
-                                });
-                            }
-                            let call_idx = self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            if target == usize::MAX {
-                                self.forward_calls.push((call_idx, aliased_target));
-                            }
-                            return Ok(());
-                        }
-                    }
-                    // Try qualifying with current module prefix (sibling module calls)
-                    let module_prefix = self.module_stack.join("::");
-                    if !module_prefix.is_empty() {
-                        let module_qualified =
-                            format!("{}::{}::{}", module_prefix, type_name, &path[1]);
-                        if let Some(&target) = self.functions.get(&module_qualified) {
-                            if !self.is_visible(&module_qualified) {
-                                return Err(FerriError::Runtime {
-                                    message: format!("`{}` is private", module_qualified),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
-                                });
-                            }
-                            let call_idx = self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            if target == usize::MAX {
-                                self.forward_calls.push((call_idx, module_qualified));
-                            }
-                            return Ok(());
-                        }
-                    }
-                    if is_builtin_path(path) {
+                    PathResolution::Builtin => {
                         self.emit(OpCode::PathCallBuiltin {
                             segments: path.clone(),
                             arg_count: args.len(),
                         });
-                        return Ok(());
+                        Ok(())
+                    }
+                    PathResolution::GenericPlaceholder {
+                        type_param,
+                        method_name,
+                    } => {
+                        // Generic body never runs directly — emit a panic
+                        // pointing the user at turbofish monomorphization.
+                        self.emit(OpCode::ConstString(format!(
+                            "generic function called without monomorphization: \
+                             cannot resolve `{}::{}()` without a concrete type; \
+                             use turbofish: `func::<Type>(args)`",
+                            type_param, method_name,
+                        )));
+                        self.emit(OpCode::Panic);
+                        // Stack balance: Return expects one value.
+                        self.emit(OpCode::ConstUnit);
+                        Ok(())
+                    }
+                    PathResolution::Unknown => {
+                        Err(self.not_yet_supported("Unknown path call", expr.span()))
                     }
                 }
-                if path.len() == 3 {
-                    let qualified = format!("{}::{}::{}", &path[0], &path[1], &path[2]);
-                    if let Some(&target) = self.functions.get(&qualified) {
-                        self.check_path_visible(path, expr.span())?;
-                        let call_idx = self.emit(OpCode::Call {
-                            target,
-                            arg_count: args.len(),
-                        });
-                        if target == usize::MAX {
-                            self.forward_calls.push((call_idx, qualified));
-                        }
-                        return Ok(());
-                    }
-                    // Try qualifying with current module prefix
-                    let module_prefix = self.module_stack.join("::");
-                    if !module_prefix.is_empty() {
-                        let module_qualified = format!(
-                            "{}::{}::{}::{}",
-                            module_prefix, &path[0], &path[1], &path[2]
-                        );
-                        if let Some(&target) = self.functions.get(&module_qualified) {
-                            if !self.is_visible(&module_qualified) {
-                                return Err(FerriError::Runtime {
-                                    message: format!("`{}` is private", module_qualified),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
-                                });
-                            }
-                            let call_idx = self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            if target == usize::MAX {
-                                self.forward_calls.push((call_idx, module_qualified));
-                            }
-                            return Ok(());
-                        }
-                    }
-                }
-                // General path resolution for any length > 2
-                if path.len() > 3 {
-                    let qualified = path.join("::");
-                    if let Some(&target) = self.functions.get(&qualified) {
-                        self.check_path_visible(path, expr.span())?;
-                        let call_idx = self.emit(OpCode::Call {
-                            target,
-                            arg_count: args.len(),
-                        });
-                        if target == usize::MAX {
-                            self.forward_calls.push((call_idx, qualified));
-                        }
-                        return Ok(());
-                    }
-                    // Try with module prefix
-                    let module_prefix = self.module_stack.join("::");
-                    if !module_prefix.is_empty() {
-                        let module_qualified = format!("{}::{}", module_prefix, qualified);
-                        if let Some(&target) = self.functions.get(&module_qualified) {
-                            if !self.is_visible(&module_qualified) {
-                                return Err(FerriError::Runtime {
-                                    message: format!("`{}` is private", module_qualified),
-                                    line: expr.span().line,
-                                    column: expr.span().column,
-                                });
-                            }
-                            let call_idx = self.emit(OpCode::Call {
-                                target,
-                                arg_count: args.len(),
-                            });
-                            if target == usize::MAX {
-                                self.forward_calls.push((call_idx, module_qualified));
-                            }
-                            return Ok(());
-                        }
-                    }
-                }
-                // Check is_builtin_path for any path length (catches
-                // std::env::args(), etc. that are >2 segments)
-                if is_builtin_path(path) {
-                    self.emit(OpCode::PathCallBuiltin {
-                        segments: path.clone(),
-                        arg_count: args.len(),
-                    });
-                    return Ok(());
-                }
-                // Check if path[0] is a generic type param → emit placeholder.
-                // The generic body is never executed directly — only monomorphized
-                // copies (with concrete types substituted) are called.
-                if path.len() == 2
-                    && self
-                        .current_generic_params
-                        .iter()
-                        .any(|p| p.name == path[0])
-                {
-                    let method_name = &path[1];
-                    for arg in args {
-                        self.compile_expr(arg)?;
-                    }
-                    self.emit(OpCode::ConstString(format!(
-                        "generic function called without monomorphization: \
-                         cannot resolve `{}::{}()` without a concrete type; \
-                         use turbofish: `func::<Type>(args)`",
-                        path[0], method_name,
-                    )));
-                    self.emit(OpCode::Panic);
-                    // Push a dummy value for stack balance (Return expects one)
-                    self.emit(OpCode::ConstUnit);
-                    return Ok(());
-                }
-                Err(self.not_yet_supported("Unknown path call", expr.span()))
             }
 
             Expr::Closure { params, body, .. } => {

@@ -10,7 +10,7 @@
 //!   ├── sym_table.rs     SymTable struct (pub(crate) use'd here)
 //!   ├── loop_context.rs  LoopContext struct (pub(crate) use'd here)
 //!   ├── helpers.rs       free functions (pub(crate) use'd here)
-//!   ├── visibility.rs    impl Compiler { is_visible, check_path_visible, ... }
+//!   ├── visibility.rs    impl Compiler { is_visible, check_path_visible_with_leaf, ... }
 //!   └── expr.rs          impl Compiler { compile_expr, compile_stmt, ... }
 //! ```
 //!
@@ -1393,6 +1393,7 @@ mod expr;
 
 mod helpers;
 mod loop_context;
+mod path_resolution;
 mod sym_table;
 mod visibility;
 
