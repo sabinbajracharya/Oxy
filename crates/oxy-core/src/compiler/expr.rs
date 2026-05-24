@@ -2116,11 +2116,24 @@ impl Compiler {
                     }
                     self.bind_pattern_data(&arm.pattern)?;
 
-                    // Compile guard if present
+                    // Compile guard if present.
+                    //
+                    // Stack discipline: after bind_pattern_data the stack is
+                    // empty; the guard pushes a bool which JumpIfFalse pops.
+                    // If the guard fails we jump to the next arm's prelude,
+                    // which unconditionally Pops one leftover-scrutinee
+                    // value (matching the pattern-fail-and-jump shape for
+                    // non-consuming patterns). To keep both exit paths
+                    // shape-compatible — and stop the prelude Pop from
+                    // dipping into the caller's frame — push a sentinel
+                    // unit before evaluating the guard.
                     if let Some(guard) = &arm.guard {
+                        self.emit(OpCode::ConstUnit);
                         self.compile_expr(guard)?;
                         let guard_jump = self.emit(OpCode::JumpIfFalse(0));
                         guard_fail_jumps.push(guard_jump);
+                        // Guard succeeded — drop the sentinel.
+                        self.emit(OpCode::Pop);
                         // Clean up guard bindings before next arm
                         self.sym.next_slot = current_slot;
                     }
