@@ -100,6 +100,20 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
         "log" => unary_op("log", args, f64::ln, span),
         "log2" => unary_op("log2", args, f64::log2, span),
         "log10" => unary_op("log10", args, f64::log10, span),
+        "clamp" => {
+            check_arg_count("math::clamp", 3, args, span)?;
+            match (&args[0], &args[1], &args[2]) {
+                (Value::I64(v), Value::I64(lo), Value::I64(hi)) => {
+                    Ok(Value::I64((*v).clamp(*lo, *hi)))
+                }
+                _ => {
+                    let v = value_to_f64(&args[0], span)?;
+                    let lo = value_to_f64(&args[1], span)?;
+                    let hi = value_to_f64(&args[2], span)?;
+                    Ok(float_to_value(v.clamp(lo, hi)))
+                }
+            }
+        }
         _ => Err(FerriError::Runtime {
             message: format!("unknown math function `math::{func_name}`"),
             line: span.line,

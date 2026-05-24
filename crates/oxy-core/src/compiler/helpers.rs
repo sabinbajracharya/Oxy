@@ -466,6 +466,7 @@ pub(crate) fn is_builtin_path(path: &[String]) -> bool {
             | ["math", "log10"]
             | ["math", "gcd"]
             | ["math", "lcm"]
+            | ["math", "clamp"]
             // json
             | ["json", "parse"]
             | ["json", "to_string"]
