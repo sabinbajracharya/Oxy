@@ -7,23 +7,33 @@ use crate::errors::FerriError;
 use crate::lexer::{Span, Token, TokenKind};
 use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
 
+/// Parsing-context state that varies as the parser descends into and
+/// out of certain syntactic positions. Bundled together so it can grow
+/// without inflating the Parser's surface area, and so the mode-flag
+/// idioms (push/pop, save/restore) live in one place.
+#[derive(Default)]
+struct ParseContext {
+    /// Stack of enclosing fn names while parsing nested fn bodies. Used
+    /// to mangle nested item names so they can be hoisted to top-level
+    /// without colliding (`fn outer() { fn inner() {} }` →
+    /// `outer__inner`).
+    fn_name_stack: Vec<String>,
+    /// Nested items extracted from fn bodies during parsing; appended
+    /// to `Program::items` at the end of `parse()`.
+    hoisted_items: Vec<Item>,
+    /// When true, an `Ident { ... }` sequence does NOT eagerly parse
+    /// as a struct initializer. Set while parsing the condition of an
+    /// `if` / `while` / `for` header so `if score < MAX { ... }`
+    /// doesn't mistake `MAX { ... }` for a struct init. Matches Rust's
+    /// "no-struct-literal" disambiguation.
+    no_struct_literal: bool,
+}
+
 /// Parser for the Oxy language.
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
-    /// Stack of enclosing fn names while parsing nested fn bodies. Used to
-    /// mangle nested item names so they can be hoisted to top-level without
-    /// colliding (`fn outer() { fn inner() {} }` → top-level `outer__inner`).
-    fn_name_stack: Vec<String>,
-    /// Nested items extracted from fn bodies during parsing; appended to
-    /// `Program::items` at the end of `parse()`.
-    hoisted_items: Vec<Item>,
-    /// When true, an `Ident { … }` sequence does NOT eagerly parse as a
-    /// struct initializer. Set while parsing the condition of an `if` /
-    /// `while` / `for` header so `if score < MAX { … }` doesn't mistake
-    /// `MAX { … }` for a struct init. Matches Rust's
-    /// "no-struct-literal" disambiguation.
-    no_struct_literal: bool,
+    ctx: ParseContext,
 }
 
 /// Operator precedence levels (lower number = lower precedence = binds less tightly).
@@ -87,10 +97,24 @@ impl Parser {
         Self {
             tokens,
             pos: 0,
-            fn_name_stack: Vec::new(),
-            hoisted_items: Vec::new(),
-            no_struct_literal: false,
+            ctx: ParseContext::default(),
         }
+    }
+
+    /// Parse with `no_struct_literal` forced to `true`, restoring the
+    /// previous value on return. Replaces the
+    /// `let saved = …; self.…no_struct_literal = true; …; self.…no_struct_literal = saved;`
+    /// idiom that used to be open-coded at every `if`/`while`/`for`
+    /// header.
+    fn with_no_struct_literal<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = self.ctx.no_struct_literal;
+        self.ctx.no_struct_literal = true;
+        let result = f(self);
+        self.ctx.no_struct_literal = saved;
+        result
     }
 
     /// Parse the tokens into a [`Program`].
@@ -104,7 +128,7 @@ impl Parser {
 
         // Append any items hoisted from nested fn bodies. Their names are
         // mangled (e.g. `outer__inner`) so they coexist with user items.
-        items.append(&mut self.hoisted_items);
+        items.append(&mut self.ctx.hoisted_items);
 
         let end_span = if items.is_empty() {
             start_span
@@ -434,9 +458,9 @@ impl Parser {
             }
         }
 
-        self.fn_name_stack.push(name.clone());
+        self.ctx.fn_name_stack.push(name.clone());
         let body = self.parse_block()?;
-        self.fn_name_stack.pop();
+        self.ctx.fn_name_stack.pop();
 
         Ok(FnDef {
             name,
@@ -1174,7 +1198,7 @@ impl Parser {
                 let span = self.current_span();
                 let item = self.parse_item()?;
                 let original_name = item_name(&item).to_string();
-                if self.fn_name_stack.is_empty() {
+                if self.ctx.fn_name_stack.is_empty() {
                     // Not actually nested — keep as a regular Stmt::Item so
                     // top-level callers (e.g. tests that call parse_stmt
                     // directly) still get the AST node. Production callers
@@ -1182,10 +1206,10 @@ impl Parser {
                     // invoked inside a fn body.
                     return Ok(Stmt::Item(Box::new(item)));
                 }
-                let prefix = self.fn_name_stack.join("__");
+                let prefix = self.ctx.fn_name_stack.join("__");
                 let mangled = format!("{}__{}", prefix, original_name);
                 let renamed = rename_item(item, mangled.clone());
-                self.hoisted_items.push(renamed);
+                self.ctx.hoisted_items.push(renamed);
                 Ok(Stmt::Use(UseDef {
                     path: vec![mangled],
                     tree: UseTree::Simple(Some(original_name)),
@@ -1316,10 +1340,7 @@ impl Parser {
             self.advance();
             let pattern = self.parse_pattern()?;
             self.expect(TokenKind::Eq)?;
-            let saved_nsl = self.no_struct_literal;
-            self.no_struct_literal = true;
-            let expr = self.parse_expr(Precedence::None)?;
-            self.no_struct_literal = saved_nsl;
+            let expr = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::WhileLet {
@@ -1331,10 +1352,7 @@ impl Parser {
             });
         }
 
-        let saved_nsl = self.no_struct_literal;
-        self.no_struct_literal = true;
-        let condition = self.parse_expr(Precedence::None)?;
-        self.no_struct_literal = saved_nsl;
+        let condition = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
         let body = self.parse_block()?;
         let end_span = body.span;
 
@@ -1384,10 +1402,7 @@ impl Parser {
             }
             self.expect(TokenKind::RParen)?;
             self.expect(TokenKind::In)?;
-            let saved_nsl = self.no_struct_literal;
-            self.no_struct_literal = true;
-            let iterable = self.parse_expr(Precedence::None)?;
-            self.no_struct_literal = saved_nsl;
+            let iterable = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::ForDestructure {
@@ -1402,10 +1417,7 @@ impl Parser {
         let name = self.expect_ident()?;
         self.expect(TokenKind::In)?;
 
-        let saved_nsl = self.no_struct_literal;
-        self.no_struct_literal = true;
-        let iterable = self.parse_expr(Precedence::None)?;
-        self.no_struct_literal = saved_nsl;
+        let iterable = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
         let body = self.parse_block()?;
         let end_span = body.span;
 
@@ -1757,7 +1769,7 @@ impl Parser {
                             });
                         }
                         // `Foo::<T> { field: val }` — struct init with turbofish
-                        if self.check(&TokenKind::LBrace) && !self.no_struct_literal {
+                        if self.check(&TokenKind::LBrace) && !self.ctx.no_struct_literal {
                             return self.parse_struct_init(name, span);
                         }
                         // No `::` after turbofish → `Foo::<T>` (unit/tuple struct)
@@ -1799,7 +1811,7 @@ impl Parser {
 
                     // Check if followed by `{` → struct init with path (e.g. module::Struct { })
                     // Skip in no-struct-literal contexts (if/while/for headers).
-                    if self.check(&TokenKind::LBrace) && !self.no_struct_literal {
+                    if self.check(&TokenKind::LBrace) && !self.ctx.no_struct_literal {
                         let full_name = segments.join("::");
                         return self.parse_struct_init(full_name, span);
                     }
@@ -1818,7 +1830,7 @@ impl Parser {
                 // as a struct literal and consume the if-body.
                 if self.check(&TokenKind::LBrace)
                     && name.starts_with(|c: char| c.is_uppercase())
-                    && !self.no_struct_literal
+                    && !self.ctx.no_struct_literal
                 {
                     return self.parse_struct_init(name, span);
                 }
@@ -2263,10 +2275,7 @@ impl Parser {
             return self.parse_if_let_expr(start_span);
         }
 
-        let saved_nsl = self.no_struct_literal;
-        self.no_struct_literal = true;
-        let condition = self.parse_expr(Precedence::None)?;
-        self.no_struct_literal = saved_nsl;
+        let condition = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
         let then_block = self.parse_block()?;
 
         let else_block = if self.match_token(&TokenKind::Else) {
