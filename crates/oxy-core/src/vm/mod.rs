@@ -1502,6 +1502,55 @@ impl Vm {
                     method_name, enum_name
                 )),
             },
+            Value::Struct { name, fields } if name == "Regex" => {
+                // The struct stores only the pattern string; recompile on
+                // each call. Cheap for short patterns, simpler than caching
+                // a compiled regex in a Value variant.
+                let pattern = match fields.get("pattern") {
+                    Some(Value::String(s)) => s.clone(),
+                    _ => String::new(),
+                };
+                let re = match regex::Regex::new(&pattern) {
+                    Ok(r) => r,
+                    Err(e) => return Err(format!("Regex: invalid pattern: {}", e)),
+                };
+                let text_arg = |a: &Value| match a {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                match method_name {
+                    "clone" => Ok(receiver.clone()),
+                    "to_string" => Ok(Value::String(format!("Regex({})", pattern))),
+                    "pattern" => Ok(Value::String(pattern)),
+                    "is_match" => {
+                        let t = args.first().map(text_arg).unwrap_or_default();
+                        Ok(Value::Bool(re.is_match(&t)))
+                    }
+                    "find" => {
+                        let t = args.first().map(text_arg).unwrap_or_default();
+                        Ok(match re.find(&t) {
+                            Some(m) => Value::some(Value::String(m.as_str().to_string())),
+                            None => Value::none(),
+                        })
+                    }
+                    "find_all" => {
+                        let t = args.first().map(text_arg).unwrap_or_default();
+                        let matches: Vec<Value> = re
+                            .find_iter(&t)
+                            .map(|m| Value::String(m.as_str().to_string()))
+                            .collect();
+                        Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                            matches,
+                        ))))
+                    }
+                    "replace" => {
+                        let t = args.first().map(text_arg).unwrap_or_default();
+                        let rep = args.get(1).map(text_arg).unwrap_or_default();
+                        Ok(Value::String(re.replace_all(&t, rep.as_str()).into_owned()))
+                    }
+                    _ => Err(format!("no method '{}' on Regex", method_name)),
+                }
+            }
             Value::Struct { name, .. } => match method_name {
                 "clone" => Ok(receiver.clone()),
                 "to_string" => Ok(Value::String(receiver.to_string())),
@@ -1729,6 +1778,29 @@ impl Vm {
             ["env", func] => call_stdlib(crate::stdlib::env::call, func, args),
             ["process", func] => call_stdlib(crate::stdlib::process::call, func, args),
             ["regex", func] => call_stdlib(crate::stdlib::regex::call, func, args),
+            // OOP-style: `Regex::new(pattern)` returns a thin handle that
+            // remembers the pattern; methods .is_match / .find / .find_all /
+            // .captures live on the resulting struct value.
+            ["Regex", "new"] | ["std", "regex", "Regex", "new"] => {
+                let pattern = args
+                    .first()
+                    .map(|v| match v {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    })
+                    .unwrap_or_default();
+                // Validate the pattern eagerly so bad regexes surface at
+                // construction, not at first .is_match.
+                if let Err(e) = regex::Regex::new(&pattern) {
+                    return Err(format!("Regex::new: invalid pattern: {}", e));
+                }
+                let mut fields: HashMap<String, Value> = HashMap::new();
+                fields.insert("pattern".to_string(), Value::String(pattern));
+                Ok(Value::Struct {
+                    name: "Regex".to_string(),
+                    fields,
+                })
+            }
             ["net", func] => call_stdlib(crate::stdlib::net::call, func, args),
             ["time", func] => call_stdlib(crate::stdlib::time::call, func, args),
             ["rand", func] => call_stdlib(crate::stdlib::rand::call, func, args),

@@ -489,6 +489,11 @@ pub(crate) fn is_builtin_path(path: &[String]) -> bool {
             | ["int", "parse"]
 
             | ["float", "parse"]
+            // OOP-style regex builder. `Regex::new(pattern)` returns an
+            // opaque compiled pattern; methods on it (.is_match, .find,
+            // .find_all, .captures) are dispatched at the value level.
+            | ["Regex", "new"]
+            | ["std", "regex", "Regex", "new"]
     ) || matches!(
         effective_module,
         "fs" | "env" | "process" | "regex" | "net" | "time" | "rand" | "http"
