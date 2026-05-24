@@ -1490,10 +1490,13 @@ impl Vm {
             Value::I64(_) | Value::U8(_) | Value::F64(_) => {
                 builtins::numeric::dispatch(receiver, method_name, &args)
             }
-            Value::EnumVariant { enum_name, .. }
-                if enum_name == "Option" || enum_name == "Result" =>
-            {
-                builtins::option_result::dispatch(receiver, method_name, &args, |func, fargs| {
+            Value::EnumVariant { enum_name, .. } if enum_name == "Option" => {
+                builtins::option::dispatch(receiver, method_name, &args, |func, fargs| {
+                    self.run_closure(&func, fargs)
+                })
+            }
+            Value::EnumVariant { enum_name, .. } if enum_name == "Result" => {
+                builtins::result::dispatch(receiver, method_name, &args, |func, fargs| {
                     self.run_closure(&func, fargs)
                 })
             }

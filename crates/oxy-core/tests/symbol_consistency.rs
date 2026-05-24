@@ -90,8 +90,13 @@ fn test_iterator_methods_in_symbols() {
 }
 
 #[test]
-fn test_option_result_methods_in_symbols() {
-    check_builtins_in_symbols(builtins::option_result::method_names(), "Option");
+fn test_option_methods_in_symbols() {
+    check_builtins_in_symbols(builtins::option::method_names(), "Option");
+}
+
+#[test]
+fn test_result_methods_in_symbols() {
+    check_builtins_in_symbols(builtins::result::method_names(), "Result");
 }
 
 #[test]
@@ -161,8 +166,13 @@ fn test_symbols_in_iterator_builtins() {
 }
 
 #[test]
-fn test_symbols_in_option_result_builtins() {
-    check_symbols_in_builtins(builtins::option_result::method_names(), "Option");
+fn test_symbols_in_option_builtins() {
+    check_symbols_in_builtins(builtins::option::method_names(), "Option");
+}
+
+#[test]
+fn test_symbols_in_result_builtins() {
+    check_symbols_in_builtins(builtins::result::method_names(), "Result");
 }
 
 #[test]

@@ -373,29 +373,43 @@ pub const ITERATOR_METHODS: &[MethodInfo] = methods![
     "zip": "(other: Iterator) -> Iterator" => "Zip two iterators into pairs.",
 ];
 
-// --- Option / Result ---
+// --- Option ---
 
-pub const OPTION_RESULT_METHODS: &[MethodInfo] = methods![
+pub const OPTION_METHODS: &[MethodInfo] = methods![
     "and_then": "(fn: (T) -> Option<U>) -> Option<U>" => "Chain a fallible operation.",
     "clone": "() -> Self" => "Create a copy.",
-    "err": "() -> Option<E>" => "Convert Result::Err(T) to Some(T), Ok to None.",
     "expect": "(msg: String) -> T" => "Unwrap with a custom error message.",
-    "is_err": "() -> bool" => "Check if the Result is Err.",
     "is_none": "() -> bool" => "Check if the Option is None.",
-    "is_ok": "() -> bool" => "Check if the Result is Ok.",
     "is_some": "() -> bool" => "Check if the Option is Some.",
     "map": "(fn: (T) -> U) -> Option<U>" => "Transform the inner value.",
-    "map_err": "(fn: (E) -> F) -> Result<T, F>" => "Transform the error value.",
-    "ok": "() -> Option<T>" => "Convert Result::Ok(T) to Some(T), Err to None.",
-    "ok_or": "(err: E) -> Result<T, E>" => "Convert Option::Some(T) to Ok(T); None to Err(err).",
+    "ok_or": "(err: E) -> Result<T, E>" => "Convert Some(T) to Ok(T); None to Err(err).",
     "ok_or_else": "(fn: () -> E) -> Result<T, E>" => "Like ok_or, but the error is produced by a closure.",
     "or": "(other: Option<T>) -> Option<T>" => "Return self if Some, else `other`.",
     "or_else": "(fn: () -> Option<T>) -> Option<T>" => "Return self if Some, else call closure.",
     "to_string": "() -> String" => "Convert to a string representation.",
-    "unwrap": "() -> T" => "Extract the inner value (panics on None/Err).",
-    "unwrap_err": "() -> E" => "Extract the error value (panics on Ok).",
+    "unwrap": "() -> T" => "Extract the inner value (panics on None).",
     "unwrap_or": "(default: T) -> T" => "Extract the value, or return `default`.",
     "unwrap_or_else": "(fn: () -> T) -> T" => "Extract the value, or call closure.",
+];
+
+// --- Result ---
+
+pub const RESULT_METHODS: &[MethodInfo] = methods![
+    "and_then": "(fn: (T) -> Result<U, E>) -> Result<U, E>" => "Chain a fallible operation.",
+    "clone": "() -> Self" => "Create a copy.",
+    "err": "() -> Option<E>" => "Convert Err(E) to Some(E), Ok to None.",
+    "expect": "(msg: String) -> T" => "Unwrap with a custom error message.",
+    "is_err": "() -> bool" => "Check if the Result is Err.",
+    "is_ok": "() -> bool" => "Check if the Result is Ok.",
+    "map": "(fn: (T) -> U) -> Result<U, E>" => "Transform the inner Ok value.",
+    "map_err": "(fn: (E) -> F) -> Result<T, F>" => "Transform the error value.",
+    "ok": "() -> Option<T>" => "Convert Ok(T) to Some(T), Err to None.",
+    "or_else": "(fn: (E) -> Result<T, F>) -> Result<T, F>" => "Return self if Ok, else call closure with the err.",
+    "to_string": "() -> String" => "Convert to a string representation.",
+    "unwrap": "() -> T" => "Extract the inner value (panics on Err).",
+    "unwrap_err": "() -> E" => "Extract the error value (panics on Ok).",
+    "unwrap_or": "(default: T) -> T" => "Extract the value, or return `default`.",
+    "unwrap_or_else": "(fn: (E) -> T) -> T" => "Extract the value, or call closure with the err.",
 ];
 
 // --- Numeric (all integer & float widths) ---
@@ -501,13 +515,13 @@ pub const ALL_TYPES: &[TypeInfo] = &[
         name: "Option",
         detail: "Optional value: Some(T) or None",
         hover_text: "**Option\\<T\\>** — `Some(value)` or `None`",
-        methods: OPTION_RESULT_METHODS,
+        methods: OPTION_METHODS,
     },
     TypeInfo {
         name: "Result",
         detail: "Result type: Ok(T) or Err(E)",
         hover_text: "**Result\\<T, E\\>** — `Ok(value)` or `Err(error)`",
-        methods: OPTION_RESULT_METHODS,
+        methods: RESULT_METHODS,
     },
     TypeInfo {
         name: "Iterator",
