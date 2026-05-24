@@ -70,6 +70,31 @@ pub fn call(func_name: &str, args: &[Value], span: &Span) -> Result<Value, Ferri
                 }),
             }
         }
+        // Inclusive integer in [lo, hi]. Like Rust's rand::Rng::gen_range
+        // for an inclusive range — convenient for dice rolls etc. where
+        // both endpoints should be reachable.
+        "rand_int" => {
+            check_arg_count("rand::rand_int", 2, args, span)?;
+            match (&args[0], &args[1]) {
+                (Value::I64(lo), Value::I64(hi)) => {
+                    if lo > hi {
+                        return Err(FerriError::Runtime {
+                            message: "rand::rand_int(lo, hi) requires lo <= hi".into(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    let span_size = (hi - lo) as u64 + 1;
+                    let raw = simple_random_u64();
+                    Ok(Value::I64(lo + (raw % span_size) as i64))
+                }
+                _ => Err(FerriError::Runtime {
+                    message: "rand::rand_int() requires integer arguments".into(),
+                    line: span.line,
+                    column: span.column,
+                }),
+            }
+        }
         "bool" => {
             check_arg_count("rand::bool", 0, args, span)?;
             Ok(Value::Bool(simple_random_u64() % 2 == 0))
