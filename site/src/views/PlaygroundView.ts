@@ -2,7 +2,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { OutputPane } from '../components/OutputPane';
 import { OxyRunner } from '../wasm/bridge';
 
-const DEFAULT_CODE = `fn fib(n: i64) -> i64 {
+const DEFAULT_CODE = `fn fib(n: int) -> int {
     if n <= 1 { return n; }
     fib(n - 1) + fib(n - 2)
 }
