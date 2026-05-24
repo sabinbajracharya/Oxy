@@ -18,6 +18,12 @@ pub struct Parser {
     /// Nested items extracted from fn bodies during parsing; appended to
     /// `Program::items` at the end of `parse()`.
     hoisted_items: Vec<Item>,
+    /// When true, an `Ident { … }` sequence does NOT eagerly parse as a
+    /// struct initializer. Set while parsing the condition of an `if` /
+    /// `while` / `for` header so `if score < MAX { … }` doesn't mistake
+    /// `MAX { … }` for a struct init. Matches Rust's
+    /// "no-struct-literal" disambiguation.
+    no_struct_literal: bool,
 }
 
 /// Operator precedence levels (lower number = lower precedence = binds less tightly).
@@ -83,6 +89,7 @@ impl Parser {
             pos: 0,
             fn_name_stack: Vec::new(),
             hoisted_items: Vec::new(),
+            no_struct_literal: false,
         }
     }
 
@@ -1284,7 +1291,10 @@ impl Parser {
             self.advance();
             let pattern = self.parse_pattern()?;
             self.expect(TokenKind::Eq)?;
+            let saved_nsl = self.no_struct_literal;
+            self.no_struct_literal = true;
             let expr = self.parse_expr(Precedence::None)?;
+            self.no_struct_literal = saved_nsl;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::WhileLet {
@@ -1296,7 +1306,10 @@ impl Parser {
             });
         }
 
+        let saved_nsl = self.no_struct_literal;
+        self.no_struct_literal = true;
         let condition = self.parse_expr(Precedence::None)?;
+        self.no_struct_literal = saved_nsl;
         let body = self.parse_block()?;
         let end_span = body.span;
 
@@ -1346,7 +1359,10 @@ impl Parser {
             }
             self.expect(TokenKind::RParen)?;
             self.expect(TokenKind::In)?;
+            let saved_nsl = self.no_struct_literal;
+            self.no_struct_literal = true;
             let iterable = self.parse_expr(Precedence::None)?;
+            self.no_struct_literal = saved_nsl;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::ForDestructure {
@@ -1361,7 +1377,10 @@ impl Parser {
         let name = self.expect_ident()?;
         self.expect(TokenKind::In)?;
 
+        let saved_nsl = self.no_struct_literal;
+        self.no_struct_literal = true;
         let iterable = self.parse_expr(Precedence::None)?;
+        self.no_struct_literal = saved_nsl;
         let body = self.parse_block()?;
         let end_span = body.span;
 
@@ -1713,7 +1732,7 @@ impl Parser {
                             });
                         }
                         // `Foo::<T> { field: val }` — struct init with turbofish
-                        if self.check(&TokenKind::LBrace) {
+                        if self.check(&TokenKind::LBrace) && !self.no_struct_literal {
                             return self.parse_struct_init(name, span);
                         }
                         // No `::` after turbofish → `Foo::<T>` (unit/tuple struct)
@@ -1754,7 +1773,8 @@ impl Parser {
                     }
 
                     // Check if followed by `{` → struct init with path (e.g. module::Struct { })
-                    if self.check(&TokenKind::LBrace) {
+                    // Skip in no-struct-literal contexts (if/while/for headers).
+                    if self.check(&TokenKind::LBrace) && !self.no_struct_literal {
                         let full_name = segments.join("::");
                         return self.parse_struct_init(full_name, span);
                     }
@@ -1767,7 +1787,14 @@ impl Parser {
 
                 // Check for struct init: `Name { field: value, ... }`
                 // Only if name starts with uppercase (convention for type names)
-                if self.check(&TokenKind::LBrace) && name.starts_with(|c: char| c.is_uppercase()) {
+                // AND we're not in a no-struct-literal context like an `if`,
+                // `while`, or `for` header — otherwise
+                // `if score < MAX_SIZE { ... }` would treat `MAX_SIZE { ... }`
+                // as a struct literal and consume the if-body.
+                if self.check(&TokenKind::LBrace)
+                    && name.starts_with(|c: char| c.is_uppercase())
+                    && !self.no_struct_literal
+                {
                     return self.parse_struct_init(name, span);
                 }
 
@@ -2211,7 +2238,10 @@ impl Parser {
             return self.parse_if_let_expr(start_span);
         }
 
+        let saved_nsl = self.no_struct_literal;
+        self.no_struct_literal = true;
         let condition = self.parse_expr(Precedence::None)?;
+        self.no_struct_literal = saved_nsl;
         let then_block = self.parse_block()?;
 
         let else_block = if self.match_token(&TokenKind::Else) {
