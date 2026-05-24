@@ -38,7 +38,11 @@ fn simple_random_u64() -> u64 {
         // wasm playground gets a deterministic sequence per session, but the
         // PRNG still advances within a session.
         let raw = seed_from_time();
-        state = if raw == 0 { 0x9E37_79B9_7F4A_7C15 } else { raw | 1 };
+        state = if raw == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            raw | 1
+        };
         PRNG_STATE.store(state, Ordering::Relaxed);
     }
     // WHY: xorshift64 chosen for its simplicity and speed in an interpreted language context;

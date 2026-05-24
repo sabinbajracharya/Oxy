@@ -59,7 +59,11 @@ impl TypeChecker {
     /// either the function's own generic params or `extra_generics` (e.g.
     /// generics from an enclosing impl block) become `TypeInfo::Unknown`
     /// so call-site checks don't false-positive against monomorphic args.
-    pub(super) fn resolve_param_types(&self, f: &FnDef, extra_generics: &[String]) -> Vec<TypeInfo> {
+    pub(super) fn resolve_param_types(
+        &self,
+        f: &FnDef,
+        extra_generics: &[String],
+    ) -> Vec<TypeInfo> {
         let mut param_names: Vec<String> =
             f.generic_params.iter().map(|p| p.name.clone()).collect();
         for n in extra_generics {

@@ -4,9 +4,9 @@
 // disassembly. Extracted from vm/mod.rs to keep that file focused on the
 // Vm struct and its execution loop.
 
-use crate::types::Value;
 use super::arith::{vm_add, vm_div, vm_mul, vm_rem, vm_sub};
 use super::OpCode;
+use crate::types::Value;
 
 pub(super) fn trace_compact_val(v: &Value) -> String {
     match v {

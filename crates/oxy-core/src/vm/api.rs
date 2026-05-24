@@ -3,8 +3,8 @@
 // Extracted from vm/mod.rs to keep that file focused on the Vm struct and its
 // execution loop.
 
-use crate::types::Value;
 use super::{disassemble_chunk, Vm, VmResult};
+use crate::types::Value;
 
 /// Compile and run with captured output (for testing).
 pub fn run_compiled(source: &str) -> Result<Value, crate::errors::FerriError> {
