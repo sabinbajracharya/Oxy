@@ -94,8 +94,8 @@ pub enum Value {
     BinaryHeap(Rc<RefCell<BinaryHeap<Value>>>),
     /// A double-ended queue — shared mutable via Rc<RefCell<>>.
     VecDeque(Rc<RefCell<VecDeque<Value>>>),
-    /// A lazy iterator (adapter chain).
-    Iterator(Box<IteratorState>),
+    /// A lazy iterator (adapter chain) — shared mutable via Rc<RefCell<>>.
+    Iterator(Rc<RefCell<IteratorState>>),
     /// A future (lazy thunk wrapping an async function call).
     Future(Box<FutureData>),
     /// A join handle (eagerly evaluated, wraps a result).
@@ -208,7 +208,7 @@ impl Clone for Value {
             Value::BTreeSet(rc) => Value::BTreeSet(Rc::clone(rc)),
             Value::BinaryHeap(rc) => Value::BinaryHeap(Rc::clone(rc)),
             Value::VecDeque(rc) => Value::VecDeque(Rc::clone(rc)),
-            Value::Iterator(it) => Value::Iterator(it.clone()),
+            Value::Iterator(rc) => Value::Iterator(Rc::clone(rc)),
             Value::Future(f) => Value::Future(f.clone()),
             Value::JoinHandle(h) => Value::JoinHandle(h.clone()),
             Value::Cell(rc) => Value::Cell(Rc::clone(rc)),
@@ -512,7 +512,7 @@ impl Value {
             }
             Value::BinaryHeap(rc) => Ok(rc.borrow().clone().into_sorted_vec()),
             Value::VecDeque(rc) => Ok(rc.borrow().clone().into_iter().collect()),
-            Value::Iterator(mut iter) => Ok(iter.collect_all()),
+            Value::Iterator(rc) => Ok(rc.borrow_mut().collect_all()),
             other => Err(format!("cannot iterate over {}", other.type_name())),
         }
     }

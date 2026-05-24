@@ -4,6 +4,9 @@
 //! sum, count, nth) are native. Closure consumers (any, all, find, fold, for_each,
 //! position) use the interpreter's call_function in a Rust loop.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::symbols;
 use crate::types::{IteratorState, Value};
 
@@ -15,35 +18,33 @@ pub fn dispatch(
     args: &[Value],
     mut call_fn: impl FnMut(&Value, &[Value]) -> Result<Value, String>,
 ) -> Result<Value, String> {
-    let Value::Iterator(mut iter) = receiver else {
+    let Value::Iterator(rc) = receiver else {
         unreachable!()
     };
 
     match method {
-        // --- Adapters ---
-        // Map and Filter are eager (not lazy) to avoid closure-in-drive_next issue
+        // --- Eager adapters (closure-based, drain iterator) ---
         symbols::iterator_m::MAP => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut state = rc.borrow_mut();
             let mut result = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 result.push(call_fn(&closure, &[val])?);
             }
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                result,
-            ))))
+            Ok(Value::Vec(Rc::new(RefCell::new(result))))
         }
         symbols::iterator_m::FILTER => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut state = rc.borrow_mut();
             let mut result = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 if call_fn(&closure, &[val.clone()])?.is_truthy() {
                     result.push(val);
                 }
             }
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                result,
-            ))))
+            Ok(Value::Vec(Rc::new(RefCell::new(result))))
         }
+        // --- Lazy adapters (wrap current state, return new Iterator) ---
         symbols::iterator_m::TAKE => {
             let n = args
                 .first()
@@ -52,10 +53,13 @@ pub fn dispatch(
                     _ => None,
                 })
                 .unwrap_or(0);
-            Ok(Value::Iterator(Box::new(IteratorState::Take {
-                source: iter,
-                remaining: n,
-            })))
+            let inner = rc.borrow().clone();
+            Ok(Value::Iterator(Rc::new(RefCell::new(
+                IteratorState::Take {
+                    source: Box::new(inner),
+                    remaining: n,
+                },
+            ))))
         }
         symbols::iterator_m::SKIP => {
             let n = args
@@ -65,17 +69,20 @@ pub fn dispatch(
                     _ => None,
                 })
                 .unwrap_or(0);
-            Ok(Value::Iterator(Box::new(IteratorState::Skip {
-                source: iter,
-                remaining: n,
-            })))
+            let inner = rc.borrow().clone();
+            Ok(Value::Iterator(Rc::new(RefCell::new(
+                IteratorState::Skip {
+                    source: Box::new(inner),
+                    remaining: n,
+                },
+            ))))
         }
         symbols::iterator_m::CHAIN => {
             let other = args.first().cloned().unwrap_or(Value::Unit);
             let right = match other {
-                Value::Iterator(other_iter) => other_iter,
-                Value::Vec(rc) => Box::new(IteratorState::VecSource {
-                    data: rc.borrow().clone(),
+                Value::Iterator(other_rc) => Box::new(other_rc.borrow().clone()),
+                Value::Vec(vec_rc) => Box::new(IteratorState::VecSource {
+                    data: vec_rc.borrow().clone(),
                     index: 0,
                 }),
                 _ => Box::new(IteratorState::VecSource {
@@ -83,17 +90,20 @@ pub fn dispatch(
                     index: 0,
                 }),
             };
-            Ok(Value::Iterator(Box::new(IteratorState::Chain {
-                first: iter,
-                second: right,
-            })))
+            let inner = rc.borrow().clone();
+            Ok(Value::Iterator(Rc::new(RefCell::new(
+                IteratorState::Chain {
+                    first: Box::new(inner),
+                    second: right,
+                },
+            ))))
         }
         symbols::iterator_m::ZIP => {
             let other = args.first().cloned().unwrap_or(Value::Unit);
             let right = match other {
-                Value::Iterator(other_iter) => other_iter,
-                Value::Vec(rc) => Box::new(IteratorState::VecSource {
-                    data: rc.borrow().clone(),
+                Value::Iterator(other_rc) => Box::new(other_rc.borrow().clone()),
+                Value::Vec(vec_rc) => Box::new(IteratorState::VecSource {
+                    data: vec_rc.borrow().clone(),
                     index: 0,
                 }),
                 _ => Box::new(IteratorState::VecSource {
@@ -101,32 +111,40 @@ pub fn dispatch(
                     index: 0,
                 }),
             };
-            Ok(Value::Iterator(Box::new(IteratorState::Zip {
-                left: iter,
+            let inner = rc.borrow().clone();
+            Ok(Value::Iterator(Rc::new(RefCell::new(IteratorState::Zip {
+                left: Box::new(inner),
                 right,
-            })))
+            }))))
         }
-        symbols::iterator_m::ENUMERATE => Ok(Value::Iterator(Box::new(IteratorState::Enumerate {
-            source: iter,
-            index: 0,
-        }))),
+        symbols::iterator_m::ENUMERATE => {
+            let inner = rc.borrow().clone();
+            Ok(Value::Iterator(Rc::new(RefCell::new(
+                IteratorState::Enumerate {
+                    source: Box::new(inner),
+                    index: 0,
+                },
+            ))))
+        }
         symbols::iterator_m::REV => {
-            // Eager: collect all elements, reverse, return VecSource
+            let mut state = rc.borrow_mut();
             let mut v = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 v.push(val);
             }
             v.reverse();
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(v))))
+            Ok(Value::Vec(Rc::new(RefCell::new(v))))
         }
         symbols::iterator_m::FLAT_MAP => {
             let closure = args.first().cloned().unwrap_or(Value::Unit);
+            let mut state = rc.borrow_mut();
             let mut result = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 let mapped = call_fn(&closure, &[val])?;
                 match mapped {
-                    Value::Vec(rc) => result.extend(rc.borrow().clone()),
-                    Value::Iterator(mut inner) => {
+                    Value::Vec(vec_rc) => result.extend(vec_rc.borrow().clone()),
+                    Value::Iterator(inner_rc) => {
+                        let mut inner = inner_rc.borrow_mut();
                         while let Some(v) = drive_next(&mut inner) {
                             result.push(v);
                         }
@@ -134,16 +152,16 @@ pub fn dispatch(
                     other => result.push(other),
                 }
             }
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                result,
-            ))))
+            Ok(Value::Vec(Rc::new(RefCell::new(result))))
         }
         symbols::iterator_m::FLATTEN => {
+            let mut state = rc.borrow_mut();
             let mut result = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 match val {
-                    Value::Vec(rc) => result.extend(rc.borrow().clone()),
-                    Value::Iterator(mut inner) => {
+                    Value::Vec(vec_rc) => result.extend(vec_rc.borrow().clone()),
+                    Value::Iterator(inner_rc) => {
+                        let mut inner = inner_rc.borrow_mut();
                         while let Some(v) = drive_next(&mut inner) {
                             result.push(v);
                         }
@@ -151,41 +169,41 @@ pub fn dispatch(
                     other => result.push(other),
                 }
             }
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                result,
-            ))))
+            Ok(Value::Vec(Rc::new(RefCell::new(result))))
         }
 
-        // --- Simple consumers (drain iterator — no closures) ---
-        symbols::iterator_m::NEXT => Ok(drive_next(&mut iter)
+        // --- Simple consumers (drain iterator state in place — no closures) ---
+        symbols::iterator_m::NEXT => Ok(drive_next(&mut rc.borrow_mut())
             .map(Value::some)
             .unwrap_or_else(Value::none)),
         symbols::iterator_m::COLLECT => {
+            let mut state = rc.borrow_mut();
             let mut result = Vec::new();
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 result.push(val);
             }
-            Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                result,
-            ))))
+            Ok(Value::Vec(Rc::new(RefCell::new(result))))
         }
         symbols::iterator_m::SUM => {
+            let mut state = rc.borrow_mut();
             let mut total: Value = Value::I64(0);
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 total = add_values(total, val);
             }
             Ok(total)
         }
         symbols::iterator_m::PRODUCT => {
+            let mut state = rc.borrow_mut();
             let mut total: Value = Value::I64(1);
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 total = mul_values(total, val);
             }
             Ok(total)
         }
         symbols::iterator_m::MAX => {
+            let mut state = rc.borrow_mut();
             let mut best: Option<Value> = None;
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 best = Some(match best {
                     None => val,
                     Some(cur) => {
@@ -203,8 +221,9 @@ pub fn dispatch(
             })
         }
         symbols::iterator_m::MIN => {
+            let mut state = rc.borrow_mut();
             let mut best: Option<Value> = None;
-            while let Some(val) = drive_next(&mut iter) {
+            while let Some(val) = drive_next(&mut state) {
                 best = Some(match best {
                     None => val,
                     Some(cur) => {
@@ -222,8 +241,9 @@ pub fn dispatch(
             })
         }
         symbols::iterator_m::COUNT => {
-            let mut n = 0;
-            while drive_next(&mut iter).is_some() {
+            let mut state = rc.borrow_mut();
+            let mut n = 0i64;
+            while drive_next(&mut state).is_some() {
                 n += 1;
             }
             Ok(Value::I64(n))
@@ -236,12 +256,13 @@ pub fn dispatch(
                     _ => None,
                 })
                 .unwrap_or(0);
+            let mut state = rc.borrow_mut();
             for _ in 0..n {
-                if drive_next(&mut iter).is_none() {
+                if drive_next(&mut state).is_none() {
                     return Ok(Value::none());
                 }
             }
-            Ok(drive_next(&mut iter)
+            Ok(drive_next(&mut state)
                 .map(Value::some)
                 .unwrap_or_else(Value::none))
         }
@@ -256,50 +277,84 @@ pub fn dispatch(
             let closure = args.first().cloned().unwrap_or(Value::Unit);
             match method {
                 symbols::iterator_m::ANY => {
-                    while let Some(val) = drive_next(&mut iter) {
-                        if call_fn(&closure, &[val])?.is_truthy() {
-                            return Ok(Value::Bool(true));
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => {
+                                if call_fn(&closure, &[v])?.is_truthy() {
+                                    return Ok(Value::Bool(true));
+                                }
+                            }
                         }
                     }
                     Ok(Value::Bool(false))
                 }
                 symbols::iterator_m::ALL => {
-                    while let Some(val) = drive_next(&mut iter) {
-                        if !call_fn(&closure, &[val])?.is_truthy() {
-                            return Ok(Value::Bool(false));
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => {
+                                if !call_fn(&closure, &[v])?.is_truthy() {
+                                    return Ok(Value::Bool(false));
+                                }
+                            }
                         }
                     }
                     Ok(Value::Bool(true))
                 }
                 symbols::iterator_m::FIND => {
-                    while let Some(val) = drive_next(&mut iter) {
-                        if call_fn(&closure, &[val.clone()])?.is_truthy() {
-                            return Ok(Value::some(val));
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => {
+                                if call_fn(&closure, &[v.clone()])?.is_truthy() {
+                                    return Ok(Value::some(v));
+                                }
+                            }
                         }
                     }
                     Ok(Value::none())
                 }
                 symbols::iterator_m::POSITION => {
-                    let mut idx = 0;
-                    while let Some(val) = drive_next(&mut iter) {
-                        if call_fn(&closure, &[val])?.is_truthy() {
-                            return Ok(Value::some(Value::I64(idx)));
+                    let mut idx = 0i64;
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => {
+                                if call_fn(&closure, &[v])?.is_truthy() {
+                                    return Ok(Value::some(Value::I64(idx)));
+                                }
+                                idx += 1;
+                            }
                         }
-                        idx += 1;
                     }
                     Ok(Value::none())
                 }
                 symbols::iterator_m::FOLD => {
                     let mut acc = args.first().cloned().unwrap_or(Value::Unit);
                     let f = args.get(1).cloned().unwrap_or(Value::Unit);
-                    while let Some(val) = drive_next(&mut iter) {
-                        acc = call_fn(&f, &[acc, val])?;
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => acc = call_fn(&f, &[acc, v])?,
+                        }
                     }
                     Ok(acc)
                 }
                 symbols::iterator_m::FOR_EACH => {
-                    while let Some(val) = drive_next(&mut iter) {
-                        call_fn(&closure, &[val])?;
+                    loop {
+                        let val = { drive_next(&mut rc.borrow_mut()) };
+                        match val {
+                            None => break,
+                            Some(v) => {
+                                call_fn(&closure, &[v])?;
+                            }
+                        }
                     }
                     Ok(Value::Unit)
                 }
@@ -406,8 +461,8 @@ fn drive_next(iter: &mut IteratorState) -> Option<Value> {
             }
             let next_val = drive_next(source)?;
             match next_val {
-                Value::Iterator(inner_iter) => {
-                    *current = Some(inner_iter);
+                Value::Iterator(inner_rc) => {
+                    *current = Some(Box::new(inner_rc.borrow().clone()));
                 }
                 other => return Some(other),
             }

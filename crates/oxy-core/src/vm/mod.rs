@@ -1483,10 +1483,9 @@ impl Vm {
                 }
                 // Fall back to iterator delegation for closure-based methods
                 let data = rc.borrow().clone();
-                let iter = Value::Iterator(Box::new(crate::types::IteratorState::VecSource {
-                    data,
-                    index: 0,
-                }));
+                let iter = Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
+                    crate::types::IteratorState::VecSource { data, index: 0 },
+                )));
                 builtins::iterator::dispatch(iter, method_name, &args, |func, fargs| {
                     self.run_closure(func, fargs)
                 })
@@ -1630,10 +1629,9 @@ impl Vm {
             // and delegating. Cheap because Ranges are small int pairs.
             Value::Range(start, end) => {
                 let data: Vec<Value> = (*start..*end).map(Value::I64).collect();
-                let iter = Value::Iterator(Box::new(crate::types::IteratorState::VecSource {
-                    data,
-                    index: 0,
-                }));
+                let iter = Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
+                    crate::types::IteratorState::VecSource { data, index: 0 },
+                )));
                 builtins::iterator::dispatch(iter, method_name, &args, |func, fargs| {
                     self.run_closure(func, fargs)
                 })

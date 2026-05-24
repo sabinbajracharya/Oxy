@@ -105,9 +105,9 @@ where
         }
         symbols::vec_m::ITER => {
             let data = rc.borrow().clone();
-            Ok(Value::Iterator(Box::new(
+            Ok(Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
                 crate::types::IteratorState::VecSource { data, index: 0 },
-            )))
+            ))))
         }
         symbols::vec_m::CLONE => {
             let cloned = rc.borrow().clone();
