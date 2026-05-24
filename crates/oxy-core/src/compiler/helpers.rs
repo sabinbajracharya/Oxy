@@ -27,40 +27,71 @@ pub(crate) fn find_captured_mutable(
     captured
 }
 
+/// Pre-scan: collect the names every closure in `block` captures from the
+/// enclosing scope. Exhaustive over `Stmt`.
 pub(crate) fn collect_closure_free_vars_in_block(
     block: &crate::ast::Block,
     params: &[String],
     out: &mut HashSet<String>,
 ) {
     for stmt in &block.stmts {
-        match stmt {
-            crate::ast::Stmt::Expr { expr, .. } => collect_closure_free_vars(expr, params, out),
-            crate::ast::Stmt::Let { value, .. } => {
-                if let Some(v) = value {
-                    collect_closure_free_vars(v, params, out);
-                }
-            }
-            crate::ast::Stmt::While {
-                condition, body, ..
-            } => {
-                collect_closure_free_vars(condition, params, out);
-                collect_closure_free_vars_in_block(body, params, out);
-            }
-            crate::ast::Stmt::Loop { body, .. } => {
-                collect_closure_free_vars_in_block(body, params, out)
-            }
-            _ => {}
-        }
+        collect_closure_free_vars_in_stmt(stmt, params, out);
     }
 }
 
+fn collect_closure_free_vars_in_stmt(
+    stmt: &crate::ast::Stmt,
+    params: &[String],
+    out: &mut HashSet<String>,
+) {
+    use crate::ast::Stmt;
+    match stmt {
+        Stmt::Expr { expr, .. } => collect_closure_free_vars(expr, params, out),
+        Stmt::Let { value, .. } => {
+            if let Some(v) = value {
+                collect_closure_free_vars(v, params, out);
+            }
+        }
+        Stmt::Return { value, .. } => {
+            if let Some(v) = value {
+                collect_closure_free_vars(v, params, out);
+            }
+        }
+        Stmt::While {
+            condition, body, ..
+        } => {
+            collect_closure_free_vars(condition, params, out);
+            collect_closure_free_vars_in_block(body, params, out);
+        }
+        Stmt::Loop { body, .. } => collect_closure_free_vars_in_block(body, params, out),
+        Stmt::For { iterable, body, .. } | Stmt::ForDestructure { iterable, body, .. } => {
+            collect_closure_free_vars(iterable, params, out);
+            collect_closure_free_vars_in_block(body, params, out);
+        }
+        Stmt::WhileLet { expr, body, .. } => {
+            collect_closure_free_vars(expr, params, out);
+            collect_closure_free_vars_in_block(body, params, out);
+        }
+        Stmt::LetPattern { value, .. } => collect_closure_free_vars(value, params, out),
+        Stmt::Break { value: Some(v), .. } => collect_closure_free_vars(v, params, out),
+        Stmt::Break { value: None, .. } | Stmt::Continue { .. } | Stmt::Use(_) | Stmt::Item(_) => {}
+    }
+}
+
+/// Exhaustive walk over `Expr`. The previous implementation covered only six
+/// of ~30 variants behind a `_ => {}` wildcard, so closures inside `if`,
+/// `match`, `for`, struct literals, etc. silently escaped the mutable-capture
+/// pre-scan. Forcing exhaustiveness here makes future AST extensions trigger a
+/// compile error until the new variant is given a recursion arm.
 pub(crate) fn collect_closure_free_vars(
     expr: &crate::ast::Expr,
     params: &[String],
     out: &mut HashSet<String>,
 ) {
+    use crate::ast::Expr;
+    use crate::ast::FStringPart;
     match expr {
-        crate::ast::Expr::Closure {
+        Expr::Closure {
             params: inner_params,
             body,
             ..
@@ -73,30 +104,127 @@ pub(crate) fn collect_closure_free_vars(
                 out.insert(v);
             }
         }
-        crate::ast::Expr::BinaryOp { left, right, .. } => {
+        Expr::BinaryOp { left, right, .. } => {
             collect_closure_free_vars(left, params, out);
             collect_closure_free_vars(right, params, out);
         }
-        crate::ast::Expr::Call { callee, args, .. } => {
+        Expr::UnaryOp { expr: inner, .. } => collect_closure_free_vars(inner, params, out),
+        Expr::Call { callee, args, .. } => {
             collect_closure_free_vars(callee, params, out);
             for a in args {
                 collect_closure_free_vars(a, params, out);
             }
         }
-        crate::ast::Expr::MethodCall { object, args, .. } => {
+        Expr::MethodCall { object, args, .. } => {
             collect_closure_free_vars(object, params, out);
             for a in args {
                 collect_closure_free_vars(a, params, out);
             }
         }
-        crate::ast::Expr::UnaryOp { expr: inner, .. } => {
-            collect_closure_free_vars(inner, params, out)
+        Expr::MacroCall { args, .. } => {
+            for a in args {
+                collect_closure_free_vars(a, params, out);
+            }
         }
-        crate::ast::Expr::Assign { target, value, .. } => {
+        Expr::PathCall { args, .. } => {
+            for a in args {
+                collect_closure_free_vars(a, params, out);
+            }
+        }
+        Expr::Assign { target, value, .. } | Expr::CompoundAssign { target, value, .. } => {
             collect_closure_free_vars(target, params, out);
             collect_closure_free_vars(value, params, out);
         }
-        _ => {}
+        Expr::Block(block) => collect_closure_free_vars_in_block(block, params, out),
+        Expr::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            collect_closure_free_vars(condition, params, out);
+            collect_closure_free_vars_in_block(then_block, params, out);
+            if let Some(eb) = else_block {
+                collect_closure_free_vars(eb, params, out);
+            }
+        }
+        Expr::IfLet {
+            expr: scrutinee,
+            then_block,
+            else_block,
+            ..
+        } => {
+            collect_closure_free_vars(scrutinee, params, out);
+            collect_closure_free_vars_in_block(then_block, params, out);
+            if let Some(eb) = else_block {
+                collect_closure_free_vars(eb, params, out);
+            }
+        }
+        Expr::Match {
+            expr: scrutinee,
+            arms,
+            ..
+        } => {
+            collect_closure_free_vars(scrutinee, params, out);
+            for arm in arms {
+                if let Some(g) = &arm.guard {
+                    collect_closure_free_vars(g, params, out);
+                }
+                collect_closure_free_vars(&arm.body, params, out);
+            }
+        }
+        Expr::Index { object, index, .. } => {
+            collect_closure_free_vars(object, params, out);
+            collect_closure_free_vars(index, params, out);
+        }
+        Expr::FieldAccess { object, .. } => collect_closure_free_vars(object, params, out),
+        Expr::Tuple { elements, .. } | Expr::Array { elements, .. } => {
+            for e in elements {
+                collect_closure_free_vars(e, params, out);
+            }
+        }
+        Expr::StructInit { fields, .. } => {
+            for (_, v) in fields {
+                collect_closure_free_vars(v, params, out);
+            }
+        }
+        Expr::Grouped(inner, _) => collect_closure_free_vars(inner, params, out),
+        Expr::Range { start, end, .. } => {
+            if let Some(s) = start.as_deref() {
+                collect_closure_free_vars(s, params, out);
+            }
+            if let Some(e) = end.as_deref() {
+                collect_closure_free_vars(e, params, out);
+            }
+        }
+        Expr::Repeat { value, count, .. } => {
+            collect_closure_free_vars(value, params, out);
+            collect_closure_free_vars(count, params, out);
+        }
+        Expr::As { expr: inner, .. }
+        | Expr::Try { expr: inner, .. }
+        | Expr::Await { expr: inner, .. } => collect_closure_free_vars(inner, params, out),
+        Expr::FString { parts, .. } => {
+            for part in parts {
+                if let FStringPart::Expr(e) = part {
+                    collect_closure_free_vars(e, params, out);
+                }
+            }
+        }
+        Expr::Return { value, .. } => {
+            if let Some(v) = value {
+                collect_closure_free_vars(v, params, out);
+            }
+        }
+        // Terminals.
+        Expr::Ident(..)
+        | Expr::IntLiteral(..)
+        | Expr::FloatLiteral(..)
+        | Expr::BoolLiteral(..)
+        | Expr::StringLiteral(..)
+        | Expr::CharLiteral(..)
+        | Expr::Path { .. }
+        | Expr::SelfRef(_) => {}
     }
 }
 
@@ -278,44 +406,60 @@ pub(crate) fn collect_free_vars(
 
 /// Collect names that a pattern introduces as bindings. Used by closure
 /// capture analysis so match-arm / if-let bound names don't get treated as
-/// free variables when they're actually local to the arm.
+/// free variables when they're actually local to the arm. Exhaustive over
+/// `Pattern`.
 fn pattern_bindings(pattern: &crate::ast::Pattern, out: &mut Vec<String>) {
+    use crate::ast::Pattern;
     match pattern {
-        crate::ast::Pattern::Ident(name, _) => out.push(name.clone()),
-        crate::ast::Pattern::EnumVariant { fields, .. }
-        | crate::ast::Pattern::Tuple(fields, _)
-        | crate::ast::Pattern::Slice(fields, _) => {
+        Pattern::Ident(name, _) => out.push(name.clone()),
+        Pattern::EnumVariant { fields, .. }
+        | Pattern::Tuple(fields, _)
+        | Pattern::Slice(fields, _) => {
             for f in fields {
                 pattern_bindings(f, out);
             }
         }
-        crate::ast::Pattern::Struct { fields, .. } => {
+        Pattern::Struct { fields, .. } => {
             for (_, p) in fields {
                 pattern_bindings(p, out);
             }
         }
-        crate::ast::Pattern::Or(pats, _) => {
+        Pattern::Or(pats, _) => {
+            // Rust requires all Or-alternatives to bind the same set of names;
+            // recording the first alternative's bindings is sufficient.
             if let Some(first) = pats.first() {
                 pattern_bindings(first, out);
             }
         }
-        _ => {}
+        // No-binding patterns.
+        Pattern::Wildcard(_) | Pattern::Literal(_) | Pattern::Range { .. } | Pattern::Rest(_) => {}
     }
 }
 
+/// Exhaustive over `Stmt` — collect identifiers used inside `stmt` that
+/// aren't in `params`. Previously a `_ => {}` wildcard silently dropped
+/// `For`, `Return`, `WhileLet`, `ForDestructure`, `LetPattern`, and
+/// `Break(value)`, so vars referenced only in those statement forms
+/// escaped capture analysis.
 pub(crate) fn collect_free_vars_in_stmt(
     stmt: &crate::ast::Stmt,
     params: &[String],
     vars: &mut Vec<String>,
 ) {
+    use crate::ast::Stmt;
     match stmt {
-        crate::ast::Stmt::Expr { expr, .. } => collect_free_vars(expr, params, vars),
-        crate::ast::Stmt::Let { value, .. } => {
+        Stmt::Expr { expr, .. } => collect_free_vars(expr, params, vars),
+        Stmt::Let { value, .. } => {
             if let Some(val) = value {
                 collect_free_vars(val, params, vars);
             }
         }
-        crate::ast::Stmt::While {
+        Stmt::Return { value, .. } => {
+            if let Some(val) = value {
+                collect_free_vars(val, params, vars);
+            }
+        }
+        Stmt::While {
             condition, body, ..
         } => {
             collect_free_vars(condition, params, vars);
@@ -323,12 +467,53 @@ pub(crate) fn collect_free_vars_in_stmt(
                 collect_free_vars_in_stmt(s, params, vars);
             }
         }
-        crate::ast::Stmt::Loop { body, .. } => {
+        Stmt::Loop { body, .. } => {
             for s in &body.stmts {
                 collect_free_vars_in_stmt(s, params, vars);
             }
         }
-        _ => {}
+        Stmt::For {
+            name,
+            iterable,
+            body,
+            ..
+        } => {
+            collect_free_vars(iterable, params, vars);
+            let mut inner = params.to_vec();
+            inner.push(name.clone());
+            for s in &body.stmts {
+                collect_free_vars_in_stmt(s, &inner, vars);
+            }
+        }
+        Stmt::ForDestructure {
+            names,
+            iterable,
+            body,
+            ..
+        } => {
+            collect_free_vars(iterable, params, vars);
+            let mut inner = params.to_vec();
+            inner.extend(names.iter().cloned());
+            for s in &body.stmts {
+                collect_free_vars_in_stmt(s, &inner, vars);
+            }
+        }
+        Stmt::WhileLet {
+            pattern,
+            expr,
+            body,
+            ..
+        } => {
+            collect_free_vars(expr, params, vars);
+            let mut inner = params.to_vec();
+            pattern_bindings(pattern, &mut inner);
+            for s in &body.stmts {
+                collect_free_vars_in_stmt(s, &inner, vars);
+            }
+        }
+        Stmt::LetPattern { value, .. } => collect_free_vars(value, params, vars),
+        Stmt::Break { value: Some(v), .. } => collect_free_vars(v, params, vars),
+        Stmt::Break { value: None, .. } | Stmt::Continue { .. } | Stmt::Use(_) | Stmt::Item(_) => {}
     }
 }
 
@@ -534,9 +719,19 @@ pub(crate) fn resolve_use_path(path: &[String], module_stack: &[String]) -> Vec<
         path.to_vec()
     }
 }
+/// Substitute generic type-param names with concrete types in an expression
+/// tree. Used by monomorphization to replace `T` with `int` etc. in path calls.
+///
+/// **Exhaustive over Expr**: when a new variant is added to `Expr`, this match
+/// will refuse to compile until the new variant is given a recursion arm. This
+/// is deliberate — previously a `_ => {}` wildcard silently dropped Closure
+/// (so generic functions containing closures didn't get monomorphized), Tuple,
+/// Range, IfLet, As/Try/Await, FString, and Return.
 pub(crate) fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(String, String)]) {
+    use crate::ast::Expr;
+    use crate::ast::FStringPart;
     match expr {
-        crate::ast::Expr::PathCall { path, args, .. } => {
+        Expr::PathCall { path, args, .. } => {
             if let Some(concrete) = subst.iter().find(|(p, _)| **p == path[0]).map(|(_, c)| c) {
                 path[0] = concrete.clone();
             }
@@ -544,95 +739,169 @@ pub(crate) fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(Stri
                 substitute_type_params(arg, subst);
             }
         }
-        crate::ast::Expr::Call { callee, args, .. } => {
+        Expr::Call { callee, args, .. } => {
             substitute_type_params(callee, subst);
             for arg in args {
                 substitute_type_params(arg, subst);
             }
         }
-        crate::ast::Expr::MethodCall { object, args, .. } => {
+        Expr::MethodCall { object, args, .. } => {
             substitute_type_params(object, subst);
             for arg in args {
                 substitute_type_params(arg, subst);
             }
         }
-        crate::ast::Expr::BinaryOp { left, right, .. } => {
+        Expr::MacroCall { args, .. } => {
+            for arg in args {
+                substitute_type_params(arg, subst);
+            }
+        }
+        Expr::BinaryOp { left, right, .. } => {
             substitute_type_params(left, subst);
             substitute_type_params(right, subst);
         }
-        crate::ast::Expr::UnaryOp { expr: inner, .. } => {
-            substitute_type_params(inner, subst);
-        }
-        crate::ast::Expr::Block(block) => {
-            for stmt in &mut block.stmts {
-                match stmt {
-                    crate::ast::Stmt::Expr { expr, .. } => substitute_type_params(expr, subst),
-                    crate::ast::Stmt::Let { value, .. } => {
-                        if let Some(val) = value {
-                            substitute_type_params(val, subst);
-                        }
-                    }
-                    crate::ast::Stmt::Return { value, .. } => {
-                        if let Some(val) = value {
-                            substitute_type_params(val, subst);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        crate::ast::Expr::If {
+        Expr::UnaryOp { expr: inner, .. } => substitute_type_params(inner, subst),
+        Expr::Block(block) => substitute_type_params_in_block(block, subst),
+        Expr::If {
             condition,
             then_block,
             else_block,
             ..
         } => {
             substitute_type_params(condition, subst);
-            for stmt in &mut then_block.stmts {
-                if let crate::ast::Stmt::Expr { expr, .. } = stmt {
-                    substitute_type_params(expr, subst);
-                }
-            }
+            substitute_type_params_in_block(then_block, subst);
             if let Some(else_expr) = else_block {
                 substitute_type_params(else_expr, subst);
             }
         }
-        crate::ast::Expr::Assign { target, value, .. } => {
-            substitute_type_params(target, subst);
-            substitute_type_params(value, subst);
+        Expr::IfLet {
+            expr: scrutinee,
+            then_block,
+            else_block,
+            ..
+        } => {
+            substitute_type_params(scrutinee, subst);
+            substitute_type_params_in_block(then_block, subst);
+            if let Some(else_expr) = else_block {
+                substitute_type_params(else_expr, subst);
+            }
         }
-        crate::ast::Expr::CompoundAssign { target, value, .. } => {
-            substitute_type_params(target, subst);
-            substitute_type_params(value, subst);
-        }
-        crate::ast::Expr::Match { expr, arms, .. } => {
-            substitute_type_params(expr, subst);
+        Expr::Match {
+            expr: scrutinee,
+            arms,
+            ..
+        } => {
+            substitute_type_params(scrutinee, subst);
             for arm in arms {
+                if let Some(g) = &mut arm.guard {
+                    substitute_type_params(g, subst);
+                }
                 substitute_type_params(&mut arm.body, subst);
             }
         }
-        crate::ast::Expr::Array { elements, .. } => {
+        Expr::Assign { target, value, .. } | Expr::CompoundAssign { target, value, .. } => {
+            substitute_type_params(target, subst);
+            substitute_type_params(value, subst);
+        }
+        Expr::Array { elements, .. } | Expr::Tuple { elements, .. } => {
             for elem in elements {
                 substitute_type_params(elem, subst);
             }
         }
-        crate::ast::Expr::StructInit { fields, .. } => {
+        Expr::StructInit { fields, .. } => {
             for (_, field_expr) in fields {
                 substitute_type_params(field_expr, subst);
             }
         }
-        crate::ast::Expr::FieldAccess { object, .. } => {
-            substitute_type_params(object, subst);
-        }
-        crate::ast::Expr::Index { object, index, .. } => {
+        Expr::FieldAccess { object, .. } => substitute_type_params(object, subst),
+        Expr::Index { object, index, .. } => {
             substitute_type_params(object, subst);
             substitute_type_params(index, subst);
         }
-        crate::ast::Expr::MacroCall { args, .. } => {
-            for arg in args {
-                substitute_type_params(arg, subst);
+        Expr::Grouped(inner, _) => substitute_type_params(inner, subst),
+        Expr::Range { start, end, .. } => {
+            if let Some(s) = start {
+                substitute_type_params(s, subst);
+            }
+            if let Some(e) = end {
+                substitute_type_params(e, subst);
             }
         }
-        _ => {}
+        Expr::Repeat { value, count, .. } => {
+            substitute_type_params(value, subst);
+            substitute_type_params(count, subst);
+        }
+        Expr::Closure { body, .. } => substitute_type_params(body, subst),
+        Expr::As { expr: inner, .. }
+        | Expr::Try { expr: inner, .. }
+        | Expr::Await { expr: inner, .. } => substitute_type_params(inner, subst),
+        Expr::FString { parts, .. } => {
+            for part in parts {
+                if let FStringPart::Expr(e) = part {
+                    substitute_type_params(e, subst);
+                }
+            }
+        }
+        Expr::Return { value, .. } => {
+            if let Some(v) = value {
+                substitute_type_params(v, subst);
+            }
+        }
+        // Terminals — no subexpressions to recurse into.
+        Expr::Ident(..)
+        | Expr::IntLiteral(..)
+        | Expr::FloatLiteral(..)
+        | Expr::BoolLiteral(..)
+        | Expr::StringLiteral(..)
+        | Expr::CharLiteral(..)
+        | Expr::Path { .. }
+        | Expr::SelfRef(_) => {}
+    }
+}
+
+fn substitute_type_params_in_block(block: &mut crate::ast::Block, subst: &[(String, String)]) {
+    for stmt in &mut block.stmts {
+        substitute_type_params_in_stmt(stmt, subst);
+    }
+}
+
+/// Exhaustive over `Stmt` — see `substitute_type_params` for the rationale.
+fn substitute_type_params_in_stmt(stmt: &mut crate::ast::Stmt, subst: &[(String, String)]) {
+    use crate::ast::Stmt;
+    match stmt {
+        Stmt::Expr { expr, .. } => substitute_type_params(expr, subst),
+        Stmt::Let { value, .. } => {
+            if let Some(v) = value {
+                substitute_type_params(v, subst);
+            }
+        }
+        Stmt::Return { value, .. } => {
+            if let Some(v) = value {
+                substitute_type_params(v, subst);
+            }
+        }
+        Stmt::While {
+            condition, body, ..
+        } => {
+            substitute_type_params(condition, subst);
+            substitute_type_params_in_block(body, subst);
+        }
+        Stmt::Loop { body, .. } => substitute_type_params_in_block(body, subst),
+        Stmt::For { iterable, body, .. } => {
+            substitute_type_params(iterable, subst);
+            substitute_type_params_in_block(body, subst);
+        }
+        Stmt::ForDestructure { iterable, body, .. } => {
+            substitute_type_params(iterable, subst);
+            substitute_type_params_in_block(body, subst);
+        }
+        Stmt::WhileLet { expr, body, .. } => {
+            substitute_type_params(expr, subst);
+            substitute_type_params_in_block(body, subst);
+        }
+        Stmt::LetPattern { value, .. } => substitute_type_params(value, subst),
+        Stmt::Break { value: Some(v), .. } => substitute_type_params(v, subst),
+        // No expressions to substitute into.
+        Stmt::Break { value: None, .. } | Stmt::Continue { .. } | Stmt::Use(_) | Stmt::Item(_) => {}
     }
 }
