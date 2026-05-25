@@ -39,6 +39,19 @@ fn main() {
             });
             install_package(target);
         }
+        Some("uninstall") => {
+            let name = args.get(2).unwrap_or_else(|| {
+                eprintln!(
+                    "{} 'uninstall' requires a package name",
+                    "error:".red().bold()
+                );
+                process::exit(2);
+            });
+            uninstall_package(name);
+        }
+        Some("list") => {
+            list_packages();
+        }
         Some("test") => {
             let file = args.get(2).unwrap_or_else(|| {
                 eprintln!("{} 'test' requires a file argument", "error:".red().bold());
@@ -321,6 +334,56 @@ fn install_package(target: &str) {
     }
 }
 
+fn uninstall_package(name: &str) {
+    match oxy_core::package::uninstall(name) {
+        Ok(path) => {
+            println!("{} uninstalled {}", "success:".green().bold(), name.cyan());
+            println!("  removed: {}", path.display());
+        }
+        Err(e) => {
+            eprintln!("{} {}", "error:".red().bold(), e);
+            process::exit(1);
+        }
+    }
+}
+
+fn list_packages() {
+    match oxy_core::package::list_installed() {
+        Ok(packages) => {
+            if packages.is_empty() {
+                println!(
+                    "{} no packages installed in {}",
+                    "info:".cyan(),
+                    oxy_core::package::packages_dir().display()
+                );
+                return;
+            }
+            println!(
+                "{} {} installed in {}\n",
+                "info:".cyan(),
+                if packages.len() == 1 {
+                    "1 package".to_string()
+                } else {
+                    format!("{} packages", packages.len())
+                },
+                oxy_core::package::packages_dir().display()
+            );
+            for pkg in &packages {
+                println!(
+                    "  {} {}",
+                    pkg.manifest.name.cyan().bold(),
+                    format!("v{}", pkg.manifest.version).dimmed()
+                );
+                println!("    {}", pkg.path.display().to_string().dimmed());
+            }
+        }
+        Err(e) => {
+            eprintln!("{} {}", "error:".red().bold(), e);
+            process::exit(1);
+        }
+    }
+}
+
 fn run_test_file(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
@@ -465,8 +528,16 @@ fn print_help() {
         "repl".cyan()
     );
     println!(
-        "  {}    Install a package from a path or URL\n",
+        "  {}    Install a package from a path or URL",
         "install <path|url>".cyan()
+    );
+    println!(
+        "  {}      Remove an installed package",
+        "uninstall <name>".cyan()
+    );
+    println!(
+        "  {}                 List installed packages\n",
+        "list".cyan()
     );
     println!("{}:", "Options".bold());
     println!(

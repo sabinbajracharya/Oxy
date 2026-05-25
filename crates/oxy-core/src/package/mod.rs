@@ -140,6 +140,16 @@ pub fn install_from_url(url: &str) -> Result<InstalledPackage, String> {
     result
 }
 
+/// Uninstall a package by name. Returns the removed path on success.
+pub fn uninstall(name: &str) -> Result<PathBuf, String> {
+    let dir = packages_dir().join(name);
+    if !dir.exists() {
+        return Err(format!("package not installed: '{name}'"));
+    }
+    std::fs::remove_dir_all(&dir).map_err(|e| format!("failed to remove package: {e}"))?;
+    Ok(dir)
+}
+
 /// List all installed packages.
 pub fn list_installed() -> Result<Vec<InstalledPackage>, String> {
     let dir = packages_dir();
@@ -244,4 +254,154 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // packages_dir() reads $HOME, and tests within a process share env.
+    // Serialize tests that mutate HOME.
+    static HOME_LOCK: Mutex<()> = Mutex::new(());
+
+    struct HomeGuard {
+        prev: Option<String>,
+        dir: PathBuf,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl HomeGuard {
+        fn new(label: &str) -> Self {
+            let lock = HOME_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            let prev = std::env::var("HOME").ok();
+            let dir = std::env::temp_dir().join(format!(
+                "oxy-pkg-test-{}-{}-{}",
+                std::process::id(),
+                label,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0),
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            unsafe {
+                std::env::set_var("HOME", &dir);
+            }
+            Self {
+                prev,
+                dir,
+                _lock: lock,
+            }
+        }
+    }
+
+    impl Drop for HomeGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+            unsafe {
+                match &self.prev {
+                    Some(v) => std::env::set_var("HOME", v),
+                    None => std::env::remove_var("HOME"),
+                }
+            }
+        }
+    }
+
+    fn make_pkg(parent: &Path, name: &str, version: &str) -> PathBuf {
+        let src = parent.join(format!("src-{name}"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            src.join("package.ox"),
+            format!("name = \"{name}\"\nversion = \"{version}\"\n"),
+        )
+        .unwrap();
+        std::fs::write(src.join("lib.ox"), "pub fn hi() {}\n").unwrap();
+        src
+    }
+
+    #[test]
+    fn manifest_parse_basic() {
+        let m = PackageManifest::parse(
+            "name = \"foo\"\nversion = \"1.2.3\"\nentry = \"lib.ox\"\ndep = \"bar\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.name, "foo");
+        assert_eq!(m.version, "1.2.3");
+        assert_eq!(m.entry.as_deref(), Some("lib.ox"));
+        assert_eq!(m.dependencies, vec!["bar".to_string()]);
+    }
+
+    #[test]
+    fn manifest_parse_requires_name() {
+        let err = PackageManifest::parse("version = \"1.0.0\"\n").unwrap_err();
+        assert!(err.contains("name"));
+    }
+
+    #[test]
+    fn manifest_parse_default_version() {
+        let m = PackageManifest::parse("name = \"x\"\n").unwrap();
+        assert_eq!(m.version, "0.1.0");
+    }
+
+    #[test]
+    fn uninstall_missing_returns_err() {
+        let _g = HomeGuard::new("uninstall-missing");
+        let err = uninstall("nonexistent-xyz").unwrap_err();
+        assert!(err.contains("not installed"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn install_list_uninstall_cycle() {
+        let g = HomeGuard::new("cycle");
+
+        assert!(list_installed().unwrap().is_empty());
+
+        let src = make_pkg(&g.dir, "demo", "1.2.3");
+        let installed = install_from_path(&src).unwrap();
+        assert_eq!(installed.manifest.name, "demo");
+        assert_eq!(installed.manifest.version, "1.2.3");
+        assert_eq!(installed.path, packages_dir().join("demo"));
+        assert!(installed.path.exists());
+
+        let listed = list_installed().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].manifest.name, "demo");
+
+        let (source, pkg_name) = find_module_in_packages("demo").expect("module found");
+        assert_eq!(pkg_name, "demo");
+        assert!(source.contains("pub fn hi"));
+
+        let removed = uninstall("demo").unwrap();
+        assert_eq!(removed, packages_dir().join("demo"));
+        assert!(!removed.exists());
+        assert!(list_installed().unwrap().is_empty());
+    }
+
+    #[test]
+    fn install_overwrites_existing() {
+        let g = HomeGuard::new("overwrite");
+        let src1 = make_pkg(&g.dir, "samename", "1.0.0");
+        install_from_path(&src1).unwrap();
+        let src2 = make_pkg(&g.dir, "samename", "2.0.0");
+        std::fs::write(
+            src2.join("package.ox"),
+            "name = \"samename\"\nversion = \"2.0.0\"\n",
+        )
+        .unwrap();
+        let installed = install_from_path(&src2).unwrap();
+        assert_eq!(installed.manifest.version, "2.0.0");
+        let listed = list_installed().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].manifest.version, "2.0.0");
+    }
+
+    #[test]
+    fn install_rejects_missing_manifest() {
+        let g = HomeGuard::new("no-manifest");
+        let src = g.dir.join("bad-pkg");
+        std::fs::create_dir_all(&src).unwrap();
+        let err = install_from_path(&src).unwrap_err();
+        assert!(err.contains("package.ox"), "unexpected: {err}");
+    }
 }
