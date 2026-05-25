@@ -3,6 +3,9 @@ services:
     build:
       context: .
       target: dev
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - .:/app
       - cargo-cache:/usr/local/cargo/registry

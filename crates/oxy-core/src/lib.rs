@@ -37,8 +37,6 @@ pub mod http;
 pub mod json;
 /// Lexer (tokenizer) for Oxy source code.
 pub mod lexer;
-/// Package manager: install, manifest parsing, registry support.
-pub mod package;
 /// Parser that transforms tokens into an AST.
 pub mod parser;
 /// Built-in standard library modules.

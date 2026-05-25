@@ -1,0 +1,23 @@
+[package]
+name = "oxy-tug"
+description = "Tug — the Oxy package manager. Manifests, lockfiles, dependency resolution."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "oxy_tug"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tug"
+path = "src/main.rs"
+
+[dependencies]
+colored = { workspace = true }
+toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"

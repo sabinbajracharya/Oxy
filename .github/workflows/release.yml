@@ -10,20 +10,23 @@ env:
 
 jobs:
   build-release:
-    name: Build (${{ matrix.target }})
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: oxy-linux-x86_64
+            platform_suffix: linux-x86_64
+            ext: ""
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: oxy-macos-aarch64
+            platform_suffix: macos-aarch64
+            ext: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: oxy-windows-x86_64.exe
+            platform_suffix: windows-x86_64
+            ext: ".exe"
     steps:
       - uses: actions/checkout@v4
 
@@ -34,20 +37,29 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build release (oxy + tug)
+        run: cargo build --release --target ${{ matrix.target }} --bin oxy --bin tug
 
-      - name: Rename binary
+      - name: Stage artifacts
         shell: bash
         run: |
-          src="target/${{ matrix.target }}/release/oxy${{ matrix.os == 'windows-latest' && '.exe' || '' }}"
-          cp "$src" "${{ matrix.artifact }}"
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/oxy${{ matrix.ext }}" \
+             "dist/oxy-${{ matrix.platform_suffix }}${{ matrix.ext }}"
+          cp "target/${{ matrix.target }}/release/tug${{ matrix.ext }}" \
+             "dist/tug-${{ matrix.platform_suffix }}${{ matrix.ext }}"
 
-      - name: Upload artifact
+      - name: Upload oxy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: oxy-${{ matrix.platform_suffix }}${{ matrix.ext }}
+          path: dist/oxy-${{ matrix.platform_suffix }}${{ matrix.ext }}
+
+      - name: Upload tug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tug-${{ matrix.platform_suffix }}${{ matrix.ext }}
+          path: dist/tug-${{ matrix.platform_suffix }}${{ matrix.ext }}
 
   create-release:
     name: Create GitHub Release

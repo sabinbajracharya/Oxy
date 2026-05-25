@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 use std::process;
 
 use colored::Colorize;
@@ -15,49 +17,30 @@ fn main() {
             print_help();
         }
         Some("run") => {
-            let file = args.get(2).unwrap_or_else(|| {
-                eprintln!("{} 'run' requires a file argument", "error:".red().bold());
-                process::exit(2);
-            });
-            // Install argv visible to `std::env::args()`: script path at
-            // index 0, user-supplied arguments follow.
+            let (externs, file, script_args) = match parse_subcmd_args(&args[2..], "run") {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{} {}", "error:".red().bold(), e);
+                    process::exit(2);
+                }
+            };
             let mut script_argv = vec![file.clone()];
-            script_argv.extend(args.iter().skip(3).cloned());
+            script_argv.extend(script_args);
             oxy_core::stdlib::env::set_cli_args(script_argv);
-            run_file(file);
+            run_file(&file, externs);
         }
         Some("repl") => {
             run_repl();
         }
-        Some("install") => {
-            let target = args.get(2).unwrap_or_else(|| {
-                eprintln!(
-                    "{} 'install' requires a package path or URL",
-                    "error:".red().bold()
-                );
-                process::exit(2);
-            });
-            install_package(target);
-        }
-        Some("uninstall") => {
-            let name = args.get(2).unwrap_or_else(|| {
-                eprintln!(
-                    "{} 'uninstall' requires a package name",
-                    "error:".red().bold()
-                );
-                process::exit(2);
-            });
-            uninstall_package(name);
-        }
-        Some("list") => {
-            list_packages();
-        }
         Some("test") => {
-            let file = args.get(2).unwrap_or_else(|| {
-                eprintln!("{} 'test' requires a file argument", "error:".red().bold());
-                process::exit(2);
-            });
-            run_test_file(file);
+            let (externs, file, _) = match parse_subcmd_args(&args[2..], "test") {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{} {}", "error:".red().bold(), e);
+                    process::exit(2);
+                }
+            };
+            run_test_file(&file, externs);
         }
         Some("--dump-tokens") => {
             let file = args.get(2).unwrap_or_else(|| {
@@ -97,7 +80,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &str) {
+fn run_file(path: &str, externs: HashMap<String, PathBuf>) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -112,7 +95,7 @@ fn run_file(path: &str) {
     // Run on the bytecode VM. If `main` is declared as `-> Result<_, _>`
     // (or `-> Option<_>`) and returns `Err(_)` / `None`, surface that to
     // the user — otherwise `?` in main would silently exit 0.
-    match oxy_core::vm::run_compiled(&source) {
+    match oxy_core::vm::run_compiled_with_options(&source, Some(path), externs) {
         Ok(v) => {
             if let Some(msg) = main_error_message(&v) {
                 eprintln!("{} {}", "error:".red().bold(), msg);
@@ -124,6 +107,54 @@ fn run_file(path: &str) {
             process::exit(1);
         }
     }
+}
+
+type ParsedSubcmd = (HashMap<String, PathBuf>, String, Vec<String>);
+
+/// Parse `[--extern name=path]... <file> [-- args...]` and return
+/// `(externs, file, script_args)`. Errors if no file argument is given.
+fn parse_subcmd_args(args: &[String], cmd: &str) -> Result<ParsedSubcmd, String> {
+    let mut externs: HashMap<String, PathBuf> = HashMap::new();
+    let mut file: Option<String> = None;
+    let mut script_args: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--extern" {
+            let kv = args
+                .get(i + 1)
+                .ok_or_else(|| "--extern requires a name=path argument".to_string())?;
+            let (name, path) = kv
+                .split_once('=')
+                .ok_or_else(|| format!("--extern expects name=path, got '{kv}'"))?;
+            if name.is_empty() {
+                return Err("--extern name cannot be empty".to_string());
+            }
+            externs.insert(name.to_string(), PathBuf::from(path));
+            i += 2;
+            continue;
+        }
+        if let Some(rest) = a.strip_prefix("--extern=") {
+            let (name, path) = rest
+                .split_once('=')
+                .ok_or_else(|| format!("--extern expects name=path, got '{rest}'"))?;
+            if name.is_empty() {
+                return Err("--extern name cannot be empty".to_string());
+            }
+            externs.insert(name.to_string(), PathBuf::from(path));
+            i += 1;
+            continue;
+        }
+        // First non-flag argument is the file; everything after goes to the script.
+        if file.is_none() {
+            file = Some(a.clone());
+            script_args = args[i + 1..].to_vec();
+            break;
+        }
+        i += 1;
+    }
+    let file = file.ok_or_else(|| format!("'{cmd}' requires a file argument"))?;
+    Ok((externs, file, script_args))
 }
 
 /// If main returned `Result::Err(_)` or `Option::None`, format the carried
@@ -299,92 +330,7 @@ fn balanced_braces(s: &str) -> bool {
     depth <= 0
 }
 
-fn install_package(target: &str) {
-    println!("{} installing package from '{}'...", "info:".cyan(), target);
-
-    let result = if target.starts_with("http://")
-        || target.starts_with("https://")
-        || target.starts_with("git@")
-        || target.contains(':')
-    {
-        oxy_core::package::install_from_url(target)
-    } else {
-        let path = std::path::Path::new(target);
-        if path.exists() && path.is_dir() {
-            oxy_core::package::install_from_path(path)
-        } else {
-            Err(format!("package not found: '{target}'"))
-        }
-    };
-
-    match result {
-        Ok(pkg) => {
-            println!(
-                "{} installed {} v{}",
-                "success:".green().bold(),
-                pkg.manifest.name,
-                pkg.manifest.version
-            );
-            println!("  path: {}", pkg.path.display());
-        }
-        Err(e) => {
-            eprintln!("{} {}", "error:".red().bold(), e);
-            process::exit(1);
-        }
-    }
-}
-
-fn uninstall_package(name: &str) {
-    match oxy_core::package::uninstall(name) {
-        Ok(path) => {
-            println!("{} uninstalled {}", "success:".green().bold(), name.cyan());
-            println!("  removed: {}", path.display());
-        }
-        Err(e) => {
-            eprintln!("{} {}", "error:".red().bold(), e);
-            process::exit(1);
-        }
-    }
-}
-
-fn list_packages() {
-    match oxy_core::package::list_installed() {
-        Ok(packages) => {
-            if packages.is_empty() {
-                println!(
-                    "{} no packages installed in {}",
-                    "info:".cyan(),
-                    oxy_core::package::packages_dir().display()
-                );
-                return;
-            }
-            println!(
-                "{} {} installed in {}\n",
-                "info:".cyan(),
-                if packages.len() == 1 {
-                    "1 package".to_string()
-                } else {
-                    format!("{} packages", packages.len())
-                },
-                oxy_core::package::packages_dir().display()
-            );
-            for pkg in &packages {
-                println!(
-                    "  {} {}",
-                    pkg.manifest.name.cyan().bold(),
-                    format!("v{}", pkg.manifest.version).dimmed()
-                );
-                println!("    {}", pkg.path.display().to_string().dimmed());
-            }
-        }
-        Err(e) => {
-            eprintln!("{} {}", "error:".red().bold(), e);
-            process::exit(1);
-        }
-    }
-}
-
-fn run_test_file(path: &str) {
+fn run_test_file(path: &str, externs: HashMap<String, PathBuf>) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -398,7 +344,7 @@ fn run_test_file(path: &str) {
 
     println!("\n{} tests in {}\n", "running".bold(), path.cyan());
 
-    match oxy_core::vm::run_tests(path, &source) {
+    match oxy_core::vm::run_tests_with_options(path, &source, externs) {
         Ok(results) => {
             let mut passed = 0;
             let mut failed = 0;
@@ -516,32 +462,29 @@ fn print_help() {
     println!("{} oxy [command] [options]\n", "Usage:".bold());
     println!("{}:", "Commands".bold());
     println!(
-        "  {}        Execute an Oxy source file (--interpreter for tree-walker)",
-        "run <file.ox> ".cyan()
+        "  {}   Execute an Oxy source file",
+        "run [--extern N=P]... <file.ox> [args...]".cyan()
     );
     println!(
-        "  {}       Run #[test] functions in a file",
-        "test <file.ox> ".cyan()
+        "  {}            Run #[test] functions in a file",
+        "test [--extern N=P]... <file.ox>".cyan()
     );
     println!(
-        "  {}                 Start the interactive REPL",
+        "  {}                                  Start the interactive REPL\n",
         "repl".cyan()
     );
     println!(
-        "  {}    Install a package from a path or URL",
-        "install <path|url>".cyan()
-    );
-    println!(
-        "  {}      Remove an installed package",
-        "uninstall <name>".cyan()
-    );
-    println!(
-        "  {}                 List installed packages\n",
-        "list".cyan()
+        "{} package management lives in {}.\n",
+        "Note:".dimmed(),
+        "tug".cyan()
     );
     println!("{}:", "Options".bold());
     println!(
-        "  {} Dump token stream for a file",
+        "  {}             Inject a module by name (mirrors rustc's --extern)",
+        "--extern <name>=<path>".cyan()
+    );
+    println!(
+        "  {}                   Dump token stream for a file",
         "--dump-tokens <file>".cyan()
     );
     println!("  {}    Dump AST for a file", "--dump-ast <file>".cyan());

@@ -62,14 +62,20 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build release binary
-        run: cargo build --release
+      - name: Build release binaries (oxy + tug)
+        run: cargo build --release --bin oxy --bin tug
 
-      - name: Upload binary
+      - name: Upload oxy binary
         uses: actions/upload-artifact@v4
         with:
           name: oxy-linux-x86_64
           path: target/release/oxy
+
+      - name: Upload tug binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tug-linux-x86_64
+          path: target/release/tug
 
   docker:
     name: Docker build

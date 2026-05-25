@@ -52,6 +52,11 @@ pub struct Compiler {
     pub(crate) method_ips: HashMap<(String, String), usize>,
     /// Directory of the source file (for resolving file-based modules).
     pub(crate) source_dir: Option<std::path::PathBuf>,
+    /// Caller-provided extern map: module_name → file path.
+    /// Used by `mod <name>;` resolution before falling back to sibling files.
+    /// Mirrors rustc's `--extern` flag: the package manager (tug) supplies this,
+    /// the compiler itself never consults a global package directory.
+    pub(crate) externs: HashMap<String, std::path::PathBuf>,
     /// Use aliases: alias_name → qualified_name (e.g., "add" → "math::add").
     pub(crate) use_aliases: HashMap<String, String>,
     /// Const/static values: name → value (inlined at reference sites).
@@ -147,6 +152,29 @@ impl Compiler {
             ..Self::default()
         }
     }
+
+    /// Create a compiler with a source dir and caller-supplied externs.
+    /// Mirrors `rustc --extern <name>=<path>`: dependency module resolution is
+    /// driven entirely by the caller (typically `tug`), never by the compiler
+    /// looking in a global package directory.
+    pub fn new_with_options(
+        source_path: Option<&str>,
+        externs: HashMap<String, std::path::PathBuf>,
+    ) -> Self {
+        let source_dir =
+            source_path.and_then(|p| std::path::Path::new(p).parent().map(|d| d.to_path_buf()));
+        Self {
+            source_dir,
+            externs,
+            ..Self::default()
+        }
+    }
+
+    /// Builder-style: replace the externs map.
+    pub fn with_externs(mut self, externs: HashMap<String, std::path::PathBuf>) -> Self {
+        self.externs = externs;
+        self
+    }
 }
 
 impl Default for Compiler {
@@ -163,6 +191,7 @@ impl Default for Compiler {
             impl_methods: HashMap::new(),
             method_ips: HashMap::new(),
             source_dir: None,
+            externs: HashMap::new(),
             use_aliases: HashMap::new(),
             const_values: HashMap::new(),
             fn_meta: HashMap::new(),
@@ -1351,7 +1380,26 @@ impl Compiler {
     }
 
     /// Load a file-based module's source code.
+    ///
+    /// Resolution order (matches rustc's `--extern` semantics — extern wins):
+    /// 1. caller-supplied externs map (`module_name → path`)
+    /// 2. `<source_dir>/<name>.ox`
+    /// 3. `<source_dir>/<name>/mod.ox`
+    ///
+    /// There is **no** fallback to a global package directory: dependency
+    /// resolution is the package manager's job (`tug`), not the compiler's.
     fn load_module_file(&self, name: &str, span: crate::lexer::Span) -> Result<String, FerriError> {
+        if let Some(extern_path) = self.externs.get(name) {
+            return std::fs::read_to_string(extern_path).map_err(|e| FerriError::Runtime {
+                message: format!(
+                    "could not read extern module `{name}` from '{}': {e}",
+                    extern_path.display()
+                ),
+                line: span.line,
+                column: span.column,
+            });
+        }
+
         let base_ref = self
             .source_dir
             .as_ref()
@@ -1367,11 +1415,11 @@ impl Compiler {
         if let Ok(source) = std::fs::read_to_string(&path2) {
             return Ok(source);
         }
-        if let Some((source, _pkg_name)) = crate::package::find_module_in_packages(name) {
-            return Ok(source);
-        }
         Err(FerriError::Runtime {
-            message: format!("could not find module `{name}`: tried '{path1}' and '{path2}'"),
+            message: format!(
+                "could not find module `{name}`: tried '{path1}' and '{path2}' \
+                 (pass --extern {name}=<path> if it's an external dependency)"
+            ),
             line: span.line,
             column: span.column,
         })

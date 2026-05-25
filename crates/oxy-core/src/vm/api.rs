@@ -3,14 +3,32 @@
 // Extracted from vm/mod.rs to keep that file focused on the Vm struct and its
 // execution loop.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use super::{disassemble_chunk, Vm, VmResult};
 use crate::types::Value;
 
 /// Compile and run with captured output (for testing).
 pub fn run_compiled(source: &str) -> Result<Value, crate::errors::FerriError> {
+    run_compiled_with_options(source, None, HashMap::new())
+}
+
+/// Compile and run with an optional source-file path (for resolving sibling
+/// modules) and caller-supplied externs (`name → path`).
+///
+/// `externs` mirrors rustc's `--extern` flag: it lets a package manager like
+/// `tug` inject dependency entry points without the compiler needing to know
+/// about a global package directory.
+pub fn run_compiled_with_options(
+    source: &str,
+    source_path: Option<&str>,
+    externs: HashMap<String, PathBuf>,
+) -> Result<Value, crate::errors::FerriError> {
     let program = crate::parser::parse(source)?;
     crate::type_checker::TypeChecker::new().check_program(&program)?;
-    let chunk = crate::compiler::Compiler::new().compile(&program)?;
+    let chunk =
+        crate::compiler::Compiler::new_with_options(source_path, externs).compile(&program)?;
     let mut vm = Vm::new(chunk);
     match vm.run() {
         VmResult::Value(v) => Ok(v),
@@ -68,6 +86,16 @@ pub struct TestResult {
 /// Run all #[test] functions in source via the VM, and verify that
 /// #[compile_error] functions fail to compile.
 pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+    run_tests_with_options(path, source, HashMap::new())
+}
+
+/// Same as [`run_tests`], but with caller-supplied externs (see
+/// [`run_compiled_with_options`]).
+pub fn run_tests_with_options(
+    path: &str,
+    source: &str,
+    externs: HashMap<String, PathBuf>,
+) -> Result<Vec<TestResult>, crate::errors::FerriError> {
     let program = crate::parser::parse(source)?;
 
     // Split: normal items vs #[compile_error] functions
@@ -91,7 +119,9 @@ pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::err
 
     // Type-check and compile normal items (must succeed)
     crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
-    let chunk = crate::compiler::Compiler::new_for_tests(Some(path)).compile(&normal_program)?;
+    let chunk = crate::compiler::Compiler::new_for_tests(Some(path))
+        .with_externs(externs.clone())
+        .compile(&normal_program)?;
 
     // Run #[test] functions
     let test_fns: Vec<&crate::ast::FnDef> = normal_program
@@ -153,8 +183,9 @@ pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::err
         }
 
         // Try compilation (catches compiler-level errors)
-        let compile_result =
-            crate::compiler::Compiler::new_for_tests(Some(path)).compile(&ce_program);
+        let compile_result = crate::compiler::Compiler::new_for_tests(Some(path))
+            .with_externs(externs.clone())
+            .compile(&ce_program);
         match compile_result {
             Err(_) => results.push(TestResult {
                 name: ce_fn.name.clone(),

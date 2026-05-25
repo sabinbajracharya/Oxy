@@ -9,14 +9,17 @@ COPY Cargo.lock* ./
 COPY crates/oxy-core/Cargo.toml crates/oxy-core/Cargo.toml
 COPY crates/oxy-cli/Cargo.toml crates/oxy-cli/Cargo.toml
 COPY crates/oxy-lsp/Cargo.toml crates/oxy-lsp/Cargo.toml
+COPY crates/oxy-tug/Cargo.toml crates/oxy-tug/Cargo.toml
 
 # Create dummy source files to cache dependency compilation
-RUN mkdir -p crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src && \
+RUN mkdir -p crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src crates/oxy-tug/src && \
     echo "pub const VERSION: &str = \"0.0.0\";" > crates/oxy-core/src/lib.rs && \
     echo "fn main() {}" > crates/oxy-cli/src/main.rs && \
     echo "fn main() {}" > crates/oxy-lsp/src/main.rs && \
+    echo "fn main() {}" > crates/oxy-tug/src/main.rs && \
+    echo "" > crates/oxy-tug/src/lib.rs && \
     cargo build --release 2>/dev/null || true && \
-    rm -rf crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src
+    rm -rf crates/oxy-core/src crates/oxy-cli/src crates/oxy-lsp/src crates/oxy-tug/src
 
 # Copy actual source and build
 COPY . .
@@ -29,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/oxy /usr/local/bin/oxy
+COPY --from=builder /app/target/release/tug /usr/local/bin/tug
 COPY --from=builder /app/target/release/oxy-lsp /usr/local/bin/oxy-lsp
 
 ENTRYPOINT ["oxy"]
