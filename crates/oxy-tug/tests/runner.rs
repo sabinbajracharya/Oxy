@@ -60,7 +60,8 @@ impl Drop for HomeGuard {
 fn oxy_binary() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let ws = Path::new(manifest_dir).parent().unwrap().parent().unwrap();
-    let candidate = ws.join("target/debug/oxy");
+    let bin_name = if cfg!(windows) { "oxy.exe" } else { "oxy" };
+    let candidate = ws.join("target").join("debug").join(bin_name);
     if !candidate.exists() {
         // Build it on demand. Slow but reliable when running this test alone.
         let _ = std::process::Command::new("cargo")
