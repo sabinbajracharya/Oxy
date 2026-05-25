@@ -1,5 +1,99 @@
 # Changelog
 
+## v0.4.0 — 2026-05-25
+
+Highlights: a brand-new package manager (`tug`), a Rust-style split between
+compiler and dependency tooling, and a substantially larger standard library.
+
+### New: `tug` package manager (separate binary)
+
+Oxy now ships a second executable, `tug`, that owns project layout,
+dependency management, and orchestration of the `oxy` compiler — exactly
+the way `cargo` complements `rustc`.
+
+- `tug new <name>` / `tug init` — scaffold a project (`tug.toml`,
+  `src/main.ox`, `.gitignore`).
+- `tug add <spec> [--git URL] [--tag T|--rev R] [--path P]` /
+  `tug remove <name>` — edit `tug.toml` and sync `tug.lock`.
+- `tug install <path|url>` / `tug uninstall <name>` / `tug list` —
+  package store at `~/.oxy/packages/`.
+- `tug build` / `tug run [args...]` / `tug test` — resolves deps and
+  shells out to `oxy` with the appropriate `--extern` flags.
+- New manifest (`tug.toml`) and lockfile (`tug.lock`) formats, both TOML.
+
+### Breaking: compiler split
+
+- The `oxy` binary no longer has `install`, `uninstall`, or `list`
+  subcommands. Use `tug` for package management. Standalone scripts
+  (`oxy run file.ox`) work as before for self-contained files.
+- The compiler no longer reads `~/.oxy/packages/` directly. Dependencies
+  must be supplied by the caller via the new `oxy --extern <name>=<path>`
+  flag — mirroring `rustc --extern`. `tug` builds this map automatically.
+- `oxy_core::package` module removed; replaced by `oxy_tug::install` etc.
+
+### Standard library additions
+
+- `std::process::spawn(program, args, callback)` — line-by-line streaming
+  subprocess execution, with stdout/stderr tagged in the callback.
+- `std::path` — lexical path manipulation (`join`, `split`, `extension`,
+  `with_extension`, `parent`, `file_stem`, `is_absolute`, etc.).
+- Real `std::env::args()` plus a `std::args::parse(spec)` helper.
+- `std::server` — closure-callback HTTP server (`server::start(addr, fn)`).
+- `std::io` — stdin reading; `std::db` — bundled SQLite client.
+- `std::regex::Regex::new(pat).<method>(text)` — OOP-style regex.
+- `int.signum()` / `byte.signum()` / `float.signum()`.
+- `String::lines()` and `String::split_whitespace()`.
+
+### Language features
+
+- Breaking: integer types collapsed to `int`, `byte`, `float` (the
+  `i8 / i16 / i32 / i64 / u8 / u16 / u32 / u64 / f32 / f64` zoo is
+  rejected with a fix-it suggestion). Width semantics are enforced at
+  function boundaries and typed `let` bindings; arithmetic widens to
+  `int` for ergonomics.
+- Breaking: Rust reference syntax (`&T`, `&mut T`, `'a`, `&self`,
+  `&str`, `&[T]`) is rejected — Oxy commits to dynamic Rust.
+- `fn main() -> Result<(), E>` is allowed; `Err(_)` is surfaced and
+  exits with a non-zero status.
+- Struct update syntax: `Foo { field: v, ..base }`.
+- `if let Some(x) = expr && guard { ... }` — pattern with `&&` guard.
+- Or-patterns: `1 | 2 | 3 => ...` (including in `let`).
+- Generic `impl<T> Type<T>` blocks.
+- 3-segment enum paths `mod::Enum::Variant` compile.
+- Closure type inference and fixed-size array types `[T; N]`.
+
+### Internals (no user-visible change)
+
+- `vm/mod.rs` split into `arith`, `format`, `call`, `api` submodules.
+- `parser/mod.rs` split into `ty`, `item`, `stmt`, `expr`, `pattern`.
+- `type_checker/mod.rs` split into `resolve`, `collect`, `check_item`,
+  `check_stmt`, `check_expr`.
+- `compiler/mod.rs` split into `expr`, `pattern`, `helpers`,
+  `path_resolution`, `visibility`, `loop_context`, `sym_table`.
+- Built-in dispatch is now table-driven via `stdlib::registry`.
+
+### LSP & tooling
+
+- LSP gains AST-aware completions, compiler diagnostics, improved
+  goto-definition and hover.
+- New shared `symbols.rs` (single source of truth for keywords, types,
+  methods, modules) with compile-time-enforced consistency.
+
+### Bug fixes (selected)
+
+- Stack-discipline fixes for `println!` and `match` in recursive fns.
+- Match arm guard-fail no longer underflows into caller frame.
+- Field-assignment now enforces declared immutability.
+- Numeric `signum`, `clamp`, `rand_int` correctness.
+- Lazy iterator adapters share state via `Rc<RefCell>` so `next()`
+  advances stored state correctly.
+
+### Release / CI
+
+- GitHub release workflow now builds and publishes both `oxy` and
+  `tug` for Linux, macOS (aarch64), and Windows.
+- Docker runtime image ships `oxy`, `tug`, and `oxy-lsp`.
+
 ## v0.3.0 — 2026-05-20
 
 ### Language Features
