@@ -19,6 +19,8 @@ pub mod io;
 pub mod math;
 /// TCP/UDP networking and DNS lookup.
 pub mod net;
+/// Lexical path manipulation (join, dirname, basename, extension, normalize).
+pub mod path;
 /// Process control and command execution.
 pub mod process;
 /// Pseudo-random number generation.

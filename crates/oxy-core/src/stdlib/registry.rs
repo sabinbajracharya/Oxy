@@ -109,6 +109,10 @@ static MODULES: &[Module] = &[
         call: crate::stdlib::args::call,
     },
     Module {
+        name: "path",
+        call: crate::stdlib::path::call,
+    },
+    Module {
         name: "process",
         call: crate::stdlib::process::call,
     },
