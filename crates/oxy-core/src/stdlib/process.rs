@@ -259,6 +259,11 @@ fn main() {
         assert_eq!(out, "false\n");
     }
 
+    // `printf` on Windows resolves to a builtin / Git Bash variant that
+    // interprets `%s` and newlines differently from POSIX `printf`, so this
+    // test is Unix-only. The behavior under test (one callback invocation
+    // per stdout line) is generic and exercised on Linux + macOS in CI.
+    #[cfg(not(windows))]
     #[test]
     fn test_process_spawn_streams_stdout_lines() {
         // `printf` (the binary) emits two lines on stdout; the callback should
