@@ -95,6 +95,19 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, f.name)
                     };
+                    // Store generic info before resolution so call sites can
+                    // enforce cross-param consistency on the same generic param
+                    // and substitute concrete types into the return type.
+                    if !f.generic_params.is_empty() {
+                        let gen_names: Vec<String> =
+                            f.generic_params.iter().map(|p| p.name.clone()).collect();
+                        let param_anns: Vec<TypeAnnotation> =
+                            f.params.iter().map(|p| p.type_ann.clone()).collect();
+                        self.fn_generic_info.insert(
+                            qualified.clone(),
+                            (gen_names, param_anns, f.return_type.clone()),
+                        );
+                    }
                     let ret_ty = if let Some(ref ann) = f.return_type {
                         let is_generic = match ann {
                             TypeAnnotation::Named { name, .. } => {
@@ -142,6 +155,28 @@ impl TypeChecker {
                             TypeInfo::Unit
                         };
                         let param_tys = self.resolve_param_types(method, &impl_generics);
+                        // Store generic info for cross-param consistency checks
+                        // and return-type substitution.
+                        let mut all_gen_names: Vec<String> = impl_generics.clone();
+                        for p in &method.generic_params {
+                            all_gen_names.push(p.name.clone());
+                        }
+                        if !all_gen_names.is_empty() {
+                            let param_anns: Vec<TypeAnnotation> =
+                                method.params.iter().map(|p| p.type_ann.clone()).collect();
+                            self.fn_generic_info.insert(
+                                qualified.clone(),
+                                (
+                                    all_gen_names.clone(),
+                                    param_anns.clone(),
+                                    method.return_type.clone(),
+                                ),
+                            );
+                            self.fn_generic_info.insert(
+                                unqualified.clone(),
+                                (all_gen_names, param_anns, method.return_type.clone()),
+                            );
+                        }
                         // Also register under unqualified type name (for use-aliased lookups)
                         self.fn_return_types
                             .insert(unqualified.clone(), ret_ty.clone());
@@ -166,6 +201,26 @@ impl TypeChecker {
                             TypeInfo::Unit
                         };
                         let param_tys = self.resolve_param_types(method, &impl_generics);
+                        let mut all_gen_names: Vec<String> = impl_generics.clone();
+                        for p in &method.generic_params {
+                            all_gen_names.push(p.name.clone());
+                        }
+                        if !all_gen_names.is_empty() {
+                            let param_anns: Vec<TypeAnnotation> =
+                                method.params.iter().map(|p| p.type_ann.clone()).collect();
+                            self.fn_generic_info.insert(
+                                qualified.clone(),
+                                (
+                                    all_gen_names.clone(),
+                                    param_anns.clone(),
+                                    method.return_type.clone(),
+                                ),
+                            );
+                            self.fn_generic_info.insert(
+                                unqualified.clone(),
+                                (all_gen_names, param_anns, method.return_type.clone()),
+                            );
+                        }
                         self.fn_return_types
                             .insert(unqualified.clone(), ret_ty.clone());
                         self.fn_return_types.insert(qualified.clone(), ret_ty);

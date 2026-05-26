@@ -403,6 +403,11 @@ pub struct TypeChecker {
     /// that don't return `Result<_, _>` / `Option<_>` — without this, an
     /// unhandled error silently exits with code 0.
     current_fn_return: TypeInfo,
+    /// For generic functions: qualified name → (generic_param_names, original_param_typeanns, original_return_typeann).
+    /// Used at call sites to enforce that the same generic param always binds
+    /// to a consistent concrete type across all argument positions, and to
+    /// substitute concrete types into the return type.
+    fn_generic_info: HashMap<String, (Vec<String>, Vec<TypeAnnotation>, Option<TypeAnnotation>)>,
 }
 
 impl TypeChecker {
@@ -419,6 +424,7 @@ impl TypeChecker {
             current_generics: Vec::new(),
             enum_defs: std::collections::HashSet::new(),
             current_fn_return: TypeInfo::Unit,
+            fn_generic_info: HashMap::new(),
         }
     }
 }
