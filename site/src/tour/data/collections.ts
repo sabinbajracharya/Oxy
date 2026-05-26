@@ -5,30 +5,195 @@ export const collections: Chapter = {
   title: 'Collections',
   lessons: [
     {
-      id: 'vec',
-      title: 'Vec',
-      instructions: `## Vec — Dynamic Array
+      id: 'vec-basics',
+      title: 'Vec Basics',
+      instructions: `## Vec Basics
 
-\`Vec<T>\` is a growable array. Create one with \`vec![1, 2, 3]\` or a comma-separated list in brackets.
+\`Vec<T>\` is a dynamic (growable) array. It stores elements of the same type in contiguous memory.
 
-Methods: \`push()\`, \`pop()\`, \`len()\`, \`get()\`, \`first()\`, \`last()\`, \`sort()\`, \`contains()\`, \`iter()\`, \`reverse()\`, and many more.
+**Creating a Vec:**
+- Use the \`vec!\` macro: \`vec![1, 2, 3]\` creates a \`Vec<int>\`
+- Start an empty one: \`let v: Vec<int> = vec![]\`
 
-**Try it:** Add \`sort()\` before printing, or use \`reverse()\`.`,
+**Key methods:**
+- \`v.push(x)\` — appends \`x\` to the end
+- \`v.pop()\` — removes and returns the last element (\`Option<T>\`)
+- \`v.len()\` — returns the number of elements
+
+**Your task:**
+
+Complete these two functions:
+
+1. \`make_vec() -> Vec<int>\` — return \`vec![1, 2, 3]\`
+2. \`push_and_len(mut v: Vec<int>, x: int) -> int\` — push \`x\` onto \`v\` and return the new length
+
+The \`mut\` keyword on the parameter lets you modify the Vec inside the function.`,
       hints: [
-        '`vec![1, 2, 3]` creates a `Vec<int>`.',
-        'Index access: `v[0]` returns the first element.',
+        'Use `vec![1, 2, 3]` to create a Vec literal.',
+        '`v.push(x)` appends `x` to the end of the Vec.',
+        '`v.len()` returns the current number of elements.',
       ],
-      initialCode: `fn main() {
-    let mut v = vec![10, 20, 30];
-    v.push(40);
-    v.push(50);
-    println!("v = {}", v);
-    println!("len = {}", v.len());
-    println!("first = {}", v.first().unwrap());
-    println!("v[2] = {}", v[2]);
+      initialCode: `fn make_vec() -> Vec<int> {
+    // TODO: return vec![1, 2, 3]
+    vec![]
+}
 
-    v.pop();
-    println!("after pop: {}", v);
+fn push_and_len(mut v: Vec<int>, x: int) -> int {
+    // TODO: push x onto v and return the new length
+    0
+}
+
+fn main() {
+    let v = make_vec();
+    println!("v = {}", v);
+
+    let len = push_and_len(v, 99);
+    println!("len after push = {}", len);
+}
+`,
+      testCode: `#[test] fn test_make_vec_length() {
+    let v = make_vec();
+    assert!(v.len() == 3);
+}
+
+#[test] fn test_make_vec_values() {
+    let v = make_vec();
+    assert!(v[0] == 1);
+    assert!(v[1] == 2);
+    assert!(v[2] == 3);
+}
+
+#[test] fn test_push_and_len_nonempty() {
+    assert!(push_and_len(vec![10, 20], 30) == 3);
+}
+
+#[test] fn test_push_and_len_empty() {
+    assert!(push_and_len(vec![], 5) == 1);
+}
+`,
+    },
+    {
+      id: 'vec-methods',
+      title: 'Vec Methods',
+      instructions: `## Safe Vec Methods
+
+Vec provides access methods that return \`Option<T>\` instead of panicking on invalid access:
+
+- \`v.get(i)\` — returns \`Some(element)\` or \`None\` if the index is out of bounds
+- \`v.first()\` — returns \`Some(first)\` or \`None\` if empty
+- \`v.last()\` — returns \`Some(last)\` or \`None\` if empty
+- \`v.is_empty()\` — returns \`true\` if there are no elements
+
+Unlike direct indexing (\`v[i]\`), these methods never panic. Invalid access produces \`None\` instead.
+
+**Your task:**
+
+Implement \`fn get_element(v: Vec<int>, i: int) -> Option<int>\` that:
+- Returns the element at index \`i\` wrapped in \`Some()\`
+- Returns \`None\` if the index is out of bounds
+
+Use \`v.get(i)\` to implement this.`,
+      hints: [
+        '`v.get(i)` returns `Option<int>` — no need to wrap the result.',
+        '`v.get(0)` returns the first element as `Some(value)`.',
+        '`v.get(v.len())` and beyond return `None`.',
+      ],
+      initialCode: `fn get_element(v: Vec<int>, i: int) -> Option<int> {
+    // TODO: use v.get(i) to safely access the element
+    None()
+}
+
+fn main() {
+    let v = vec![10, 20, 30];
+
+    let first = get_element(v, 0);
+    println!("first = {}", first.unwrap());
+
+    let v2 = vec![10, 20, 30];
+    let missing = get_element(v2, 100);
+    println!("missing.is_none() = {}", missing.is_none());
+}
+`,
+      testCode: `#[test] fn test_get_in_bounds() {
+    let v = vec![5, 10, 15];
+    let r = get_element(v, 1);
+    assert!(r.is_some());
+    assert!(r.unwrap() == 10);
+}
+
+#[test] fn test_get_out_of_bounds() {
+    let v = vec![5, 10, 15];
+    let r = get_element(v, 10);
+    assert!(r.is_none());
+}
+
+#[test] fn test_get_first() {
+    let v = vec![100, 200, 300];
+    let r = get_element(v, 0);
+    assert!(r.is_some());
+    assert!(r.unwrap() == 100);
+}
+
+#[test] fn test_get_negative_index() {
+    let v = vec![1, 2, 3];
+    assert!(get_element(v, -1).is_none());
+}
+`,
+    },
+    {
+      id: 'vec-indexing',
+      title: 'Indexing Vec',
+      instructions: `## Indexing Vec with Bracket Syntax
+
+You can access elements directly with bracket syntax: \`v[index]\`.
+
+**Important:** If the index is out of bounds, the program **panics** (crashes). Always check the index first for safe access.
+
+To check bounds, compare against \`v.len()\`: valid indices are \`0 <= index < v.len()\`.
+
+**Your task:**
+
+Implement \`fn safe_get(v: Vec<int>, i: int) -> String\`:
+- If \`i\` is a valid index (\`0 <= i < v.len()\`), return the element as a string using \`format!\`
+- Otherwise, return \`"out of bounds"\`
+
+Use an \`if\` expression to check the bounds before indexing.`,
+      hints: [
+        'Check `i >= 0 && i < v.len()` before indexing.',
+        'Use `format!("{}", v[i])` to convert the integer to a `String`.',
+        'Return `"out of bounds".to_string()` for invalid indices.',
+      ],
+      initialCode: `fn safe_get(v: Vec<int>, i: int) -> String {
+    // TODO: check bounds, return element string or "out of bounds"
+    "".to_string()
+}
+
+fn main() {
+    let v = vec![5, 10, 15];
+    println!("v[1] = {}", safe_get(v, 1));
+
+    let v2 = vec![5, 10, 15];
+    println!("v[10] = {}", safe_get(v2, 10));
+}
+`,
+      testCode: `#[test] fn test_in_bounds() {
+    let r = safe_get(vec![1, 2, 3], 1);
+    assert!(r == "2".to_string());
+}
+
+#[test] fn test_out_of_bounds() {
+    let r = safe_get(vec![1, 2, 3], 100);
+    assert!(r == "out of bounds".to_string());
+}
+
+#[test] fn test_negative_index() {
+    let r = safe_get(vec![1, 2, 3], -1);
+    assert!(r == "out of bounds".to_string());
+}
+
+#[test] fn test_first_and_last() {
+    assert!(safe_get(vec![42, 99, 7], 0) == "42".to_string());
+    assert!(safe_get(vec![42, 99, 7], 2) == "7".to_string());
 }
 `,
     },
@@ -37,29 +202,56 @@ Methods: \`push()\`, \`pop()\`, \`len()\`, \`get()\`, \`first()\`, \`last()\`, \
       title: 'HashMap',
       instructions: `## HashMap — Key-Value Store
 
-\`HashMap<K, V>\` maps keys to values. Create with \`HashMap::new()\` and \`insert()\` entries.
+\`HashMap<K, V>\` maps keys to values. Each key can only appear once — inserting a duplicate key overwrites the old value.
 
-Create from pairs: \`[("a", 1), ("b", 2)].iter().collect::<HashMap<_, _>>()\`.
+**Common methods:**
+- \`map.insert(key, value)\` — insert or update a key
+- \`map.get(key)\` — returns \`Option<V>\`
+- \`map.contains_key(key)\` — returns \`bool\`
+- \`map.len()\` — number of entries
 
-Methods: \`insert()\`, \`get()\`, \`remove()\`, \`contains_key()\`, \`keys()\`, \`values()\`, \`len()\`.
+**Your task:**
 
-**Try it:** Add another entry and use \`contains_key()\` to check for it.`,
+Implement \`fn build_map() -> HashMap<String, int>\` that creates a HashMap with three entries:
+- \`"a"\` → \`10\`
+- \`"b"\` → \`20\`
+- \`"c"\` → \`30\`
+
+Use \`"key".to_string()\` to convert string literals to \`String\` keys.`,
       hints: [
-        '`map.get(key)` returns an `Option<V>`.',
-        '`map["key"]` syntax also works for index access.',
+        'Create the map with `HashMap::new()`.',
+        'Insert entries with `map.insert("a".to_string(), 10)`.',
+        'Keys must be `String` — use `.to_string()` on string literals.',
       ],
-      initialCode: `fn main() {
-    let mut scores = HashMap::new();
-    scores.insert("alice".to_string(), 95);
-    scores.insert("bob".to_string(), 82);
+      initialCode: `fn build_map() -> HashMap<String, int> {
+    // TODO: create and return a HashMap with entries a=10, b=20, c=30
+    HashMap::new()
+}
 
-    println!("alice: {}", scores.get("alice".to_string()).unwrap());
-    println!("len = {}", scores.len());
+fn main() {
+    let map = build_map();
+    println!("map has {} entries", map.len());
+    println!("a = {}", map.get("a".to_string()).unwrap());
+}
+`,
+      testCode: `#[test] fn test_build_map_length() {
+    let map = build_map();
+    assert!(map.len() == 3);
+}
 
-    for key in scores.keys() {
-        let val = scores[key.clone()];
-        println!("  {} -> {}", key, val);
-    }
+#[test] fn test_build_map_values() {
+    let map = build_map();
+    assert!(map.get("a".to_string()).unwrap() == 10);
+    assert!(map.get("b".to_string()).unwrap() == 20);
+    assert!(map.get("c".to_string()).unwrap() == 30);
+}
+
+#[test] fn test_contains_key() {
+    let map = build_map();
+    assert!(map.contains_key("a".to_string()));
+    assert!(map.contains_key("b".to_string()));
+    assert!(map.contains_key("c".to_string()));
+    assert!(!map.contains_key("z".to_string()));
 }
 `,
     },
@@ -68,93 +260,197 @@ Methods: \`insert()\`, \`get()\`, \`remove()\`, \`contains_key()\`, \`keys()\`, 
       title: 'HashSet',
       instructions: `## HashSet — Unique Values
 
-\`HashSet<T>\` stores unique values with fast lookup.
+\`HashSet<T>\` stores unique values. Inserting a duplicate is silently ignored — the set keeps only one copy.
 
-Methods: \`insert()\`, \`remove()\`, \`contains()\`, \`len()\`, \`union()\`, \`intersection()\`, \`difference()\`.
+**Common methods:**
+- \`set.insert(value)\` — add a value
+- \`set.contains(value)\` — check for membership
+- \`set.len()\` — number of unique values
+- \`set.to_vec()\` — convert back to a \`Vec<T>\`
 
-**Try it:** Create a third set and find the intersection with one of the existing sets.`,
+**Your task:**
+
+Implement \`fn unique_items(items: Vec<int>) -> Vec<int>\` that removes duplicate values:
+
+1. Create an empty \`HashSet<int>\`
+2. Loop over \`items\` and insert each element into the set (duplicates are ignored automatically)
+3. Convert the set to a Vec using \`set.to_vec()\`
+4. Return the Vec`,
       hints: [
-        '`set.contains(value)` returns `true` if the value is present.',
-        'Duplicates are silently ignored on insert.',
+        'Create the set with `HashSet::new()`.',
+        'Use a `for` loop with `item in items` to iterate.',
+        'Call `set.to_vec()` at the end to get a `Vec<int>`.',
       ],
-      initialCode: `fn main() {
-    let mut set = HashSet::new();
-    set.insert(1);
-    set.insert(2);
-    set.insert(2); // duplicate — ignored
-    set.insert(3);
+      initialCode: `fn unique_items(items: Vec<int>) -> Vec<int> {
+    // TODO: use a HashSet to remove duplicates, then return unique items
+    items
+}
 
-    println!("set = {}", set.to_vec());
-    println!("len = {}", set.len());
-    println!("contains 2: {}", set.contains(2));
-    println!("contains 5: {}", set.contains(5));
+fn main() {
+    let items = vec![1, 2, 2, 3, 3, 3];
+    let unique = unique_items(items);
+    println!("unique: {}", unique);
+}
+`,
+      testCode: `#[test] fn test_removes_duplicates() {
+    let result = unique_items(vec![1, 2, 2, 3, 3, 3]);
+    assert!(result.len() == 3);
+    assert!(result.contains(1));
+    assert!(result.contains(2));
+    assert!(result.contains(3));
+}
+
+#[test] fn test_all_unique() {
+    let result = unique_items(vec![5, 1, 9]);
+    assert!(result.len() == 3);
+}
+
+#[test] fn test_all_same() {
+    let result = unique_items(vec![7, 7, 7, 7]);
+    assert!(result.len() == 1);
+    assert!(result.contains(7));
+}
+
+#[test] fn test_empty() {
+    let result = unique_items(vec![]);
+    assert!(result.len() == 0);
 }
 `,
     },
     {
       id: 'arrays',
-      title: 'Fixed-Size Arrays',
-      instructions: `## Fixed-Size Arrays [T; N]
+      title: 'Arrays & Tuples',
+      instructions: `## Arrays and Tuples
 
-Arrays have a fixed size known at compile time. Type annotation: \`[int; 3]\`.
+**Arrays** have a fixed length known at compile time. Type annotation uses \`[T; N]\`:
 
-Create with a comma-separated list \`[1, 2, 3]\` or a repeat expression \`[0; 5]\` (five zeros).
+\`\`\`
+let arr: [int; 3] = [10, 20, 30];
+let zeros = [0; 5];     // five zeros
+\`\`\`
 
-Arrays are **value types** — they're copied on assignment, not shared.
+Arrays are value types — they are copied on assignment.
 
-**Try it:** Create a \`[bool; 4]\` with alternating true/false values.`,
+**Tuples** group values of possibly different types:
+
+\`\`\`
+let t: (int, String, bool) = (42, "hello".to_string(), true);
+\`\`\`
+
+Access tuple fields with dot syntax: \`t.0\`, \`t.1\`, \`t.2\`.
+
+**Your task:**
+
+Implement \`fn first_three(items: Vec<int>) -> (int, int, int)\` that:
+1. Assumes \`items\` has at least 3 elements
+2. Returns the first three as a tuple: \`(items[0], items[1], items[2])\``,
       hints: [
-        '`[0; 5]` creates an array of 5 zeros.',
-        'Arrays work with `for` loops and iterators just like Vec.',
+        'Access individual elements with `items[0]`, `items[1]`, `items[2]`.',
+        'Return a tuple with parentheses: `(a, b, c)`.',
+        'Tuple types are written as `(int, int, int)`.',
       ],
-      initialCode: `fn main() {
-    let arr: [int; 3] = [10, 20, 30];
-    println!("arr = {}", arr);
-    println!("len = {}", arr.len());
-    println!("arr[1] = {}", arr[1]);
+      initialCode: `fn first_three(items: Vec<int>) -> (int, int, int) {
+    // TODO: return the first three elements as a tuple
+    (0, 0, 0)
+}
 
-    // Repeat expression
-    let zeros = [0; 5];
-    println!("zeros = {}", zeros);
+fn main() {
+    let items = vec![10, 20, 30, 40, 50];
+    let (a, b, c) = first_three(items);
+    println!("{}, {}, {}", a, b, c);
+}
+`,
+      testCode: `#[test] fn test_first_three_many() {
+    let result = first_three(vec![1, 2, 3, 4, 5]);
+    assert!(result.0 == 1);
+    assert!(result.1 == 2);
+    assert!(result.2 == 3);
+}
 
-    // Equality
-    let a = [1, 2, 3];
-    let b = [1, 2, 3];
-    println!("a == b: {}", a == b);
+#[test] fn test_first_three_exact() {
+    let result = first_three(vec![100, 200, 300]);
+    assert!(result.0 == 100);
+    assert!(result.1 == 200);
+    assert!(result.2 == 300);
+}
 
-    for v in arr {
-        println!("  {}", v);
-    }
+#[test] fn test_first_three_negative() {
+    let result = first_three(vec![-5, 0, 5]);
+    assert!(result.0 == -5);
+    assert!(result.1 == 0);
+    assert!(result.2 == 5);
 }
 `,
     },
     {
-      id: 'iterators',
-      title: 'Iterators & Chaining',
-      instructions: `## Iterators
+      id: 'iterating',
+      title: 'Iterating Collections',
+      instructions: `## Iterating Collections with For
 
-Call \`.iter()\` on a collection to get an iterator. Chain operations like \`map\`, \`filter\`, \`take\`, \`skip\`, and \`collect\`.
+Use \`for\` to loop over elements in a collection:
 
-Use \`collect::<Vec<_>>()\` to gather results into a Vec.
+\`\`\`
+for item in vec {
+    // use item
+}
 
-**Try it:** Add \`skip(1)\` and \`take(2)\` to get only the middle elements.`,
+for key in map.keys() {
+    // use key
+}
+\`\`\`
+
+The \`.keys()\` method on a HashMap returns an iterator over all keys.
+
+**Your task:**
+
+Implement \`fn sum_values(map: HashMap<String, int>) -> int\` that:
+1. Iterates over all keys in the map using \`map.keys()\`
+2. For each key, looks up the value and adds it to a running total
+3. Returns the total sum
+
+Start with \`let mut total = 0;\` and update it inside the loop.`,
       hints: [
-        '`filter(|x| condition)` keeps only elements matching the predicate.',
-        '`collect::<Vec<_>>()` uses turbofish syntax to specify the collection type.',
+        'Use `for key in map.keys() { ... }` to iterate over keys.',
+        'Access the value with `map[key]` inside the loop.',
+        'Accumulate: `total = total + map[key]`.',
       ],
-      initialCode: `fn main() {
-    let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      initialCode: `fn sum_values(map: HashMap<String, int>) -> int {
+    // TODO: iterate over keys and sum all values
+    0
+}
 
-    let evens = nums.iter()
-        .filter(|x| x % 2 == 0)
-        .collect::<Vec<_>>();
-    println!("evens: {}", evens);
+fn main() {
+    let mut map = HashMap::new();
+    map.insert("a".to_string(), 10);
+    map.insert("b".to_string(), 20);
+    let total = sum_values(map);
+    println!("total = {}", total);
+}
+`,
+      testCode: `#[test] fn test_sum_multiple() {
+    let mut map = HashMap::new();
+    map.insert("x".to_string(), 5);
+    map.insert("y".to_string(), 15);
+    map.insert("z".to_string(), 25);
+    assert!(sum_values(map) == 45);
+}
 
-    let squares = nums.iter()
-        .take(5)
-        .map(|x| x * x)
-        .collect::<Vec<_>>();
-    println!("first 5 squared: {}", squares);
+#[test] fn test_sum_single() {
+    let mut map = HashMap::new();
+    map.insert("only".to_string(), 42);
+    assert!(sum_values(map) == 42);
+}
+
+#[test] fn test_sum_zero_values() {
+    let mut map = HashMap::new();
+    map.insert("a".to_string(), 0);
+    map.insert("b".to_string(), 0);
+    assert!(sum_values(map) == 0);
+}
+
+#[test] fn test_sum_empty_map() {
+    let map = HashMap::new();
+    assert!(sum_values(map) == 0);
 }
 `,
     },

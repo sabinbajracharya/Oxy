@@ -1,28 +1,36 @@
 import type { Chapter, Lesson } from '../types';
-import { basics } from './basics';
+import { gettingStarted } from './getting-started';
+import { primitiveTypes } from './primitive-types';
 import { functions } from './functions';
 import { controlFlow } from './control-flow';
-import { dataTypes } from './data-types';
 import { collections } from './collections';
-import { structsEnums } from './structs-enums';
-import { traitsGenerics } from './traits-generics';
+import { structs } from './structs';
+import { enumsMatching } from './enums-matching';
 import { errorHandling } from './error-handling';
+import { generics } from './generics';
+import { traits } from './traits';
+import { closures } from './closures';
+import { iterators } from './iterators';
 import { modules } from './modules';
+import { asyncChapter } from './async';
 import { stdlib } from './stdlib';
-import { advanced } from './advanced';
 
 export const CHAPTERS: Chapter[] = [
-  basics,
+  gettingStarted,
+  primitiveTypes,
   functions,
   controlFlow,
-  dataTypes,
   collections,
-  structsEnums,
-  traitsGenerics,
+  structs,
+  enumsMatching,
   errorHandling,
+  generics,
+  traits,
+  closures,
+  iterators,
   modules,
+  asyncChapter,
   stdlib,
-  advanced,
 ];
 
 export function findLesson(chapterId: string, lessonId: string): Lesson | undefined {

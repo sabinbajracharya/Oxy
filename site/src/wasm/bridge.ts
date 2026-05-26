@@ -1,5 +1,12 @@
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  error: string | null;
+}
+
 let wasmModule: {
   run_oxy: (source: string) => string;
+  run_tests_oxy: (source: string) => string;
   default?: () => Promise<void>;
 } | null = null;
 
@@ -49,6 +56,18 @@ export class OxyRunner {
       return { output: result, error: isError };
     } catch (e) {
       return { output: `Runtime error: ${e}`, error: true };
+    }
+  }
+
+  runTests(source: string): TestResult[] | { error: string } {
+    if (!wasmModule) {
+      return { error: 'WASM module not loaded.' };
+    }
+    try {
+      const json = wasmModule.run_tests_oxy(source);
+      return JSON.parse(json) as TestResult[] | { error: string };
+    } catch (e) {
+      return { error: `Test runner error: ${e}` };
     }
   }
 

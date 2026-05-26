@@ -7,123 +7,202 @@ export const controlFlow: Chapter = {
     {
       id: 'if-else',
       title: 'If / Else',
-      instructions: `## If / Else Expressions
+      instructions: `## If / Else
 
 \`if\` expressions evaluate a boolean condition and execute the first branch whose condition is \`true\`.
 
-In Oxy, \`if\` is an **expression** — it returns a value. This means you can use it on the right side of \`let\`.
+An optional \`else\` branch runs when the condition is \`false\`.
 
-**Try it:** Add an \`else if\` branch for numbers between 10 and 20.`,
+No parentheses are needed around the condition — just write \`if condition { ... }\`.
+
+**Try it:** Implement \`classify\` that returns \`"positive"\`, \`"negative"\`, or \`"zero"\` based on the input number.`,
       hints: [
-        'No parentheses needed around conditions.',
-        'All branches must return the same type when used as an expression.',
+        'No parentheses around the condition: \`if n > 0 { ... }\` not \`if (n > 0)\`.',
+        'Braces are required around each branch body.',
       ],
-      initialCode: `fn main() {
-    let x = 15;
+      initialCode: `fn classify(n: int) -> String {
+    // TODO: return "positive", "negative", or "zero"
+}
 
-    if x > 20 {
-        println!("x is large");
-    } else if x > 10 {
-        println!("x is medium");
-    } else {
-        println!("x is small");
-    }
-
-    // if as an expression
-    let label = if x % 2 == 0 { "even" } else { "odd" };
-    println!("x is {}", label);
+fn main() {
+    println!("5 is {}", classify(5));
+    println!("-3 is {}", classify(-3));
+    println!("0 is {}", classify(0));
+}
+`,
+      testCode: `#[test] fn test_classify() {
+    assert_eq!(classify(5), "positive");
+    assert_eq!(classify(1), "positive");
+    assert_eq!(classify(-3), "negative");
+    assert_eq!(classify(-1), "negative");
+    assert_eq!(classify(0), "zero");
 }
 `,
     },
     {
-      id: 'loops',
-      title: 'While & Loop',
-      instructions: `## While & Loop
+      id: 'else-if',
+      title: 'Else If Chains',
+      instructions: `## Else If Chains
 
-\`while\` runs the body as long as the condition is \`true\`.
+Chain multiple conditions with \`else if\`. The first matching branch executes and the rest are skipped.
 
-\`loop\` runs forever until you \`break\`. Loops can return a value by placing a value after \`break\`.
-
-**Try it:** Change the while condition to count down from 10 instead of up to 5.`,
+**Try it:** Implement \`grade\` that returns a letter grade based on score:
+- 90+ → \`"A"\`
+- 80-89 → \`"B"\`
+- 70-79 → \`"C"\`
+- 60-69 → \`"D"\`
+- below 60 → \`"F"\``,
       hints: [
-        'Use `break` to exit a loop early.',
-        'Use `continue` to skip to the next iteration.',
-        '`break value` returns a value from the loop.',
+        'Check the highest range first, then chain down with \`else if\`.',
+        'Use \`&&\` for ranges like \`score >= 80 && score < 90\`, or rely on the fact that earlier conditions have already failed.',
       ],
-      initialCode: `fn main() {
-    let mut count = 0;
-    while count < 5 {
-        println!("count = {}", count);
-        count = count + 1;
-    }
+      initialCode: `fn grade(score: int) -> String {
+    // TODO: return "A", "B", "C", "D", or "F" based on score
+}
 
-    let result = loop {
-        count = count - 1;
-        if count == 0 {
-            break count * 10;
-        }
-    };
-    println!("loop result: {}", result);
+fn main() {
+    println!("95 -> {}", grade(95));
+    println!("83 -> {}", grade(83));
+    println!("72 -> {}", grade(72));
+    println!("65 -> {}", grade(65));
+    println!("42 -> {}", grade(42));
+}
+`,
+      testCode: `#[test] fn test_grade_a() {
+    assert_eq!(grade(95), "A");
+    assert_eq!(grade(100), "A");
+    assert_eq!(grade(90), "A");
+}
+
+#[test] fn test_grade_b() {
+    assert_eq!(grade(89), "B");
+    assert_eq!(grade(80), "B");
+}
+
+#[test] fn test_grade_c() {
+    assert_eq!(grade(79), "C");
+    assert_eq!(grade(70), "C");
+}
+
+#[test] fn test_grade_d() {
+    assert_eq!(grade(69), "D");
+    assert_eq!(grade(60), "D");
+}
+
+#[test] fn test_grade_f() {
+    assert_eq!(grade(59), "F");
+    assert_eq!(grade(0), "F");
+}
+`,
+    },
+    {
+      id: 'if-expressions',
+      title: 'If Expressions',
+      instructions: `## If Expressions
+
+In Oxy, \`if\` is an **expression** that returns a value. You can use it on the right side of \`let\`.
+
+Each branch must return the same type. The last expression in each branch (without a semicolon) becomes the value.
+
+**Try it:** Implement \`abs\` that returns the absolute value using an \`if\` expression. No \`return\` keyword needed.`,
+      hints: [
+        'The \`if\` expression goes on the right side of \`=\`: \`let result = if cond { val1 } else { val2 };\`.',
+        'No semicolons after the values inside each branch.',
+        'Absolute value: if n < 0 return -n, otherwise return n.',
+      ],
+      initialCode: `fn abs(n: int) -> int {
+    // TODO: return the absolute value using an if expression
+}
+
+fn main() {
+    println!("abs(5) = {}", abs(5));
+    println!("abs(-3) = {}", abs(-3));
+    println!("abs(0) = {}", abs(0));
+}
+`,
+      testCode: `#[test] fn test_abs() {
+    assert_eq!(abs(5), 5);
+    assert_eq!(abs(-3), 3);
+    assert_eq!(abs(0), 0);
+    assert_eq!(abs(-100), 100);
+}
+`,
+    },
+    {
+      id: 'while-loops',
+      title: 'While Loops',
+      instructions: `## While Loops
+
+\`while\` runs the loop body as long as the condition evaluates to \`true\`. The condition is checked before each iteration.
+
+Use a \`mut\` counter variable to track progress.
+
+**Try it:** Implement \`sum_to\` that sums all integers from 1 to \`n\` (inclusive) using a \`while\` loop. If \`n\` is 0 or less, return 0.`,
+      hints: [
+        'Initialize a \`let mut i = 1\` counter and a \`let mut sum = 0\` accumulator.',
+        'Loop \`while i <= n { ... }\`, adding \`i\` to \`sum\` and incrementing \`i\`.',
+        'Return \`sum\` after the loop ends.',
+      ],
+      initialCode: `fn sum_to(n: int) -> int {
+    // TODO: sum integers from 1 to n using a while loop
+}
+
+fn main() {
+    println!("sum_to(5) = {}", sum_to(5));
+    println!("sum_to(0) = {}", sum_to(0));
+}
+`,
+      testCode: `#[test] fn test_sum_to() {
+    assert_eq!(sum_to(5), 15);
+    assert_eq!(sum_to(1), 1);
+    assert_eq!(sum_to(10), 55);
+}
+
+#[test] fn test_sum_to_zero() {
+    assert_eq!(sum_to(0), 0);
+    assert_eq!(sum_to(-3), 0);
 }
 `,
     },
     {
       id: 'for-in',
-      title: 'For / In',
+      title: 'For / In Loops',
       instructions: `## For / In Loops
 
-\`for\` loops iterate over any iterable: ranges, arrays, vecs, strings, and more.
+\`for\` loops iterate over elements of a collection. The syntax is \`for element in collection { ... }\`.
 
-Ranges are written as \`start..end\` (exclusive) or \`start..=end\` (inclusive).
+You can iterate over \`Vec\`, arrays, ranges, and more.
 
-**Try it:** Change the range to \`1..=5\` (inclusive) and use \`..\` to iterate in steps.`,
+**Try it:** Implement \`sum_list\` that returns the sum of all integers in a \`Vec<int>\`. Use a \`for\` loop.`,
       hints: [
-        '`0..10` goes from 0 to 9 (10 items).',
-        '`0..=10` goes from 0 to 10 (11 items).',
-        '`for item in collection` works on Vec, Array, String, HashMap keys, etc.',
+        'Iterate with \`for item in items { ... }\`.',
+        'Use a \`let mut sum = 0\` before the loop, then add each item.',
+        'For an empty vec, the loop body never runs, so the result should be 0.',
       ],
-      initialCode: `fn main() {
-    for i in 0..5 {
-        println!("i = {}", i);
-    }
+      initialCode: `fn sum_list(items: Vec<int>) -> int {
+    // TODO: sum all integers in the vec using a for loop
+}
 
-    let names = ["alice", "bob", "carol"];
-    for name in names {
-        println!("Hello, {}!", name);
-    }
+fn main() {
+    let nums = vec![1, 2, 3, 4, 5];
+    println!("sum = {}", sum_list(nums));
+
+    let empty: Vec<int> = vec![];
+    println!("sum of empty = {}", sum_list(empty));
 }
 `,
-    },
-    {
-      id: 'match',
-      title: 'Pattern Matching',
-      instructions: `## Match Expressions
+      testCode: `#[test] fn test_sum_list() {
+    assert_eq!(sum_list(vec![1, 2, 3, 4, 5]), 15);
+    assert_eq!(sum_list(vec![10, 20]), 30);
+}
 
-\`match\` compares a value against a series of **patterns**. The first matching arm executes.
+#[test] fn test_sum_list_empty() {
+    let empty: Vec<int> = vec![];
+    assert_eq!(sum_list(empty), 0);
+}
 
-Patterns can be literals, variables, wildcards (\`_\`), ranges, structs, enums, and more.
-
-**Try it:** Add a match arm for the number 0 (print "zero").`,
-      hints: [
-        '`_` is the wildcard pattern — it matches anything.',
-        'Match is exhaustive — all possible values must be handled.',
-      ],
-      initialCode: `fn main() {
-    let x = 3;
-
-    match x {
-        1 => println!("one"),
-        2 => println!("two"),
-        3 => println!("three"),
-        _ => println!("many!"),
-    }
-
-    // match as an expression
-    let description = match x % 2 {
-        0 => "even",
-        _ => "odd",
-    };
-    println!("{} is {}", x, description);
+#[test] fn test_sum_list_single() {
+    assert_eq!(sum_list(vec![42]), 42);
 }
 `,
     },
@@ -132,37 +211,48 @@ Patterns can be literals, variables, wildcards (\`_\`), ranges, structs, enums, 
       title: 'Break & Continue',
       instructions: `## Break & Continue
 
-\`break\` exits a loop immediately. \`continue\` skips to the next iteration.
+\`break\` exits a loop immediately. \`continue\` skips to the next iteration, skipping the rest of the current body.
 
-Both support **labels** for nested loops. Label a loop with \`'name:\` and use \`break 'name;\`.
+Use \`loop {}\` for an infinite loop that you exit with \`break\`.
 
-**Try it:** Instead of skipping 3, try skipping all even numbers (hint: \`i % 2 == 0\`).`,
+**Try it:** Implement \`find_first_even\` that returns the first even number in a \`Vec<int>\` as \`Some(value)\`, or \`None()\` if no even number is found. Use a \`for\` loop with \`break\`.`,
       hints: [
-        'Labels are written with a single quote: `\'outer:`.',
-        '`break \'label;` exits the labeled loop from an inner loop.',
+        'Iterate with \`for item in items { ... }\`.',
+        'Use \`if item % 2 == 0 { break Some(item); }\` inside the loop.',
+        'After the loop, return \`None()\` (nothing was found).',
+        'Return type is \`Option<int>\`.',
       ],
-      initialCode: `fn main() {
-    for i in 0..10 {
-        if i == 3 {
-            continue; // skip 3
-        }
-        if i == 7 {
-            break; // stop at 7
-        }
-        println!("i = {}", i);
-    }
+      initialCode: `fn find_first_even(items: Vec<int>) -> Option<int> {
+    // TODO: return the first even number, or None()
+}
 
-    println!("---");
+fn main() {
+    let nums = vec![1, 3, 5, 2, 7];
+    let result = find_first_even(nums);
+    println!("first even: {}", result.unwrap_or(-1));
 
-    'outer: for x in 0..3 {
-        for y in 0..3 {
-            if x * y > 2 {
-                println!("breaking outer at {},{}", x, y);
-                break 'outer;
-            }
-            println!("  ({}, {})", x, y);
-        }
-    }
+    let no_evens = vec![1, 3, 5, 7];
+    println!("no evens: {}", find_first_even(no_evens).is_none());
+}
+`,
+      testCode: `#[test] fn test_find_first_even_found() {
+    let nums = vec![1, 3, 5, 2, 7];
+    assert_eq!(find_first_even(nums), Some(2));
+}
+
+#[test] fn test_find_first_even_first() {
+    let nums = vec![2, 4, 6];
+    assert_eq!(find_first_even(nums), Some(2));
+}
+
+#[test] fn test_find_first_even_not_found() {
+    let nums = vec![1, 3, 5, 7];
+    assert_eq!(find_first_even(nums), None());
+}
+
+#[test] fn test_find_first_even_empty() {
+    let empty: Vec<int> = vec![];
+    assert_eq!(find_first_even(empty), None());
 }
 `,
     },

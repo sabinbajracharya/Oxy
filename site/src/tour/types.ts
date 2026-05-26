@@ -4,6 +4,7 @@ export interface Lesson {
   instructions: string;
   hints: string[];
   initialCode: string;
+  testCode: string;
 }
 
 export interface Chapter {
