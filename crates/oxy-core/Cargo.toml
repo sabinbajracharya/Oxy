@@ -18,4 +18,11 @@ regex = { workspace = true }
 ureq = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cranelift-codegen = { workspace = true }
+cranelift-frontend = { workspace = true }
+cranelift-module = { workspace = true }
+cranelift-jit = { workspace = true }
+cranelift-native = { workspace = true }
+
 [dev-dependencies]

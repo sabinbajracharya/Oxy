@@ -57,6 +57,8 @@ use std::rc::Rc;
 use crate::lexer::IntegerSuffix;
 use crate::types::{FloatWidth, FunctionData, FutureData, IntegerWidth, Value};
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod jit;
 pub(crate) mod scheduler;
 
 /// Bytecode instructions for the Oxy VM.
