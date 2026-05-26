@@ -2048,6 +2048,5 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
     }
 }
 
-// FIXME: vm/tests.rs has compilation errors from interpreter migration
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;

@@ -785,7 +785,7 @@ mod tests {
         let result = run_compiled_capturing(source);
         assert!(result.is_ok(), "pathcall sqrt failed: {:?}", result.err());
         let (_, output) = result.unwrap();
-        assert_eq!(output, vec!["4\n"]);
+        assert_eq!(output, vec!["4.0\n"]);
     }
 
     #[test]
