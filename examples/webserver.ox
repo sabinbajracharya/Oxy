@@ -1,41 +1,38 @@
 // Example: Simple web server in Oxy
 //
-// Run with: oxide run examples/webserver.ox
+// Run with: oxy run examples/webserver.ox
 // Then visit http://127.0.0.1:8080 in your browser
 
 fn main() {
-    let app = Server::new();
+    let app = std::server::new();
 
     // Home page
-    app.get("/", |req| {
-        Response::html("<h1>Welcome to Oxy!</h1><p>A web server written in Oxy.</p>")
+    std::server::get(app, "/", |req| {
+        std::server::html("<h1>Welcome to Oxy!</h1><p>A web server written in Oxy.</p>")
     });
 
     // Plain text endpoint
-    app.get("/hello", |req| {
-        Response::text("Hello, World!")
+    std::server::get(app, "/hello", |req| {
+        std::server::text("Hello, World!")
     });
 
     // Path parameters
-    app.get("/users/:id", |req| {
+    std::server::get(app, "/users/:id", |req| {
         let id = req.params.get("id").unwrap_or("unknown");
-        Response::json(format!("{{\"id\": \"{}\"}}", id))
+        std::server::json(format!("{{\"id\": \"{}\"}}", id))
     });
 
     // POST endpoint — echo the request body
-    app.post("/echo", |req| {
-        Response::text(req.body)
+    std::server::post(app, "/echo", |req| {
+        std::server::text(req.body)
     });
 
     // Custom status code
-    app.get("/teapot", |req| {
-        Response::status(418, "I'm a teapot")
+    std::server::get(app, "/teapot", |req| {
+        std::server::status(418, "I'm a teapot")
     });
 
-    // Serve static files from ./public directory
-    // app.static_files("./public");
-
     // Start the server
-    println!("Starting server...");
-    app.listen("127.0.0.1:8080");
+    println!("Starting server on http://127.0.0.1:8080 ...");
+    std::server::listen(app, 8080);
 }
