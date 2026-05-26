@@ -51,15 +51,12 @@ impl Parser {
                 let use_def = self.parse_use_def(Visibility::Private)?;
                 Ok(Stmt::Use(use_def))
             }
-            // Nested items: `fn`, `struct`, `enum` inside a function body.
-            // Hoist the item to top-level with a mangled name based on the
-            // enclosing fn stack (e.g. `fn outer() { fn inner() {} }` →
-            // top-level `outer__inner`), and leave a `Stmt::Use` in place to
-            // alias the original name into the body's scope. Forward
-            // references within the body Just Work because the hoisted item
-            // is registered globally during the compiler's prescan, before
-            // any body is compiled.
-            TokenKind::Fn | TokenKind::Struct | TokenKind::Enum => {
+            // Nested items: `fn`, `async fn`, `struct`, `enum` inside a
+            // function body. Hoist the item to top-level with a mangled name
+            // based on the enclosing fn stack (e.g. `fn outer() { fn inner()
+            // {} }` → top-level `outer__inner`), and leave a `Stmt::Use` in
+            // place to alias the original name into the body's scope.
+            TokenKind::Fn | TokenKind::Async | TokenKind::Struct | TokenKind::Enum => {
                 let span = self.current_span();
                 let item = self.parse_item()?;
                 let original_name = item_name(&item).to_string();
