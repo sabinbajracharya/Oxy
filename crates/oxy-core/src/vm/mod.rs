@@ -927,6 +927,11 @@ impl Vm {
                     Value::Struct { fields, .. } => self
                         .stack
                         .push(fields.get(&field_name).cloned().unwrap_or(Value::Unit)),
+                    Value::HashMap(rc) => {
+                        let key = Value::String(field_name);
+                        let val = rc.borrow().get(&key).cloned().unwrap_or(Value::Unit);
+                        self.stack.push(val);
+                    }
                     _ => self.stack.push(Value::Unit),
                 }
             }
@@ -937,6 +942,10 @@ impl Vm {
                     Value::Struct { name, mut fields } => {
                         fields.insert(field_name, val);
                         self.stack.push(Value::Struct { name, fields });
+                    }
+                    Value::HashMap(rc) => {
+                        rc.borrow_mut().insert(Value::String(field_name), val);
+                        self.stack.push(Value::HashMap(rc));
                     }
                     other => self.stack.push(other),
                 }
