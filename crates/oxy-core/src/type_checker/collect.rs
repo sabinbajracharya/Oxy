@@ -125,6 +125,12 @@ impl TypeChecker {
                     } else {
                         TypeInfo::Unit
                     };
+                    // async fn returns Future<T> — .await unwraps it
+                    let ret_ty = if f.is_async {
+                        TypeInfo::Future(Box::new(ret_ty))
+                    } else {
+                        ret_ty
+                    };
                     let param_tys = self.resolve_param_types(f, &[]);
                     self.fn_return_types.insert(qualified.clone(), ret_ty);
                     self.fn_param_types.insert(qualified, param_tys);

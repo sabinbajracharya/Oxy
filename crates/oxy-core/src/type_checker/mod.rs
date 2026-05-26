@@ -53,6 +53,10 @@ pub enum TypeInfo {
         params: Vec<TypeInfo>,
         ret: Box<TypeInfo>,
     },
+    /// The result of calling an `async fn`. `.await` unwraps it.
+    Future(Box<TypeInfo>),
+    /// The result of `spawn(|| expr)`. `.await` unwraps it.
+    JoinHandle(Box<TypeInfo>),
     Array(Box<TypeInfo>, usize),
     Unknown,
 }
@@ -84,6 +88,8 @@ impl TypeInfo {
             TypeInfo::Result(..) => "Result",
             TypeInfo::UserStruct { name, .. } => name.as_str(),
             TypeInfo::Function { .. } => "fn",
+            TypeInfo::Future(_) => "Future",
+            TypeInfo::JoinHandle(_) => "JoinHandle",
             TypeInfo::Array(..) => "[...]",
             TypeInfo::Unknown => "?",
         }
@@ -103,6 +109,8 @@ impl TypeInfo {
             TypeInfo::Result(t, e) => {
                 format!("Result<{}, {}>", t.display_name(), e.display_name())
             }
+            TypeInfo::Future(t) => format!("Future<{}>", t.display_name()),
+            TypeInfo::JoinHandle(t) => format!("JoinHandle<{}>", t.display_name()),
             TypeInfo::Array(elem, n) => format!("[{}; {n}]", elem.display_name()),
             _ => self.name().to_string(),
         }
@@ -333,6 +341,14 @@ impl TypeInfo {
         }
         if let (TypeInfo::BTreeMap(sk, sv), TypeInfo::BTreeMap(ok, ov)) = (self, other) {
             return sk.accepts(ok) && sv.accepts(ov);
+        }
+        // Future<T> and JoinHandle<T>: wrapper types that unwrap to their
+        // inner type via .await. Accept if inner types agree.
+        if let (TypeInfo::Future(st), TypeInfo::Future(ot)) = (self, other) {
+            return st.accepts(ot);
+        }
+        if let (TypeInfo::JoinHandle(st), TypeInfo::JoinHandle(ot)) = (self, other) {
+            return st.accepts(ot);
         }
         false
     }

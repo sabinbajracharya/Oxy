@@ -541,6 +541,34 @@ impl TypeChecker {
                                     Box::new(inner),
                                 ));
                             }
+                            "spawn" => {
+                                // spawn(|| expr) → JoinHandle<expr_type>
+                                let inner = if let Some(Expr::Closure { body, .. }) = args.first() {
+                                    self.infer_expr(body)?
+                                } else {
+                                    // spawn with a non-closure — let the compiler
+                                    // reject it; type-check leniently here.
+                                    TypeInfo::Unknown
+                                };
+                                return Ok(TypeInfo::JoinHandle(Box::new(inner)));
+                            }
+                            "select" => {
+                                // select(h1, h2, ...) → common inner type of all
+                                // JoinHandle args, or Unknown if they differ.
+                                let mut inner: Option<TypeInfo> = None;
+                                for t in &arg_types {
+                                    let unwrapped = match t {
+                                        TypeInfo::JoinHandle(inner_ty) => *inner_ty.clone(),
+                                        _ => TypeInfo::Unknown,
+                                    };
+                                    inner = match inner {
+                                        None => Some(unwrapped),
+                                        Some(prev) if prev == unwrapped => Some(prev),
+                                        _ => Some(TypeInfo::Unknown),
+                                    };
+                                }
+                                return Ok(inner.unwrap_or(TypeInfo::Unknown));
+                            }
                             _ => {}
                         }
                     }
@@ -1339,8 +1367,12 @@ impl TypeChecker {
                 })
             }
             Expr::Await { expr: inner, .. } => {
-                let _ = self.infer_expr(inner)?;
-                Ok(TypeInfo::Unknown)
+                let inner_ty = self.infer_expr(inner)?;
+                match inner_ty {
+                    TypeInfo::Future(t) => Ok(*t),
+                    TypeInfo::JoinHandle(t) => Ok(*t),
+                    _ => Ok(inner_ty),
+                }
             }
             Expr::FString { .. } => Ok(TypeInfo::String),
             Expr::MacroCall { name, args, .. } => {

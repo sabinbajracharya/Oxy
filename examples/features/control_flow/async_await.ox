@@ -153,6 +153,49 @@ fn spawn_non_closure() {
     spawn(42);
 }
 
+// --- type-checker: .await resolves to the correct type ---
+
+fn take_int(x: int) -> int { x }
+
+fn take_string(s: String) -> String { s }
+
+#[test]
+fn test_await_future_type_flows_to_callee() {
+    let f = answer();          // Future<int>
+    let v = f.await;           // int (unwrapped by type checker)
+    let _ = take_int(v);       // OK: int → int
+}
+
+#[test]
+fn test_await_spawn_type_flows_to_callee() {
+    let h = spawn(|| 42);      // JoinHandle<int>
+    let v = h.await;           // int
+    let _ = take_int(v);       // OK
+}
+
+#[test]
+fn test_await_plain_value_passthrough() {
+    let x = 42;
+    let v = x.await;           // passthrough: int
+    let _ = take_int(v);       // OK
+}
+
+// --- compile_error: type mismatch across .await ---
+
+#[compile_error]
+fn await_future_wrong_type() {
+    let f = answer();          // Future<int>
+    let v = f.await;           // int
+    let _ = take_string(v);    // ERROR: int does not match String
+}
+
+#[compile_error]
+fn await_spawn_wrong_type() {
+    let h = spawn(|| 42);      // JoinHandle<int>
+    let v = h.await;           // int
+    let _ = take_string(v);    // ERROR: int does not match String
+}
+
 // --- event-loop spawn: correctness ---
 
 #[test]
