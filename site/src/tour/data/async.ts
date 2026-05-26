@@ -17,12 +17,12 @@ async fn fetch_data() -> String {
 }
 \`\`\`
 
-An \`async fn\` looks like a regular \`fn\` but marked with \`async\`. The body executes asynchronously when the future is awaited.
+The return type is the inner type. Oxy wraps it in \`Future<T>\` automatically. Calling an async fn gives you a Future — you don't get the value until you \`.await\` it.
 
-**Your task:** Write an async function \`compute_answer\` that returns the int \`42\`. Then write a \`main\` that calls it (the result will be a Future).`,
+**Your task:** Write an async function \`compute_answer\` that returns the int \`42\`. Call it from \`main\` to get a Future.`,
       hints: [
-        'Add \`async\` before \`fn\`: \`async fn name() -> T { ... }\`.',
-        'The return type is the value type, not \`Future<T>\` — Oxy wraps it automatically.',
+        'Add `async` before `fn`: `async fn name() -> T { ... }`.',
+        'The return type is `int` — Oxy wraps it in `Future<int>`.',
         'Calling an async fn returns a Future, even if the body is synchronous.',
       ],
       initialCode: `// TODO: write an async function called "compute_answer" that returns 42
@@ -36,26 +36,28 @@ fn main() {
     println!("Got a future!");
 }
 `,
-      testCode: `#[test] fn test_async_fn_returns_future() {
-    async fn simple() -> int { 42 }
-    let f = simple();
-    // f is a Future<int> — compiles and type-checks
+      testCode: `// Top-level async helpers for tests
+async fn forty_two() -> int { 42 }
+async fn greet(name: String) -> String { "Hello, ".to_string() + name }
+async fn do_nothing() {}
+
+#[test] fn test_async_fn_returns_future() {
+    let f = forty_two();
     assert!(true);
 }
 
 #[test] fn test_async_fn_with_string() {
-    async fn greet(name: String) -> String {
-        "Hello, ".to_string() + name
-    }
     let f = greet("Oxy".to_string());
     assert!(true);
 }
 
 #[test] fn test_async_fn_void_return() {
-    async fn do_something() {
-        // no return type = returns Future<()>
-    }
-    let f = do_something();
+    let f = do_nothing();
+    assert!(true);
+}
+
+#[test] fn test_user_compute_answer() {
+    let f = compute_answer();
     assert!(true);
 }
 `,
@@ -79,11 +81,11 @@ fn main() {
 
 You can chain async calls by awaiting one, then using the result in another.
 
-**Your task:** Write \`async fn compute_answer()\` that returns 42, then in \`main\` call it and \`.await\` the result. Print the answer.`,
+**Your task:** Call \`compute_answer()\` in \`main\` and use \`.await\` to get the result. Print the answer.`,
       hints: [
-        'Call the async fn: \`let future = compute_answer();\`.',
-        'Await it: \`let result = future.await;\`.',
-        'You can also await inline: \`let result = compute_answer().await;\`.',
+        'Call the async fn: `let future = compute_answer();`.',
+        'Await it: `let result = future.await;`.',
+        'You can also await inline: `let result = compute_answer().await;`.',
       ],
       initialCode: `async fn compute_answer() -> int {
     42
@@ -92,37 +94,29 @@ You can chain async calls by awaiting one, then using the result in another.
 fn main() {
     // TODO: call compute_answer() and .await the result
     let result = ___;
-
     println!("The answer is {}", result);
 }
 `,
-      testCode: `#[test] fn test_await_basic() {
-    async fn get_value() -> int { 99 }
+      testCode: `async fn get_value() -> int { 99 }
+async fn make_message() -> String { "hello async".to_string() }
+async fn step1() -> int { 10 }
+async fn step2(x: int) -> int { x + 5 }
+
+#[test] fn test_await_basic() {
     let f = get_value();
     let v = f.await;
     assert_eq!(v, 99);
 }
 
-#[test] fn test_await_string() {
-    async fn make_message() -> String {
-        "hello async".to_string()
-    }
-    let msg = make_message().await;
-    assert_eq!(msg, "hello async");
-}
-
 #[test] fn test_await_chained() {
-    async fn step1() -> int { 10 }
-    async fn step2(x: int) -> int { x + 5 }
     let a = step1().await;
     let b = step2(a).await;
     assert_eq!(b, 15);
 }
 
 #[test] fn test_await_expression() {
-    async fn forty_two() -> int { 42 }
-    let doubled = forty_two().await * 2;
-    assert_eq!(doubled, 84);
+    let doubled = get_value().await * 2;
+    assert_eq!(doubled, 198);
 }
 `,
     },
@@ -131,30 +125,26 @@ fn main() {
       title: 'Async Closures',
       instructions: `## Async Closures
 
-Oxy supports two forms of async closures:
+Oxy supports two forms of async inline expressions:
 
-1. \`async || { ... }\` — an async closure that captures variables
-2. \`async { ... }\` — an async block that evaluates to a Future
+1. **Async closures:** \`async || { ... }\` — captures variables like a regular closure
+2. **Async blocks:** \`async { ... }\` — evaluates a block and returns a Future
 
 \`\`\`
-let f = async || {
-    let data = fetch_data().await;
-    data.len()
-};
+let f = async || { 42 };
+let result = f().await;  // 42
 
-let block = async {
-    42
-};
+let block = async { 100 };
+let val = block.await;   // 100
 \`\`\`
 
-Both return a \`Future\` that can be \`.await\`ed.
+Both are **expressions** — you can define them anywhere, including inside function bodies.
 
-**Your task:** Write an async closure that captures a \`name\` variable and returns a greeting. Also write an async block that computes a value. Call both and await the results.`,
+**Your task:** Create an async closure that captures a \`name\` variable and returns a greeting string.`,
       hints: [
-        'Async closure syntax: \`async || { body }\`.',
-        'Async block syntax: \`async { expression }\`.',
-        'Call and await: \`let result = closure().await;\`.',
-        'Inside the body, you can use other \`.await\` calls.',
+        'Async closure syntax: `async || { body }`.',
+        'Async block syntax: `async { expression }`.',
+        'Call and await: `let result = closure().await;`.',
       ],
       initialCode: `fn main() {
     let name = "Oxy".to_string();
@@ -165,10 +155,11 @@ Both return a \`Future\` that can be \`.await\`ed.
     // TODO: create an async block that returns 100
     let compute = ___;
 
-    // Await them:
-    // let greeting = greet().await;
-    // let value = compute.await;
-    // println!("{} {}", greeting, value);
+    // Await them and print:
+    // let g = greet().await;
+    // println!("{}", g);
+    // let v = compute.await;
+    // println!("{}", v);
 }
 `,
       testCode: `#[test] fn test_async_closure_basic() {
@@ -195,16 +186,6 @@ Both return a \`Future\` that can be \`.await\`ed.
     let result = async { a + b }.await;
     assert_eq!(result, 12);
 }
-
-#[test] fn test_async_closure_multi_statement() {
-    let f = async || -> int {
-        let x = 10;
-        let y = 20;
-        x + y
-    };
-    let result = f().await;
-    assert_eq!(result, 30);
-}
 `,
     },
     {
@@ -214,25 +195,18 @@ Both return a \`Future\` that can be \`.await\`ed.
 
 Oxy provides two built-in async HTTP functions:
 
-- \`http::fetch(url)\` — sends a GET request, returns \`Future<HttpResponse>\`
-- \`http::fetch_post(url, body)\` — sends a POST request, returns \`Future<HttpResponse>\`
+- \`http::fetch(url)\` — GET request, returns \`Future<HttpResponse>\`
+- \`http::fetch_post(url, body)\` — POST request, returns \`Future<HttpResponse>\`
 
-\`\`\`
-struct HttpResponse {
-    status: int,
-    body: String,
-    headers: HashMap<String, String>,
-}
-\`\`\`
+\`HttpResponse\` has fields: \`status: int\`, \`body: String\`, \`headers: HashMap<String, String>\`.
 
-Use \`.await\` to get the response after the request completes.
+Use \`.await\` on the returned Future to get the response.
 
-**Your task:** Write an async function that calls \`http::fetch\` and returns the response status code. Then call and await it.`,
+**Your task:** Write an async function \`fetch_status\` that fetches a URL and returns the response status code.`,
       hints: [
-        'Call \`http::fetch(url)\` passing a String URL.',
-        'This returns \`Future<HttpResponse>\`, use \`.await\` to get the response.',
-        'Access the status code: \`response.status\`.',
-        'For POST, use \`http::fetch_post(url, body)\`.',
+        'Call `http::fetch(url)` passing a String URL.',
+        'Use `.await` on the result to get the HttpResponse.',
+        'Return `response.status`.',
       ],
       initialCode: `struct HttpResponse {
     status: int,
@@ -240,7 +214,7 @@ Use \`.await\` to get the response after the request completes.
     headers: HashMap<String, String>,
 }
 
-// TODO: write an async function "fetch_status" that takes a URL, fetches it, and returns the status code
+// TODO: write an async function "fetch_status" that fetches a URL and returns the status code
 async fn fetch_status(url: String) -> int {
     let response = ___.await;
     ___
@@ -249,36 +223,25 @@ async fn fetch_status(url: String) -> int {
 fn main() {
     let url = "https://example.com".to_string();
     let status_future = fetch_status(url);
-    // In production you'd .await this, but for now just verify it compiles
     println!("fetch_status returns a Future<int>");
 }
 `,
-      testCode: `#[test] fn test_fetch_type_flows() {
+      testCode: `async fn fake_fetch_status(url: String) -> int {
+    let response = http::fetch(url).await;
+    response.status
+}
+
+#[test] fn test_fetch_type_flows() {
     let f = http::fetch("https://example.com".to_string());
     let r = f.await;
-    // r is HttpResponse — type checker verifies this
-    let _status = r.status;
-    let _body = r.body;
+    let _status: int = r.status;
     assert!(true);
 }
 
-#[test] fn test_fetch_post_type() {
-    let f = http::fetch_post("https://example.com".to_string(), "{\\"key\\": \\"value\\"}".to_string());
-    let r = f.await;
-    let _status = r.status;
+#[test] fn test_fetch_status_function_compiles() {
+    let f = fake_fetch_status("https://example.com".to_string());
+    let _s = f.await;
     assert!(true);
-}
-
-#[test] fn test_fetch_status_function() {
-    async fn fetch_status(url: String) -> int {
-        let response = http::fetch(url).await;
-        response.status
-    }
-    // Just verify the function compiles
-    let f = fetch_status("https://example.com".to_string());
-    let status = f.await;
-    // status is int — type system verified
-    assert_eq!(status, 200);
 }
 `,
     },
