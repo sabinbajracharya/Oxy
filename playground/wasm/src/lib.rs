@@ -39,6 +39,9 @@ pub fn run_tests_oxy(source: &str) -> String {
                 .collect();
             format!("[{}]", items.join(","))
         }
-        Err(e) => format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "\\\"").replace('\n', "\\n")),
+        Err(e) => format!(
+            "{{\"error\":\"{}\"}}",
+            e.to_string().replace('"', "\\\"").replace('\n', "\\n")
+        ),
     }
 }
