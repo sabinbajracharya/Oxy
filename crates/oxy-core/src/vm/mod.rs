@@ -1441,9 +1441,7 @@ impl Vm {
                 // In event-loop context: non-blocking yield.
                 // Outside event loop (inside run_closure): fall back to blocking.
                 if self.scheduler.current_task().is_some() {
-                    let wake = std::time::Instant::now()
-                        .checked_add(std::time::Duration::from_millis(ms))
-                        .unwrap_or(std::time::Instant::now());
+                    let wake = scheduler::delay_from_now(ms);
                     // Push Unit now so the saved stack is correct on resume.
                     self.stack.push(Value::Unit);
                     if let Some(cur) = self.scheduler.current_task() {

@@ -5,7 +5,6 @@
 //! host OS thread.
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
-use std::time::Instant;
 
 /// Unique identifier for a scheduled task.
 pub type TaskId = usize;
@@ -17,6 +16,67 @@ pub struct TaskSnapshot {
     pub stack: Vec<crate::types::Value>,
     pub call_stack: Vec<super::Frame>,
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+mod clock {
+    use std::time::Instant;
+
+    pub type TimeMark = Instant;
+
+    pub fn now() -> TimeMark {
+        Instant::now()
+    }
+
+    pub fn delay_from_now(ms: u64) -> TimeMark {
+        Instant::now()
+            .checked_add(std::time::Duration::from_millis(ms))
+            .unwrap_or(Instant::now())
+    }
+
+    pub fn duration_until(mark: &TimeMark) -> std::time::Duration {
+        let now = Instant::now();
+        if *mark > now {
+            mark.duration_since(now)
+        } else {
+            std::time::Duration::ZERO
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod clock {
+    use std::cell::Cell;
+
+    /// On WASM: monotonically-increasing counter. `Instant::now()` may be
+    /// unavailable or unreliable depending on the runtime, and we can't
+    /// block anyway, so a simple counter gives correct ordering without
+    /// depending on host time APIs.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct TimeMark(u64);
+
+    pub fn now() -> TimeMark {
+        thread_local! {
+            static WASM_TICK: Cell<u64> = const { Cell::new(0) };
+        }
+        WASM_TICK.with(|t| {
+            let v = t.get();
+            t.set(v + 1);
+            TimeMark(v)
+        })
+    }
+
+    pub fn delay_from_now(_ms: u64) -> TimeMark {
+        // WASM can't block — treat all delays as immediate next tick.
+        now()
+    }
+
+    pub fn duration_until(_mark: &TimeMark) -> std::time::Duration {
+        // WASM can't block — report zero so the event loop doesn't try.
+        std::time::Duration::ZERO
+    }
+}
+
+pub use clock::{delay_from_now, TimeMark};
 
 /// What a task is currently doing (or waiting for).
 #[derive(Debug, Clone)]
@@ -32,7 +92,7 @@ pub enum TaskStatus {
     WaitingOnMultiple(Vec<TaskId>),
     /// Blocked on a timer (`sleep(ms)`).
     #[allow(dead_code)]
-    WaitingOnTimer(Instant),
+    WaitingOnTimer(TimeMark),
     /// Finished with a result.
     Done(crate::types::Value),
 }
@@ -57,7 +117,7 @@ impl Task {
 
 /// Ordering for the timer heap: earliest wake time first.
 #[derive(Debug, Clone)]
-struct TimerEntry(Instant, TaskId);
+struct TimerEntry(TimeMark, TaskId);
 
 impl PartialEq for TimerEntry {
     fn eq(&self, other: &Self) -> bool {
@@ -155,7 +215,7 @@ impl Scheduler {
     }
 
     /// Yield the current task because it's waiting on a timer.
-    pub fn yield_for_timer(&mut self, wake: Instant) {
+    pub fn yield_for_timer(&mut self, wake: TimeMark) {
         if let Some(id) = self.current.take() {
             self.timers.push(TimerEntry(wake, id));
             if let Some(task) = self.tasks.get_mut(&id) {
@@ -226,7 +286,7 @@ impl Scheduler {
     /// Pick the next ready task to run. Checks timers first.
     pub fn next_ready(&mut self) -> Option<TaskId> {
         // Move expired timers to ready.
-        let now = Instant::now();
+        let now = clock::now();
         while let Some(entry) = self.timers.peek() {
             if entry.0 <= now {
                 let TimerEntry(_, tid) = self.timers.pop().unwrap();
@@ -252,13 +312,8 @@ impl Scheduler {
 
     /// Duration until the next timer fires, if any.
     pub fn next_timer(&self) -> Option<std::time::Duration> {
-        self.timers.peek().map(|entry| {
-            let now = Instant::now();
-            if entry.0 > now {
-                entry.0.duration_since(now)
-            } else {
-                std::time::Duration::ZERO
-            }
-        })
+        self.timers
+            .peek()
+            .map(|entry| clock::duration_until(&entry.0))
     }
 }
