@@ -1419,6 +1419,53 @@ impl Vm {
                             self.stack.push(Value::Unit);
                         }
                     }
+                    Value::AsyncResult { result } => {
+                        let mut guard = result.lock().unwrap();
+                        if let Some(res) = guard.take() {
+                            drop(guard);
+                            match res {
+                                Ok(data) => {
+                                    let val = crate::stdlib::http::build_response_from_raw(data);
+                                    self.stack.push(val);
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        } else {
+                            // Not ready — put AsyncResult back and yield, then poll again.
+                            drop(guard);
+                            self.stack.push(Value::AsyncResult {
+                                result: std::sync::Arc::clone(&result),
+                            });
+                            if let Some(cur) = self.scheduler.current_task() {
+                                // Save at current IP so we re-execute Await on resume.
+                                self.save_task_snapshot(cur);
+                                let wake = crate::vm::scheduler::delay_from_now(1);
+                                self.scheduler.yield_for_timer(wake);
+                                return Ok(StepOutcome::Yielded);
+                            }
+                            // Outside event loop — block until result arrives.
+                            loop {
+                                if let Some(res) = result.lock().unwrap().take() {
+                                    match res {
+                                        Ok(data) => {
+                                            let val =
+                                                crate::stdlib::http::build_response_from_raw(data);
+                                            self.stack.push(val);
+                                            break;
+                                        }
+                                        Err(e) => return Err(e),
+                                    }
+                                }
+                                #[cfg(not(target_arch = "wasm32"))]
+                                std::thread::sleep(std::time::Duration::from_millis(1));
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    // WASM can't block — tight loop is unfortunate but
+                                    // the worker thread should finish quickly.
+                                }
+                            }
+                        }
+                    }
                     other => {
                         self.stack.push(other);
                     }

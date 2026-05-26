@@ -100,6 +100,12 @@ pub enum Value {
     Future(Box<FutureData>),
     /// A join handle referencing a spawned task by ID.
     JoinHandle { task_id: usize },
+    /// Pending result of an async external operation (e.g. HTTP on background thread).
+    /// Shared with the worker thread via Arc<Mutex<>> — polled on .await.
+    /// Stores raw HTTP data (Send-safe) so the background thread doesn't touch Value.
+    AsyncResult {
+        result: std::sync::Arc<std::sync::Mutex<Option<Result<HttpResultData, String>>>>,
+    },
     /// A shared mutable cell — any value wrapped in Rc<RefCell<>> for mutation sharing.
     /// Used for mutable variables captured by closures and &mut self methods.
     Cell(Rc<RefCell<Value>>),
@@ -211,9 +217,21 @@ impl Clone for Value {
             Value::Iterator(rc) => Value::Iterator(Rc::clone(rc)),
             Value::Future(f) => Value::Future(f.clone()),
             Value::JoinHandle { task_id } => Value::JoinHandle { task_id: *task_id },
+            Value::AsyncResult { result } => Value::AsyncResult {
+                result: std::sync::Arc::clone(result),
+            },
             Value::Cell(rc) => Value::Cell(Rc::clone(rc)),
         }
     }
+}
+
+/// Raw HTTP result data — Send-safe so it can cross thread boundaries.
+/// Converted to a Value::Struct in the VM thread when .await unwraps it.
+#[derive(Debug, Clone)]
+pub struct HttpResultData {
+    pub status: i64,
+    pub body: String,
+    pub headers: Vec<(String, String)>,
 }
 
 /// Data for an async future (boxed to keep Value enum small).
@@ -413,6 +431,7 @@ impl Value {
             Value::Iterator(_) => "Iterator".into(),
             Value::Future(_) => "Future".into(),
             Value::JoinHandle { .. } => "JoinHandle".into(),
+            Value::AsyncResult { .. } => "Future".into(),
             Value::Cell(_) => "Cell".into(),
         }
     }
@@ -544,8 +563,9 @@ impl Value {
             Value::Function(_) => 18,
             Value::Future(_) => 19,
             Value::JoinHandle { .. } => 20,
-            Value::Array(_) => 22,
-            Value::Cell(_) => 21,
+            Value::AsyncResult { .. } => 21,
+            Value::Array(_) => 23,
+            Value::Cell(_) => 22,
         }
     }
 
@@ -572,6 +592,7 @@ impl Value {
             Value::Iterator(_) => true,
             Value::Future(_) => true,
             Value::JoinHandle { .. } => true,
+            Value::AsyncResult { .. } => true,
             Value::Cell(rc) => rc.borrow().is_truthy(),
             _ => true,
         }
@@ -740,6 +761,7 @@ impl fmt::Display for Value {
             Value::Iterator(_) => write!(f, "<iterator>"),
             Value::Future(_) => write!(f, "<future>"),
             Value::JoinHandle { task_id } => write!(f, "<join_handle {}>", task_id),
+            Value::AsyncResult { .. } => write!(f, "<async_result>"),
             Value::Cell(rc) => write!(f, "{}", rc.borrow()),
         }
     }
@@ -807,6 +829,7 @@ impl PartialEq for Value {
                 let vb: Vec<Value> = b.borrow().iter().cloned().collect();
                 va == vb
             }
+            (Value::AsyncResult { .. }, Value::AsyncResult { .. }) => false,
             (Value::Iterator(_), Value::Iterator(_)) => false,
             _ => false,
         }
@@ -1013,6 +1036,7 @@ impl Ord for Value {
             (Value::Iterator(_), Value::Iterator(_)) => Ordering::Equal,
             (Value::Future(_), Value::Future(_)) => Ordering::Equal,
             (Value::JoinHandle { task_id: a }, Value::JoinHandle { task_id: b }) => a.cmp(b),
+            (Value::AsyncResult { .. }, Value::AsyncResult { .. }) => Ordering::Equal,
             _ => Ordering::Equal, // unreachable: discriminant matched, types match
         }
     }
@@ -1121,6 +1145,7 @@ impl Hash for Value {
             Value::Iterator(_) => "_iterator_".hash(state),
             Value::Future(_) => "_future_".hash(state),
             Value::JoinHandle { task_id } => task_id.hash(state),
+            Value::AsyncResult { .. } => "_async_result_".hash(state),
             Value::Cell(rc) => rc.borrow().hash(state),
         }
     }

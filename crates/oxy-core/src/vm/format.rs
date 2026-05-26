@@ -179,6 +179,7 @@ pub(super) fn debug_format(val: &Value) -> String {
         }
         Value::Future(f) => format!("Future<{}>", f.name),
         Value::JoinHandle { task_id } => format!("JoinHandle({})", task_id),
+        Value::AsyncResult { .. } => "<async_result>".into(),
         Value::Cell(rc) => debug_format(&rc.borrow()),
         other => format!("{other}"),
     }

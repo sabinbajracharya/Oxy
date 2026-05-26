@@ -569,6 +569,14 @@ impl TypeChecker {
                                 }
                                 return Ok(inner.unwrap_or(TypeInfo::Unknown));
                             }
+                            "http::fetch" | "http::fetch_post" => {
+                                // async HTTP call → Future<HttpResponse>
+                                let _ = arg_types; // validate args but don't constrain
+                                return Ok(TypeInfo::Future(Box::new(TypeInfo::UserStruct {
+                                    name: "HttpResponse".to_string(),
+                                    generic_args: vec![],
+                                })));
+                            }
                             _ => {}
                         }
                     }
@@ -857,6 +865,17 @@ impl TypeChecker {
                         return Ok(ret.clone());
                     }
                 } else {
+                    // Built-in path calls with known return types.
+                    let name = qualified.as_str();
+                    if name == "http::fetch" || name == "http::fetch_post" {
+                        for arg in args {
+                            self.infer_expr(arg)?;
+                        }
+                        return Ok(TypeInfo::Future(Box::new(TypeInfo::UserStruct {
+                            name: "HttpResponse".to_string(),
+                            generic_args: vec![],
+                        })));
+                    }
                     for arg in args {
                         self.infer_expr(arg)?;
                     }
