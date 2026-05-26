@@ -635,7 +635,8 @@ impl Parser {
                 } else {
                     Visibility::Private
                 };
-                let mut m = self.parse_fn_def(false, vec![], method_vis)?;
+                let is_async = self.match_token(&TokenKind::Async);
+                let mut m = self.parse_fn_def(is_async, vec![], method_vis)?;
                 Self::merge_impl_generics(&mut m, &impl_generics);
                 methods.push(m);
             }
@@ -660,7 +661,8 @@ impl Parser {
             } else {
                 Visibility::Private
             };
-            let mut m = self.parse_fn_def(false, vec![], method_vis)?;
+            let is_async = self.match_token(&TokenKind::Async);
+            let mut m = self.parse_fn_def(is_async, vec![], method_vis)?;
             Self::merge_impl_generics(&mut m, &impl_generics);
             methods.push(m);
         }

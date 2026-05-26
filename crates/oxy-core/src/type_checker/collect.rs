@@ -160,6 +160,12 @@ impl TypeChecker {
                         } else {
                             TypeInfo::Unit
                         };
+                        // async fn returns Future<T> — .await unwraps it
+                        let ret_ty = if method.is_async {
+                            TypeInfo::Future(Box::new(ret_ty))
+                        } else {
+                            ret_ty
+                        };
                         let param_tys = self.resolve_param_types(method, &impl_generics);
                         // Store generic info for cross-param consistency checks
                         // and return-type substitution.
@@ -205,6 +211,12 @@ impl TypeChecker {
                             self.resolve_annotation(ann)
                         } else {
                             TypeInfo::Unit
+                        };
+                        // async fn returns Future<T> — .await unwraps it
+                        let ret_ty = if method.is_async {
+                            TypeInfo::Future(Box::new(ret_ty))
+                        } else {
+                            ret_ty
                         };
                         let param_tys = self.resolve_param_types(method, &impl_generics);
                         let mut all_gen_names: Vec<String> = impl_generics.clone();

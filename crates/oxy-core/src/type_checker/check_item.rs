@@ -115,7 +115,17 @@ impl TypeChecker {
         } else {
             TypeInfo::Unit
         };
-        self.fn_return_types.insert(f.name.clone(), ret_ty.clone());
+        // async fn returns Future<T> to callers — .await unwraps it.
+        // The body itself still returns the declared type, so we store the
+        // Future-wrapped type in fn_return_types but keep ret_ty as the raw
+        // annotation for body checking and current_fn_return.
+        let stored_ret_ty = if f.is_async {
+            TypeInfo::Future(Box::new(ret_ty.clone()))
+        } else {
+            ret_ty.clone()
+        };
+        self.fn_return_types
+            .insert(f.name.clone(), stored_ret_ty.clone());
         let param_tys = self.resolve_param_types(f, &impl_generics);
         // Validate every declared param type for unknown names.
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {

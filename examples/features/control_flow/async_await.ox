@@ -305,3 +305,97 @@ fn test_spawn_string_result() {
     let h = spawn(|| "hello".to_string());
     assert_eq!(h.await, "hello");
 }
+
+// --- async methods on structs ---
+
+struct Calculator {
+    value: int,
+}
+
+impl Calculator {
+    fn new(v: int) -> Calculator { Calculator { value: v } }
+
+    async fn compute(self) -> int { self.value * 2 }
+
+    async fn add(self, other: int) -> int { self.value + other }
+
+    fn sync_get(self) -> int { self.value }
+}
+
+struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    async fn greet(self) -> String { "Hello, ".to_string() + self.name }
+
+    async fn greet_formal(self, title: String) -> String {
+        title + " " + self.name
+    }
+}
+
+#[test]
+fn test_async_method_basic() {
+    let c = Calculator::new(21);
+    let f = c.compute();
+    assert_eq!(f.await, 42);
+}
+
+#[test]
+fn test_async_method_with_param() {
+    let c = Calculator::new(40);
+    let f = c.add(2);
+    assert_eq!(f.await, 42);
+}
+
+#[test]
+fn test_async_method_string_return() {
+    let g = Greeter { name: "World".to_string() };
+    let f = g.greet();
+    assert_eq!(f.await, "Hello, World");
+}
+
+#[test]
+fn test_async_method_multiple_calls() {
+    let c1 = Calculator::new(10);
+    let c2 = Calculator::new(20);
+    let a = c1.compute();
+    let b = c2.compute();
+    assert_eq!(a.await, 20);
+    assert_eq!(b.await, 40);
+}
+
+#[test]
+fn test_async_method_with_formal_param() {
+    let g = Greeter { name: "Smith".to_string() };
+    let f = g.greet_formal("Dr.".to_string());
+    assert_eq!(f.await, "Dr. Smith");
+}
+
+#[test]
+fn test_async_method_chain_with_sync() {
+    let c = Calculator::new(21);
+    assert_eq!(c.sync_get(), 21);
+    let f = c.compute();
+    assert_eq!(f.await, 42);
+}
+
+// --- type-checker: async method .await resolves to correct type ---
+
+#[test]
+fn test_async_method_type_flows_to_callee() {
+    let c = Calculator::new(42);
+    let f = c.compute();       // Future<int>
+    let v = f.await;           // int
+    let _ = take_int(v);       // OK: int → int
+}
+
+// --- compile_error: type mismatch across async method .await ---
+
+#[compile_error]
+fn async_method_wrong_type() {
+    let g = Greeter { name: "Test".to_string() };
+    let f = g.greet();         // Future<String>
+    let v = f.await;           // String
+    let _ = take_int(v);       // ERROR: String does not match int
+}
