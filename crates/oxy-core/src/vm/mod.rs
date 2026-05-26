@@ -57,6 +57,8 @@ use std::rc::Rc;
 use crate::lexer::IntegerSuffix;
 use crate::types::{FloatWidth, FunctionData, FutureData, IntegerWidth, Value};
 
+pub(crate) mod scheduler;
+
 /// Bytecode instructions for the Oxy VM.
 #[derive(Debug, Clone)]
 pub enum OpCode {
@@ -322,26 +324,29 @@ pub struct Vm {
     output: Option<Rc<RefCell<Vec<String>>>>,
     /// Trace execution to stderr.
     trace: bool,
+    /// Cooperative task scheduler (for spawn/sleep/await).
+    scheduler: scheduler::Scheduler,
 }
 
-struct Frame {
-    return_ip: usize,
+#[derive(Debug, Clone)]
+pub(crate) struct Frame {
+    pub(crate) return_ip: usize,
     /// Locals for this frame, owned and pre-sized at Call time from the
     /// compiler-known `frame_size`. Slot N is `locals[N]` — no `base + slot`
     /// arithmetic, no growth-during-execution. Args occupy slots 0..arg_count
     /// (regular functions) or `captures_end..captures_end + arg_count`
     /// (closures, where captures are placed at their original outer indices).
-    locals: Vec<Value>,
+    pub(crate) locals: Vec<Value>,
     /// Operand stack length at frame entry (after args have been drained off).
     /// Used by `Return` (and the `TryPop` early-return path) to clean up any
     /// scratch the callee leaves on the operand stack before pushing the result.
-    caller_op_stack_len: usize,
+    pub(crate) caller_op_stack_len: usize,
     /// Function entry IP (for looking up local variable names).
     #[allow(dead_code)]
-    fn_ip: usize,
+    pub(crate) fn_ip: usize,
     /// If this is a method call on a local, write self back to this slot on return.
     #[allow(dead_code)]
-    write_back_slot: Option<usize>,
+    pub(crate) write_back_slot: Option<usize>,
 }
 
 /// Result of VM execution.
@@ -360,6 +365,16 @@ enum StepOutcome {
     Returned(Value),
     /// `Halt` opcode was executed.
     Halted,
+    /// The current task yielded to the scheduler (sleep, await on incomplete task).
+    Yielded,
+}
+
+/// Result of running one task slice in the event loop.
+enum TaskSliceResult {
+    /// Task completed with a value.
+    Completed(Value),
+    /// Task yielded (saved state, waiting on timer or another task).
+    Yielded,
 }
 
 impl Vm {
@@ -372,6 +387,7 @@ impl Vm {
             call_stack: Vec::new(),
             output: None,
             trace,
+            scheduler: scheduler::Scheduler::new(),
         }
     }
 
@@ -397,13 +413,14 @@ impl Vm {
         }
     }
 
-    /// Execute the chunk, starting at the entry point.
+    /// Execute the chunk using the cooperative event loop.
+    /// Wraps main() in task 0 and runs the scheduler until all tasks complete.
     pub fn run(&mut self) -> VmResult {
+        // Create task 0 = main()
+        let main_task = self.scheduler.create_task();
+        self.scheduler.set_current(main_task);
         self.ip = self.chunk.entry_point;
 
-        // Push a synthetic top-level frame holding the top-level scope's locals.
-        // The sentinel `return_ip == usize::MAX` is how dispatch_op's Return
-        // arm detects "this is the top of execution".
         let top_size = self.chunk.local_count;
         self.call_stack.push(Frame {
             return_ip: usize::MAX,
@@ -413,10 +430,74 @@ impl Vm {
             fn_ip: self.chunk.entry_point,
         });
 
+        let result = self.run_event_loop();
+        // After event loop, task 0 should be done
+        if let Some(val) = self.scheduler.task_result(main_task) {
+            VmResult::Value(val)
+        } else {
+            result
+        }
+    }
+
+    /// Main event loop: pick ready tasks, run them until they yield or complete.
+    fn run_event_loop(&mut self) -> VmResult {
+        loop {
+            // Check timers and pick next ready task
+            let task_id = match self.scheduler.next_ready() {
+                Some(id) => id,
+                None => {
+                    if self.scheduler.all_done() {
+                        break;
+                    }
+                    // If a task is already running, keep running it.
+                    if let Some(cur) = self.scheduler.current_task() {
+                        cur
+                    } else {
+                        // Nothing ready and nothing running — wait for timers.
+                        if let Some(dur) = self.scheduler.next_timer() {
+                            std::thread::sleep(dur);
+                        }
+                        continue;
+                    }
+                }
+            };
+
+            // If switching to a different task, save current first
+            let current = self.scheduler.current_task();
+            if current != Some(task_id) {
+                if let Some(cur) = current {
+                    self.save_task_snapshot(cur);
+                }
+                // Restore target task's state
+                if let Some(snapshot) = self.scheduler.take_snapshot(task_id) {
+                    self.restore_task_snapshot(snapshot);
+                }
+                self.scheduler.set_current(task_id);
+            }
+
+            // Run the current task until it yields, completes, or errors
+            match self.run_task_slice() {
+                Ok(TaskSliceResult::Completed(value)) => {
+                    self.scheduler.complete(task_id, value);
+                }
+                Ok(TaskSliceResult::Yielded) => {
+                    // Task state already saved by the opcode that yielded;
+                    // scheduler already updated (yield_for_timer, yield_for_task).
+                    // Just continue to next iteration.
+                }
+                Err(e) => return VmResult::Error(e),
+            }
+        }
+
+        VmResult::Value(Value::Unit)
+    }
+
+    /// Run the current task until it yields, returns, or halts.
+    fn run_task_slice(&mut self) -> Result<TaskSliceResult, String> {
         loop {
             let op = match self.chunk.code.get(self.ip) {
                 Some(op) => op.clone(),
-                None => return VmResult::Error("unexpected end of code".into()),
+                None => return Err("unexpected end of code".into()),
             };
 
             if self.trace {
@@ -426,11 +507,78 @@ impl Vm {
             match self.dispatch_op(op) {
                 Ok(StepOutcome::Bump) => self.ip += 1,
                 Ok(StepOutcome::Continue) => {}
-                Ok(StepOutcome::Returned(v)) => return VmResult::Value(v),
-                Ok(StepOutcome::Halted) => return VmResult::Value(Value::Unit),
-                Err(e) => return VmResult::Error(e),
+                Ok(StepOutcome::Returned(v)) => return Ok(TaskSliceResult::Completed(v)),
+                Ok(StepOutcome::Halted) => return Ok(TaskSliceResult::Completed(Value::Unit)),
+                Ok(StepOutcome::Yielded) => return Ok(TaskSliceResult::Yielded),
+                Err(e) => return Err(e),
             }
         }
+    }
+
+    /// Save the current VM IP/stack/call_stack into the given task's snapshot.
+    fn save_task_snapshot(&mut self, task_id: usize) {
+        let snapshot = scheduler::TaskSnapshot {
+            ip: self.ip,
+            stack: self.stack.clone(),
+            call_stack: self.call_stack.clone(),
+        };
+        self.scheduler.save_current(snapshot);
+        let _ = task_id;
+    }
+
+    /// Save with a specific IP (for opcodes that want to resume past themselves).
+    fn save_task_snapshot_at(&mut self, task_id: usize, ip: usize) {
+        let snapshot = scheduler::TaskSnapshot {
+            ip,
+            stack: self.stack.clone(),
+            call_stack: self.call_stack.clone(),
+        };
+        self.scheduler.save_current(snapshot);
+        let _ = task_id;
+    }
+
+    /// Restore VM state from a task snapshot.
+    fn restore_task_snapshot(&mut self, snapshot: scheduler::TaskSnapshot) {
+        self.ip = snapshot.ip;
+        self.stack = snapshot.stack;
+        self.call_stack = snapshot.call_stack;
+    }
+
+    /// Build an initial TaskSnapshot for a spawned closure.
+    fn prepare_closure_snapshot(&self, func: &Value) -> Result<scheduler::TaskSnapshot, String> {
+        let ft = match func {
+            Value::Function(f) => f.clone(),
+            _ => return Err("spawn: not a callable function".into()),
+        };
+        let target = match ft.target_ip {
+            Some(t) => t,
+            None => return Err("spawn: function has no bytecode target".into()),
+        };
+        let captures_end = ft.captured_names.len();
+        let frame_size = self
+            .chunk
+            .fn_frame_sizes
+            .get(&target)
+            .copied()
+            .unwrap_or(captures_end)
+            .max(captures_end);
+        let mut locals = vec![Value::Unit; frame_size];
+        for (i, name) in ft.captured_names.iter().enumerate() {
+            if let Ok(val) = ft.closure_env.borrow().get(name) {
+                locals[i] = val.clone();
+            }
+        }
+        Ok(scheduler::TaskSnapshot {
+            ip: target,
+            stack: Vec::new(),
+            call_stack: vec![Frame {
+                return_ip: usize::MAX,
+                locals,
+                caller_op_stack_len: 0,
+                fn_ip: target,
+                write_back_slot: None,
+            }],
+        })
     }
 
     /// Try native op first; if it fails, dispatch to trait method (operator overloading).
@@ -1238,8 +1386,23 @@ impl Vm {
                         let result = self.run_closure(&func, &future.args)?;
                         self.stack.push(result);
                     }
-                    Value::JoinHandle(inner) => {
-                        self.stack.push(*inner);
+                    Value::JoinHandle { task_id } => {
+                        // Check if the task is done
+                        if let Some(result) = self.scheduler.task_result(task_id) {
+                            self.stack.push(result);
+                        } else {
+                            // Task not done — put JoinHandle back and yield.
+                            self.stack.push(Value::JoinHandle { task_id });
+                            if let Some(cur) = self.scheduler.current_task() {
+                                self.save_task_snapshot(cur);
+                                self.scheduler.yield_for_task(task_id);
+                                return Ok(StepOutcome::Yielded);
+                            }
+                            // Not in event loop context — push Unit and continue
+                            // (shouldn't normally happen, but handle gracefully).
+                            self.stack.pop();
+                            self.stack.push(Value::Unit);
+                        }
                     }
                     other => {
                         self.stack.push(other);
@@ -1248,8 +1411,11 @@ impl Vm {
             }
             OpCode::Spawn => {
                 let closure = self.stack.pop().unwrap_or(Value::Unit);
-                let result = self.run_closure(&closure, &[])?;
-                self.stack.push(Value::JoinHandle(Box::new(result)));
+                let snapshot = self.prepare_closure_snapshot(&closure)?;
+                let task_id = self.scheduler.create_task();
+                // Store the initial snapshot so the scheduler can restore it
+                self.scheduler.save_new_task(task_id, snapshot);
+                self.stack.push(Value::JoinHandle { task_id });
             }
             OpCode::Sleep => {
                 let ms_val = self.stack.pop().unwrap_or(Value::I64(0));
@@ -1257,6 +1423,22 @@ impl Vm {
                     Value::I64(n) => n as u64,
                     _ => return Err("sleep: expected an integer argument".into()),
                 };
+                // In event-loop context: non-blocking yield.
+                // Outside event loop (inside run_closure): fall back to blocking.
+                if self.scheduler.current_task().is_some() {
+                    let wake = std::time::Instant::now()
+                        .checked_add(std::time::Duration::from_millis(ms))
+                        .unwrap_or(std::time::Instant::now());
+                    // Push Unit now so the saved stack is correct on resume.
+                    self.stack.push(Value::Unit);
+                    if let Some(cur) = self.scheduler.current_task() {
+                        // Save snapshot pointing past this opcode so it
+                        // doesn't re-execute on resume.
+                        self.save_task_snapshot_at(cur, self.ip + 1);
+                        self.scheduler.yield_for_timer(wake);
+                    }
+                    return Ok(StepOutcome::Yielded);
+                }
                 std::thread::sleep(std::time::Duration::from_millis(ms));
                 self.stack.push(Value::Unit);
             }
@@ -1527,6 +1709,11 @@ impl Vm {
                 Ok(StepOutcome::Continue) => {}
                 Ok(StepOutcome::Returned(v)) => break Ok(v),
                 Ok(StepOutcome::Halted) => break Err("halt inside closure".into()),
+                Ok(StepOutcome::Yielded) => {
+                    // Save the closure state (not the outer state) so the
+                    // scheduler can resume inside the closure body.
+                    break Err("yield inside async fn body is not yet supported".into());
+                }
                 Err(e) => break Err(e),
             }
         };

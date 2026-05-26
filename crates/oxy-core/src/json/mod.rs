@@ -87,7 +87,7 @@ fn serialize_value(value: &Value) -> Result<String, String> {
         }
         Value::Cell(rc) => serialize_value(&rc.borrow()),
         Value::Future(_) => Err("cannot serialize future".to_string()),
-        Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
+        Value::JoinHandle { .. } => Err("cannot serialize join handle".to_string()),
     }
 }
 
@@ -247,7 +247,7 @@ fn serialize_value_pretty(value: &Value, indent: usize) -> Result<String, String
         }
         Value::Cell(rc) => serialize_value(&rc.borrow()),
         Value::Future(_) => Err("cannot serialize future".to_string()),
-        Value::JoinHandle(_) => Err("cannot serialize join handle".to_string()),
+        Value::JoinHandle { .. } => Err("cannot serialize join handle".to_string()),
     }
 }
 

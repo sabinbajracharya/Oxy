@@ -927,4 +927,53 @@ mod tests {
         let (_, output) = result.unwrap();
         assert_eq!(output, vec!["true\n"], "expected 'true', got {:?}", output);
     }
+
+    // --- Event-loop spawn tests ---
+
+    #[test]
+    fn test_event_loop_spawn_basic() {
+        let source = r#"
+        fn main() {
+            let h = spawn(|| 42);
+            println!("{}", h.await);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "spawn basic failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["42\n"]);
+    }
+
+    #[test]
+    fn test_event_loop_spawn_multiple() {
+        let source = r#"
+        fn main() {
+            let a = spawn(|| 100);
+            let b = spawn(|| 200);
+            println!("{}", a.await);
+            println!("{}", b.await);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "spawn multiple failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["100\n", "200\n"]);
+    }
+
+    #[test]
+    fn test_event_loop_sleep_in_spawn() {
+        let source = r#"
+        fn main() {
+            let h = spawn(|| {
+                sleep(0);
+                99
+            });
+            println!("{}", h.await);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "sleep in spawn failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["99\n"]);
+    }
 }

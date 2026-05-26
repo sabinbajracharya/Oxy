@@ -178,7 +178,7 @@ pub(super) fn debug_format(val: &Value) -> String {
             format!("VecDeque([{}])", items.join(", "))
         }
         Value::Future(f) => format!("Future<{}>", f.name),
-        Value::JoinHandle(v) => format!("JoinHandle({})", debug_format(v)),
+        Value::JoinHandle { task_id } => format!("JoinHandle({})", task_id),
         Value::Cell(rc) => debug_format(&rc.borrow()),
         other => format!("{other}"),
     }

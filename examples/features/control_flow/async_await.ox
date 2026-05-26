@@ -152,3 +152,113 @@ fn sleep_two_args() {
 fn spawn_non_closure() {
     spawn(42);
 }
+
+// --- event-loop spawn: correctness ---
+
+#[test]
+fn test_spawn_basic() {
+    let h = spawn(|| 42);
+    assert_eq!(h.await, 42);
+}
+
+#[test]
+fn test_spawn_with_captured_var() {
+    let x = 10;
+    let h = spawn(|| x * 3);
+    assert_eq!(h.await, 30);
+}
+
+#[test]
+fn test_spawn_multiple_independent() {
+    let a = spawn(|| 100);
+    let b = spawn(|| 200);
+    let c = spawn(|| 300);
+    // Results are collected in any order
+    assert_eq!(a.await, 100);
+    assert_eq!(b.await, 200);
+    assert_eq!(c.await, 300);
+}
+
+#[test]
+fn test_spawn_sequential_await() {
+    let a = spawn(|| 1);
+    let r1 = a.await;
+    let b = spawn(|| r1 + 1);
+    let r2 = b.await;
+    assert_eq!(r2, 2);
+}
+
+// --- sleep yields to scheduler ---
+
+#[test]
+fn test_sleep_inside_spawn() {
+    let h = spawn(|| {
+        sleep(0);
+        99
+    });
+    assert_eq!(h.await, 99);
+}
+
+#[test]
+fn test_sleep_multiple_spawns() {
+    let a = spawn(|| {
+        sleep(0);
+        "a"
+    });
+    let b = spawn(|| {
+        sleep(0);
+        "b"
+    });
+    assert_eq!(a.await, "a");
+    assert_eq!(b.await, "b");
+}
+
+// --- nested spawn ---
+
+#[test]
+fn test_nested_spawn() {
+    let outer = spawn(|| {
+        let inner = spawn(|| 42);
+        inner.await
+    });
+    assert_eq!(outer.await, 42);
+}
+
+#[test]
+fn test_spawn_chain() {
+    let h = spawn(|| {
+        let inner = spawn(|| 7);
+        inner.await * 6
+    });
+    assert_eq!(h.await, 42);
+}
+
+// --- await on plain values still pass-through ---
+
+#[test]
+fn test_await_passthrough_inside_spawn() {
+    let h = spawn(|| {
+        let x = 42;
+        x.await
+    });
+    assert_eq!(h.await, 42);
+}
+
+// --- async fn inside spawn ---
+
+#[test]
+fn test_async_fn_inside_spawn() {
+    let h = spawn(|| {
+        let f = answer();
+        f.await
+    });
+    assert_eq!(h.await, 42);
+}
+
+// --- spawn with string return ---
+
+#[test]
+fn test_spawn_string_result() {
+    let h = spawn(|| "hello".to_string());
+    assert_eq!(h.await, "hello");
+}

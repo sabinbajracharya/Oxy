@@ -98,8 +98,8 @@ pub enum Value {
     Iterator(Rc<RefCell<IteratorState>>),
     /// A future (lazy thunk wrapping an async function call).
     Future(Box<FutureData>),
-    /// A join handle (eagerly evaluated, wraps a result).
-    JoinHandle(Box<Value>),
+    /// A join handle referencing a spawned task by ID.
+    JoinHandle { task_id: usize },
     /// A shared mutable cell — any value wrapped in Rc<RefCell<>> for mutation sharing.
     /// Used for mutable variables captured by closures and &mut self methods.
     Cell(Rc<RefCell<Value>>),
@@ -210,7 +210,7 @@ impl Clone for Value {
             Value::VecDeque(rc) => Value::VecDeque(Rc::clone(rc)),
             Value::Iterator(rc) => Value::Iterator(Rc::clone(rc)),
             Value::Future(f) => Value::Future(f.clone()),
-            Value::JoinHandle(h) => Value::JoinHandle(h.clone()),
+            Value::JoinHandle { task_id } => Value::JoinHandle { task_id: *task_id },
             Value::Cell(rc) => Value::Cell(Rc::clone(rc)),
         }
     }
@@ -412,7 +412,7 @@ impl Value {
             Value::VecDeque(_) => "VecDeque".into(),
             Value::Iterator(_) => "Iterator".into(),
             Value::Future(_) => "Future".into(),
-            Value::JoinHandle(_) => "JoinHandle".into(),
+            Value::JoinHandle { .. } => "JoinHandle".into(),
             Value::Cell(_) => "Cell".into(),
         }
     }
@@ -543,7 +543,7 @@ impl Value {
             Value::EnumVariant { .. } => 17,
             Value::Function(_) => 18,
             Value::Future(_) => 19,
-            Value::JoinHandle(_) => 20,
+            Value::JoinHandle { .. } => 20,
             Value::Array(_) => 22,
             Value::Cell(_) => 21,
         }
@@ -571,7 +571,7 @@ impl Value {
             Value::VecDeque(rc) => !rc.borrow().is_empty(),
             Value::Iterator(_) => true,
             Value::Future(_) => true,
-            Value::JoinHandle(_) => true,
+            Value::JoinHandle { .. } => true,
             Value::Cell(rc) => rc.borrow().is_truthy(),
             _ => true,
         }
@@ -739,7 +739,7 @@ impl fmt::Display for Value {
             }
             Value::Iterator(_) => write!(f, "<iterator>"),
             Value::Future(_) => write!(f, "<future>"),
-            Value::JoinHandle(_) => write!(f, "<join_handle>"),
+            Value::JoinHandle { task_id } => write!(f, "<join_handle {}>", task_id),
             Value::Cell(rc) => write!(f, "{}", rc.borrow()),
         }
     }
@@ -1012,7 +1012,7 @@ impl Ord for Value {
             (Value::Function(a), Value::Function(b)) => a.name.cmp(&b.name),
             (Value::Iterator(_), Value::Iterator(_)) => Ordering::Equal,
             (Value::Future(_), Value::Future(_)) => Ordering::Equal,
-            (Value::JoinHandle(a), Value::JoinHandle(b)) => a.cmp(b),
+            (Value::JoinHandle { task_id: a }, Value::JoinHandle { task_id: b }) => a.cmp(b),
             _ => Ordering::Equal, // unreachable: discriminant matched, types match
         }
     }
@@ -1120,7 +1120,7 @@ impl Hash for Value {
             }
             Value::Iterator(_) => "_iterator_".hash(state),
             Value::Future(_) => "_future_".hash(state),
-            Value::JoinHandle(v) => v.hash(state),
+            Value::JoinHandle { task_id } => task_id.hash(state),
             Value::Cell(rc) => rc.borrow().hash(state),
         }
     }
