@@ -55,7 +55,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::lexer::IntegerSuffix;
-use crate::types::{FloatWidth, IntegerWidth, Value};
+use crate::types::{FloatWidth, FunctionData, FutureData, IntegerWidth, Value};
 
 /// Bytecode instructions for the Oxy VM.
 #[derive(Debug, Clone)]
@@ -220,9 +220,19 @@ pub enum OpCode {
     CallClosure {
         arg_count: usize,
     },
+    /// Build a Value::Future from an async fn's target IP and `arg_count` args
+    /// popped from the stack.
+    MakeFuture {
+        target_ip: usize,
+        arg_count: usize,
+    },
     /// Await a future: pop Value, if Future run its body, if JoinHandle unwrap,
     /// otherwise pass through.
     Await,
+    /// Pop a closure, run it synchronously, wrap the result in Value::JoinHandle.
+    Spawn,
+    /// Pop an integer, sleep for that many milliseconds.
+    Sleep,
     /// Try operator `?`: pop value; if Err(e) or None, return early with that value;
     /// otherwise push unwrapped inner value.
     TryPop,
@@ -288,6 +298,14 @@ pub struct Chunk {
     pub impl_methods: std::collections::HashMap<String, Vec<crate::ast::FnDef>>,
     /// Compiled method entry points: (type_name, method_name) → instruction index.
     pub method_ips: std::collections::HashMap<(String, String), usize>,
+    /// Async function metadata: (name, params, return_type, body, target_ip).
+    pub async_fns: Vec<(
+        String,
+        Vec<crate::ast::Param>,
+        Option<crate::ast::TypeAnnotation>,
+        crate::ast::Block,
+        usize,
+    )>,
 }
 
 /// The stack-based VM executor.
@@ -1172,11 +1190,53 @@ impl Vm {
                     data,
                 });
             }
+            OpCode::MakeFuture {
+                target_ip,
+                arg_count,
+            } => {
+                let args_start = self.stack.len().saturating_sub(arg_count);
+                let args: Vec<Value> = self.stack.drain(args_start..).collect();
+                // Find async fn metadata by target_ip
+                let meta = self
+                    .chunk
+                    .async_fns
+                    .iter()
+                    .find(|(_, _, _, _, ip)| *ip == target_ip);
+                let (name, params, return_type, body, _) = match meta {
+                    Some(m) => m.clone(),
+                    None => {
+                        return Err(format!(
+                            "MakeFuture: no async function found at target_ip={}",
+                            target_ip
+                        ));
+                    }
+                };
+                self.stack.push(Value::Future(Box::new(FutureData {
+                    name,
+                    params,
+                    return_type,
+                    body,
+                    closure_env: crate::env::Environment::new(),
+                    args,
+                    target_ip,
+                })));
+            }
             OpCode::Await => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
                 match val {
-                    Value::Future(_) => {
-                        return Err("Await on Future not yet supported in VM".into());
+                    Value::Future(future) => {
+                        // Build a FunctionData from the FutureData and run it
+                        let func = Value::Function(Box::new(FunctionData {
+                            name: future.name.clone(),
+                            params: future.params.clone(),
+                            return_type: future.return_type.clone(),
+                            body: future.body.clone(),
+                            closure_env: crate::env::Environment::new(),
+                            target_ip: Some(future.target_ip),
+                            captured_names: Vec::new(),
+                        }));
+                        let result = self.run_closure(&func, &future.args)?;
+                        self.stack.push(result);
                     }
                     Value::JoinHandle(inner) => {
                         self.stack.push(*inner);
@@ -1185,6 +1245,20 @@ impl Vm {
                         self.stack.push(other);
                     }
                 }
+            }
+            OpCode::Spawn => {
+                let closure = self.stack.pop().unwrap_or(Value::Unit);
+                let result = self.run_closure(&closure, &[])?;
+                self.stack.push(Value::JoinHandle(Box::new(result)));
+            }
+            OpCode::Sleep => {
+                let ms_val = self.stack.pop().unwrap_or(Value::I64(0));
+                let ms = match ms_val {
+                    Value::I64(n) => n as u64,
+                    _ => return Err("sleep: expected an integer argument".into()),
+                };
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+                self.stack.push(Value::Unit);
             }
             OpCode::PathCallBuiltin {
                 segments,
@@ -1941,7 +2015,16 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
             target_ip, param_count, meta_idx
         ),
         OpCode::CallClosure { arg_count } => format!("CallClosure(arg_count={})", arg_count),
+        OpCode::MakeFuture {
+            target_ip,
+            arg_count,
+        } => format!(
+            "MakeFuture(target_ip={}, arg_count={})",
+            target_ip, arg_count
+        ),
         OpCode::Await => "Await".into(),
+        OpCode::Spawn => "Spawn".into(),
+        OpCode::Sleep => "Sleep".into(),
         OpCode::TryPop => "TryPop".into(),
         OpCode::CastInt(w) => format!("CastInt({:?})", w),
         OpCode::CastFloat(w) => format!("CastFloat({:?})", w),

@@ -94,6 +94,16 @@ pub struct Compiler {
     pub(crate) monomorphized_fns: HashMap<String, usize>,
     /// Type aliases: alias_name → actual_type_name (e.g., P → Point).
     pub(crate) type_aliases: HashMap<String, String>,
+    /// Set of function names that are async (for emitting MakeFuture instead of Call).
+    pub(crate) async_fn_names: HashSet<String>,
+    /// Async function metadata: (name, params, return_type, body, target_ip).
+    pub(crate) async_fns: Vec<(
+        String,
+        Vec<crate::ast::Param>,
+        Option<crate::ast::TypeAnnotation>,
+        crate::ast::Block,
+        usize,
+    )>,
     /// Forward calls that need target patching: (bytecode_index, function_name).
     pub(crate) forward_calls: Vec<(usize, String)>,
     /// Module name stack for resolving `self`, `super`, `crate` in paths.
@@ -206,6 +216,8 @@ impl Default for Compiler {
             trait_method_names: HashMap::new(),
             monomorphized_fns: HashMap::new(),
             type_aliases: HashMap::new(),
+            async_fn_names: HashSet::new(),
+            async_fns: Vec::new(),
             forward_calls: Vec::new(),
             module_stack: Vec::new(),
             deferred_globs: Vec::new(),
@@ -443,6 +455,7 @@ impl Compiler {
             enum_defs: self.enum_defs,
             impl_methods: self.impl_methods,
             method_ips: self.method_ips,
+            async_fns: self.async_fns,
         })
     }
 
@@ -781,6 +794,22 @@ impl Compiler {
         }
         self.fn_local_names.insert(ip, self.sym.build_slot_names());
         self.fn_frame_sizes.insert(ip, self.sym.next_slot);
+
+        // Track async functions so call sites emit MakeFuture instead of Call.
+        if f.is_async {
+            self.async_fn_names.insert(f.name.clone());
+            self.async_fns.push((
+                f.name.clone(),
+                f.params.clone(),
+                f.return_type.clone(),
+                f.body.clone(),
+                ip,
+            ));
+            if let Some(tn) = type_name {
+                let qualified = format!("{}::{}", tn, f.name);
+                self.async_fn_names.insert(qualified);
+            }
+        }
 
         self.sym = saved_sym;
         self.current_impl_type = saved_impl_type;

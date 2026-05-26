@@ -225,6 +225,7 @@ pub struct FutureData {
     pub body: Block,
     pub closure_env: Env,
     pub args: Vec<Value>,
+    pub target_ip: usize,
 }
 
 /// Lazy iterator state — each variant represents one stage in an adapter chain.

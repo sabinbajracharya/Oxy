@@ -685,6 +685,33 @@ impl Compiler {
                         self.emit(OpCode::ConstUnit);
                         return Ok(());
                     }
+                    // spawn(closure) → run closure eagerly, wrap in JoinHandle
+                    if name == "spawn" {
+                        if args.len() != 1 {
+                            return Err(FerriError::Runtime {
+                                message: "spawn expects exactly 1 argument (a closure)".to_string(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.compile_expr(&args[0])?;
+                        self.emit(OpCode::Spawn);
+                        return Ok(());
+                    }
+                    // sleep(ms) → pause for ms milliseconds
+                    if name == "sleep" {
+                        if args.len() != 1 {
+                            return Err(FerriError::Runtime {
+                                message: "sleep expects exactly 1 argument (milliseconds)"
+                                    .to_string(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.compile_expr(&args[0])?;
+                        self.emit(OpCode::Sleep);
+                        return Ok(());
+                    }
                     // Follow use_aliases chain (handles pub use re-exports)
                     let mut resolved = name.clone();
                     let mut seen: HashSet<&str> = HashSet::new();
@@ -799,6 +826,26 @@ impl Compiler {
                                     column: span.column,
                                 });
                             }
+                        }
+                    }
+                    // Check if calling an async function → emit MakeFuture instead of Call
+                    if let Expr::Ident(name, _) = callee.as_ref() {
+                        let resolved = self
+                            .use_aliases
+                            .get(name)
+                            .cloned()
+                            .unwrap_or_else(|| name.clone());
+                        if self.async_fn_names.contains(&resolved)
+                            || self.async_fn_names.contains(name)
+                        {
+                            for arg in args {
+                                self.compile_expr(arg)?;
+                            }
+                            self.emit(OpCode::MakeFuture {
+                                target_ip: target,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
                         }
                     }
                     // Direct call: compile args first, emit Call
@@ -1689,7 +1736,11 @@ impl Compiler {
                 Ok(())
             }
 
-            Expr::Await { .. } => Err(self.not_yet_supported("await", expr.span())),
+            Expr::Await { expr: inner, .. } => {
+                self.compile_expr(inner)?;
+                self.emit(OpCode::Await);
+                Ok(())
+            }
 
             Expr::MacroCall { name, args, .. } => {
                 // For println!/print!/format! with simple {} format strings,
