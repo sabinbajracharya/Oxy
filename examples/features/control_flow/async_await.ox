@@ -121,3 +121,34 @@ fn test_await_on_sync_fn_result() {
     let v = sync_double(21);
     assert_eq!(v.await, 42);
 }
+
+// --- compile_error: spawn with wrong arg count ---
+
+#[compile_error]
+fn spawn_zero_args() {
+    spawn();
+}
+
+#[compile_error]
+fn spawn_two_args() {
+    spawn(|| 1, || 2);
+}
+
+// --- compile_error: sleep with wrong arg count ---
+
+#[compile_error]
+fn sleep_zero_args() {
+    sleep();
+}
+
+#[compile_error]
+fn sleep_two_args() {
+    sleep(10, 20);
+}
+
+// --- compile_error: spawn with non-closure arg ---
+
+#[compile_error]
+fn spawn_non_closure() {
+    spawn(42);
+}

@@ -694,6 +694,13 @@ impl Compiler {
                                 column: span.column,
                             });
                         }
+                        if !matches!(args[0], crate::ast::Expr::Closure { .. }) {
+                            return Err(FerriError::Runtime {
+                                message: "spawn expects a closure argument".to_string(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
                         self.compile_expr(&args[0])?;
                         self.emit(OpCode::Spawn);
                         return Ok(());
