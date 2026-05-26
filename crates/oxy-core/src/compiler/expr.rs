@@ -914,6 +914,23 @@ impl Compiler {
                             }
                         }
                     }
+                    // Check if the resolved name (through use aliases) is a
+                    // built-in path like `std::db::open`. This lets
+                    // `use std::db::open as db_open; db_open(...)` work.
+                    if resolved.contains("::") {
+                        let segments: Vec<String> =
+                            resolved.split("::").map(|s| s.to_string()).collect();
+                        if super::helpers::is_builtin_path(&segments) {
+                            for arg in args {
+                                self.compile_expr(arg)?;
+                            }
+                            self.emit(OpCode::PathCallBuiltin {
+                                segments,
+                                arg_count: args.len(),
+                            });
+                            return Ok(());
+                        }
+                    }
                     // Fall through to dynamic CallClosure
                     self.compile_expr(callee)?;
                     for arg in args {

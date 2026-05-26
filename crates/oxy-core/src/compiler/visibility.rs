@@ -20,6 +20,11 @@ impl Compiler {
         let in_enums = self.enum_defs.contains_key(qualified);
         let in_modules = self.module_names.contains(qualified);
         if !in_fns && !in_structs && !in_enums && !in_modules {
+            // Check if it's a built-in path (e.g., "std::db::open").
+            let segments: Vec<String> = qualified.split("::").map(|s| s.to_string()).collect();
+            if super::helpers::is_builtin_path(&segments) {
+                return true;
+            }
             return false; // unknown name — reject
         }
         if let Some(vis) = self.pub_vis.get(qualified) {
