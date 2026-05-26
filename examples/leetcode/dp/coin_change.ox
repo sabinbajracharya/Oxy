@@ -29,18 +29,11 @@ fn main() {
 
 fn coin_change(coins: Vec, amount: int) -> int {
     let inf = amount + 1;
-    let mut dp = vec![];
-    let mut i = 0;
-    while i <= amount {
-        if i == 0 {
-            dp.push(0);
-        } else {
-            dp.push(inf);
-        }
-        i = i + 1;
+    let mut dp = vec![0];
+    for _i in 0..amount {
+        dp.push(inf);
     }
-    let mut a = 1;
-    while a <= amount {
+    for a in 1..=amount {
         for coin in coins {
             if coin <= a {
                 let prev = dp[a - coin];
@@ -52,7 +45,6 @@ fn coin_change(coins: Vec, amount: int) -> int {
                 }
             }
         }
-        a = a + 1;
     }
     if dp[amount] == inf { -1 } else { dp[amount] }
 }

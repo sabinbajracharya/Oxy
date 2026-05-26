@@ -31,12 +31,10 @@ fn climb_stairs(n: int) -> int {
     }
     let mut prev2 = 1;
     let mut prev1 = 2;
-    let mut i = 3;
-    while i <= n {
+    for _i in 3..=n {
         let current = prev1 + prev2;
         prev2 = prev1;
         prev1 = current;
-        i = i + 1;
     }
     prev1
 }

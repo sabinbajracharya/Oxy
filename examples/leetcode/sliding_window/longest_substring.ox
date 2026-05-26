@@ -36,11 +36,8 @@ fn length_of_longest_substring(s: String) -> int {
     let n = s.len();
     while right < n {
         let ch = s.char_at(right);
-        if let Some(prev_idx) = seen.get(ch) {
-            // Jump left past the previous occurrence if it's within our window
-            if prev_idx >= left {
-                left = prev_idx + 1;
-            }
+        if let Some(prev_idx) = seen.get(ch) && prev_idx >= left {
+            left = prev_idx + 1;
         }
         seen.insert(ch, right);
         let len = right - left + 1;

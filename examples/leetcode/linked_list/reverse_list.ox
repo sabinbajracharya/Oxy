@@ -39,8 +39,7 @@ fn main() {
 
 fn print_list(head: Option) {
     let mut curr = head;
-    while curr.is_some() {
-        let node = curr.unwrap();
+    while let Some(node) = curr {
         print!("{} ", node.val);
         curr = node.next;
     }
@@ -50,8 +49,8 @@ fn print_list(head: Option) {
 fn reverse_list(head: Option) -> Option {
     let mut prev = None;
     let mut curr = head;
-    while curr.is_some() {
-        let mut node = curr.unwrap();
+    while let Some(node) = curr {
+        let mut node = node;
         let next = node.next;
         node.next = prev;
         prev = Some(node);

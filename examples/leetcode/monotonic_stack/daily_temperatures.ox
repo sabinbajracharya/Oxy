@@ -38,8 +38,7 @@ fn daily_temperatures(temps: Vec) -> Vec {
         answer.push(0);
     }
     let mut stack = vec![];
-    let mut i = 0;
-    while i < n {
+    for i in 0..n {
         while !stack.is_empty() {
             let prev_idx = stack.last().unwrap();
             if temps[i] > temps[prev_idx] {
@@ -50,7 +49,6 @@ fn daily_temperatures(temps: Vec) -> Vec {
             }
         }
         stack.push(i);
-        i = i + 1;
     }
     answer
 }

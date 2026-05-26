@@ -37,13 +37,13 @@ fn main() {
 }
 
 fn max_depth(root: Option) -> int {
-    if root.is_none() {
-        return 0;
+    if let Some(node) = root {
+        let left = max_depth(node.left);
+        let right = max_depth(node.right);
+        1 + (if left > right { left } else { right })
+    } else {
+        0
     }
-    let node = root.unwrap();
-    let left = max_depth(node.left);
-    let right = max_depth(node.right);
-    1 + (if left > right { left } else { right })
 }
 
 #[test]

@@ -55,17 +55,13 @@ fn num_islands(grid: Vec) -> int {
     let cols = grid[0].len();
     let mut count = 0;
     let mut g = grid;
-    let mut i = 0;
-    while i < rows {
-        let mut j = 0;
-        while j < cols {
+    for i in 0..rows {
+        for j in 0..cols {
             if g[i][j] == '1' {
                 count = count + 1;
                 g = dfs(g, i, j);
             }
-            j = j + 1;
         }
-        i = i + 1;
     }
     count
 }

@@ -51,17 +51,15 @@ fn level_order(root: Option) -> Vec {
     while !queue.is_empty() {
         let level_size = queue.len();
         let mut level = vec![];
-        let mut i = 0;
-        while i < level_size {
+        for _i in 0..level_size {
             let mut node = queue.pop_front().unwrap();
             level.push(node.val);
-            if node.left.is_some() {
-                queue.push_back(node.left.unwrap());
+            if let Some(left) = node.left {
+                queue.push_back(left);
             }
-            if node.right.is_some() {
-                queue.push_back(node.right.unwrap());
+            if let Some(right) = node.right {
+                queue.push_back(right);
             }
-            i = i + 1;
         }
         result.push(level);
     }

@@ -42,23 +42,24 @@ fn main() {
 }
 
 fn print_tree(root: Option) {
-    if root.is_none() { return; }
-    let node = root.unwrap();
-    print!("{} ", node.val);
-    print_tree(node.left);
-    print_tree(node.right);
+    if let Some(node) = root {
+        print!("{} ", node.val);
+        print_tree(node.left);
+        print_tree(node.right);
+    }
 }
 
 fn invert_tree(root: Option) -> Option {
-    if root.is_none() {
-        return None;
+    if let Some(node) = root {
+        let mut node = node;
+        let left = node.left;
+        let right = node.right;
+        node.left = invert_tree(right);
+        node.right = invert_tree(left);
+        Some(node)
+    } else {
+        None
     }
-    let mut node = root.unwrap();
-    let left = node.left;
-    let right = node.right;
-    node.left = invert_tree(right);
-    node.right = invert_tree(left);
-    Some(node)
 }
 
 #[test]

@@ -36,12 +36,10 @@ fn rob(nums: Vec) -> int {
     }
     let mut prev2 = nums[0];
     let mut prev1 = if nums[0] > nums[1] { nums[0] } else { nums[1] };
-    let mut i = 2;
-    while i < n {
+    for i in 2..n {
         let current = if prev1 > (prev2 + nums[i]) { prev1 } else { prev2 + nums[i] };
         prev2 = prev1;
         prev1 = current;
-        i = i + 1;
     }
     prev1
 }

@@ -44,8 +44,7 @@ fn main() {
 
 fn print_list(head: Option) {
     let mut curr = head;
-    while curr.is_some() {
-        let node = curr.unwrap();
+    while let Some(node) = curr {
         print!("{} ", node.val);
         curr = node.next;
     }

@@ -33,18 +33,15 @@ fn main() {
 fn has_cycle(head: Option) -> bool {
     let mut slow = head;
     let mut fast = head;
-    while fast.is_some() {
-        let fast_node = fast.unwrap();
+    while let Some(fast_node) = fast {
         if fast_node.next.is_none() {
             return false;
         }
         slow = slow.unwrap().next;
         fast = fast_node.next.unwrap().next;
-        if slow.is_some() && fast.is_some() {
-            // In Oxy we compare by value — for cycle detection we'd need
-            // reference equality, but this is a structural check only.
-            // The real test is whether fast reaches the end.
-        }
+        // Note: full cycle detection compares slow == fast by reference.
+        // Oxy compares by value, so the algorithm cannot detect cycles
+        // when values repeat. This implementation detects only acyclic lists.
     }
     false
 }

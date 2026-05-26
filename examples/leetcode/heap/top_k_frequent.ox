@@ -45,11 +45,10 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
         if fa > fb { -1 } else if fa < fb { 1 } else { 0 }
     });
     let mut result = vec![];
-    let mut i = 0;
-    while i < k && i < pairs.len() {
+    let limit = if k < pairs.len() { k } else { pairs.len() };
+    for i in 0..limit {
         let (_, num) = pairs[i];
         result.push(num);
-        i = i + 1;
     }
     result
 }
