@@ -235,6 +235,10 @@ pub enum OpCode {
     Spawn,
     /// Pop an integer, sleep for that many milliseconds.
     Sleep,
+    /// Pop `count` JoinHandles, suspend until any completes, push its result.
+    Select {
+        count: usize,
+    },
     /// Try operator `?`: pop value; if Err(e) or None, return early with that value;
     /// otherwise push unwrapped inner value.
     TryPop,
@@ -455,7 +459,17 @@ impl Vm {
                     } else {
                         // Nothing ready and nothing running — wait for timers.
                         if let Some(dur) = self.scheduler.next_timer() {
+                            #[cfg(not(target_arch = "wasm32"))]
                             std::thread::sleep(dur);
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                // WASM can't block the browser thread.
+                                // Skip the wait — timers expire on the next
+                                // iteration. This makes sleep() effectively
+                                // sleep(0) on WASM, which is the best we can
+                                // do without async JS interop.
+                                let _ = dur;
+                            }
                         }
                         continue;
                     }
@@ -479,6 +493,7 @@ impl Vm {
             match self.run_task_slice() {
                 Ok(TaskSliceResult::Completed(value)) => {
                     self.scheduler.complete(task_id, value);
+                    self.scheduler.clear_current();
                 }
                 Ok(TaskSliceResult::Yielded) => {
                     // Task state already saved by the opcode that yielded;
@@ -1439,8 +1454,59 @@ impl Vm {
                     }
                     return Ok(StepOutcome::Yielded);
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 std::thread::sleep(std::time::Duration::from_millis(ms));
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // WASM can't block — skip the sleep, just push Unit.
+                    let _ = ms;
+                }
                 self.stack.push(Value::Unit);
+            }
+            OpCode::Select { count } => {
+                // Pop `count` handles from the stack.
+                let start = self.stack.len().saturating_sub(count);
+                let handles: Vec<Value> = self.stack.drain(start..).collect();
+
+                // Extract task IDs.
+                let mut task_ids: Vec<usize> = Vec::with_capacity(count);
+                for h in &handles {
+                    match h {
+                        Value::JoinHandle { task_id } => {
+                            task_ids.push(*task_id);
+                        }
+                        _ => {
+                            return Err("select: all arguments must be JoinHandle".into());
+                        }
+                    }
+                }
+
+                // Check if any target task is already done.
+                let mut found: Option<Value> = None;
+                for &tid in &task_ids {
+                    if let Some(result) = self.scheduler.task_result(tid) {
+                        found = Some(result);
+                        break;
+                    }
+                }
+
+                if let Some(result) = found {
+                    self.stack.push(result);
+                    // Fall through to Bump so IP advances past Select.
+                } else if let Some(cur) = self.scheduler.current_task() {
+                    // None ready — put handles back and yield.
+                    for h in handles.into_iter().rev() {
+                        self.stack.push(h);
+                    }
+                    // Save snapshot so we re-execute Select on resume
+                    // and re-check which handles are done.
+                    self.save_task_snapshot(cur);
+                    self.scheduler.yield_for_multiple(task_ids);
+                    return Ok(StepOutcome::Yielded);
+                } else {
+                    // Not in event-loop context — shouldn't happen.
+                    return Err("select: can only be used within an async context".into());
+                }
             }
             OpCode::PathCallBuiltin {
                 segments,
@@ -2212,6 +2278,7 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
         OpCode::Await => "Await".into(),
         OpCode::Spawn => "Spawn".into(),
         OpCode::Sleep => "Sleep".into(),
+        OpCode::Select { count } => format!("Select({})", count),
         OpCode::TryPop => "TryPop".into(),
         OpCode::CastInt(w) => format!("CastInt({:?})", w),
         OpCode::CastFloat(w) => format!("CastFloat({:?})", w),

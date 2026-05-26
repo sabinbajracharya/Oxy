@@ -27,6 +27,9 @@ pub enum TaskStatus {
     Running,
     /// Blocked on another task (`.await` on an incomplete JoinHandle).
     WaitingOnTask(TaskId),
+    /// Blocked on any of several tasks (`select(handle1, handle2, ...)`).
+    #[allow(dead_code)]
+    WaitingOnMultiple(Vec<TaskId>),
     /// Blocked on a timer (`sleep(ms)`).
     #[allow(dead_code)]
     WaitingOnTimer(Instant),
@@ -137,6 +140,11 @@ impl Scheduler {
         }
     }
 
+    /// Clear the current task (called after a task completes).
+    pub fn clear_current(&mut self) {
+        self.current = None;
+    }
+
     /// Save the current task's execution state.
     pub fn save_current(&mut self, snapshot: TaskSnapshot) {
         if let Some(id) = self.current {
@@ -165,6 +173,16 @@ impl Scheduler {
         }
     }
 
+    /// Yield the current task because it's waiting on any of several tasks
+    /// (used by `select`).
+    pub fn yield_for_multiple(&mut self, task_ids: Vec<TaskId>) {
+        if let Some(id) = self.current.take() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.status = TaskStatus::WaitingOnMultiple(task_ids);
+            }
+        }
+    }
+
     /// Mark a task as complete with a result. Returns the ids of any tasks
     /// that were waiting on this one (they should be moved to ready).
     pub fn complete(&mut self, id: TaskId, result: crate::types::Value) -> Vec<TaskId> {
@@ -174,11 +192,16 @@ impl Scheduler {
         }
         // Find tasks waiting on this one and move them to ready.
         for task in self.tasks.values_mut() {
-            if let TaskStatus::WaitingOnTask(w) = task.status {
-                if w == id {
+            match &task.status {
+                TaskStatus::WaitingOnTask(w) if *w == id => {
                     task.status = TaskStatus::Ready;
                     woken.push(task.id);
                 }
+                TaskStatus::WaitingOnMultiple(ids) if ids.contains(&id) => {
+                    task.status = TaskStatus::Ready;
+                    woken.push(task.id);
+                }
+                _ => {}
             }
         }
         for &wid in &woken {

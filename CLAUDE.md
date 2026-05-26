@@ -70,9 +70,15 @@ docker compose run --rm build-ext                                   # Package .v
 docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test -p oxy-core"
 docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp --all-targets -- -D warnings && cargo test -p oxy-lsp"
 docker compose run --rm dev bash -c "cargo clippy -p oxy-tug --all-targets -- -D warnings && cargo test -p oxy-tug"
+docker compose run --rm dev bash -c "rustup target add wasm32-unknown-unknown 2>/dev/null; cargo check --target wasm32-unknown-unknown -p oxy-core --no-default-features"
 ```
 
 All must pass. No exceptions.
+
+**WASM note:** `std::thread::sleep` panics on `wasm32` (calls `unreachable`).
+Always gate thread-sleep behind `#[cfg(not(target_arch = "wasm32"))]` and provide
+a WASM fallback (no-op or skip). `std::time::Instant` works on WASM (backed by
+`performance.now()`).
 
 ## Architecture
 

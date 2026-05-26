@@ -719,6 +719,22 @@ impl Compiler {
                         self.emit(OpCode::Sleep);
                         return Ok(());
                     }
+                    // select(h1, h2, ...) → race multiple JoinHandles, return first result
+                    if name == "select" {
+                        if args.len() < 2 {
+                            return Err(FerriError::Runtime {
+                                message: "select expects at least 2 arguments (JoinHandles)"
+                                    .to_string(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        for arg in args {
+                            self.compile_expr(arg)?;
+                        }
+                        self.emit(OpCode::Select { count: args.len() });
+                        return Ok(());
+                    }
                     // Follow use_aliases chain (handles pub use re-exports)
                     let mut resolved = name.clone();
                     let mut seen: HashSet<&str> = HashSet::new();

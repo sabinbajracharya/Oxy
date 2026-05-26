@@ -976,4 +976,21 @@ mod tests {
         let (_, output) = result.unwrap();
         assert_eq!(output, vec!["99\n"]);
     }
+
+    #[test]
+    fn test_event_loop_select_basic() {
+        let source = r#"
+        fn main() {
+            let a = spawn(|| 42);
+            let b = spawn(|| 99);
+            let result = select(a, b);
+            println!("{}", result);
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(result.is_ok(), "select basic failed: {:?}", result.err());
+        let (_, output) = result.unwrap();
+        let val = output[0].trim().parse::<i64>().unwrap();
+        assert!(val == 42 || val == 99, "expected 42 or 99, got {}", val);
+    }
 }
