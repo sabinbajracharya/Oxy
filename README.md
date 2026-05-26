@@ -38,6 +38,10 @@ If you have Rust installed, you can also build natively with `cargo build --rele
 
 ## CLI
 
+Oxy ships two binaries: `oxy` (compiler) and `tug` (package manager), following the rustc/cargo model.
+
+### `oxy` — compiler
+
 ```
 oxy [OPTIONS] <COMMAND>
 
@@ -45,12 +49,30 @@ Commands:
   run <file.ox>            Run an Oxy source file
   test <file.ox>           Run #[test] and #[compile_error] functions
   repl                     Start the interactive REPL
-  install <path|url>       Install a package from a local path or git URL
 
 Options:
+  --extern <name>=<path>   Register an external module dependency
   --dump-tokens <file>     Show lexer output (debugging)
   --dump-ast <file>        Show parser AST output (debugging)
   --dump-bytecode <file>   Show compiled bytecode (debugging)
+```
+
+### `tug` — package manager
+
+```
+tug <COMMAND>
+
+Commands:
+  new <name>               Scaffold a new project (tug.toml, src/main.ox)
+  init                     Initialize a project in the current directory
+  build                    Compile the project with dependencies
+  run [args...]            Build and run the project
+  test                     Build and run tests
+  add <spec>               Add a dependency to tug.toml
+  remove <name>            Remove a dependency
+  install <path|url>       Install a package globally (~/.oxy/packages/)
+  uninstall <name>         Remove a globally installed package
+  list                     List installed packages
 ```
 
 ## Language Features
@@ -63,7 +85,7 @@ fn main() {
     let mut y = 10;
     y += x;
 
-    fn add(a: i64, b: i64) -> i64 { a + b }
+    fn add(a: int, b: int) -> int { a + b }
     println!("{}", add(3, 4));   // 7
 
     if x > 0 { println!("positive"); }
@@ -76,35 +98,34 @@ fn main() {
 
 ### Types
 
-Integer: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`
-Float: `f32`, `f64`
-Type suffixes: `42i32`, `0xFFu8`, `3.14f32`
+Three numeric types: `int` (signed 64-bit), `byte` (unsigned 8-bit), `float` (64-bit IEEE-754).
+Width semantics enforced at function boundaries and typed `let` bindings.
 
 ```rust
-let a: i8 = 127;
-let b = a + 1i8;          // -128 (wrapping)
-let c = 3.14f32;
-let d = 0xFFu8;           // hex with suffix
+let a: int = 127;
+let b: byte = 0xFF;
+let c = 3.14;              // float inferred
+let d = a + 1;             // arithmetic widens to int
 ```
 
 ### Structs, Enums, Impl, Traits
 
 ```rust
-struct Point { x: f64, y: f64 }
+struct Point { x: float, y: float }
 
 impl Point {
-    fn new(x: f64, y: f64) -> Point { Point { x, y } }
+    fn new(x: float, y: float) -> Point { Point { x, y } }
 
-    fn distance(self, other: Point) -> f64 {
+    fn distance(self, other: Point) -> float {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         (dx * dx + dy * dy).sqrt()
     }
 }
 
-enum Shape { Circle(f64), Rectangle(f64, f64) }
+enum Shape { Circle(float), Rectangle(float, float) }
 
-fn area(s: Shape) -> f64 {
+fn area(s: Shape) -> float {
     match s {
         Shape::Circle(r) => 3.14159 * r * r,
         Shape::Rectangle(w, h) => w * h,
@@ -115,7 +136,7 @@ fn area(s: Shape) -> f64 {
 ### Error Handling
 
 ```rust
-fn divide(a: f64, b: f64) -> Result<f64, String> {
+fn divide(a: float, b: float) -> Result<float, String> {
     if b == 0.0 { Err("division by zero".to_string()) }
     else { Ok(a / b) }
 }
@@ -158,8 +179,8 @@ match n {
 
 ```rust
 mod math {
-    pub fn add(a: i64, b: i64) -> i64 { a + b }
-    fn helper() -> i64 { 0 }          // private
+    pub fn add(a: int, b: int) -> int { a + b }
+    fn helper() -> int { 0 }          // private
 }
 
 use math::add;
@@ -173,7 +194,7 @@ Visibility: `pub`, `pub(crate)`, `pub(super)`, and private (default). Enforced a
 Annotate functions with `#[test]` for runtime tests, `#[compile_error]` for tests that must fail compilation:
 
 ```rust
-fn add(a: i64, b: i64) -> i64 { a + b }
+fn add(a: int, b: int) -> int { a + b }
 
 #[test]
 fn test_add() {
@@ -207,13 +228,18 @@ let json_str = json::serialize(data);
 
 | Module | What it provides |
 |--------|-----------------|
-| `math` | `sqrt`, `sin`, `cos`, `abs`, `pow`, `log`, `floor`, `ceil`, `round`, `min`, `max`, `gcd`, `lcm`, `PI`, `E` |
-| `rand` | `random`, `range`, `bool` |
+| `math` | `sqrt`, `sin`, `cos`, `abs`, `pow`, `log`, `floor`, `ceil`, `round`, `min`, `max`, `clamp`, `gcd`, `lcm`, `PI`, `E` |
+| `rand` | `random`, `rand_int(lo, hi)`, `range`, `bool` |
 | `time` | `now`, `millis`, `elapsed` |
 | `std::fs` | `read_to_string`, `write`, `append`, `exists`, `create_dir`, `read_dir`, `remove_file`, `rename`, `copy`, `metadata` |
-| `std::env` | `args`, `var`, `vars`, `current_dir`, `home_dir` |
-| `std::process` | `command` |
-| `std::regex` | `is_match`, `find`, `find_all`, `captures`, `replace`, `replace_all`, `split` |
+| `std::env` | `args()`, `var`, `vars`, `current_dir`, `home_dir` |
+| `std::args` | `parse(spec)` — CLI argument parser |
+| `std::path` | `join`, `split`, `extension`, `with_extension`, `parent`, `file_stem`, `is_absolute`, and more |
+| `std::process` | `command`, `spawn(program, args, callback)` — line-by-line streaming |
+| `std::io` | `stdin` — read from standard input |
+| `std::server` | `start(addr, callback)` — closure-driven HTTP server |
+| `std::db` | SQLite client (bundled) |
+| `std::regex` | `Regex::new(pat).is_match(text)`, `find`, `find_all`, `captures`, `replace`, `replace_all`, `split` |
 | `std::net` | `tcp_connect`, `tcp_send`, `tcp_listen`, `udp_bind`, `lookup_host` |
 | `json` | `parse`, `serialize`, `deserialize` |
 
@@ -233,8 +259,9 @@ code --install-extension editors/vscode/oxy-lang-0.1.0.vsix
 | Rust | Oxy |
 |------|-----|
 | Ownership / borrow checker | Reference-counted. Collections use `Rc<RefCell<>>` — assignment shares data. Use `.clone()` for independent copies. |
-| `&` and `&mut` | Syntax accepted but semantically ignored. |
-| Lifetimes (`'a`) | Syntax accepted but ignored. `'label` used for labeled break/continue. |
+| `&T`, `&mut T`, `&self`, `&str` | Rejected by the parser. Use `T`, `mut T`, `self`, `String` instead. |
+| Lifetimes (`'a`, `<'a>`) | Not supported. `'label` used for labeled break/continue. |
+| Integer widths (`i8`–`u64`) | Three types: `int` (64-bit), `byte` (8-bit unsigned), `float` (64-bit). |
 | Lazy iterators | Iterator adapters are eager — they return `Vec` immediately. |
 | Macros | Built-in pseudo-macros only: `println!`, `format!`, `vec!`, `assert!`, `assert_eq!`, `panic!`, `dbg!`. |
 
@@ -244,17 +271,38 @@ code --install-extension editors/vscode/oxy-lang-0.1.0.vsix
 crates/
 ├── oxy-core/src/
 │   ├── compiler/        # Bytecode compiler (AST → VM opcodes)
+│   │   ├── mod.rs       #   Prescan, compile items, module handling
+│   │   ├── expr.rs      #   Expression compilation
+│   │   ├── pattern.rs   #   Pattern compilation
+│   │   └── visibility.rs#   Visibility enforcement
 │   ├── vm/              # Stack-based VM + test runner
+│   │   ├── mod.rs       #   Dispatch, builtin_method, run_tests
+│   │   ├── builtins/    #   Per-type method implementations
+│   │   ├── arith.rs     #   Arithmetic operations
+│   │   ├── call.rs      #   Function call dispatch
+│   │   └── format.rs    #   String formatting (println!, format!)
 │   ├── type_checker/    # Static type validation
+│   │   ├── mod.rs       #   TypeChecker struct, check_program
+│   │   ├── check_expr.rs#   Expression type inference
+│   │   ├── check_item.rs#   Item type checking
+│   │   └── resolve.rs   #   Name resolution
 │   ├── parser/          # Pratt parser (15 precedence levels)
+│   │   ├── mod.rs       #   Parser struct, parse_program
+│   │   ├── expr.rs      #   Expression parsing
+│   │   ├── item.rs      #   Item parsing (fn, struct, enum, impl)
+│   │   └── stmt.rs      #   Statement parsing
 │   ├── lexer/           # Tokenizer
 │   ├── ast/             # AST node definitions
 │   ├── types/           # Value enum, type system
-│   └── stdlib/          # Standard library (fs, env, regex, net, etc.)
-├── oxy-cli/             # CLI binary (run, test, repl, install)
-└── oxy-lsp/             # LSP server
+│   ├── stdlib/          # Standard library (fs, env, path, process, etc.)
+│   └── symbols.rs       # Canonical symbol definitions
+├── oxy-cli/             # CLI binary (run, test, repl)
+├── oxy-lsp/             # LSP server (completions, diagnostics, hover)
+└── oxy-tug/             # Package manager (tug new, build, add, install)
 editors/vscode/          # VS Code extension
-examples/                # Example .ox programs + feature tests
+examples/
+├── features/            # Language feature tests (200+ .ox files)
+└── showcase/            # Showcase projects (todo-cli, http-scraper, etc.)
 playground/wasm/         # WebAssembly playground
 ```
 

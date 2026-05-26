@@ -55,6 +55,7 @@ Only proceed if they explicitly confirm and can articulate a coherent reason —
 docker compose run --rm dev bash -c "cargo test"                    # All tests
 docker compose run --rm dev bash -c "cargo test -p oxy-core"        # Core only
 docker compose run --rm dev bash -c "cargo test -p oxy-lsp"         # LSP only
+docker compose run --rm dev bash -c "cargo test -p oxy-tug"         # Tug only
 docker compose run --rm dev bash -c "cargo fmt --all"               # Format
 docker compose run --rm dev bash -c "cargo clippy --all-targets -- -D warnings"   # Lint
 docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"  # Run
@@ -68,6 +69,7 @@ docker compose run --rm build-ext                                   # Package .v
 ```bash
 docker compose run --rm dev bash -c "cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test -p oxy-core"
 docker compose run --rm dev bash -c "cargo clippy -p oxy-lsp --all-targets -- -D warnings && cargo test -p oxy-lsp"
+docker compose run --rm dev bash -c "cargo clippy -p oxy-tug --all-targets -- -D warnings && cargo test -p oxy-tug"
 ```
 
 All must pass. No exceptions.
@@ -76,25 +78,92 @@ All must pass. No exceptions.
 
 ```
 crates/oxy-core/src/
-├── lib.rs                  # Public API exports
-├── lexer/mod.rs            # Tokenizer → Vec<Token>
-├── lexer/token.rs          # Token, TokenKind, Span (1-indexed)
-├── ast/mod.rs              # AST: Program, Item, Expr, Stmt, FnDef, StructDef, EnumDef, Attribute, Visibility, etc.
-├── parser/mod.rs           # Pratt parser (~3200 lines), precedence 0-14
-├── compiler/mod.rs         # Compiler: prescan → compile items → bytecode Chunk
-├── type_checker/mod.rs     # Semantic type checker: infers types, enforces field visibility
-├── vm/mod.rs               # Stack-based VM: executes bytecode, hosts run_tests()
-├── symbols.rs              # Canonical symbol definitions (keywords, types, methods, modules) — single source of truth
-├── vm/builtins.rs          # Built-in method implementations (Vec, String, HashMap, HashSet, etc.)
-├── types/mod.rs            # Value enum (all integer widths, floats, Bool, String, Vec, HashMap, Struct, etc.)
-├── env/mod.rs              # Lexical scope chain (for repl/eval compatibility)
-├── json/mod.rs             # Hand-written JSON ser/de
-├── http/mod.rs             # HTTP client (ureq wrapper)
-├── errors.rs               # FerriError: Lexer, Parser, TypeError, Runtime (with line/column)
-├── stdlib.rs               # Standard library built-in functions
-└── repl.rs                 # REPL utilities
-crates/oxy-cli/src/main.rs  # CLI: run, repl, --dump-tokens, --dump-ast, --dump-bytecode
-crates/oxy-lsp/src/main.rs  # LSP server (tower-lsp)
+├── lib.rs                       # Public API exports
+├── lexer/mod.rs                 # Tokenizer → Vec<Token>
+├── lexer/token.rs               # Token, TokenKind, Span (1-indexed)
+├── ast/mod.rs                   # AST: Program, Item, Expr, Stmt, FnDef, etc.
+├── parser/
+│   ├── mod.rs                   #   Parser struct, parse_program (Pratt, precedence 0-14)
+│   ├── expr.rs                  #   Expression parsing
+│   ├── item.rs                  #   Item parsing (fn, struct, enum, impl, trait, mod)
+│   ├── stmt.rs                  #   Statement parsing (let, use, if, while, for, return)
+│   ├── pattern.rs               #   Pattern parsing (match arms, let destructure)
+│   └── ty.rs                    #   Type annotation parsing
+├── compiler/
+│   ├── mod.rs                   #   Prescan, compile items, module handling, post-pass
+│   ├── expr.rs                  #   Expression compilation + PathCall/StructInit
+│   ├── pattern.rs               #   Pattern compilation (match, if-let, while-let)
+│   ├── helpers.rs               #   Shared compiler helpers
+│   ├── path_resolution.rs       #   Path name resolution
+│   ├── visibility.rs            #   Visibility checks (is_visible, check_path_visible)
+│   ├── loop_context.rs          #   Loop break/continue tracking
+│   └── sym_table.rs             #   Symbol table
+├── type_checker/
+│   ├── mod.rs                   #   TypeChecker struct, check_program, TypeInfo
+│   ├── check_expr.rs            #   Expression type inference
+│   ├── check_item.rs            #   Item type checking
+│   ├── check_stmt.rs            #   Statement type checking
+│   ├── collect.rs               #   collect_defs + collect_fn_types
+│   ├── resolve.rs               #   Name resolution
+│   └── tests.rs                 #   Rust unit tests for type checker
+├── vm/
+│   ├── mod.rs                   #   Stack-based VM: dispatch, builtin_method, run_tests()
+│   ├── builtins/                #   Per-type method implementations
+│   │   ├── mod.rs               #     Re-exports
+│   │   ├── numeric.rs           #     int/byte/float methods (signum, etc.)
+│   │   ├── string.rs            #     String methods (find, lines, split_whitespace, etc.)
+│   │   ├── vec.rs               #     Vec methods
+│   │   ├── hashmap.rs           #     HashMap methods
+│   │   ├── hashset.rs           #     HashSet methods
+│   │   ├── btreemap.rs          #     BTreeMap methods
+│   │   ├── btreeset.rs          #     BTreeSet methods
+│   │   ├── iterator.rs          #     Iterator adapter methods
+│   │   ├── option.rs            #     Option methods
+│   │   ├── result.rs            #     Result methods
+│   │   ├── binary_heap.rs       #     BinaryHeap methods
+│   │   └── vec_deque.rs         #     VecDeque methods
+│   ├── arith.rs                 #   Arithmetic operations
+│   ├── call.rs                  #   Function call dispatch
+│   ├── format.rs                #   String formatting (println!, format!)
+│   ├── api.rs                   #   Public VM API
+│   └── tests.rs                 #   Rust unit tests for VM
+├── stdlib/
+│   ├── mod.rs                   #   Stdlib registration + table-driven registry
+│   ├── args.rs                  #   std::args::parse()
+│   ├── db.rs                    #   std::db (SQLite)
+│   ├── env.rs                   #   std::env
+│   ├── fs.rs                    #   std::fs
+│   ├── http.rs                  #   std::http
+│   ├── io.rs                    #   std::io (stdin)
+│   ├── json.rs                  #   json::
+│   ├── math.rs                  #   math::
+│   ├── net.rs                   #   std::net
+│   ├── path.rs                  #   std::path
+│   ├── process.rs               #   std::process (command + spawn)
+│   ├── rand.rs                  #   rand::
+│   ├── regex.rs                 #   std::regex
+│   ├── registry.rs              #   Table-driven built-in dispatch
+│   ├── server.rs                #   std::server (HTTP)
+│   └── time.rs                  #   time::
+├── symbols.rs                   #   Canonical symbol definitions (keywords, types, methods, modules)
+├── types/mod.rs                 #   Value enum, type system
+├── env/mod.rs                   #   Lexical scope chain
+├── json/mod.rs                  #   Hand-written JSON ser/de
+├── http/mod.rs                  #   HTTP client (ureq wrapper)
+├── errors.rs                    #   FerriError: Lexer, Parser, TypeError, Runtime
+└── repl.rs                      #   REPL utilities
+crates/oxy-cli/src/main.rs       #   CLI binary: run, test, repl
+crates/oxy-lsp/src/main.rs       #   LSP server (tower-lsp)
+crates/oxy-tug/                  #   Package manager (tug)
+├── src/
+│   ├── main.rs                  #     CLI entry point
+│   ├── install.rs               #     tug install/uninstall/list
+│   ├── manifest.rs              #     tug.toml parsing
+│   ├── lockfile.rs              #     tug.lock management
+│   ├── project.rs               #     Project resolution
+│   ├── runner.rs                #     tug build/run/test
+│   └── scaffold.rs              #     tug new/init
+└── tests/                       #   Integration tests
 ```
 
 ## Test Infrastructure
@@ -109,6 +178,7 @@ crates/oxy-lsp/src/main.rs  # LSP server (tower-lsp)
 | Integration test | `feature_examples.rs` globs all `.ox` | `crates/oxy-core/tests/feature_examples.rs` |
 | Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
 | Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/VM | `crates/oxy-core/tests/symbol_consistency.rs` |
+| Extern modules | `#[test]` for `--extern` dependency loading | `crates/oxy-core/tests/extern_modules.rs` |
 
 ### `run_tests()` flow (`vm/mod.rs`)
 
@@ -192,9 +262,9 @@ If `pub_vis` is NOT populated during prescan, `is_visible()` will return false f
 
 ### Module compilation
 
-Two code paths:
-- **`compile_module()`** (line ~855): top-level `mod foo { ... }` — prefix = `module.name`
-- **`compile_module_items()` Item::Module** (line ~1391): nested modules — prefix = `"parent::child"` (cumulative)
+Two code paths in `compiler/mod.rs`:
+- **`compile_module()`**: top-level `mod foo { ... }` — prefix = `module.name`
+- **`compile_module_items()` Item::Module**: nested modules — prefix = `"parent::child"` (cumulative)
 
 Items in nested modules get fully qualified names: `"parent::child::fn_name"`.
 
@@ -312,7 +382,7 @@ Compares struct's defining module against current `module_stack`. Private fields
 - **Use raw string literals in builtins dispatch match arms** — use `symbols::<type>_m::CONSTANT` instead. If you add a method without adding its constant to `symbols.rs`, it won't compile
 - **Add a built-in method only to builtins or only to symbols** — must update both: the dispatch match arm (using the constant) AND the `MethodInfo` list in `symbols.rs`. Consistency tests + compile-time constants enforce this
 - **Wire up only some Value variants** for a built-in dispatch — all integer/float widths must go through `numeric::dispatch`, all collection types must be handled. `dispatched_type_names()` + consistency tests catch gaps
-- **Inline-match on type name strings** in the type checker or compiler — use `TypeInfo::from_name()` instead. A partial match with `_ => Unknown` silently accepts any type because `TypeInfo::accepts()` returns `true` when either side is `Unknown`. The `from_name` function at `type_checker/mod.rs:91` is the single source of truth for type name → TypeInfo conversion.
+- **Inline-match on type name strings** in the type checker or compiler — use `TypeInfo::from_name()` instead. A partial match with `_ => Unknown` silently accepts any type because `TypeInfo::accepts()` returns `true` when either side is `Unknown`. The `from_name` function in `type_checker/mod.rs` is the single source of truth for type name → TypeInfo conversion.
 
 ## Symbol Definitions (`symbols.rs`)
 
