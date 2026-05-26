@@ -104,6 +104,11 @@ pub(crate) fn collect_closure_free_vars(
                 out.insert(v);
             }
         }
+        Expr::AsyncBlock { body, .. } => {
+            for stmt in &body.stmts {
+                collect_closure_free_vars_in_stmt(stmt, params, out);
+            }
+        }
         Expr::BinaryOp { left, right, .. } => {
             collect_closure_free_vars(left, params, out);
             collect_closure_free_vars(right, params, out);
@@ -316,6 +321,11 @@ pub(crate) fn collect_free_vars(
                 new_params.push(p.name.clone());
             }
             collect_free_vars(body, &new_params, vars);
+        }
+        crate::ast::Expr::AsyncBlock { body, .. } => {
+            for stmt in &body.stmts {
+                collect_free_vars_in_stmt(stmt, params, vars);
+            }
         }
         crate::ast::Expr::FieldAccess { object, .. } => {
             collect_free_vars(object, params, vars);
@@ -785,6 +795,9 @@ pub(crate) fn substitute_type_params(expr: &mut crate::ast::Expr, subst: &[(Stri
             substitute_type_params(count, subst);
         }
         Expr::Closure { body, .. } => substitute_type_params(body, subst),
+        Expr::AsyncBlock { body, .. } => {
+            substitute_type_params_in_block(body, subst);
+        }
         Expr::As { expr: inner, .. }
         | Expr::Try { expr: inner, .. }
         | Expr::Await { expr: inner, .. } => substitute_type_params(inner, subst),

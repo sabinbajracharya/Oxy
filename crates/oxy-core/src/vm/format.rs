@@ -34,11 +34,18 @@ pub(super) fn trace_format_op(op: &OpCode) -> String {
             target_ip,
             param_count,
             meta_idx,
+            is_async,
         } => {
             format!(
-                "Closure(ip={}, params={}, meta={})",
-                target_ip, param_count, meta_idx
+                "Closure(ip={}, params={}, meta={}, is_async={})",
+                target_ip, param_count, meta_idx, is_async
             )
+        }
+        OpCode::AsyncBlock {
+            target_ip,
+            meta_idx,
+        } => {
+            format!("AsyncBlock(ip={}, meta={})", target_ip, meta_idx)
         }
         OpCode::MakeCell(s) => format!("MakeCell({})", s),
         OpCode::Dup => "Dup".into(),

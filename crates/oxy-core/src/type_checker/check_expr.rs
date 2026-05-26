@@ -585,6 +585,24 @@ impl TypeChecker {
                         self.infer_expr(arg)?;
                     }
                 }
+                // Fallback: check if callee is a function-typed value (closure, async closure).
+                let callee_ty = self.infer_expr(callee)?;
+                if let TypeInfo::Function { params, ret } = &callee_ty {
+                    // Only check arg count when params are known (non-empty).
+                    // A bare `Fn` type has 0 params and accepts any arity.
+                    if !params.is_empty() && args.len() != params.len() {
+                        return Err(FerriError::TypeError {
+                            message: format!(
+                                "expected {} arguments, found {}",
+                                params.len(),
+                                args.len()
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    return Ok(*ret.clone());
+                }
                 Ok(TypeInfo::Unknown)
             }
 
@@ -1349,6 +1367,7 @@ impl TypeChecker {
                 params,
                 return_type,
                 body,
+                is_async,
                 ..
             } => {
                 let mut param_types = Vec::with_capacity(params.len());
@@ -1380,10 +1399,19 @@ impl TypeChecker {
                         });
                     }
                 }
+                let ret_ty = if *is_async {
+                    TypeInfo::Future(Box::new(inferred_ret))
+                } else {
+                    inferred_ret
+                };
                 Ok(TypeInfo::Function {
                     params: param_types,
-                    ret: Box::new(inferred_ret),
+                    ret: Box::new(ret_ty),
                 })
+            }
+            Expr::AsyncBlock { body, .. } => {
+                let last_ty = self.block_tail_type(body)?;
+                Ok(TypeInfo::Future(Box::new(last_ty)))
             }
             Expr::Await { expr: inner, .. } => {
                 let inner_ty = self.infer_expr(inner)?;

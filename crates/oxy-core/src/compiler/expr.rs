@@ -519,10 +519,12 @@ impl Compiler {
                         let param_names: Vec<String> =
                             params.iter().map(|p| p.name.clone()).collect();
                         self.closure_meta.push((param_names, *body_expr, vec![]));
+                        let is_async = self.async_fn_names.contains(&resolved);
                         self.emit(OpCode::Closure {
                             target_ip: target,
                             param_count: params.len(),
                             meta_idx,
+                            is_async,
                         });
                         Ok(())
                     } else if let Some(sdef) = self.struct_defs.get(&resolved) {
@@ -1569,7 +1571,12 @@ impl Compiler {
                 }
             }
 
-            Expr::Closure { params, body, .. } => {
+            Expr::Closure {
+                params,
+                body,
+                is_async,
+                ..
+            } => {
                 // Emit a jump to skip over the closure body in the instruction stream
                 let skip_jump_idx = self.emit(OpCode::Jump(0));
                 let target_ip = self.code.len();
@@ -1614,6 +1621,56 @@ impl Compiler {
                 self.emit(OpCode::Closure {
                     target_ip,
                     param_count: params.len(),
+                    meta_idx,
+                    is_async: *is_async,
+                });
+                Ok(())
+            }
+
+            Expr::AsyncBlock { body, .. } => {
+                let skip_jump_idx = self.emit(OpCode::Jump(0));
+                let target_ip = self.code.len();
+                let saved_sym = std::mem::replace(&mut self.sym, SymTable::new(0));
+                let param_names: Vec<String> = vec![];
+                let captured_free = find_free_vars(&Expr::Block(body.clone()), &param_names);
+                let captured: Vec<(String, usize, bool)> = captured_free
+                    .iter()
+                    .filter_map(|name| {
+                        saved_sym.get(name).map(|outer_slot| {
+                            let is_mut = saved_sym.is_mutable(name);
+                            self.sym.define(name);
+                            if is_mut {
+                                self.sym.mutable.insert(name.clone());
+                            }
+                            (name.clone(), outer_slot, is_mut)
+                        })
+                    })
+                    .collect();
+                let stmt_count = body.stmts.len();
+                for (i, stmt) in body.stmts.iter().enumerate() {
+                    self.compile_stmt(stmt, i == stmt_count - 1)?;
+                }
+                let has_tail = body.stmts.last().map_or(false, |s| {
+                    matches!(
+                        s,
+                        Stmt::Expr {
+                            has_semicolon: false,
+                            ..
+                        }
+                    )
+                });
+                if !has_tail {
+                    self.emit(OpCode::ConstUnit);
+                }
+                self.emit(OpCode::Return);
+                self.fn_frame_sizes.insert(target_ip, self.sym.next_slot);
+                self.sym = saved_sym;
+                self.patch(skip_jump_idx, OpCode::Jump(self.code.len()));
+                let meta_idx = self.closure_meta.len();
+                self.closure_meta
+                    .push((param_names, Expr::Block(body.clone()), captured));
+                self.emit(OpCode::AsyncBlock {
+                    target_ip,
                     meta_idx,
                 });
                 Ok(())

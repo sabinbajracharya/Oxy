@@ -578,7 +578,10 @@ pub enum Expr {
         return_type: Option<TypeAnnotation>,
         body: Box<Expr>,
         span: Span,
+        is_async: bool,
     },
+    /// Async block: `async { ... }` — evaluates to a Future<T>.
+    AsyncBlock { body: Block, span: Span },
     /// Await expression: `expr.await`
     Await { expr: Box<Expr>, span: Span },
     /// F-string expression: `f"Hello {name}!"`
@@ -624,6 +627,7 @@ impl Expr {
             | Expr::IfLet { span: s, .. }
             | Expr::Try { span: s, .. }
             | Expr::Closure { span: s, .. }
+            | Expr::AsyncBlock { span: s, .. }
             | Expr::Await { span: s, .. }
             | Expr::FString { span: s, .. }
             | Expr::Return { span: s, .. } => *s,
@@ -1527,8 +1531,12 @@ impl Expr {
                 params,
                 return_type,
                 body,
+                is_async,
                 ..
             } => {
+                if *is_async {
+                    out.push_str("async ");
+                }
                 out.push('|');
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -1545,6 +1553,14 @@ impl Expr {
                 }
                 out.push(' ');
                 body.pretty_print(out, indent);
+            }
+            Expr::AsyncBlock { body, .. } => {
+                out.push_str("async {\n");
+                for stmt in &body.stmts {
+                    stmt.pretty_print(out, indent + 1);
+                }
+                out.push_str(&"  ".repeat(indent));
+                out.push('}');
             }
             Expr::Await { expr, .. } => {
                 expr.pretty_print(out, indent);

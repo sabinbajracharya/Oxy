@@ -516,10 +516,10 @@ impl Parser {
             )),
 
             // Closure: `|params| expr` or `|params| { body }`
-            TokenKind::Pipe => self.parse_closure(),
+            TokenKind::Pipe => self.parse_closure(false),
 
             // Closure with no params: `|| expr` or `|| { body }`
-            TokenKind::PipePipe => self.parse_empty_closure(),
+            TokenKind::PipePipe => self.parse_empty_closure(false),
 
             // Prefix range: `..end` or `..=end`
             TokenKind::DotDot | TokenKind::DotDotEq => {
@@ -547,9 +547,29 @@ impl Parser {
             TokenKind::Move => {
                 self.advance(); // consume `move`
                 if self.check(&TokenKind::PipePipe) {
-                    self.parse_empty_closure()
+                    self.parse_empty_closure(false)
                 } else {
-                    self.parse_closure()
+                    self.parse_closure(false)
+                }
+            }
+
+            // `async` closure: `async || expr`, `async |params| expr`, `async { ... }`
+            TokenKind::Async => {
+                let start_span = self.current_span();
+                self.advance(); // consume `async`
+                if self.check(&TokenKind::PipePipe) {
+                    self.parse_empty_closure(true)
+                } else if self.check(&TokenKind::Pipe) {
+                    self.parse_closure(true)
+                } else if self.check(&TokenKind::LBrace) {
+                    let block = self.parse_block()?;
+                    let end_span = block.span;
+                    Ok(Expr::AsyncBlock {
+                        body: block,
+                        span: self.merge_spans(start_span, end_span),
+                    })
+                } else {
+                    Err(self.error("expected `||`, `|`, or `{` after `async`".into()))
                 }
             }
 
@@ -843,7 +863,7 @@ impl Parser {
     }
 
     /// Parse a closure expression: `|params| expr` or `|params| { body }`
-    fn parse_closure(&mut self) -> Result<Expr, FerriError> {
+    fn parse_closure(&mut self, is_async: bool) -> Result<Expr, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Pipe)?;
 
@@ -894,11 +914,12 @@ impl Parser {
             return_type,
             body: Box::new(body),
             span: self.merge_spans(start_span, end_span),
+            is_async,
         })
     }
 
     /// Parse a closure with no params: `|| expr` or `|| { body }`
-    fn parse_empty_closure(&mut self) -> Result<Expr, FerriError> {
+    fn parse_empty_closure(&mut self, is_async: bool) -> Result<Expr, FerriError> {
         let start_span = self.current_span();
         self.expect(TokenKind::PipePipe)?;
 
@@ -922,6 +943,7 @@ impl Parser {
             return_type,
             body: Box::new(body),
             span: self.merge_spans(start_span, end_span),
+            is_async,
         })
     }
 

@@ -244,6 +244,9 @@ pub struct FutureData {
     pub closure_env: Env,
     pub args: Vec<Value>,
     pub target_ip: usize,
+    /// Captured variable names for closures/blocks — propagated through .await
+    /// so run_closure can populate locals from closure_env.
+    pub captured_names: Vec<String>,
 }
 
 /// Lazy iterator state — each variant represents one stage in an adapter chain.
@@ -399,6 +402,8 @@ pub struct FunctionData {
     /// Captured variable names in dense order. The closure's frame places
     /// `captured_names[i]` at `locals[i]`; params follow at `locals[N..]`.
     pub captured_names: Vec<String>,
+    /// Whether this function is async (calling it returns Future instead of executing).
+    pub is_async: bool,
 }
 
 impl Value {

@@ -217,6 +217,12 @@ pub enum OpCode {
         target_ip: usize,
         param_count: usize,
         meta_idx: usize,
+        is_async: bool,
+    },
+    /// Push a Value::Future directly from an async block body.
+    AsyncBlock {
+        target_ip: usize,
+        meta_idx: usize,
     },
     /// Pop a Value::Function, extract its target IP, call with `arg_count` args.
     CallClosure {
@@ -1382,21 +1388,25 @@ impl Vm {
                     closure_env: crate::env::Environment::new(),
                     args,
                     target_ip,
+                    captured_names: Vec::new(),
                 })));
             }
             OpCode::Await => {
                 let val = self.stack.pop().unwrap_or(Value::Unit);
                 match val {
                     Value::Future(future) => {
-                        // Build a FunctionData from the FutureData and run it
+                        // Build a FunctionData from the FutureData and run it.
+                        // Propagate closure_env and captured_names so that
+                        // async closures/blocks preserve their captures.
                         let func = Value::Function(Box::new(FunctionData {
                             name: future.name.clone(),
                             params: future.params.clone(),
                             return_type: future.return_type.clone(),
                             body: future.body.clone(),
-                            closure_env: crate::env::Environment::new(),
+                            closure_env: future.closure_env.clone(),
                             target_ip: Some(future.target_ip),
-                            captured_names: Vec::new(),
+                            captured_names: future.captured_names.clone(),
+                            is_async: false,
                         }));
                         let result = self.run_closure(&func, &future.args)?;
                         self.stack.push(result);
@@ -1591,6 +1601,25 @@ impl Vm {
                     .get(self.stack.len().saturating_sub(arg_count + 1))
                     .cloned();
                 if let Some(Value::Function(f)) = fn_val {
+                    if f.is_async {
+                        // Async closure: create a Future instead of executing.
+                        let drain_start = self.stack.len() - arg_count - 1;
+                        let mut drained: Vec<Value> = self.stack.drain(drain_start..).collect();
+                        let _closure_val = drained.remove(0);
+                        let args = drained;
+                        let target_ip = f.target_ip.unwrap_or(0);
+                        self.stack.push(Value::Future(Box::new(FutureData {
+                            name: f.name.clone(),
+                            params: f.params.clone(),
+                            return_type: f.return_type.clone(),
+                            body: f.body.clone(),
+                            closure_env: f.closure_env.clone(),
+                            args,
+                            target_ip,
+                            captured_names: f.captured_names.clone(),
+                        })));
+                        return Ok(StepOutcome::Bump);
+                    }
                     if let Some(target) = f.target_ip {
                         if self.call_stack.len() >= 1024 {
                             return Err("recursion limit exceeded (max depth 1024)".into());
@@ -1633,6 +1662,7 @@ impl Vm {
                 target_ip,
                 param_count,
                 meta_idx,
+                is_async,
             } => {
                 let blank_span = crate::lexer::Span {
                     start: 0,
@@ -1693,7 +1723,60 @@ impl Vm {
                         closure_env,
                         target_ip: Some(target_ip),
                         captured_names,
+                        is_async,
                     })));
+            }
+            OpCode::AsyncBlock {
+                target_ip,
+                meta_idx,
+            } => {
+                let blank_span = crate::lexer::Span {
+                    start: 0,
+                    end: 0,
+                    line: 0,
+                    column: 0,
+                };
+                let (_param_names, body_expr, captured_vars) = self
+                    .chunk
+                    .closure_meta
+                    .get(meta_idx)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        (
+                            vec![],
+                            crate::ast::Expr::IntLiteral(0, IntegerSuffix::None, blank_span),
+                            vec![],
+                        )
+                    });
+                let body_block = crate::ast::Block {
+                    stmts: vec![crate::ast::Stmt::Expr {
+                        expr: body_expr,
+                        has_semicolon: false,
+                    }],
+                    span: blank_span,
+                };
+                let closure_env = crate::env::Environment::new();
+                if !captured_vars.is_empty() {
+                    let outer_locals: Vec<Value> = self.current_locals().to_vec();
+                    for (name, slot, is_mut) in &captured_vars {
+                        let val = outer_locals.get(*slot).cloned().unwrap_or(Value::Unit);
+                        closure_env.borrow_mut().define(name.clone(), val, *is_mut);
+                    }
+                }
+                let captured_names: Vec<String> = captured_vars
+                    .iter()
+                    .map(|(name, _, _)| name.clone())
+                    .collect();
+                self.stack.push(Value::Future(Box::new(FutureData {
+                    name: "<async_block>".into(),
+                    params: vec![],
+                    return_type: None,
+                    body: body_block,
+                    closure_env,
+                    args: vec![],
+                    target_ip,
+                    captured_names,
+                })));
             }
             OpCode::MethodCall {
                 method_name,
@@ -2308,10 +2391,15 @@ fn format_opcode(op: &OpCode, local_names: &[String]) -> String {
             target_ip,
             param_count,
             meta_idx,
+            is_async,
         } => format!(
-            "Closure(target_ip={}, param_count={}, meta_idx={})",
-            target_ip, param_count, meta_idx
+            "Closure(target_ip={}, param_count={}, meta_idx={}, is_async={})",
+            target_ip, param_count, meta_idx, is_async
         ),
+        OpCode::AsyncBlock {
+            target_ip,
+            meta_idx,
+        } => format!("AsyncBlock(target_ip={}, meta_idx={})", target_ip, meta_idx),
         OpCode::CallClosure { arg_count } => format!("CallClosure(arg_count={})", arg_count),
         OpCode::MakeFuture {
             target_ip,
