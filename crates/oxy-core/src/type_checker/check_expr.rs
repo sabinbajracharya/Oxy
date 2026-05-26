@@ -987,6 +987,7 @@ impl TypeChecker {
                     "to_string" => TypeInfo::String,
                     "len" => TypeInfo::I64,
                     "is_empty" | "contains" | "starts_with" | "ends_with" => TypeInfo::Bool,
+                    "find" => TypeInfo::Option(Box::new(TypeInfo::I64)),
                     "clone" => obj_ty.clone(),
                     _ => TypeInfo::Unknown,
                 })

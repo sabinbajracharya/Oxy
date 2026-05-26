@@ -211,6 +211,7 @@ pub const STRING_METHODS: &[MethodInfo] = methods![
     "clone": "() -> String" => "Create a copy of the string.",
     "contains": "(pat: String) -> bool" => "Check if the string contains `pat`.",
     "ends_with": "(pat: String) -> bool" => "Check if the string ends with `pat`.",
+    "find": "(pat: String) -> Option<i64>" => "Return the char index of the first occurrence of `pat`, or None.",
     "is_empty": "() -> bool" => "Check if the string is empty.",
     "len": "() -> i64" => "Return the number of characters.",
     "parse_float": "() -> Option<f64>" => "Parse the string as an f64.",
@@ -575,6 +576,7 @@ pub mod string_m {
     pub const SUBSTRING: &str = "substring";
     pub const PARSE_INT: &str = "parse_int";
     pub const PARSE_FLOAT: &str = "parse_float";
+    pub const FIND: &str = "find";
     pub const CLONE: &str = "clone";
     pub const TO_STRING: &str = "to_string";
 }

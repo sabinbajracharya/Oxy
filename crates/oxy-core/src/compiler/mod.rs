@@ -347,13 +347,50 @@ impl Compiler {
             "",
         );
 
+        // Load and prescan --extern modules so `use <extern_name>::...` works
+        // without a preceding `mod <extern_name>;` declaration.
+        let mut extern_programs: Vec<(String, crate::ast::Program)> = Vec::new();
+        {
+            let externs: Vec<(String, std::path::PathBuf)> = self
+                .externs
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            for (name, path) in &externs {
+                let source = std::fs::read_to_string(path).map_err(|e| FerriError::Runtime {
+                    message: format!("could not read extern module `{name}`: {e}"),
+                    line: 0,
+                    column: 0,
+                })?;
+                let program = crate::parser::parse(&source)?;
+                prescan_items(
+                    &program.items,
+                    &mut self.functions,
+                    &mut self.fn_meta,
+                    &mut self.struct_defs,
+                    &mut self.enum_defs,
+                    &mut self.pub_vis,
+                    name,
+                );
+                extern_programs.push((name.clone(), program));
+            }
+        }
+
         // Pre-resolve globs: process all use statements eagerly against pre-scanned data.
         // This ensures glob aliases exist before function bodies are compiled.
         self.preresolve_uses(&program.items)?;
 
-        // Compile function bodies
+        // Compile function bodies from the main program.
         for item in &program.items {
             self.compile_item(item)?;
+        }
+
+        // Compile function bodies from --extern modules.
+        for (name, program) in &extern_programs {
+            self.module_names.insert(name.clone());
+            self.module_stack.push(name.clone());
+            self.compile_module_items(&program.items, name)?;
+            self.module_stack.pop();
         }
 
         // Patch forward calls: replace sentinel targets with actual function IPs

@@ -119,6 +119,16 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
                 "cannot parse \"{s}\" as float"
             )))),
         },
+        symbols::string_m::FIND => {
+            let pat = args.first().map(|v| v.to_string()).unwrap_or_default();
+            match s.find(&pat) {
+                Some(byte_idx) => {
+                    let char_idx = s[..byte_idx].chars().count() as i64;
+                    Ok(Value::some(Value::I64(char_idx)))
+                }
+                None => Ok(Value::none()),
+            }
+        }
         symbols::string_m::CLONE => Ok(Value::String(s.clone())),
         symbols::string_m::TO_STRING => Ok(Value::String(s.clone())),
         _ => Err(format!("no method '{}' on type String", method)),
@@ -146,6 +156,7 @@ pub fn method_names() -> &'static [&'static str] {
         "substring",
         "parse_int",
         "parse_float",
+        "find",
         "clone",
         "to_string",
     ]
