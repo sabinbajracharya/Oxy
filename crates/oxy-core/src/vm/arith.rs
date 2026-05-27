@@ -11,7 +11,7 @@ use crate::types::{FloatWidth, IntegerWidth, Value};
 /// Promote two integers to a common type. Same-type (byte+byte) stays as
 /// byte; any int+byte mix widens to int, since int is the wider type and
 /// arithmetic between mixed widths conceptually happens at int.
-pub(super) fn promote_ints(a: Value, b: Value) -> (Value, Value) {
+pub(crate) fn promote_ints(a: Value, b: Value) -> (Value, Value) {
     if std::mem::discriminant(&a) == std::mem::discriminant(&b) {
         (a, b)
     } else {
@@ -20,7 +20,7 @@ pub(super) fn promote_ints(a: Value, b: Value) -> (Value, Value) {
 }
 
 /// Wrap an i64 result back to the target integer variant (byte or int).
-pub(super) fn wrap_to(v: i64, target: &Value) -> Value {
+pub(crate) fn wrap_to(v: i64, target: &Value) -> Value {
     match target {
         Value::U8(_) => Value::U8(v as u8),
         _ => Value::I64(v),
@@ -29,7 +29,7 @@ pub(super) fn wrap_to(v: i64, target: &Value) -> Value {
 
 // --- Arithmetic ---
 
-pub(super) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     // String concatenation
     if let (Value::String(sa), Value::String(sb)) = (&a, &b) {
         return Ok(Value::String(format!("{sa}{sb}")));
@@ -55,7 +55,7 @@ pub(super) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     ))
 }
 
-pub(super) fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
         return Ok(Value::F64(a.to_f64() - b.to_f64()));
     }
@@ -70,7 +70,7 @@ pub(super) fn vm_sub(a: Value, b: Value) -> Result<Value, String> {
     ))
 }
 
-pub(super) fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
         return Ok(Value::F64(a.to_f64() * b.to_f64()));
     }
@@ -85,7 +85,7 @@ pub(super) fn vm_mul(a: Value, b: Value) -> Result<Value, String> {
     ))
 }
 
-pub(super) fn vm_div(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_div(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
         if b.to_f64() == 0.0 {
             return Err("division by zero".into());
@@ -107,7 +107,7 @@ pub(super) fn vm_div(a: Value, b: Value) -> Result<Value, String> {
     ))
 }
 
-pub(super) fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
     if a.is_float() || b.is_float() {
         if b.to_f64() == 0.0 {
             return Err("modulo by zero".into());
@@ -129,7 +129,7 @@ pub(super) fn vm_rem(a: Value, b: Value) -> Result<Value, String> {
     ))
 }
 
-pub(super) fn vm_neg(v: Value) -> Value {
+pub(crate) fn vm_neg(v: Value) -> Value {
     match v {
         Value::I64(n) => Value::I64(n.wrapping_neg()),
         Value::U8(n) => Value::U8(n.wrapping_neg()),
@@ -138,7 +138,7 @@ pub(super) fn vm_neg(v: Value) -> Value {
     }
 }
 
-pub(super) fn vm_bitnot(v: Value) -> Value {
+pub(crate) fn vm_bitnot(v: Value) -> Value {
     match v {
         Value::I64(n) => Value::I64(!n),
         Value::U8(n) => Value::U8(!n),
@@ -146,7 +146,7 @@ pub(super) fn vm_bitnot(v: Value) -> Value {
     }
 }
 
-pub(super) fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() & b.as_i64(), &a))
@@ -155,7 +155,7 @@ pub(super) fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
     }
 }
 
-pub(super) fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() | b.as_i64(), &a))
@@ -164,7 +164,7 @@ pub(super) fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
     }
 }
 
-pub(super) fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() ^ b.as_i64(), &a))
@@ -173,7 +173,7 @@ pub(super) fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
     }
 }
 
-pub(super) fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
         let shift = b.as_u64() as u32;
         Ok(wrap_to(a.as_i64().wrapping_shl(shift), &a))
@@ -182,7 +182,7 @@ pub(super) fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
     }
 }
 
-pub(super) fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
+pub(crate) fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
     if a.is_integer() && b.is_integer() {
         let shift = b.as_u64() as u32;
         Ok(wrap_to(a.as_i64().wrapping_shr(shift), &a))
@@ -194,7 +194,7 @@ pub(super) fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
 // --- Cast helpers ---
 
 /// Extract an i64 from any Value type (for cast/conversion purposes).
-pub(super) fn value_to_i64(val: &Value) -> i64 {
+pub(crate) fn value_to_i64(val: &Value) -> i64 {
     match val {
         Value::I64(n) => *n,
         Value::U8(n) => *n as i64,
@@ -205,7 +205,7 @@ pub(super) fn value_to_i64(val: &Value) -> i64 {
 }
 
 /// Cast a Value to a specific integer width with wrapping.
-pub(super) fn cast_to_int(val: &Value, width: IntegerWidth) -> Value {
+pub(crate) fn cast_to_int(val: &Value, width: IntegerWidth) -> Value {
     let bits = value_to_i64(val);
     match width {
         IntegerWidth::I64 => Value::I64(bits),
@@ -214,7 +214,7 @@ pub(super) fn cast_to_int(val: &Value, width: IntegerWidth) -> Value {
 }
 
 /// Cast a Value to a specific float width.
-pub(super) fn cast_to_float(val: &Value, _width: FloatWidth) -> Value {
+pub(crate) fn cast_to_float(val: &Value, _width: FloatWidth) -> Value {
     let f = match val {
         Value::F64(n) => *n,
         Value::Char(c) => *c as u32 as f64,
