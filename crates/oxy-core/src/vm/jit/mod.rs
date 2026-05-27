@@ -138,6 +138,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
             &[types::I64, types::I64, types::I64],
             None,
         ),
+        ("oxy_struct_init", &[types::I64, types::I64], None),
         ("oxy_display_arg", &[types::I64], None),
         ("oxy_await_ffi", &[types::I64], Some(types::I64)),
         ("oxy_spawn_ffi", &[types::I64], None),
@@ -372,5 +373,23 @@ mod tests {
     fn test_jit_string_len_method() {
         let result = run_compiled_jit("fn main() -> int { let s = \"hello\"; s.len() }").unwrap();
         assert_eq!(result, crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_jit_struct_init() {
+        let result = run_compiled_jit(
+            "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.x }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_jit_struct_field_y() {
+        let result = run_compiled_jit(
+            "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.y }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(2));
     }
 }

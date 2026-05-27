@@ -676,13 +676,27 @@ fn translate_op(
             false
         }
 
+        OpCode::StructInit {
+            name,
+            field_count,
+            field_names,
+        } => {
+            let meta_idx = crate::vm::jit::ffi::register_struct_init(
+                name.clone(),
+                field_names.clone(),
+                *field_count,
+            );
+            let mi = builder.ins().iconst(types::I64, meta_idx as i64);
+            call1(builder, ffi_refs, "oxy_struct_init", mi);
+            // Pops field_count values, pushes one struct
+            *stack_depth = *stack_depth - field_count + 1;
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
         _ => {
             // For stubbed opcodes, just track stack balance based on known effects
             match op {
-                OpCode::StructInit { field_count, .. } => {
-                    *stack_depth = *stack_depth - field_count + 1
-                }
                 OpCode::StructUpdate { field_count, .. } => *stack_depth -= field_count,
                 OpCode::ConstEnumVariant { .. } => *stack_depth += 1,
                 OpCode::MakeEnumVariant { arg_count, .. } => {

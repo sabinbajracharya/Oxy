@@ -375,6 +375,40 @@ pub(crate) fn register_builtin_path(segments: Vec<String>) -> usize {
     idx
 }
 
+// ── Struct init registry ──────────────────────────────────────────────
+
+/// Struct init metadata stored in a global registry.
+struct StructInitMeta {
+    name: String,
+    field_names: Vec<String>,
+    field_count: usize,
+}
+
+static STRUCT_INIT_META: std::sync::OnceLock<std::sync::Mutex<Vec<StructInitMeta>>> =
+    std::sync::OnceLock::new();
+
+fn struct_init_meta_lock() -> std::sync::MutexGuard<'static, Vec<StructInitMeta>> {
+    STRUCT_INIT_META
+        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn register_struct_init(
+    name: String,
+    field_names: Vec<String>,
+    field_count: usize,
+) -> usize {
+    let mut lock = struct_init_meta_lock();
+    let idx = lock.len();
+    lock.push(StructInitMeta {
+        name,
+        field_names,
+        field_count,
+    });
+    idx
+}
+
 // ── Function calls ───────────────────────────────────────────────────
 
 /// Call stack for nested Oxy function invocations.
@@ -928,21 +962,24 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
 
 // ── Structs ───────────────────────────────────────────────────────────
 
-extern "C" fn oxy_struct_init(
-    ctx: *mut JitContext,
-    name_ptr: *const u8,
-    name_len: usize,
-    field_count: usize,
-    _fnames_ptr: *const u8,
-    _fnames_len: usize,
-) {
+extern "C" fn oxy_struct_init(ctx: *mut JitContext, meta_idx: usize) {
     let ctx = unsafe { &mut *ctx };
-    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
-    let name = String::from_utf8_lossy(name_bytes).into_owned();
+    let meta = {
+        let lock = struct_init_meta_lock();
+        lock.get(meta_idx).map(|m| StructInitMeta {
+            name: m.name.clone(),
+            field_names: m.field_names.clone(),
+            field_count: m.field_count,
+        })
+    };
+    let (name, field_names, field_count) = meta
+        .map(|m| (m.name, m.field_names, m.field_count))
+        .unwrap_or_default();
     let mut fields = HashMap::new();
-    for i in 0..field_count {
+    for i in (0..field_count).rev() {
         let val = unsafe { pop(ctx) };
-        fields.insert(format!("_f{i}"), val);
+        let fname = field_names.get(i).cloned().unwrap_or_else(|| format!("_f{i}"));
+        fields.insert(fname, val);
     }
     unsafe {
         push(ctx, Value::Struct { name, fields });
