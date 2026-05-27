@@ -2186,6 +2186,7 @@ extern "C" fn oxy_make_future(ctx: *mut JitContext, target_ip: usize, arg_count:
 
 pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
     let syms: &[(&str, *const u8)] = &[
+        ("oxy_set_result_i64", oxy_set_result_i64 as _),
         ("oxy_push_unit", oxy_push_unit as _),
         ("oxy_push_bool", oxy_push_bool as _),
         ("oxy_push_int", oxy_push_int as _),
