@@ -338,6 +338,17 @@ impl JitVm {
             sched.reset();
         }
 
+        // Determine local_count for the main function so the operand stack
+        // starts after the locals, preventing stack pushes from overwriting
+        // local variables stored at buffer[0..local_count].
+        let main_local_count = self
+            .engine
+            .chunk
+            .fn_local_names
+            .get(&entry_ip)
+            .map(|names| names.len())
+            .unwrap_or(self.engine.chunk.local_count);
+
         // Create main task (task 0) and make it ready
         let main_task_id: usize = {
             let mut sched = ffi::scheduler_lock();
@@ -353,7 +364,7 @@ impl JitVm {
                         resume_ip: entry_ip,
                         locals: vec![],
                         operand_stack: vec![],
-                        local_count: 0,
+                        local_count: main_local_count,
                         yield_reason: 0,
                         yield_data: 0,
                     }),
@@ -479,7 +490,18 @@ impl JitVm {
             None => return VmResult::Error(format!("JIT: no function at ip={ip}")),
         };
 
-        let mut ctx = JitContext::new(8);
+        // Determine the correct local_count for this function so the operand
+        // stack starts after the locals, preventing overlap.
+        let local_count = self
+            .engine
+            .chunk
+            .fn_local_names
+            .get(&ip)
+            .map(|names| names.len())
+            .unwrap_or(0)
+            .max(8);
+
+        let mut ctx = JitContext::new(local_count);
         ctx.result = crate::types::Value::Unit;
 
         if let Some(ref output_rc) = self.output {
