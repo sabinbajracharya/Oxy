@@ -70,8 +70,10 @@ extern "C" fn oxy_push_char(ctx: *mut JitContext, val: u32) {
 
 extern "C" fn oxy_push_string(ctx: *mut JitContext, ptr: *const u8, len: usize) {
     let ctx = unsafe { &mut *ctx };
+    eprintln!("[DEBUG] oxy_push_string ptr={ptr:p} len={len}");
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
     let s = String::from_utf8_lossy(bytes).into_owned();
+    eprintln!("[DEBUG] oxy_push_string result={s:?}");
     unsafe {
         push(ctx, Value::String(s));
     }
@@ -679,7 +681,11 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
 extern "C" fn oxy_return(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     // Mirror VM: self.stack.pop().unwrap_or(Value::Unit)
-    let result = if ctx.sp == 0 { Value::Unit } else { unsafe { pop(ctx) } };
+    let result = if ctx.sp == 0 {
+        Value::Unit
+    } else {
+        unsafe { pop(ctx) }
+    };
     ctx.result = result;
 }
 
@@ -701,7 +707,12 @@ extern "C" fn oxy_make_array(ctx: *mut JitContext, count: usize) {
         elements.push(unsafe { pop(ctx) });
     }
     elements.reverse();
-    unsafe { push(ctx, Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements)))); }
+    unsafe {
+        push(
+            ctx,
+            Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements))),
+        );
+    }
 }
 
 extern "C" fn oxy_make_fixed_array(ctx: *mut JitContext, count: usize) {
@@ -711,7 +722,9 @@ extern "C" fn oxy_make_fixed_array(ctx: *mut JitContext, count: usize) {
         elements.push(unsafe { pop(ctx) });
     }
     elements.reverse();
-    unsafe { push(ctx, Value::Array(elements)); }
+    unsafe {
+        push(ctx, Value::Array(elements));
+    }
 }
 
 extern "C" fn oxy_make_tuple(ctx: *mut JitContext, count: usize) {
@@ -721,7 +734,9 @@ extern "C" fn oxy_make_tuple(ctx: *mut JitContext, count: usize) {
         elements.push(unsafe { pop(ctx) });
     }
     elements.reverse();
-    unsafe { push(ctx, Value::Tuple(elements)); }
+    unsafe {
+        push(ctx, Value::Tuple(elements));
+    }
 }
 
 // ── Iteration ─────────────────────────────────────────────────────────
@@ -736,21 +751,27 @@ extern "C" fn oxy_make_iter(ctx: *mut JitContext) {
                 crate::types::IteratorState::VecSource { data, index: 0 },
             )))
         }
-        Value::Range(start, end) => {
-            Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
-                crate::types::IteratorState::RangeSource { current: start, end },
-            )))
-        }
+        Value::Range(start, end) => Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
+            crate::types::IteratorState::RangeSource {
+                current: start,
+                end,
+            },
+        ))),
         Value::String(s) => {
             let chars: Vec<Value> = s.chars().map(Value::Char).collect();
             Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
-                crate::types::IteratorState::VecSource { data: chars, index: 0 },
+                crate::types::IteratorState::VecSource {
+                    data: chars,
+                    index: 0,
+                },
             )))
         }
         Value::Iterator(_) => val,
         _ => panic!("cannot iterate over {val:?}"),
     };
-    unsafe { push(ctx, iter); }
+    unsafe {
+        push(ctx, iter);
+    }
 }
 
 extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
@@ -770,7 +791,9 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
         Value::Array(a) => a.len() as i64,
         _ => 0,
     };
-    unsafe { push(ctx, Value::I64(len)); }
+    unsafe {
+        push(ctx, Value::I64(len));
+    }
 }
 
 extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
@@ -787,7 +810,9 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
         }
         _ => panic!("cannot index {collection:?}"),
     };
-    unsafe { push(ctx, result); }
+    unsafe {
+        push(ctx, result);
+    }
 }
 
 extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
@@ -805,7 +830,9 @@ extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
         }
         _ => panic!("cannot index-store {collection:?}"),
     }
-    unsafe { push(ctx, value); }
+    unsafe {
+        push(ctx, value);
+    }
 }
 
 extern "C" fn oxy_make_range(ctx: *mut JitContext) {
@@ -822,7 +849,9 @@ extern "C" fn oxy_make_range(ctx: *mut JitContext) {
         Value::U8(n) => *n as i64,
         _ => panic!("range end must be integer"),
     };
-    unsafe { push(ctx, Value::Range(s, e)); }
+    unsafe {
+        push(ctx, Value::Range(s, e));
+    }
 }
 
 // ── String operations ─────────────────────────────────────────────────
@@ -831,7 +860,9 @@ extern "C" fn oxy_to_string(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let s = val.to_string();
-    unsafe { push(ctx, Value::String(s)); }
+    unsafe {
+        push(ctx, Value::String(s));
+    }
 }
 
 extern "C" fn oxy_fstring_concat(ctx: *mut JitContext, count: usize) {
@@ -842,7 +873,9 @@ extern "C" fn oxy_fstring_concat(ctx: *mut JitContext, count: usize) {
     }
     parts.reverse();
     let result: String = parts.iter().map(|v| v.to_string()).collect();
-    unsafe { push(ctx, Value::String(result)); }
+    unsafe {
+        push(ctx, Value::String(result));
+    }
 }
 
 extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
@@ -853,12 +886,16 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
     }
     vals.reverse();
     if vals.is_empty() {
-        unsafe { push(ctx, Value::String(String::new())); }
+        unsafe {
+            push(ctx, Value::String(String::new()));
+        }
         return;
     }
     let template = vals[0].to_string();
     if count == 1 {
-        unsafe { push(ctx, Value::String(template)); }
+        unsafe {
+            push(ctx, Value::String(template));
+        }
         return;
     }
     let mut result = String::new();
@@ -875,7 +912,9 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
             result.push(c);
         }
     }
-    unsafe { push(ctx, Value::String(result)); }
+    unsafe {
+        push(ctx, Value::String(result));
+    }
 }
 
 // ── Structs ───────────────────────────────────────────────────────────
@@ -896,7 +935,9 @@ extern "C" fn oxy_struct_init(
         let val = unsafe { pop(ctx) };
         fields.insert(format!("_f{i}"), val);
     }
-    unsafe { push(ctx, Value::Struct { name, fields }); }
+    unsafe {
+        push(ctx, Value::Struct { name, fields });
+    }
 }
 
 extern "C" fn oxy_struct_update(ctx: *mut JitContext, field_count: usize) {
@@ -913,7 +954,15 @@ extern "C" fn oxy_struct_update(ctx: *mut JitContext, field_count: usize) {
             for (i, val) in overrides.into_iter().enumerate() {
                 new_fields.insert(format!("_f{i}"), val);
             }
-            unsafe { push(ctx, Value::Struct { name, fields: new_fields }); }
+            unsafe {
+                push(
+                    ctx,
+                    Value::Struct {
+                        name,
+                        fields: new_fields,
+                    },
+                );
+            }
         }
         _ => panic!("struct update on non-struct"),
     }
@@ -928,7 +977,9 @@ extern "C" fn oxy_field_access(ctx: *mut JitContext, name_ptr: *const u8, name_l
         Value::Struct { fields, .. } => fields.get(name.as_ref()).cloned().unwrap_or(Value::Unit),
         _ => panic!("field access on non-struct"),
     };
-    unsafe { push(ctx, result); }
+    unsafe {
+        push(ctx, result);
+    }
 }
 
 extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_len: usize) {
@@ -938,9 +989,20 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
     let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
     let name = String::from_utf8_lossy(name_bytes);
     match obj {
-        Value::Struct { name: sname, mut fields } => {
+        Value::Struct {
+            name: sname,
+            mut fields,
+        } => {
             fields.insert(name.into_owned(), value);
-            unsafe { push(ctx, Value::Struct { name: sname, fields }); }
+            unsafe {
+                push(
+                    ctx,
+                    Value::Struct {
+                        name: sname,
+                        fields,
+                    },
+                );
+            }
         }
         _ => panic!("field store on non-struct"),
     }
@@ -969,11 +1031,20 @@ fn jit_closure_invoker(func: &Value, args: &[Value]) -> Result<Value, String> {
     let frame_size = captures_end + args.len();
     let mut call_ctx = JitContext::new(frame_size);
     for (i, name) in ft.captured_names.iter().enumerate() {
-        let val = ft.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
-        unsafe { call_ctx.buffer.add(i).write(val); }
+        let val = ft
+            .closure_env
+            .borrow()
+            .get(name)
+            .ok()
+            .unwrap_or(Value::Unit);
+        unsafe {
+            call_ctx.buffer.add(i).write(val);
+        }
     }
     for (i, arg) in args.iter().enumerate() {
-        unsafe { call_ctx.buffer.add(captures_end + i).write(arg.clone()); }
+        unsafe {
+            call_ctx.buffer.add(captures_end + i).write(arg.clone());
+        }
     }
     call_ctx.local_count = frame_size;
 
@@ -1009,7 +1080,9 @@ extern "C" fn oxy_method_call(
     let result = dispatch_builtin_method(receiver.clone(), &method_name, args.clone());
 
     match result {
-        Ok(val) => unsafe { push(ctx, val); },
+        Ok(val) => unsafe {
+            push(ctx, val);
+        },
         Err(e) => panic!("method call '{method_name}' failed: {e}"),
     }
 }
@@ -1051,21 +1124,11 @@ fn dispatch_builtin_method(
                 jit_closure_invoker(&f, fa)
             })
         }
-        Value::String(_) => {
-            crate::vm::builtins::string::dispatch(receiver, method_name, &args)
-        }
-        Value::HashMap(_) => {
-            crate::vm::builtins::hashmap::dispatch(receiver, method_name, &args)
-        }
-        Value::HashSet(_) => {
-            crate::vm::builtins::hashset::dispatch(receiver, method_name, &args)
-        }
-        Value::BTreeMap(_) => {
-            crate::vm::builtins::btreemap::dispatch(receiver, method_name, &args)
-        }
-        Value::BTreeSet(_) => {
-            crate::vm::builtins::btreeset::dispatch(receiver, method_name, &args)
-        }
+        Value::String(_) => crate::vm::builtins::string::dispatch(receiver, method_name, &args),
+        Value::HashMap(_) => crate::vm::builtins::hashmap::dispatch(receiver, method_name, &args),
+        Value::HashSet(_) => crate::vm::builtins::hashset::dispatch(receiver, method_name, &args),
+        Value::BTreeMap(_) => crate::vm::builtins::btreemap::dispatch(receiver, method_name, &args),
+        Value::BTreeSet(_) => crate::vm::builtins::btreeset::dispatch(receiver, method_name, &args),
         Value::VecDeque(_) => {
             crate::vm::builtins::vec_deque::dispatch(receiver, method_name, &args)
         }
@@ -1103,16 +1166,17 @@ fn dispatch_builtin_method(
         Value::EnumVariant { enum_name, .. } => match method_name {
             "clone" => Ok(receiver.clone()),
             "to_string" => Ok(Value::String(receiver.to_string())),
-            _ => Err(format!(
-                "no method '{method_name}' on type {enum_name}"
-            )),
+            _ => Err(format!("no method '{method_name}' on type {enum_name}")),
         },
         Value::Struct { name, .. } if name == "Regex" => match method_name {
             "clone" => Ok(receiver.clone()),
             "to_string" => Ok(Value::String(receiver.to_string())),
             "pattern" => {
                 if let Value::Struct { fields, .. } = &receiver {
-                    Ok(fields.get("pattern").cloned().unwrap_or(Value::String(String::new())))
+                    Ok(fields
+                        .get("pattern")
+                        .cloned()
+                        .unwrap_or(Value::String(String::new())))
                 } else {
                     Ok(Value::Unit)
                 }
@@ -1121,19 +1185,15 @@ fn dispatch_builtin_method(
                 // Stubbed for now
                 Ok(Value::Bool(false))
             }
-            "find" | "find_all" | "replace" => {
-                Err(format!("regex method '{method_name}' not yet supported in JIT"))
-            }
-            _ => Err(format!(
-                "no method '{method_name}' on type Regex"
+            "find" | "find_all" | "replace" => Err(format!(
+                "regex method '{method_name}' not yet supported in JIT"
             )),
+            _ => Err(format!("no method '{method_name}' on type Regex")),
         },
         Value::Struct { .. } => match method_name {
             "clone" => Ok(receiver.clone()),
             "to_string" => Ok(Value::String(receiver.to_string())),
-            _ => Err(format!(
-                "no method '{method_name}' on struct"
-            )),
+            _ => Err(format!("no method '{method_name}' on struct")),
         },
         Value::Iterator(_) => {
             crate::vm::builtins::iterator::dispatch(receiver, method_name, &args, |f, fa| {
@@ -1193,24 +1253,32 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     match &val {
-        Value::EnumVariant { enum_name, variant, data } if enum_name == "Result" && variant == "Err" => {
+        Value::EnumVariant {
+            enum_name,
+            variant,
+            data,
+        } if enum_name == "Result" && variant == "Err" => {
             // Early return: push the error and return from the function.
             // The JIT function will see this on the stack and handle via oxy_return.
             ctx.result = val;
             // Signal early return by setting resume_ip to a sentinel
             ctx.resume_ip = usize::MAX;
         }
-        Value::EnumVariant { enum_name, variant, .. } if enum_name == "Option" && variant == "None" => {
+        Value::EnumVariant {
+            enum_name, variant, ..
+        } if enum_name == "Option" && variant == "None" => {
             ctx.result = val;
             ctx.resume_ip = usize::MAX;
         }
         _ => {
             // Unwrap: for Some/Ok, push inner data. For other types, pass through.
             match &val {
-                Value::EnumVariant { data, .. } if !data.is_empty() => {
-                    unsafe { push(ctx, data[0].clone()); }
-                }
-                _ => unsafe { push(ctx, val); }
+                Value::EnumVariant { data, .. } if !data.is_empty() => unsafe {
+                    push(ctx, data[0].clone());
+                },
+                _ => unsafe {
+                    push(ctx, val);
+                },
             }
         }
     }
@@ -1220,14 +1288,18 @@ extern "C" fn oxy_cast_int(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let result = crate::vm::arith::cast_to_int(&val, crate::types::IntegerWidth::I64);
-    unsafe { push(ctx, result); }
+    unsafe {
+        push(ctx, result);
+    }
 }
 
 extern "C" fn oxy_cast_float(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let result = crate::vm::arith::cast_to_float(&val, crate::types::FloatWidth::F64);
-    unsafe { push(ctx, result); }
+    unsafe {
+        push(ctx, result);
+    }
 }
 
 extern "C" fn oxy_cast_to_char(ctx: *mut JitContext) {
@@ -1235,7 +1307,9 @@ extern "C" fn oxy_cast_to_char(ctx: *mut JitContext) {
     let val = unsafe { pop(ctx) };
     let n = crate::vm::arith::value_to_i64(&val);
     let c = char::from_u32(n as u32).unwrap_or('\u{FFFD}');
-    unsafe { push(ctx, Value::Char(c)); }
+    unsafe {
+        push(ctx, Value::Char(c));
+    }
 }
 
 // ── Pattern matching ──────────────────────────────────────────────────
@@ -1243,7 +1317,9 @@ extern "C" fn oxy_cast_to_char(ctx: *mut JitContext) {
 extern "C" fn oxy_bind_ident(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    unsafe { ctx.buffer.add(index).write(val); }
+    unsafe {
+        ctx.buffer.add(index).write(val);
+    }
 }
 
 extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
@@ -1252,7 +1328,9 @@ extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
     match &val {
         Value::EnumVariant { data, .. } => {
             let inner = data.get(index).cloned().unwrap_or(Value::Unit);
-            unsafe { push(ctx, inner); }
+            unsafe {
+                push(ctx, inner);
+            }
         }
         _ => panic!("EnumDataGet on non-enum"),
     }
@@ -1260,11 +1338,7 @@ extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
 
 // ── PathCall builtins ─────────────────────────────────────────────────
 
-extern "C" fn oxy_path_call_builtin(
-    ctx: *mut JitContext,
-    path_idx: usize,
-    arg_count: usize,
-) {
+extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_count: usize) {
     let ctx = unsafe { &mut *ctx };
     let segments: Vec<String> = {
         let lock = builtin_paths_lock();
@@ -1283,7 +1357,9 @@ extern "C" fn oxy_path_call_builtin(
     // Try exact-path items first
     if let Some(handler) = registry::lookup_item(&seg_refs) {
         match handler(&args) {
-            Ok(val) => unsafe { push(ctx, val); },
+            Ok(val) => unsafe {
+                push(ctx, val);
+            },
             Err(e) => panic!("builtin call '{}' failed: {e}", seg_refs.join("::")),
         }
         return;
@@ -1298,7 +1374,9 @@ extern "C" fn oxy_path_call_builtin(
     if let Some((module, func)) = module_route {
         if let Some(call) = registry::lookup_module(&module) {
             match call_stdlib_jit(call, &func, &args) {
-                Ok(val) => unsafe { push(ctx, val); },
+                Ok(val) => unsafe {
+                    push(ctx, val);
+                },
                 Err(e) => panic!("module call '{module}::{func}' failed: {e}"),
             }
             return;
@@ -1330,7 +1408,9 @@ extern "C" fn oxy_display_arg(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     // Push the display string via the to_string convention
-    unsafe { push(ctx, Value::String(val.to_string())); }
+    unsafe {
+        push(ctx, Value::String(val.to_string()));
+    }
 }
 // ── Async runtime ────────────────────────────────────────────────────
 

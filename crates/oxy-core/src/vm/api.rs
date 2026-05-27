@@ -26,11 +26,12 @@ pub fn run_compiled_jit_with_options(
     crate::type_checker::TypeChecker::new().check_program(&program)?;
     let chunk =
         crate::compiler::Compiler::new_with_options(source_path, externs).compile(&program)?;
-    let mut jit_vm = super::jit::JitVm::new(chunk).map_err(|e| crate::errors::FerriError::Runtime {
-        message: e,
-        line: 0,
-        column: 0,
-    })?;
+    let mut jit_vm =
+        super::jit::JitVm::new(chunk).map_err(|e| crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        })?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
         VmResult::Error(e) => Err(crate::errors::FerriError::Runtime {
@@ -110,13 +111,12 @@ pub fn run_tests_jit_with_options(
         .compile(&normal_program)?;
 
     // Build JIT engine once for all tests
-    let mut jit_vm = super::jit::JitVm::new(chunk).map_err(|e| {
-        crate::errors::FerriError::Runtime {
+    let mut jit_vm =
+        super::jit::JitVm::new(chunk).map_err(|e| crate::errors::FerriError::Runtime {
             message: e,
             line: 0,
             column: 0,
-        }
-    })?;
+        })?;
 
     // Collect test functions
     let test_fns: Vec<&crate::ast::FnDef> = normal_program
