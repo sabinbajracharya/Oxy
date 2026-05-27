@@ -15,7 +15,7 @@ pub(crate) use ffi::{
     register_ffi_symbols, set_async_fn_meta, set_closure_meta, set_fn_table, set_method_ips,
 };
 
-use crate::vm::Chunk;
+use crate::vm::{Chunk, OpCode};
 use cranelift_codegen::ir::types;
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::FunctionBuilderContext;
@@ -273,13 +273,206 @@ impl JitVm {
             .unwrap_or_default()
     }
 
-    /// Run the main function.
+    /// Run the main function. Uses event-loop for async functions, direct sync
+    /// call for plain functions.
     pub fn run(&mut self) -> VmResult {
         let entry_ip = self.engine.entry_point;
-        self.run_function(entry_ip)
+        // If the main function has async ops (spawn/sleep/await), use the
+        // event loop. Otherwise use the simpler sync path.
+        let has_async = self.has_async_ops(entry_ip);
+        if has_async {
+            self.run_event_loop(entry_ip)
+        } else {
+            self.run_function(entry_ip)
+        }
     }
 
-    /// Run a specific function by its bytecode entry IP.
+    /// Check whether a function body (starting at entry_ip) contains any async ops.
+    fn has_async_ops(&self, entry_ip: usize) -> bool {
+        let code = &self.engine.chunk.code;
+        // Scan to the end of bytecode (skipping nested closure/async bodies).
+        let end = code.len();
+        let mut ip = entry_ip;
+        while ip < end {
+            // Skip nested entry ranges
+            if ip != entry_ip && self.is_nested_entry(ip) {
+                if let Some(OpCode::Jump(skip)) = code.get(ip - 1) {
+                    ip = *skip;
+                    continue;
+                }
+            }
+            match code.get(ip) {
+                Some(OpCode::Spawn | OpCode::Await | OpCode::Sleep | OpCode::Select { .. }) => {
+                    return true;
+                }
+                _ => {}
+            }
+            ip += 1;
+        }
+        false
+    }
+
+    /// Check if an IP is a nested closure/async block entry.
+    fn is_nested_entry(&self, ip: usize) -> bool {
+        if ip == 0 {
+            return false;
+        }
+        match self.engine.chunk.code.get(ip - 1) {
+            Some(OpCode::Jump(target)) if *target > ip => {
+                matches!(
+                    self.engine.chunk.code.get(*target),
+                    Some(OpCode::Closure { .. } | OpCode::AsyncBlock { .. })
+                )
+            }
+            _ => false,
+        }
+    }
+
+    /// Run the main function with async event-loop support.
+    fn run_event_loop(&mut self, entry_ip: usize) -> VmResult {
+        use crate::vm::scheduler::{JitTaskState, TaskSnapshot};
+
+        // Reset global scheduler for a fresh run
+        {
+            let mut sched = ffi::scheduler_lock();
+            sched.reset();
+        }
+
+        // Create main task (task 0) and make it ready
+        let main_task_id: usize = {
+            let mut sched = ffi::scheduler_lock();
+            let id = sched.create_task();
+            sched.save_new_task(
+                id,
+                TaskSnapshot {
+                    ip: entry_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(JitTaskState {
+                        entry_ip,
+                        resume_ip: entry_ip,
+                        locals: vec![],
+                        operand_stack: vec![],
+                        local_count: 0,
+                        yield_reason: 0,
+                        yield_data: 0,
+                    }),
+                },
+            );
+            sched.set_current(id);
+            id
+        };
+
+        // Event loop
+        let result = loop {
+            // Pick next task to run
+            let task_id = {
+                let mut sched = ffi::scheduler_lock();
+                match sched.next_ready() {
+                    Some(id) => {
+                        sched.set_current(id);
+                        id
+                    }
+                    None => {
+                        if sched.all_done() {
+                            break None;
+                        }
+                        if let Some(dur) = sched.next_timer() {
+                            drop(sched);
+                            #[cfg(not(target_arch = "wasm32"))]
+                            std::thread::sleep(dur);
+                        }
+                        continue;
+                    }
+                }
+            };
+
+            // Take the task's snapshot (contains JIT state)
+            let snapshot = {
+                let mut sched = ffi::scheduler_lock();
+                sched.take_snapshot(task_id)
+            };
+            let jit_state = match snapshot.and_then(|s| s.jit_state) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            // Look up the JIT function pointer for the entry IP
+            let fn_ptr = match ffi::lookup_fn_ptr(jit_state.entry_ip) {
+                Some(p) => p,
+                None => {
+                    return VmResult::Error(format!(
+                        "JIT: no function at entry_ip={}",
+                        jit_state.entry_ip
+                    ));
+                }
+            };
+
+            // Create context and restore task state
+            let mut ctx = JitContext::new(jit_state.local_count.max(8));
+            ctx.result = crate::types::Value::Unit;
+            ffi::ctx_from_jit_state(&mut ctx, jit_state);
+
+            // Wire up captured output
+            if let Some(ref output_rc) = self.output {
+                ctx.output = output_rc as *const _;
+            }
+
+            // Call the JIT function
+            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+                unsafe { std::mem::transmute(fn_ptr) };
+            let discriminant = fn_ptr(&mut ctx as *mut JitContext);
+
+            match discriminant {
+                0 => {
+                    // Task completed
+                    let result = std::mem::replace(&mut ctx.result, crate::types::Value::Unit);
+                    let mut sched = ffi::scheduler_lock();
+                    sched.complete(task_id, result);
+                    sched.clear_current();
+                    if task_id == main_task_id {
+                        if let Some(v) = sched.task_result(main_task_id) {
+                            break Some(v);
+                        }
+                    }
+                }
+                1 => {
+                    // Task yielded — state already saved by FFI yield functions
+                    // (yield_jit_for_timer, yield_jit_for_task, etc.)
+                    // current_task() is already cleared by those methods.
+                    // ctx_from_jit_state took ownership of JitTaskState,
+                    // moving values into the JitContext buffer. Both the
+                    // original buffer values (cleared by jit_state_from_ctx)
+                    // and the JitTaskState (consumed by ctx_from_jit_state)
+                    // are safely handled — no double-free.
+                    drop(ctx);
+                }
+                2 => {
+                    let msg = String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)])
+                        .into_owned();
+                    return VmResult::Error(msg);
+                }
+                other => {
+                    return VmResult::Error(format!("JIT: unexpected discriminant {other}"));
+                }
+            }
+        };
+
+        match result {
+            Some(v) => VmResult::Value(v),
+            None => {
+                // Fallback: check main task result
+                let sched = ffi::scheduler_lock();
+                if let Some(v) = sched.task_result(main_task_id) {
+                    VmResult::Value(v)
+                } else {
+                    VmResult::Value(crate::types::Value::Unit)
+                }
+            }
+        }
+    }
+
+    /// Run a specific function by its bytecode entry IP (synchronous, no event loop).
     pub fn run_function(&mut self, ip: usize) -> VmResult {
         let fn_ptr = match self.engine.get_fn_ptr(ip) {
             Some(p) => p,
@@ -288,13 +481,9 @@ impl JitVm {
 
         let mut ctx = JitContext::new(8);
         ctx.result = crate::types::Value::Unit;
-        ctx.fn_table = std::ptr::null();
-        ctx.fn_table_len = 0;
 
-        // Wire up captured output
         if let Some(ref output_rc) = self.output {
-            let ptr: *const std::rc::Rc<std::cell::RefCell<Vec<String>>> = output_rc;
-            ctx.output = ptr;
+            ctx.output = output_rc as *const _;
         }
 
         let fn_ptr: extern "C" fn(*mut JitContext) -> u64 = unsafe { std::mem::transmute(fn_ptr) };

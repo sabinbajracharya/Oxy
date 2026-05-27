@@ -528,6 +528,10 @@ fn fn_table_lock() -> std::sync::MutexGuard<'static, HashMap<usize, usize>> {
         .unwrap()
 }
 
+pub(super) fn lookup_fn_ptr(ip: usize) -> Option<*const u8> {
+    fn_table_lock().get(&ip).map(|&p| p as *const u8)
+}
+
 pub(crate) fn set_fn_table(table: HashMap<usize, *const u8>) {
     let mut m = fn_table_lock();
     m.clear();
@@ -1845,7 +1849,7 @@ extern "C" fn oxy_display_arg(ctx: *mut JitContext) {
 static SCHEDULER: std::sync::OnceLock<std::sync::Mutex<crate::vm::scheduler::Scheduler>> =
     std::sync::OnceLock::new();
 
-fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::scheduler::Scheduler> {
+pub(super) fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::scheduler::Scheduler> {
     SCHEDULER
         .get_or_init(|| std::sync::Mutex::new(crate::vm::scheduler::Scheduler::new()))
         .lock()
@@ -1853,27 +1857,39 @@ fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::scheduler::Sche
 }
 
 /// Build a JitTaskState from the current JitContext.
-fn jit_state_from_ctx(ctx: &JitContext, resume_ip: usize) -> crate::vm::scheduler::JitTaskState {
+pub(super) fn jit_state_from_ctx(
+    ctx: &mut JitContext,
+    resume_ip: usize,
+) -> crate::vm::scheduler::JitTaskState {
+    let entry_ip = ctx.entry_ip;
+    let local_count = ctx.local_count;
+    let sp = ctx.sp;
     let mut locals = Vec::new();
-    for i in 0..ctx.local_count {
+    for i in 0..local_count {
         locals.push(unsafe { ctx.buffer.add(i).read() });
     }
     let mut operand_stack = Vec::new();
-    for i in 0..ctx.sp {
-        operand_stack.push(unsafe { ctx.buffer.add(ctx.local_count + i).read() });
+    for i in 0..sp {
+        operand_stack.push(unsafe { ctx.buffer.add(local_count + i).read() });
     }
+    // Prevent JitContext::drop from dropping these values — they're now owned
+    // by the JitTaskState. Without this, ptr::read above creates shallow copies
+    // and the Drop impl would free the same heap memory twice.
+    ctx.local_count = 0;
+    ctx.sp = 0;
     crate::vm::scheduler::JitTaskState {
+        entry_ip,
         resume_ip,
         locals,
         operand_stack,
-        local_count: ctx.local_count,
+        local_count,
         yield_reason: ctx.yield_reason,
         yield_data: ctx.yield_data,
     }
 }
 
-/// Restore JitContext from a JitTaskState.
-fn ctx_from_jit_state(ctx: &mut JitContext, state: &crate::vm::scheduler::JitTaskState) {
+/// Restore JitContext from a JitTaskState (takes ownership to prevent double-free).
+pub(super) fn ctx_from_jit_state(ctx: &mut JitContext, state: crate::vm::scheduler::JitTaskState) {
     // Ensure buffer is large enough
     let needed = state.local_count + state.operand_stack.len();
     while ctx.capacity < needed {
@@ -1893,16 +1909,19 @@ fn ctx_from_jit_state(ctx: &mut JitContext, state: &crate::vm::scheduler::JitTas
     ctx.local_count = state.local_count;
     ctx.sp = state.operand_stack.len();
     ctx.resume_ip = state.resume_ip;
+    ctx.entry_ip = state.entry_ip;
     ctx.yield_reason = state.yield_reason;
     ctx.yield_data = state.yield_data;
-    for (i, v) in state.locals.iter().enumerate() {
+    // Take ownership of values from the state (into_iter consumes the Vec,
+    // preventing JitTaskState::drop from freeing them).
+    for (i, v) in state.locals.into_iter().enumerate() {
         unsafe {
-            ctx.buffer.add(i).write(v.clone());
+            ctx.buffer.add(i).write(v);
         }
     }
-    for (i, v) in state.operand_stack.iter().enumerate() {
+    for (i, v) in state.operand_stack.into_iter().enumerate() {
         unsafe {
-            ctx.buffer.add(state.local_count + i).write(v.clone());
+            ctx.buffer.add(state.local_count + i).write(v);
         }
     }
 }
@@ -1979,14 +1998,15 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
                 }
                 return 0;
             }
-            // Not done — yield the current JIT task
+            // Not done — push JoinHandle back so the resume state includes it,
+            // then save state and yield.
+            unsafe {
+                push(ctx, Value::JoinHandle { task_id });
+            }
             ctx.yield_reason = 2;
             ctx.yield_data = task_id as u64;
             let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
             scheduler_lock().yield_jit_for_task(task_id, jit_state);
-            unsafe {
-                push(ctx, Value::JoinHandle { task_id });
-            }
             1
         }
         other => {
@@ -2011,6 +2031,7 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 locals.push(f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit));
             }
             let jit_state = crate::vm::scheduler::JitTaskState {
+                entry_ip: target_ip,
                 resume_ip: target_ip,
                 locals,
                 operand_stack: vec![],
@@ -2057,6 +2078,10 @@ extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) -> u64 {
         }
         return 0;
     }
+    // Push the ms value back so the resume state includes it.
+    unsafe {
+        push(ctx, ms_val);
+    }
     let wake = crate::vm::scheduler::delay_from_now(ms);
     ctx.yield_reason = 1;
     ctx.yield_data = ms;
@@ -2086,16 +2111,17 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) -> u64 {
             }
         }
     }
-    // None ready — yield
-    ctx.yield_reason = 3;
-    ctx.yield_data = task_ids.first().copied().unwrap_or(0) as u64;
-    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
-    scheduler_lock().yield_jit_for_multiple(task_ids.clone(), jit_state);
+    // None ready — push JoinHandles back so resume state includes them,
+    // then save state and yield.
     for &tid in task_ids.iter().rev() {
         unsafe {
             push(ctx, Value::JoinHandle { task_id: tid });
         }
     }
+    ctx.yield_reason = 3;
+    ctx.yield_data = task_ids.first().copied().unwrap_or(0) as u64;
+    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
+    scheduler_lock().yield_jit_for_multiple(task_ids.clone(), jit_state);
     1
 }
 

@@ -8,7 +8,7 @@
 
 use crate::vm::{Chunk, OpCode};
 use cranelift_codegen::ir::{
-    condcodes::IntCC, types, AbiParam, Block, FuncRef, InstBuilder, UserFuncName,
+    condcodes::IntCC, types, AbiParam, Block, FuncRef, InstBuilder, MemFlags, UserFuncName,
 };
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::JITModule;
@@ -89,6 +89,36 @@ impl<'a> Translator<'a> {
         if !entries.iter().any(|&(ip, _)| ip == main_ip) {
             entries.push((main_ip, self.chunk.local_count));
         }
+
+        // Also add closure/async-block target IPs from the bytecode.
+        for op in &self.chunk.code {
+            match op {
+                OpCode::Closure {
+                    target_ip,
+                    param_count,
+                    ..
+                } => {
+                    if !entries.iter().any(|&(eip, _)| eip == *target_ip) {
+                        entries.push((*target_ip, *param_count));
+                    }
+                }
+                OpCode::AsyncBlock { target_ip, .. } => {
+                    if !entries.iter().any(|&(eip, _)| eip == *target_ip) {
+                        entries.push((*target_ip, 0));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Also add nested entries detected via the forward-Jump pattern.
+        for ip in 0..self.chunk.code.len() {
+            if self.is_nested_entry(ip) && !entries.iter().any(|&(eip, _)| eip == ip) {
+                entries.push((ip, 0));
+            }
+        }
+
+        entries.sort_by_key(|&(ip, _)| ip);
+
         entries.sort_by_key(|&(ip, _)| ip);
 
         for (entry_ip, frame_size) in &entries {
@@ -155,20 +185,81 @@ impl<'a> Translator<'a> {
         // borrow conflicts: builder borrows self.ctx mutably).
         let mut cfg = self.analyze_cfg(entry_ip, fn_end_ip, &nested_entry_ips);
 
+        // Find all yield-point IPs (Await/Sleep/Select) for resume dispatch.
+        let end_scan = fn_end_ip.min(self.chunk.code.len());
+        let mut yield_ips: Vec<usize> = Vec::new();
+        for ip in entry_ip..end_scan {
+            if nested_entry_ips.contains(&ip) && ip != entry_ip {
+                continue;
+            }
+            match &self.chunk.code[ip] {
+                OpCode::Await | OpCode::Sleep | OpCode::Select { .. } => {
+                    yield_ips.push(ip);
+                }
+                _ => {}
+            }
+        }
+
         let mut builder = FunctionBuilder::new(&mut fn_ctx.func, self.ctx);
         let entry_block = builder.create_block();
         builder.append_block_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block);
         let ctx_val = builder.block_params(entry_block)[0];
 
-        // Assign Cranelift blocks to each CFG basic block
+        // Assign Cranelift blocks to each CFG basic block.
+        // The entry_block is used for the resume dispatch; the first CFG block
+        // gets its own block (so we can jump to it from the dispatch).
         for idx in 0..cfg.blocks.len() {
-            if cfg.blocks[idx].start_ip == entry_ip {
-                cfg.blocks[idx].clif_block = Some(entry_block);
-            } else {
-                cfg.blocks[idx].clif_block = Some(builder.create_block());
-            }
+            cfg.blocks[idx].clif_block = Some(builder.create_block());
         }
+
+        // The first CFG block in RPO order — all dispatch paths lead here eventually.
+        let first_cfg_block = cfg.blocks[cfg.rpo[0]]
+            .clif_block
+            .expect("first CFG block has no clif_block");
+
+        // Emit resume dispatch in entry_block.
+        if !yield_ips.is_empty() {
+            // Load resume_ip from JitContext (offset 32 = after buffer + local_count + sp + capacity).
+            let resume_ip_addr = builder.ins().iadd_imm(ctx_val, 32);
+            let resume_ip = builder
+                .ins()
+                .load(types::I64, MemFlags::new(), resume_ip_addr, 0);
+            let zero = builder.ins().iconst(types::I64, 0);
+            let is_zero = builder.ins().icmp(IntCC::Equal, resume_ip, zero);
+
+            let dispatch_block = builder.create_block();
+            builder
+                .ins()
+                .brif(is_zero, first_cfg_block, &[], dispatch_block, &[]);
+
+            // In dispatch_block: chain of comparisons for each yield IP.
+            builder.switch_to_block(dispatch_block);
+            for &yield_ip in &yield_ips {
+                let target = cfg
+                    .blocks
+                    .iter()
+                    .find(|b| b.start_ip == yield_ip)
+                    .and_then(|b| b.clif_block);
+                if let Some(target_block) = target {
+                    let yield_val = builder.ins().iconst(types::I64, yield_ip as i64);
+                    let is_match = builder.ins().icmp(IntCC::Equal, resume_ip, yield_val);
+                    let next_check = builder.create_block();
+                    builder
+                        .ins()
+                        .brif(is_match, target_block, &[], next_check, &[]);
+                    builder.switch_to_block(next_check);
+                }
+            }
+            // No match — fall through to the first CFG block.
+            builder.ins().jump(first_cfg_block, &[]);
+        } else {
+            // No yield points — entry block is dead code, jump to first CFG block.
+            builder.ins().jump(first_cfg_block, &[]);
+        }
+
+        // Switch to the first CFG block so the RPO loop starts translating there.
+        builder.switch_to_block(first_cfg_block);
 
         // Build a HashMap for compatibility with translate_op (IP→Block lookups)
         let mut blocks: HashMap<usize, Block> = HashMap::new();
@@ -180,6 +271,21 @@ impl<'a> Translator<'a> {
 
         // Build the block_stack_depths map for JumpIfTrue/False targets
         let mut block_stack_depths: HashMap<usize, usize> = HashMap::new();
+
+        // Yield-point blocks are entered via the resume dispatch with values
+        // on the stack (the FFI functions push back their arguments before
+        // yielding). Set initial stack depths for these blocks.
+        for &yield_ip in &yield_ips {
+            match self.chunk.code.get(yield_ip) {
+                Some(OpCode::Select { count }) => {
+                    block_stack_depths.insert(yield_ip, *count);
+                }
+                _ => {
+                    // Await, Sleep: 1 value on stack (JoinHandle/ms)
+                    block_stack_depths.insert(yield_ip, 1);
+                }
+            }
+        }
 
         // Walk blocks in RPO order, emitting each block's bytecodes
         let rpo = cfg.rpo.clone();
@@ -382,6 +488,11 @@ impl<'a> Translator<'a> {
                     if ip + 1 < end {
                         leaders.insert(ip + 1);
                     }
+                }
+                // Yield points (await, sleep, select) must be block leaders
+                // so the resume dispatch can jump directly to them.
+                OpCode::Await | OpCode::Sleep | OpCode::Select { .. } => {
+                    leaders.insert(ip);
                 }
                 _ => {}
             }
@@ -1071,6 +1182,13 @@ fn translate_op(
         }
 
         OpCode::Await => {
+            // Store resume IP so we can resume at this exact instruction.
+            // resume_ip is at offset 32 in JitContext.
+            let resume_ip_addr = builder.ins().iadd_imm(ctx_val, 32);
+            let ip_val = builder.ins().iconst(types::I64, current_ip as i64);
+            builder
+                .ins()
+                .store(MemFlags::new(), ip_val, resume_ip_addr, 0);
             let f = fref(ffi_refs, "oxy_await_ffi");
             let inst = builder.ins().call(f, &[ctx_val]);
             let disc = builder.inst_results(inst)[0];
@@ -1092,6 +1210,12 @@ fn translate_op(
         }
 
         OpCode::Sleep => {
+            // Store resume IP so we can resume at this exact instruction.
+            let resume_ip_addr = builder.ins().iadd_imm(ctx_val, 32);
+            let ip_val = builder.ins().iconst(types::I64, current_ip as i64);
+            builder
+                .ins()
+                .store(MemFlags::new(), ip_val, resume_ip_addr, 0);
             let f = fref(ffi_refs, "oxy_sleep_ffi");
             let inst = builder.ins().call(f, &[ctx_val]);
             *stack_depth -= 1;
@@ -1108,6 +1232,12 @@ fn translate_op(
         }
 
         OpCode::Select { count } => {
+            // Store resume IP so we can resume at this exact instruction.
+            let resume_ip_addr = builder.ins().iadd_imm(ctx_val, 32);
+            let ip_val = builder.ins().iconst(types::I64, current_ip as i64);
+            builder
+                .ins()
+                .store(MemFlags::new(), ip_val, resume_ip_addr, 0);
             let c = builder.ins().iconst(types::I64, *count as i64);
             let f = fref(ffi_refs, "oxy_select_ffi");
             let inst = builder.ins().call(f, &[ctx_val, c]);

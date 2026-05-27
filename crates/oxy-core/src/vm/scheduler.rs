@@ -23,7 +23,9 @@ pub struct TaskSnapshot {
 /// Execution state for a JIT-compiled task.
 #[derive(Debug, Clone)]
 pub struct JitTaskState {
-    /// Bytecode IP to resume at.
+    /// The JIT function's entry bytecode IP (used to look up the native fn pointer).
+    pub entry_ip: usize,
+    /// Bytecode IP to resume at within the function (0 = start from beginning).
     pub resume_ip: usize,
     /// Locals (copied from JitContext buffer).
     pub locals: Vec<crate::types::Value>,
@@ -179,6 +181,15 @@ impl Scheduler {
             next_id: 0,
             current: None,
         }
+    }
+
+    /// Reset all state — used between JitVm invocations when reusing the global scheduler.
+    pub fn reset(&mut self) {
+        self.tasks.clear();
+        self.ready.clear();
+        self.timers.clear();
+        self.next_id = 0;
+        self.current = None;
     }
 
     /// Register a new task. Returns its id. The task is NOT added to
