@@ -56,12 +56,15 @@ pub(crate) struct JitContext {
     pub error_len: usize,
 
     /// Pointer to the JIT engine's function pointer table (for closure calls).
-    /// This is a `*const *const u8` pointing into `JitEngine.fn_ptrs` values.
     pub fn_table: *const *const u8,
     /// Number of entries in fn_table, indexed by (ip - base_ip) / alignment.
     pub fn_table_len: usize,
     /// Base instruction pointer for indexing into fn_table.
     pub fn_table_base_ip: usize,
+
+    /// Captured output buffer (if non-null, print goes here instead of stdout).
+    /// This is a `*const Rc<RefCell<Vec<String>>>` pointer.
+    pub output: *const std::rc::Rc<std::cell::RefCell<Vec<String>>>,
 }
 
 impl JitContext {
@@ -86,6 +89,7 @@ impl JitContext {
             fn_table: std::ptr::null(),
             fn_table_len: 0,
             fn_table_base_ip: 0,
+            output: std::ptr::null(),
         }
     }
 

@@ -152,7 +152,12 @@ extern "C" fn oxy_print_val(ctx: *mut JitContext) {
 extern "C" fn oxy_println_val(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    println!("{val}");
+    if !ctx.output.is_null() {
+        let output = unsafe { &*ctx.output };
+        output.borrow_mut().push(format!("{val}\n"));
+    } else {
+        println!("{val}");
+    }
 }
 
 // ── Binary arithmetic ────────────────────────────────────────────────
@@ -673,9 +678,9 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
 
 extern "C" fn oxy_return(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
-    let result = unsafe { pop(ctx) };
+    // Mirror VM: self.stack.pop().unwrap_or(Value::Unit)
+    let result = if ctx.sp == 0 { Value::Unit } else { unsafe { pop(ctx) } };
     ctx.result = result;
-    // Restore caller's sp? For now, the Cranelift return_ will handle exit.
 }
 
 extern "C" fn oxy_panic(ctx: *mut JitContext) {

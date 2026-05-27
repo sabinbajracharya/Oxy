@@ -26,9 +26,13 @@ pub(crate) type JitFn = extern "C" fn(*mut JitContext) -> u64;
 /// The Cranelift JIT compilation engine.
 pub(crate) struct JitEngine {
     /// Bytecode instruction pointer → finalized native function pointer.
-    fn_ptrs: HashMap<usize, *const u8>,
+    pub(crate) fn_ptrs: HashMap<usize, *const u8>,
+    /// Function name → entry IP (for test discovery).
+    pub(crate) functions: HashMap<String, usize>,
     /// Entry point IP for the main function.
     entry_point: usize,
+    /// Keeps the Chunk (and all string data) alive.
+    _chunk: Chunk,
 }
 
 /// FFI function declarations with their parameter types and return type.
@@ -142,7 +146,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
 
 impl JitEngine {
     /// Build a JIT engine from a compiled bytecode chunk.
-    pub fn new(chunk: &Chunk) -> Result<Self, String> {
+    pub fn new(chunk: Chunk) -> Result<Self, String> {
         // Detect host ISA
         let isa_builder =
             cranelift_native::builder().map_err(|e| format!("host ISA detection failed: {e}"))?;
@@ -161,7 +165,7 @@ impl JitEngine {
         let mut fn_ctx = FunctionBuilderContext::new();
 
         // Set up translator and declare all FFI imports
-        let mut translator = translator::Translator::new(chunk, &mut module, &mut fn_ctx);
+        let mut translator = translator::Translator::new(&chunk, &mut module, &mut fn_ctx);
         for (name, params, ret) in ffi_decls() {
             translator.declare_ffi(name, params.to_vec(), ret);
         }
@@ -174,8 +178,10 @@ impl JitEngine {
         set_closure_meta(chunk.closure_meta.clone());
 
         Ok(Self {
-            fn_ptrs,
+            fn_ptrs: fn_ptrs.clone(),
+            functions: chunk.functions.clone(),
             entry_point: chunk.entry_point,
+            _chunk: chunk,
         })
     }
 
@@ -187,5 +193,140 @@ impl JitEngine {
     /// Get the entry point IP.
     pub(crate) fn entry_point(&self) -> usize {
         self.entry_point
+    }
+}
+
+// ── JitVm: High-level execution wrapper ───────────────────────────────
+
+use crate::vm::VmResult;
+
+/// A JIT-compiled execution context that mirrors the `Vm` API.
+pub(crate) struct JitVm {
+    pub(crate) engine: JitEngine,
+    /// Captured output buffer shared with JitContext.
+    output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
+}
+
+impl JitVm {
+    /// Build a JIT VM from a compiled chunk. Compiles all functions to native code.
+    pub fn new(chunk: Chunk) -> Result<Self, String> {
+        let engine = JitEngine::new(chunk)?;
+        Ok(Self { engine, output: None })
+    }
+
+    /// Build a JIT VM with captured output (for testing).
+    pub fn with_captured_output(chunk: Chunk) -> Result<Self, String> {
+        let engine = JitEngine::new(chunk)?;
+        Ok(Self {
+            engine,
+            output: Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))),
+        })
+    }
+
+    /// Return captured output lines.
+    pub fn captured_output(&self) -> Vec<String> {
+        self.output
+            .as_ref()
+            .map(|rc| rc.borrow().clone())
+            .unwrap_or_default()
+    }
+
+    /// Run the main function.
+    pub fn run(&mut self) -> VmResult {
+        let entry_ip = self.engine.entry_point;
+        self.run_function(entry_ip)
+    }
+
+    /// Run a specific function by its bytecode entry IP.
+    pub fn run_function(&mut self, ip: usize) -> VmResult {
+        let fn_ptr = match self.engine.get_fn_ptr(ip) {
+            Some(p) => p,
+            None => return VmResult::Error(format!("JIT: no function at ip={ip}")),
+        };
+
+        let mut ctx = JitContext::new(8);
+        ctx.result = crate::types::Value::Unit;
+        ctx.fn_table = std::ptr::null();
+        ctx.fn_table_len = 0;
+
+        // Wire up captured output
+        if let Some(ref output_rc) = self.output {
+            let ptr: *const std::rc::Rc<std::cell::RefCell<Vec<String>>> = output_rc;
+            ctx.output = ptr;
+        }
+
+        let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+            unsafe { std::mem::transmute(fn_ptr) };
+        let discriminant = fn_ptr(&mut ctx as *mut JitContext);
+
+        match discriminant {
+            0 => VmResult::Value(ctx.result.clone()),
+            2 => {
+                let msg = String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)])
+                    .into_owned();
+                VmResult::Error(msg)
+            }
+            other => VmResult::Error(format!("JIT: unexpected discriminant {other}")),
+        }
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vm::api::{run_compiled_jit, run_compiled_capturing_jit};
+
+    #[test]
+    fn test_jit_simple_literal() {
+        let result = run_compiled_jit("fn main() -> int { 42 }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_jit_print_captured() {
+        let (val, output) =
+            run_compiled_capturing_jit("fn main() { println!(\"hello\"); println!(\"world\"); }")
+                .unwrap();
+        assert_eq!(val, crate::types::Value::Unit);
+        assert_eq!(output, vec!["hello\n", "world\n"]);
+    }
+
+    #[test]
+    fn test_jit_add_two_ints() {
+        let result = run_compiled_jit("fn main() -> int { 1 + 2 }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(3));
+    }
+
+    #[test]
+    fn test_jit_let_binding() {
+        let result = run_compiled_jit("fn main() -> int { let x = 5; x }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_jit_arithmetic() {
+        let result =
+            run_compiled_jit("fn main() -> int { let x = 2 + 3 * 4; x }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(14));
+    }
+
+    #[test]
+    fn test_jit_if_true() {
+        let result = run_compiled_jit(
+            "fn main() -> int { if true { 1 } else { 0 } }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_jit_if_else() {
+        let result = run_compiled_jit(
+            "fn main() -> int { let x = 5; if x > 3 { 1 } else { 0 } }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(1));
     }
 }

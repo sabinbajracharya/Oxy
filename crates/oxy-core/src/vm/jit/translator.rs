@@ -144,19 +144,29 @@ impl<'a> Translator<'a> {
         // Walk bytecode and emit CLIF
         let mut ip = entry_ip;
         let mut stack_depth: usize = 0;
+        let mut current_block_terminated = false;
 
         loop {
             if ip >= fn_end_ip || ip >= self.chunk.code.len() {
                 break;
             }
 
-            // Switch to block if needed
+            // Switch to block if needed. If the current block isn't
+            // terminated, add a fallthrough jump first.
             if let Some(&blk) = blocks.get(&ip) {
                 if ip != entry_ip {
-                    builder.switch_to_block(blk);
+                    let cur = builder.current_block().unwrap_or(entry_block);
+                    if cur != blk && !current_block_terminated {
+                        builder.ins().jump(blk, &[]);
+                        current_block_terminated = true;
+                    }
+                    if cur != blk {
+                        builder.switch_to_block(blk);
+                    }
                     if let Some(&expected) = block_stack_depths.get(&ip) {
                         stack_depth = expected;
                     }
+                    current_block_terminated = false;
                 }
             }
 
@@ -172,6 +182,24 @@ impl<'a> Translator<'a> {
             );
 
             if terminated {
+                current_block_terminated = true;
+                // After a Jump, continue processing at ip+1 in a NEW block.
+                if matches!(op, OpCode::Jump(_)) {
+                    let next_ip = ip + 1;
+                    if next_ip < fn_end_ip && next_ip < self.chunk.code.len() {
+                        let next_block = blocks
+                            .entry(next_ip)
+                            .or_insert_with(|| builder.create_block());
+                        builder.switch_to_block(*next_block);
+                        if let Some(&expected) = block_stack_depths.get(&next_ip) {
+                            stack_depth = expected;
+                        } else {
+                            block_stack_depths.insert(next_ip, stack_depth);
+                        }
+                        ip = next_ip;
+                        continue;
+                    }
+                }
                 break;
             }
             ip += 1;
@@ -513,7 +541,7 @@ fn translate_op(
         }
         OpCode::Return => {
             call_void(builder, ffi_refs, "oxy_return");
-            *stack_depth -= 1;
+            *stack_depth = (*stack_depth).saturating_sub(1);
             let zero = builder.ins().iconst(types::I64, 0);
             builder.ins().return_(&[zero]);
             true
