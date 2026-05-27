@@ -94,6 +94,8 @@ pub(crate) enum IrOp {
         args: Vec<Reg>,
         /// Extra immediate arguments (e.g. field_count, meta_idx, usize params).
         immediates: Vec<usize>,
+        /// String metadata (function names, field names, method names, paths).
+        strings: Vec<String>,
     },
 
     // ── Special ────────────────────────────────────────────────────────

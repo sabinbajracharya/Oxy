@@ -370,6 +370,7 @@ impl IrGen {
                     func: "oxy_call",
                     args: arg_regs,
                     immediates: vec![],
+                    strings: vec![fname],
                 });
                 r
             }
@@ -385,6 +386,7 @@ impl IrGen {
                     func: "oxy_method_call",
                     args: arg_regs,
                     immediates: vec![],
+                    strings: vec![method.clone()],
                 });
                 r
             }
@@ -406,14 +408,30 @@ impl IrGen {
                 for (_, val) in fields {
                     arg_regs.push(self.gen_expr(val));
                 }
-                let r = self.alloc_reg();
-                self.emit(IrOp::CallBuiltin {
-                    result: r,
-                    func: "oxy_struct_init",
-                    args: arg_regs,
-                    immediates: vec![fields.len()],
-                });
-                r
+                if let Some(base_expr) = base {
+                    // Struct update: Point { x: 1, ..base }
+                    let base_reg = self.gen_expr(base_expr);
+                    arg_regs.push(base_reg);
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_update",
+                        args: arg_regs,
+                        immediates: vec![fields.len()],
+                        strings: vec![name.clone()],
+                    });
+                    r
+                } else {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_init",
+                        args: arg_regs,
+                        immediates: vec![fields.len()],
+                        strings: vec![name.clone()],
+                    });
+                    r
+                }
             }
             Expr::FieldAccess { object, field, .. } => {
                 let obj = self.gen_expr(object);
@@ -423,6 +441,7 @@ impl IrGen {
                     func: "oxy_field_access",
                     args: vec![obj],
                     immediates: vec![],
+                    strings: vec![field.clone()],
                 });
                 r
             }
@@ -437,6 +456,7 @@ impl IrGen {
                     func: "oxy_path_call_builtin",
                     args: arg_regs,
                     immediates: vec![],
+                    strings: path.clone(),
                 });
                 r
             }
@@ -451,6 +471,7 @@ impl IrGen {
                     func: "oxy_make_array",
                     args: regs,
                     immediates: vec![elements.len()],
+                strings: vec![],
                 });
                 r
             }
@@ -465,6 +486,7 @@ impl IrGen {
                     func: "oxy_make_tuple",
                     args: regs,
                     immediates: vec![elements.len()],
+                strings: vec![],
                 });
                 r
             }
@@ -477,6 +499,7 @@ impl IrGen {
                     func: "oxy_vec_index",
                     args: vec![obj, idx],
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -488,6 +511,7 @@ impl IrGen {
                     func: "oxy_try_pop",
                     args: vec![val],
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -511,6 +535,7 @@ impl IrGen {
                     func: "oxy_fstring_concat",
                     args: regs,
                     immediates: vec![parts.len()],
+                strings: vec![],
                 });
                 r
             }
@@ -530,6 +555,7 @@ impl IrGen {
                             func: "oxy_field_store",
                             args: vec![obj_reg, val_reg],
                             immediates: vec![],
+                            strings: vec![field.clone()],
                         });
                     }
                     Expr::Index { object, index, .. } => {
@@ -541,6 +567,7 @@ impl IrGen {
                             func: "oxy_vec_index_store",
                             args: vec![obj_reg, idx_reg, val_reg],
                             immediates: vec![],
+                        strings: vec![],
                         });
                     }
                     _ => {}
@@ -588,6 +615,7 @@ impl IrGen {
                     func: "oxy_make_range",
                     args: vec![start_reg, end_reg],
                     immediates: vec![*inclusive as usize],
+                strings: vec![],
                 });
                 r
             }
@@ -595,13 +623,14 @@ impl IrGen {
                 self.gen_closure(params, body, *is_async)
             }
             Expr::Path { segments, .. } => {
-                // Unit enum variant: Color::Red — handled via const enum variant call
+                // Unit enum variant: Color::Red
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func: "oxy_const_enum_variant",
                     args: vec![],
                     immediates: vec![],
+                    strings: segments.clone(),
                 });
                 r
             }
@@ -629,6 +658,7 @@ impl IrGen {
                     func,
                     args: arg_regs,
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -641,6 +671,7 @@ impl IrGen {
                     func: "oxy_make_repeat",
                     args: vec![val_reg, count_reg],
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -658,6 +689,7 @@ impl IrGen {
                     func: "oxy_await_ffi",
                     args: vec![val],
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -684,6 +716,7 @@ impl IrGen {
                     func,
                     args: vec![val],
                     immediates: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -887,6 +920,7 @@ impl IrGen {
                     func: "oxy_enum_variant_equal",
                     args: vec![val_reg],
                     immediates: vec![],
+                strings: vec![],
                 });
                 // If there are inner patterns, also check them
                 for (i, inner) in fields.iter().enumerate() {
@@ -896,6 +930,7 @@ impl IrGen {
                         func: "oxy_enum_data_get",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     let inner_match = self.gen_pattern_check(inner, inner_val);
                     // AND the results: r = r && inner_match
@@ -914,6 +949,7 @@ impl IrGen {
                         func: "oxy_enum_data_get",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     let elem_match = self.gen_pattern_check(p, elem_val);
                     let new_r = self.alloc_reg();
@@ -931,6 +967,7 @@ impl IrGen {
                         func: "oxy_field_access",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     let field_match = self.gen_pattern_check(p, field_val);
                     let new_r = self.alloc_reg();
@@ -1105,6 +1142,7 @@ impl IrGen {
             func: "oxy_make_iter",
             args: vec![iter_reg],
             immediates: vec![],
+        strings: vec![],
         });
 
         self.terminate(Terminator::Jump(header_id));
@@ -1117,6 +1155,7 @@ impl IrGen {
             func: "oxy_iter_next",
             args: vec![iter_r],
             immediates: vec![slot],
+        strings: vec![],
         });
         // oxy_iter_next sets the value via local slot and returns bool-like
         let cond = self.alloc_reg();
@@ -1125,6 +1164,7 @@ impl IrGen {
             func: "oxy_is_truthy",
             args: vec![next_r],
             immediates: vec![],
+        strings: vec![],
         });
         self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
 
@@ -1155,6 +1195,7 @@ impl IrGen {
             func: "oxy_make_iter",
             args: vec![iter_reg],
             immediates: vec![],
+        strings: vec![],
         });
 
         let header_id = self.alloc_block();
@@ -1172,6 +1213,7 @@ impl IrGen {
             func: "oxy_iter_next_destructure",
             args: vec![iter_r],
             immediates: names.iter().map(|n| self.lookup_local(n).unwrap_or(0)).collect(),
+            strings: vec![],
         });
         let cond = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
@@ -1179,6 +1221,7 @@ impl IrGen {
             func: "oxy_is_truthy",
             args: vec![next_r],
             immediates: vec![],
+        strings: vec![],
         });
         self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
 
@@ -1213,6 +1256,7 @@ impl IrGen {
                         func: "oxy_enum_data_get",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     self.gen_pattern_bind(p, r);
                 }
@@ -1225,6 +1269,7 @@ impl IrGen {
                         func: "oxy_field_access",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     self.gen_pattern_bind(p, r);
                 }
@@ -1237,6 +1282,7 @@ impl IrGen {
                         func: "oxy_enum_data_get",
                         args: vec![val_reg],
                         immediates: vec![i],
+                        strings: vec![],
                     });
                     self.gen_pattern_bind(p, r);
                 }
@@ -1446,6 +1492,7 @@ impl IrGen {
             func: if is_async { "oxy_push_async_block" } else { "oxy_push_closure" },
             args: vec![],
             immediates: vec![],
+        strings: vec![],
         });
         r
     }
