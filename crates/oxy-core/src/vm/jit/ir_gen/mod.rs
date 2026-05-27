@@ -506,6 +506,14 @@ impl IrGen {
                 match op {
                     BinOp::Add => self.emit(IrOp::Add(r, target_reg, val_reg)),
                     BinOp::Sub => self.emit(IrOp::Sub(r, target_reg, val_reg)),
+                    BinOp::Mul => self.emit(IrOp::Mul(r, target_reg, val_reg)),
+                    BinOp::Div => self.emit(IrOp::Div(r, target_reg, val_reg)),
+                    BinOp::Mod => self.emit(IrOp::Rem(r, target_reg, val_reg)),
+                    BinOp::BitAnd => self.emit(IrOp::BitAnd(r, target_reg, val_reg)),
+                    BinOp::BitOr => self.emit(IrOp::BitOr(r, target_reg, val_reg)),
+                    BinOp::BitXor => self.emit(IrOp::BitXor(r, target_reg, val_reg)),
+                    BinOp::Shl => self.emit(IrOp::Shl(r, target_reg, val_reg)),
+                    BinOp::Shr => self.emit(IrOp::Shr(r, target_reg, val_reg)),
                     _ => { self.emit(IrOp::Copy(r, val_reg)); }
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
@@ -758,7 +766,7 @@ impl IrGen {
 
     /// Emit a pattern-match check: returns a register that is truthy if pattern matches.
     fn gen_pattern_check(&mut self, pattern: &Pattern, val_reg: Reg) -> Reg {
-        let r = self.alloc_reg();
+        let mut r = self.alloc_reg();
         match pattern {
             Pattern::Literal(lit_expr) => {
                 let lit_reg = self.gen_expr(lit_expr);
@@ -767,16 +775,102 @@ impl IrGen {
             Pattern::Wildcard(..) | Pattern::Ident(..) | Pattern::Rest(..) => {
                 self.emit(IrOp::ConstBool(r, true));
             }
-            Pattern::EnumVariant { .. } => {
+            Pattern::EnumVariant { fields, .. } => {
+                // Check variant discriminant, then recursively check inner field patterns
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func: "oxy_enum_variant_equal",
                     args: vec![val_reg],
                     immediates: vec![],
                 });
+                // If there are inner patterns, also check them
+                for (i, inner) in fields.iter().enumerate() {
+                    let inner_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: inner_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                    });
+                    let inner_match = self.gen_pattern_check(inner, inner_val);
+                    // AND the results: r = r && inner_match
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, inner_match));
+                    r = new_r;
+                }
             }
-            Pattern::Struct { .. } | Pattern::Tuple(..) | Pattern::Or(..)
-            | Pattern::Slice(..) | Pattern::Range { .. } => {
+            Pattern::Tuple(patterns, ..) => {
+                // Check each element recursively, AND all results
+                self.emit(IrOp::ConstBool(r, true));
+                for (i, p) in patterns.iter().enumerate() {
+                    let elem_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: elem_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                    });
+                    let elem_match = self.gen_pattern_check(p, elem_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, elem_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                // Check each named field recursively
+                self.emit(IrOp::ConstBool(r, true));
+                for (i, (_fname, p)) in fields.iter().enumerate() {
+                    let field_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: field_val,
+                        func: "oxy_field_access",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                    });
+                    let field_match = self.gen_pattern_check(p, field_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, field_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Or(patterns, ..) => {
+                // Match if ANY sub-pattern matches
+                self.emit(IrOp::ConstBool(r, false));
+                for p in patterns {
+                    let sub_match = self.gen_pattern_check(p, val_reg);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::Or(new_r, r, sub_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Range { start, end, inclusive, .. } => {
+                // Check if val_reg is within [start, end] or [start, end)
+                self.emit(IrOp::ConstBool(r, true));
+                if let Some(lo) = start {
+                    let lo_reg = self.alloc_reg();
+                    self.emit(IrOp::ConstInt(lo_reg, *lo));
+                    let ge_check = self.alloc_reg();
+                    self.emit(IrOp::Ge(ge_check, val_reg, lo_reg));
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, ge_check));
+                    r = new_r;
+                }
+                if let Some(hi) = end {
+                    let hi_reg = self.alloc_reg();
+                    self.emit(IrOp::ConstInt(hi_reg, *hi));
+                    let cmp = self.alloc_reg();
+                    if *inclusive {
+                        self.emit(IrOp::Le(cmp, val_reg, hi_reg));
+                    } else {
+                        self.emit(IrOp::Lt(cmp, val_reg, hi_reg));
+                    }
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, cmp));
+                    r = new_r;
+                }
+            }
+            Pattern::Slice(..) => {
+                // Slice patterns: stub as always matching for now
                 self.emit(IrOp::ConstBool(r, true));
             }
         }
