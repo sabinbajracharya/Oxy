@@ -134,6 +134,13 @@ fn ffi_decls() -> Vec<FfiDecl> {
             None,
         ),
         (
+            "oxy_make_enum_variant",
+            &[
+                types::I64, types::I64, types::I64, types::I64, types::I64, types::I64,
+            ],
+            None,
+        ),
+        (
             "oxy_path_call_builtin",
             &[types::I64, types::I64, types::I64],
             None,
@@ -401,5 +408,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_jit_make_enum_variant() {
+        let result = run_compiled_jit(
+            "enum MyOption { Some(int), None } fn main() -> int { let r = MyOption::Some(42); 99 }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(99));
     }
 }

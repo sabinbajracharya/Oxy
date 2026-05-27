@@ -1415,6 +1415,37 @@ extern "C" fn oxy_enum_variant_equal(
     }
 }
 
+extern "C" fn oxy_make_enum_variant(
+    ctx: *mut JitContext,
+    enum_name_ptr: *const u8,
+    enum_name_len: usize,
+    variant_ptr: *const u8,
+    variant_len: usize,
+    arg_count: usize,
+) {
+    let ctx = unsafe { &mut *ctx };
+    let enum_name = unsafe {
+        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+    let variant = unsafe {
+        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+    let mut data = Vec::with_capacity(arg_count);
+    for _ in 0..arg_count {
+        data.push(unsafe { pop(ctx) });
+    }
+    data.reverse();
+    unsafe {
+        push(ctx, Value::EnumVariant {
+            enum_name,
+            variant,
+            data,
+        });
+    }
+}
+
 // ── PathCall builtins ─────────────────────────────────────────────────
 
 extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_count: usize) {
@@ -1805,6 +1836,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_bind_ident", oxy_bind_ident as _),
         ("oxy_enum_data_get", oxy_enum_data_get as _),
         ("oxy_enum_variant_equal", oxy_enum_variant_equal as _),
+        ("oxy_make_enum_variant", oxy_make_enum_variant as _),
         ("oxy_path_call_builtin", oxy_path_call_builtin as _),
         ("oxy_display_arg", oxy_display_arg as _),
         ("oxy_await_ffi", oxy_await_ffi as _),

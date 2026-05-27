@@ -308,6 +308,18 @@ fn translate_op(
         let f = fref(ffi_refs, name);
         builder.ins().call(f, &[ctx_val, a1, a2, a3, a4]);
     };
+    // Call FFI with 5 extra args.
+    let call5 = |builder: &mut FunctionBuilder,
+                 ffi_refs: &HashMap<String, FuncRef>,
+                 name: &str,
+                 a1,
+                 a2,
+                 a3,
+                 a4,
+                 a5| {
+        let f = fref(ffi_refs, name);
+        builder.ins().call(f, &[ctx_val, a1, a2, a3, a4, a5]);
+    };
 
     match op {
         // ── Constants ──────────────────────────────────────────
@@ -710,14 +722,27 @@ fn translate_op(
             false
         }
 
+        OpCode::MakeEnumVariant {
+            enum_name,
+            variant,
+            arg_count,
+        } => {
+            let enp = builder.ins().iconst(types::I64, enum_name.as_ptr() as i64);
+            let enl = builder.ins().iconst(types::I64, enum_name.len() as i64);
+            let vp = builder.ins().iconst(types::I64, variant.as_ptr() as i64);
+            let vl = builder.ins().iconst(types::I64, variant.len() as i64);
+            let ac = builder.ins().iconst(types::I64, *arg_count as i64);
+            call5(builder, ffi_refs, "oxy_make_enum_variant", enp, enl, vp, vl, ac);
+            // Pops arg_count values, pushes one enum variant
+            *stack_depth = *stack_depth - arg_count + 1;
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
         _ => {
             // For stubbed opcodes, just track stack balance based on known effects
             match op {
                 OpCode::ConstEnumVariant { .. } => *stack_depth += 1,
-                OpCode::MakeEnumVariant { arg_count, .. } => {
-                    *stack_depth = *stack_depth - arg_count + 1
-                }
                 OpCode::EnumDataGet(idx) => {
                     let i = builder.ins().iconst(types::I64, *idx as i64);
                     call1(builder, ffi_refs, "oxy_enum_data_get", i);
