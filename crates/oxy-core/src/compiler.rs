@@ -9,21 +9,33 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub struct Compiler {
+    #[allow(dead_code)]
     source_path: Option<String>,
+    #[allow(dead_code)]
     externs: HashMap<String, PathBuf>,
 }
 
 impl Compiler {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self { source_path: None, externs: HashMap::new() }
+        Self {
+            source_path: None,
+            externs: HashMap::new(),
+        }
     }
 
     pub fn new_with_options(source_path: Option<&str>, externs: HashMap<String, PathBuf>) -> Self {
-        Self { source_path: source_path.map(|s| s.to_string()), externs }
+        Self {
+            source_path: source_path.map(|s| s.to_string()),
+            externs,
+        }
     }
 
     pub fn new_for_tests(source_path: Option<&str>) -> Self {
-        Self { source_path: source_path.map(|s| s.to_string()), externs: HashMap::new() }
+        Self {
+            source_path: source_path.map(|s| s.to_string()),
+            externs: HashMap::new(),
+        }
     }
 
     pub fn with_externs(mut self, externs: HashMap<String, PathBuf>) -> Self {

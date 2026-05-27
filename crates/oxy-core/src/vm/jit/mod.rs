@@ -5,16 +5,15 @@
 
 #![allow(dead_code)]
 
+mod codegen;
 mod context;
 pub(crate) mod ffi;
 pub(crate) mod ir;
 pub(crate) mod ir_gen;
-mod codegen;
 
 pub(crate) use context::JitContext;
 pub(crate) use ffi::register_ffi_symbols;
 
-use crate::vm::Chunk;
 use crate::vm::VmResult;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::settings::{self, Configurable};
@@ -36,7 +35,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_push_int", &[types::I64, types::I64], None),
         ("oxy_push_float", &[types::I64, types::F64], None),
         ("oxy_push_char", &[types::I64, types::I32], None),
-        ("oxy_push_string", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_push_string",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
         ("oxy_pop", &[types::I64], None),
         ("oxy_dup", &[types::I64], None),
         ("oxy_load_local", &[types::I64, types::I64], None),
@@ -68,8 +71,16 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_is_falsy", &[types::I64], Some(types::I8)),
         ("oxy_is_truthy", &[types::I64], Some(types::I8)),
         ("oxy_call", &[types::I64, types::I64, types::I64], None),
-        ("oxy_push_closure", &[types::I64, types::I64, types::I64, types::I64, types::I8], None),
-        ("oxy_push_async_block", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_push_closure",
+            &[types::I64, types::I64, types::I64, types::I64, types::I8],
+            None,
+        ),
+        (
+            "oxy_push_async_block",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
         ("oxy_call_closure", &[types::I64, types::I64], None),
         ("oxy_return", &[types::I64], None),
         ("oxy_error_discriminant", &[types::I64], Some(types::I64)),
@@ -85,18 +96,49 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_to_string", &[types::I64], None),
         ("oxy_fstring_concat", &[types::I64, types::I64], None),
         ("oxy_format", &[types::I64, types::I64], None),
-        ("oxy_field_access", &[types::I64, types::I64, types::I64], None),
-        ("oxy_field_store", &[types::I64, types::I64, types::I64], None),
-        ("oxy_method_call", &[types::I64, types::I64, types::I64, types::I64], None),
+        (
+            "oxy_field_access",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
+        (
+            "oxy_field_store",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
+        (
+            "oxy_method_call",
+            &[types::I64, types::I64, types::I64, types::I64],
+            None,
+        ),
         ("oxy_try_pop", &[types::I64], None),
         ("oxy_cast_int", &[types::I64], None),
         ("oxy_cast_float", &[types::I64], None),
         ("oxy_cast_to_char", &[types::I64], None),
         ("oxy_bind_ident", &[types::I64, types::I64], None),
         ("oxy_enum_data_get", &[types::I64, types::I64], None),
-        ("oxy_enum_variant_equal", &[types::I64, types::I64, types::I64, types::I64, types::I64], None),
-        ("oxy_make_enum_variant", &[types::I64, types::I64, types::I64, types::I64, types::I64, types::I64], None),
-        ("oxy_path_call_builtin", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_enum_variant_equal",
+            &[types::I64, types::I64, types::I64, types::I64, types::I64],
+            None,
+        ),
+        (
+            "oxy_make_enum_variant",
+            &[
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+            ],
+            None,
+        ),
+        (
+            "oxy_path_call_builtin",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
         ("oxy_struct_init", &[types::I64, types::I64], None),
         ("oxy_const_enum_variant", &[types::I64, types::I64], None),
         ("oxy_struct_update", &[types::I64, types::I64], None),
@@ -104,8 +146,16 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_await_ffi", &[types::I64], Some(types::I64)),
         ("oxy_spawn_ffi", &[types::I64], None),
         ("oxy_sleep_ffi", &[types::I64], Some(types::I64)),
-        ("oxy_select_ffi", &[types::I64, types::I64], Some(types::I64)),
-        ("oxy_make_future", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_select_ffi",
+            &[types::I64, types::I64],
+            Some(types::I64),
+        ),
+        (
+            "oxy_make_future",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
     ]
 }
 
@@ -127,10 +177,10 @@ impl JitEngine {
         let functions: Vec<ir::IrFunction> = std::mem::take(&mut ir.functions);
 
         // 2. Detect ISA, build JIT module
-        let isa_builder = cranelift_native::builder()
-            .map_err(|e| format!("host ISA: {e}"))?;
+        let isa_builder = cranelift_native::builder().map_err(|e| format!("host ISA: {e}"))?;
         let mut flag_builder = settings::builder();
-        flag_builder.set("opt_level", "speed")
+        flag_builder
+            .set("opt_level", "speed")
             .map_err(|e| format!("opt_level: {e}"))?;
         let isa = isa_builder
             .finish(settings::Flags::new(flag_builder))
@@ -153,7 +203,8 @@ impl JitEngine {
         // 5. Build engine
         let entry_name = "main".to_string();
         Ok(Self {
-            functions: std::mem::take(&mut cg.fn_names).into_iter()
+            functions: std::mem::take(&mut cg.fn_names)
+                .into_iter()
                 .map(|(name, idx)| (name, cg.fn_ptrs[&idx]))
                 .collect(),
             entry_name,
@@ -180,10 +231,14 @@ impl JitVm {
     /// Compile an Oxy program and prepare to run it.
     pub fn compile(source: &str) -> Result<Self, String> {
         let program = crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
-        crate::type_checker::TypeChecker::new().check_program(&program)
+        crate::type_checker::TypeChecker::new()
+            .check_program(&program)
             .map_err(|e| format!("type check: {e}"))?;
         let engine = JitEngine::compile(&program)?;
-        Ok(Self { engine, output: None })
+        Ok(Self {
+            engine,
+            output: None,
+        })
     }
 
     pub fn with_captured_output(&mut self) {
@@ -191,7 +246,10 @@ impl JitVm {
     }
 
     pub fn captured_output(&self) -> Vec<String> {
-        self.output.as_ref().map(|rc| rc.borrow().clone()).unwrap_or_default()
+        self.output
+            .as_ref()
+            .map(|rc| rc.borrow().clone())
+            .unwrap_or_default()
     }
 
     pub fn run(&mut self) -> VmResult {
@@ -224,8 +282,8 @@ impl JitVm {
         match disc {
             0 => VmResult::Value(ctx.result.clone()),
             2 => {
-                let msg = String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)])
-                    .into_owned();
+                let msg =
+                    String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)]).into_owned();
                 VmResult::Error(msg)
             }
             other => VmResult::Error(format!("unexpected discriminant {other}")),

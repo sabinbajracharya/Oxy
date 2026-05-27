@@ -184,6 +184,7 @@ impl Scheduler {
     }
 
     /// Reset all state — used between JitVm invocations when reusing the global scheduler.
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.tasks.clear();
         self.ready.clear();

@@ -9,9 +9,9 @@
 //! 3. `IrGen::gen_program()` → `Vec<IrFunction>` (register IR + CFG)
 //! 4. `codegen.rs` → Cranelift CLIF
 
+use super::ir::*;
 use crate::ast::*;
 use crate::type_checker::TypeInfo;
-use super::ir::*;
 
 /// IR code generator. Walks a typed AST and produces register IR.
 pub(crate) struct IrGen {
@@ -120,13 +120,58 @@ impl IrGen {
         }
     }
 
+    /// Convert a type annotation to TypeInfo (simple types only; complex types map to Unknown).
+    fn type_ann_to_type_info(ann: &TypeAnnotation) -> TypeInfo {
+        match ann {
+            TypeAnnotation::Named {
+                name, generic_args, ..
+            } => {
+                if generic_args.is_empty() {
+                    TypeInfo::from_name(name)
+                } else {
+                    // Parameterized types — map generics and construct
+                    let args: Vec<TypeInfo> = generic_args
+                        .iter()
+                        .map(Self::type_ann_to_type_info)
+                        .collect();
+                    match name.as_str() {
+                        "Vec" => TypeInfo::Vec(Box::new(
+                            args.first().cloned().unwrap_or(TypeInfo::Unknown),
+                        )),
+                        "HashMap" => TypeInfo::HashMap(
+                            Box::new(args.first().cloned().unwrap_or(TypeInfo::Unknown)),
+                            Box::new(args.get(1).cloned().unwrap_or(TypeInfo::Unknown)),
+                        ),
+                        "Option" => TypeInfo::Option(Box::new(
+                            args.first().cloned().unwrap_or(TypeInfo::Unknown),
+                        )),
+                        "Result" => TypeInfo::Result(
+                            Box::new(args.first().cloned().unwrap_or(TypeInfo::Unknown)),
+                            Box::new(args.get(1).cloned().unwrap_or(TypeInfo::Unknown)),
+                        ),
+                        _ => TypeInfo::UserStruct {
+                            name: name.clone(),
+                            generic_args: args,
+                        },
+                    }
+                }
+            }
+            TypeAnnotation::Array { inner, size, .. } => {
+                TypeInfo::Array(Box::new(Self::type_ann_to_type_info(inner)), *size)
+            }
+        }
+    }
+
     /// Generate IR for one function.
     fn gen_fn(&mut self, f: &FnDef) {
+        let ret_ty = f
+            .return_type
+            .as_ref()
+            .map(Self::type_ann_to_type_info)
+            .unwrap_or(TypeInfo::Unit);
         // Save current state
-        let saved = std::mem::replace(
-            &mut self.current,
-            IrFunction::new(f.name.clone(), 0, 0),
-        );
+        let saved = std::mem::replace(&mut self.current, IrFunction::new(f.name.clone(), 0, 0));
+        self.current.return_type = ret_ty;
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_count = self.local_count;
         let saved_break = self.break_target;
@@ -150,7 +195,10 @@ impl IrGen {
         // Generate body
         let result_reg = self.gen_block_stmts(&f.body);
         // If no explicit return, add implicit return of tail expression
-        if !matches!(self.current.blocks[self.current_block].terminator, Terminator::Return(_) | Terminator::Panic(_)) {
+        if !matches!(
+            self.current.blocks[self.current_block].terminator,
+            Terminator::Return(_) | Terminator::Panic(_)
+        ) {
             let reg = result_reg.unwrap_or_else(|| {
                 let r = self.alloc_reg();
                 self.emit(IrOp::ConstUnit(r));
@@ -160,10 +208,8 @@ impl IrGen {
         }
 
         self.current.local_count = self.local_count;
-        self.functions.push(std::mem::replace(
-            &mut self.current,
-            saved,
-        ));
+        self.functions
+            .push(std::mem::replace(&mut self.current, saved));
 
         // Restore state
         self.locals = saved_locals;
@@ -198,7 +244,10 @@ impl IrGen {
                 self.gen_pattern_bind(pattern, val_reg);
                 None
             }
-            Stmt::Expr { expr, has_semicolon } => {
+            Stmt::Expr {
+                expr,
+                has_semicolon,
+            } => {
                 let reg = self.gen_expr(expr);
                 if *has_semicolon {
                     None
@@ -218,21 +267,34 @@ impl IrGen {
                 self.terminate(Terminator::Return(reg));
                 None
             }
-            Stmt::While { condition, body, label, .. } => {
-                self.gen_while(condition, body, label.as_deref())
-            }
-            Stmt::WhileLet { pattern, expr, body, label, .. } => {
-                self.gen_while_let(pattern, expr, body, label.as_deref())
-            }
-            Stmt::Loop { body, label, .. } => {
-                self.gen_loop(body, label.as_deref())
-            }
-            Stmt::For { name, iterable, body, label, .. } => {
-                self.gen_for_in(name, iterable, body, label.as_deref())
-            }
-            Stmt::ForDestructure { names, iterable, body, label, .. } => {
-                self.gen_for_destructure(names, iterable, body, label.as_deref())
-            }
+            Stmt::While {
+                condition,
+                body,
+                label,
+                ..
+            } => self.gen_while(condition, body, label.as_deref()),
+            Stmt::WhileLet {
+                pattern,
+                expr,
+                body,
+                label,
+                ..
+            } => self.gen_while_let(pattern, expr, body, label.as_deref()),
+            Stmt::Loop { body, label, .. } => self.gen_loop(body, label.as_deref()),
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                label,
+                ..
+            } => self.gen_for_in(name, iterable, body, label.as_deref()),
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                label,
+                ..
+            } => self.gen_for_destructure(names, iterable, body, label.as_deref()),
             Stmt::Break { label, value, .. } => {
                 let reg = value.as_ref().map(|v| self.gen_expr(v)).unwrap_or_else(|| {
                     let r = self.alloc_reg();
@@ -311,14 +373,14 @@ impl IrGen {
                     r
                 }
             }
-            Expr::Block(block) => {
-                self.gen_block_stmts(block).unwrap_or_else(|| {
-                    let r = self.alloc_reg();
-                    self.emit(IrOp::ConstUnit(r));
-                    r
-                })
-            }
-            Expr::BinaryOp { left, op, right, .. } => {
+            Expr::Block(block) => self.gen_block_stmts(block).unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            }),
+            Expr::BinaryOp {
+                left, op, right, ..
+            } => {
                 let lhs = self.gen_expr(left);
                 let rhs = self.gen_expr(right);
                 let r = self.alloc_reg();
@@ -374,7 +436,12 @@ impl IrGen {
                 });
                 r
             }
-            Expr::MethodCall { object, method, args, .. } => {
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                ..
+            } => {
                 let obj_reg = self.gen_expr(object);
                 let mut arg_regs = vec![obj_reg];
                 for a in args {
@@ -390,20 +457,36 @@ impl IrGen {
                 });
                 r
             }
-            Expr::If { condition, then_block, else_block, .. } => {
-                self.gen_if(condition, then_block, else_block.as_deref())
-            }
-            Expr::IfLet { pattern, expr, then_block, else_block, guard, .. } => {
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => self.gen_if(condition, then_block, else_block.as_deref()),
+            Expr::IfLet {
+                pattern,
+                expr,
+                then_block,
+                else_block,
+                guard,
+                ..
+            } => {
                 if let Some(guard_expr) = guard {
-                    self.gen_if_let_guarded(pattern, expr, guard_expr, then_block, else_block.as_deref())
+                    self.gen_if_let_guarded(
+                        pattern,
+                        expr,
+                        guard_expr,
+                        then_block,
+                        else_block.as_deref(),
+                    )
                 } else {
                     self.gen_if_let(pattern, expr, then_block, else_block.as_deref())
                 }
             }
-            Expr::Match { expr, arms, .. } => {
-                self.gen_match(expr, arms)
-            }
-            Expr::StructInit { name, fields, base, .. } => {
+            Expr::Match { expr, arms, .. } => self.gen_match(expr, arms),
+            Expr::StructInit {
+                name, fields, base, ..
+            } => {
                 let mut arg_regs = Vec::new();
                 for (_, val) in fields {
                     arg_regs.push(self.gen_expr(val));
@@ -445,7 +528,12 @@ impl IrGen {
                 });
                 r
             }
-            Expr::PathCall { path, turbofish, args, .. } => {
+            Expr::PathCall {
+                path,
+                turbofish: _,
+                args,
+                ..
+            } => {
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
@@ -471,7 +559,7 @@ impl IrGen {
                     func: "oxy_make_array",
                     args: regs,
                     immediates: vec![elements.len()],
-                strings: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -486,7 +574,7 @@ impl IrGen {
                     func: "oxy_make_tuple",
                     args: regs,
                     immediates: vec![elements.len()],
-                strings: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -535,7 +623,7 @@ impl IrGen {
                     func: "oxy_fstring_concat",
                     args: regs,
                     immediates: vec![parts.len()],
-                strings: vec![],
+                    strings: vec![],
                 });
                 r
             }
@@ -567,14 +655,16 @@ impl IrGen {
                             func: "oxy_vec_index_store",
                             args: vec![obj_reg, idx_reg, val_reg],
                             immediates: vec![],
-                        strings: vec![],
+                            strings: vec![],
                         });
                     }
                     _ => {}
                 }
                 val_reg
             }
-            Expr::CompoundAssign { target, op, value, .. } => {
+            Expr::CompoundAssign {
+                target, op, value, ..
+            } => {
                 let val_reg = self.gen_expr(value);
                 let target_reg = self.gen_expr(target);
                 let r = self.alloc_reg();
@@ -589,7 +679,9 @@ impl IrGen {
                     BinOp::BitXor => self.emit(IrOp::BitXor(r, target_reg, val_reg)),
                     BinOp::Shl => self.emit(IrOp::Shl(r, target_reg, val_reg)),
                     BinOp::Shr => self.emit(IrOp::Shr(r, target_reg, val_reg)),
-                    _ => { self.emit(IrOp::Copy(r, val_reg)); }
+                    _ => {
+                        self.emit(IrOp::Copy(r, val_reg));
+                    }
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
@@ -598,7 +690,12 @@ impl IrGen {
                 }
                 r
             }
-            Expr::Range { start, end, inclusive, .. } => {
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
                 let start_reg = start.as_ref().map(|s| self.gen_expr(s)).unwrap_or_else(|| {
                     let r = self.alloc_reg();
                     self.emit(IrOp::ConstInt(r, 0));
@@ -615,13 +712,16 @@ impl IrGen {
                     func: "oxy_make_range",
                     args: vec![start_reg, end_reg],
                     immediates: vec![*inclusive as usize],
-                strings: vec![],
+                    strings: vec![],
                 });
                 r
             }
-            Expr::Closure { params, body, is_async, .. } => {
-                self.gen_closure(params, body, *is_async)
-            }
+            Expr::Closure {
+                params,
+                body,
+                is_async,
+                ..
+            } => self.gen_closure(params, body, *is_async),
             Expr::Path { segments, .. } => {
                 // Unit enum variant: Color::Red
                 let r = self.alloc_reg();
@@ -640,9 +740,7 @@ impl IrGen {
                 self.emit(IrOp::LoadLocal(r, 0));
                 r
             }
-            Expr::Grouped(inner, _) => {
-                self.gen_expr(inner)
-            }
+            Expr::Grouped(inner, _) => self.gen_expr(inner),
             Expr::MacroCall { name, args, .. } => {
                 let mut arg_regs = Vec::new();
                 for a in args {
@@ -704,7 +802,9 @@ impl IrGen {
                 self.terminate(Terminator::Return(reg));
                 reg
             }
-            Expr::As { expr, type_name, .. } => {
+            Expr::As {
+                expr, type_name, ..
+            } => {
                 let val = self.gen_expr(expr);
                 let r = self.alloc_reg();
                 let func = match type_name.as_str() {
@@ -721,13 +821,7 @@ impl IrGen {
                     strings: vec![],
                 });
                 r
-            }
-            // Stub remaining
-            _ => {
-                let r = self.alloc_reg();
-                self.emit(IrOp::ConstUnit(r));
-                r
-            }
+            } // Unreachable: all Expr variants are handled above.
         }
     }
 
@@ -741,7 +835,11 @@ impl IrGen {
         let merge_id = self.alloc_block();
 
         // Entry: branch
-        self.terminate(Terminator::Branch { cond, then_block: then_id, else_block: else_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: then_id,
+            else_block: else_id,
+        });
 
         // Then block
         self.start_block(then_id);
@@ -771,14 +869,24 @@ impl IrGen {
         r
     }
 
-    fn gen_if_let(&mut self, pattern: &Pattern, expr: &Expr, then_block: &Block, else_block: Option<&Expr>) -> Reg {
+    fn gen_if_let(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        then_block: &Block,
+        else_block: Option<&Expr>,
+    ) -> Reg {
         let val = self.gen_expr(expr);
         let then_id = self.alloc_block();
         let else_id = self.alloc_block();
         let merge_id = self.alloc_block();
 
         let cond = self.gen_pattern_check(pattern, val);
-        self.terminate(Terminator::Branch { cond, then_block: then_id, else_block: else_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: then_id,
+            else_block: else_id,
+        });
 
         self.start_block(then_id);
         let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
@@ -875,7 +983,11 @@ impl IrGen {
                 self.start_block(check_blocks[i]);
             }
             let matches = self.gen_pattern_check(&arm.pattern, val);
-            let else_target = if i + 1 < n { check_blocks[i + 1] } else { body_blocks[i] };
+            let else_target = if i + 1 < n {
+                check_blocks[i + 1]
+            } else {
+                body_blocks[i]
+            };
             self.terminate(Terminator::Branch {
                 cond: matches,
                 then_block: body_blocks[i],
@@ -922,7 +1034,7 @@ impl IrGen {
                     func: "oxy_enum_variant_equal",
                     args: vec![val_reg],
                     immediates: vec![],
-                strings: vec![],
+                    strings: vec![],
                 });
                 // If there are inner patterns, also check them
                 for (i, inner) in fields.iter().enumerate() {
@@ -987,7 +1099,12 @@ impl IrGen {
                     r = new_r;
                 }
             }
-            Pattern::Range { start, end, inclusive, .. } => {
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
                 // Check if val_reg is within [start, end] or [start, end)
                 self.emit(IrOp::ConstBool(r, true));
                 if let Some(lo) = start {
@@ -1028,7 +1145,8 @@ impl IrGen {
 
         // Register label if present
         if let Some(lbl) = label {
-            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
         }
 
         // Jump to header
@@ -1037,7 +1155,11 @@ impl IrGen {
         // Header: evaluate condition
         self.start_block(header_id);
         let cond = self.gen_expr(condition);
-        self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
 
         // Body
         let saved_break = self.break_target;
@@ -1057,13 +1179,20 @@ impl IrGen {
         None
     }
 
-    fn gen_while_let(&mut self, pattern: &Pattern, expr: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
+    fn gen_while_let(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
 
         if let Some(lbl) = label {
-            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
         }
 
         self.terminate(Terminator::Jump(header_id));
@@ -1071,7 +1200,11 @@ impl IrGen {
         self.start_block(header_id);
         let val = self.gen_expr(expr);
         let cond = self.gen_pattern_check(pattern, val);
-        self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
 
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -1094,7 +1227,8 @@ impl IrGen {
         let exit_id = self.alloc_block();
 
         if let Some(lbl) = label {
-            self.labeled_targets.insert(lbl.to_string(), (exit_id, body_id));
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, body_id));
         }
 
         self.terminate(Terminator::Jump(body_id));
@@ -1125,7 +1259,13 @@ impl IrGen {
         Some(r)
     }
 
-    fn gen_for_in(&mut self, name: &str, iterable: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
+    fn gen_for_in(
+        &mut self,
+        name: &str,
+        iterable: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
         let iter_reg = self.gen_expr(iterable);
         let slot = self.alloc_local(name);
 
@@ -1134,7 +1274,8 @@ impl IrGen {
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
         if let Some(lbl) = label {
-            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
         }
 
         // Call oxy_make_iter to get an iterator
@@ -1144,7 +1285,7 @@ impl IrGen {
             func: "oxy_make_iter",
             args: vec![iter_reg],
             immediates: vec![],
-        strings: vec![],
+            strings: vec![],
         });
 
         self.terminate(Terminator::Jump(header_id));
@@ -1157,7 +1298,7 @@ impl IrGen {
             func: "oxy_iter_next",
             args: vec![iter_r],
             immediates: vec![slot],
-        strings: vec![],
+            strings: vec![],
         });
         // oxy_iter_next sets the value via local slot and returns bool-like
         let cond = self.alloc_reg();
@@ -1166,9 +1307,13 @@ impl IrGen {
             func: "oxy_is_truthy",
             args: vec![next_r],
             immediates: vec![],
-        strings: vec![],
+            strings: vec![],
         });
-        self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
 
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -1186,7 +1331,13 @@ impl IrGen {
         None
     }
 
-    fn gen_for_destructure(&mut self, names: &[String], iterable: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
+    fn gen_for_destructure(
+        &mut self,
+        names: &[String],
+        iterable: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
         let iter_reg = self.gen_expr(iterable);
         for name in names {
             self.alloc_local(name);
@@ -1197,14 +1348,15 @@ impl IrGen {
             func: "oxy_make_iter",
             args: vec![iter_reg],
             immediates: vec![],
-        strings: vec![],
+            strings: vec![],
         });
 
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
         if let Some(lbl) = label {
-            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
         }
 
         self.terminate(Terminator::Jump(header_id));
@@ -1214,7 +1366,10 @@ impl IrGen {
             result: next_r,
             func: "oxy_iter_next_destructure",
             args: vec![iter_r],
-            immediates: names.iter().map(|n| self.lookup_local(n).unwrap_or(0)).collect(),
+            immediates: names
+                .iter()
+                .map(|n| self.lookup_local(n).unwrap_or(0))
+                .collect(),
             strings: vec![],
         });
         let cond = self.alloc_reg();
@@ -1223,9 +1378,13 @@ impl IrGen {
             func: "oxy_is_truthy",
             args: vec![next_r],
             immediates: vec![],
-        strings: vec![],
+            strings: vec![],
         });
-        self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
 
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -1298,7 +1457,11 @@ impl IrGen {
     }
 
     /// Collect free variable names in an expression (variables not in param_names).
-    fn collect_free_vars(&self, expr: &Expr, param_names: &std::collections::HashSet<String>) -> Vec<String> {
+    fn collect_free_vars(
+        &self,
+        expr: &Expr,
+        param_names: &std::collections::HashSet<String>,
+    ) -> Vec<String> {
         let mut vars = std::collections::HashSet::new();
         self.collect_idents(expr, param_names, &mut vars);
         vars.into_iter().collect()
@@ -1323,9 +1486,16 @@ impl IrGen {
             Expr::UnaryOp { expr, .. } => self.collect_idents(expr, param_names, out),
             Expr::Call { callee, args, .. } => {
                 self.collect_idents(callee, param_names, out);
-                for a in args { self.collect_idents(a, param_names, out); }
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
             }
-            Expr::If { condition, then_block, else_block, .. } => {
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.collect_idents(condition, param_names, out);
                 self.collect_idents_in_block(then_block, param_names, out);
                 if let Some(eb) = else_block {
@@ -1335,15 +1505,23 @@ impl IrGen {
             Expr::Block(block) => self.collect_idents_in_block(block, param_names, out),
             Expr::MethodCall { object, args, .. } => {
                 self.collect_idents(object, param_names, out);
-                for a in args { self.collect_idents(a, param_names, out); }
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
             }
             Expr::StructInit { fields, base, .. } => {
-                for (_, v) in fields { self.collect_idents(v, param_names, out); }
-                if let Some(b) = base { self.collect_idents(b, param_names, out); }
+                for (_, v) in fields {
+                    self.collect_idents(v, param_names, out);
+                }
+                if let Some(b) = base {
+                    self.collect_idents(b, param_names, out);
+                }
             }
             Expr::FieldAccess { object, .. } => self.collect_idents(object, param_names, out),
             Expr::Array { elements, .. } => {
-                for e in elements { self.collect_idents(e, param_names, out); }
+                for e in elements {
+                    self.collect_idents(e, param_names, out);
+                }
             }
             Expr::Index { object, index, .. } => {
                 self.collect_idents(object, param_names, out);
@@ -1366,21 +1544,39 @@ impl IrGen {
                     }
                 }
             }
-            Expr::IfLet { expr, guard, then_block, else_block, .. } => {
+            Expr::IfLet {
+                expr,
+                guard,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.collect_idents(expr, param_names, out);
-                if let Some(g) = guard { self.collect_idents(g, param_names, out); }
+                if let Some(g) = guard {
+                    self.collect_idents(g, param_names, out);
+                }
                 self.collect_idents_in_block(then_block, param_names, out);
-                if let Some(eb) = else_block { self.collect_idents(eb, param_names, out); }
+                if let Some(eb) = else_block {
+                    self.collect_idents(eb, param_names, out);
+                }
             }
             Expr::Tuple { elements, .. } => {
-                for e in elements { self.collect_idents(e, param_names, out); }
+                for e in elements {
+                    self.collect_idents(e, param_names, out);
+                }
             }
             Expr::PathCall { args, .. } => {
-                for a in args { self.collect_idents(a, param_names, out); }
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
             }
             Expr::Range { start, end, .. } => {
-                if let Some(s) = start { self.collect_idents(s, param_names, out); }
-                if let Some(e) = end { self.collect_idents(e, param_names, out); }
+                if let Some(s) = start {
+                    self.collect_idents(s, param_names, out);
+                }
+                if let Some(e) = end {
+                    self.collect_idents(e, param_names, out);
+                }
             }
             Expr::Repeat { value, count, .. } => {
                 self.collect_idents(value, param_names, out);
@@ -1396,12 +1592,16 @@ impl IrGen {
             Expr::As { expr, .. } => self.collect_idents(expr, param_names, out),
             Expr::Try { expr, .. } => self.collect_idents(expr, param_names, out),
             Expr::Return { value, .. } => {
-                if let Some(v) = value { self.collect_idents(v, param_names, out); }
+                if let Some(v) = value {
+                    self.collect_idents(v, param_names, out);
+                }
             }
             Expr::AsyncBlock { body, .. } => self.collect_idents_in_block(body, param_names, out),
             Expr::Await { expr, .. } => self.collect_idents(expr, param_names, out),
             Expr::MacroCall { args, .. } => {
-                for a in args { self.collect_idents(a, param_names, out); }
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
             }
             _ => {}
         }
@@ -1417,12 +1617,18 @@ impl IrGen {
             match stmt {
                 Stmt::Expr { expr, .. } => self.collect_idents(expr, param_names, out),
                 Stmt::Let { value, .. } => {
-                    if let Some(v) = value { self.collect_idents(v, param_names, out); }
+                    if let Some(v) = value {
+                        self.collect_idents(v, param_names, out);
+                    }
                 }
                 Stmt::Return { value, .. } => {
-                    if let Some(v) = value { self.collect_idents(v, param_names, out); }
+                    if let Some(v) = value {
+                        self.collect_idents(v, param_names, out);
+                    }
                 }
-                Stmt::While { condition, body, .. } => {
+                Stmt::While {
+                    condition, body, ..
+                } => {
                     self.collect_idents(condition, param_names, out);
                     self.collect_idents_in_block(body, param_names, out);
                 }
@@ -1473,16 +1679,17 @@ impl IrGen {
         }
 
         let result_reg = self.gen_expr(body);
-        if !matches!(self.current.blocks[self.current_block].terminator, Terminator::Return(_)) {
+        if !matches!(
+            self.current.blocks[self.current_block].terminator,
+            Terminator::Return(_)
+        ) {
             self.terminate(Terminator::Return(result_reg));
         }
 
         self.current.local_count = self.local_count;
         self.current.is_async = is_async;
-        self.functions.push(std::mem::replace(
-            &mut self.current,
-            saved,
-        ));
+        self.functions
+            .push(std::mem::replace(&mut self.current, saved));
 
         self.locals = saved_locals;
         self.local_count = saved_local_count;
@@ -1491,10 +1698,14 @@ impl IrGen {
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
-            func: if is_async { "oxy_push_async_block" } else { "oxy_push_closure" },
+            func: if is_async {
+                "oxy_push_async_block"
+            } else {
+                "oxy_push_closure"
+            },
             args: vec![],
             immediates: vec![],
-        strings: vec![],
+            strings: vec![],
         });
         r
     }
@@ -1509,7 +1720,9 @@ mod tests {
     /// Helper: parse + type-check + generate IR, return the IrGen and program.
     fn gen(source: &str) -> IrGen {
         let program = crate::parser::parse(source).expect("parse failed");
-        crate::type_checker::TypeChecker::new().check_program(&program).expect("type-check failed");
+        crate::type_checker::TypeChecker::new()
+            .check_program(&program)
+            .expect("type-check failed");
         let mut ir = IrGen::new();
         ir.gen_program(&program);
         ir
@@ -1517,15 +1730,18 @@ mod tests {
 
     /// Helper: find an IrFunction by name.
     fn find_fn<'a>(ir: &'a IrGen, name: &str) -> &'a IrFunction {
-        ir.functions.iter().find(|f| f.name == name)
+        ir.functions
+            .iter()
+            .find(|f| f.name == name)
             .unwrap_or_else(|| panic!("function not found: {name}"))
     }
 
     /// Helper: collect all IrOp variants in a function as strings (for simple matching).
     fn op_names(f: &IrFunction) -> Vec<String> {
-        f.blocks.iter().flat_map(|b| {
-            b.ops.iter().map(|op| format!("{:?}", op))
-        }).collect()
+        f.blocks
+            .iter()
+            .flat_map(|b| b.ops.iter().map(|op| format!("{:?}", op)))
+            .collect()
     }
 
     // ── Literals ───────────────────────────────────────────────────────
@@ -1536,8 +1752,11 @@ mod tests {
         let f = find_fn(&ir, "main");
         assert!(f.blocks.len() >= 1, "should have at least one block");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
-            "should have ConstInt(42), got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
+            "should have ConstInt(42), got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1545,8 +1764,11 @@ mod tests {
         let ir = gen("fn main() -> bool { true }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, true))),
-            "should have ConstBool(true), got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, true))),
+            "should have ConstBool(true), got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1554,8 +1776,11 @@ mod tests {
         let ir = gen("fn main() -> bool { false }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, false))),
-            "should have ConstBool(false), got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, false))),
+            "should have ConstBool(false), got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1563,8 +1788,11 @@ mod tests {
         let ir = gen("fn main() -> float { 3.14 }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstFloat(_, _))),
-            "should have ConstFloat, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstFloat(_, _))),
+            "should have ConstFloat, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1572,8 +1800,11 @@ mod tests {
         let ir = gen("fn main() -> String { \"hello\" }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstString(_, _))),
-            "should have ConstString, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstString(_, _))),
+            "should have ConstString, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1581,8 +1812,11 @@ mod tests {
         let ir = gen("fn main() -> char { 'x' }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstChar(_, 'x'))),
-            "should have ConstChar('x'), got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstChar(_, 'x'))),
+            "should have ConstChar('x'), got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1600,8 +1834,11 @@ mod tests {
         let ir = gen("fn main() -> int { 1 + 2 }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::Add(_, _, _))),
-            "should have Add, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::Add(_, _, _))),
+            "should have Add, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1771,10 +2008,16 @@ mod tests {
         let ir = gen("fn main() -> int { let x = 5; x }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
-            "should have StoreLocal for let binding, got: {:?}", ops);
-        assert!(ops.iter().any(|op| matches!(op, IrOp::LoadLocal(_, _))),
-            "should have LoadLocal for reading x, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
+            "should have StoreLocal for let binding, got: {:?}",
+            ops
+        );
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::LoadLocal(_, _))),
+            "should have LoadLocal for reading x, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1782,8 +2025,10 @@ mod tests {
         let ir = gen("fn main() -> int { let mut x = 5; x = 10; x }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
-            "should have StoreLocal ops");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
+            "should have StoreLocal ops"
+        );
     }
 
     #[test]
@@ -1791,8 +2036,13 @@ mod tests {
         let ir = gen("fn main() -> int { let a = 1; let b = 2; a + b }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().filter(|op| matches!(op, IrOp::StoreLocal(_, _))).count() >= 2,
-            "should have at least 2 StoreLocal ops");
+        assert!(
+            ops.iter()
+                .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+                .count()
+                >= 2,
+            "should have at least 2 StoreLocal ops"
+        );
     }
 
     // ── Control flow (if/else) ─────────────────────────────────────────
@@ -1801,11 +2051,18 @@ mod tests {
     fn test_if_then() {
         let ir = gen("fn main() -> int { if true { 1 } else { 0 } }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 3, "should have at least 3 blocks (entry, then, else), got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 3,
+            "should have at least 3 blocks (entry, then, else), got {}",
+            f.blocks.len()
+        );
         // Should have Branch terminator
         let entry = &f.blocks[f.entry];
-        assert!(matches!(entry.terminator, Terminator::Branch { .. }),
-            "entry should have Branch terminator, got: {:?}", entry.terminator);
+        assert!(
+            matches!(entry.terminator, Terminator::Branch { .. }),
+            "entry should have Branch terminator, got: {:?}",
+            entry.terminator
+        );
     }
 
     #[test]
@@ -1819,7 +2076,10 @@ mod tests {
     fn test_if_else_if() {
         let ir = gen("fn main() -> int { if true { 1 } else if false { 2 } else { 3 } }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 4, "should have multiple blocks for else-if chain");
+        assert!(
+            f.blocks.len() >= 4,
+            "should have multiple blocks for else-if chain"
+        );
     }
 
     #[test]
@@ -1835,21 +2095,36 @@ mod tests {
     fn test_while_loop() {
         let ir = gen("fn main() -> int { let mut x = 0; while x < 5 { x = x + 1; } x }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 2, "while should have at least 2 blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 2,
+            "while should have at least 2 blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
     fn test_loop_expression() {
-        let ir = gen("fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }");
+        let ir =
+            gen("fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 2, "loop should have multiple blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 2,
+            "loop should have multiple blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
     fn test_for_in() {
-        let ir = gen("fn main() -> int { let mut sum = 0; for x in vec![1, 2, 3] { sum = sum + x; } sum }");
+        let ir = gen(
+            "fn main() -> int { let mut sum = 0; for x in vec![1, 2, 3] { sum = sum + x; } sum }",
+        );
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 2, "for-in should have multiple blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 2,
+            "for-in should have multiple blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
@@ -1863,7 +2138,10 @@ mod tests {
     fn test_continue_in_loop() {
         let ir = gen("fn main() -> int { let mut x = 0; while x < 10 { x = x + 1; if x == 2 { continue; } } x }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 2, "while with continue should have blocks");
+        assert!(
+            f.blocks.len() >= 2,
+            "while with continue should have blocks"
+        );
     }
 
     // ── Function calls ─────────────────────────────────────────────────
@@ -1873,8 +2151,11 @@ mod tests {
         let ir = gen("fn foo() -> int { 42 } fn main() -> int { foo() }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "should have a call op, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "should have a call op, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -1889,8 +2170,10 @@ mod tests {
         let ir = gen("fn main() -> int { let s = \"hello\"; s.len() }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "method call should be a CallBuiltin");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "method call should be a CallBuiltin"
+        );
     }
 
     #[test]
@@ -1907,8 +2190,11 @@ mod tests {
         let ir = gen("fn main() -> int { return 42; }");
         let f = find_fn(&ir, "main");
         let entry = &f.blocks[f.entry];
-        assert!(matches!(entry.terminator, Terminator::Return(_)),
-            "should have Return terminator, got: {:?}", entry.terminator);
+        assert!(
+            matches!(entry.terminator, Terminator::Return(_)),
+            "should have Return terminator, got: {:?}",
+            entry.terminator
+        );
     }
 
     #[test]
@@ -1916,8 +2202,10 @@ mod tests {
         let ir = gen("fn main() -> int { 42 }");
         let f = find_fn(&ir, "main");
         let last_block = &f.blocks.last().unwrap();
-        assert!(matches!(last_block.terminator, Terminator::Return(_)),
-            "tail expr should generate Return terminator");
+        assert!(
+            matches!(last_block.terminator, Terminator::Return(_)),
+            "tail expr should generate Return terminator"
+        );
     }
 
     // ── Blocks and scoping ─────────────────────────────────────────────
@@ -1936,8 +2224,10 @@ mod tests {
         let ir = gen("struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.x }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "struct init should use CallBuiltin for oxy_struct_init");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "struct init should use CallBuiltin for oxy_struct_init"
+        );
     }
 
     #[test]
@@ -1952,8 +2242,10 @@ mod tests {
         let ir = gen("struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.x }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "field access should use CallBuiltin for oxy_field_access");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "field access should use CallBuiltin for oxy_field_access"
+        );
     }
 
     // ── Enum variants ──────────────────────────────────────────────────
@@ -1967,11 +2259,15 @@ mod tests {
 
     #[test]
     fn test_enum_variant_with_data() {
-        let ir = gen("enum MyOption { Some(int), None } fn main() -> int { let x = MyOption::Some(42); 0 }");
+        let ir = gen(
+            "enum MyOption { Some(int), None } fn main() -> int { let x = MyOption::Some(42); 0 }",
+        );
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "enum variant should use CallBuiltin");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "enum variant should use CallBuiltin"
+        );
     }
 
     // ── Pattern matching ───────────────────────────────────────────────
@@ -1980,14 +2276,21 @@ mod tests {
     fn test_match_expression() {
         let ir = gen("fn main() -> int { match 1 { 0 => 10, 1 => 20, _ => 30 } }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 3, "match should have multiple blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 3,
+            "match should have multiple blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
     fn test_match_on_enum() {
         let ir = gen("enum MyOption { Some(int), None } fn main() -> int { let x = MyOption::Some(42); match x { MyOption::Some(v) => v, MyOption::None => 0 } }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 3, "match on enum should have multiple blocks");
+        assert!(
+            f.blocks.len() >= 3,
+            "match on enum should have multiple blocks"
+        );
     }
 
     // ── Collections ────────────────────────────────────────────────────
@@ -2018,8 +2321,10 @@ mod tests {
         let ir = gen("fn main() -> int { let v = vec![1, 2, 3]; v[0] }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "index should use CallBuiltin for oxy_vec_index");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "index should use CallBuiltin for oxy_vec_index"
+        );
     }
 
     // ── F-string ───────────────────────────────────────────────────────
@@ -2035,11 +2340,14 @@ mod tests {
 
     #[test]
     fn test_try_operator() {
-        let ir = gen("fn main() -> Option { let x = Option::Some(42); let y = x?; Option::Some(y) }");
+        let ir =
+            gen("fn main() -> Option { let x = Option::Some(42); let y = x?; Option::Some(y) }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "try should use CallBuiltin for oxy_try_pop");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "try should use CallBuiltin for oxy_try_pop"
+        );
     }
 
     // ── Closures ───────────────────────────────────────────────────────
@@ -2100,8 +2408,15 @@ mod tests {
         let ir = gen("fn main() -> int { let mut x = 5; x = 10; x }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        let store_count = ops.iter().filter(|op| matches!(op, IrOp::StoreLocal(_, _))).count();
-        assert!(store_count >= 2, "should have at least 2 stores (init + assignment), got {}", store_count);
+        let store_count = ops
+            .iter()
+            .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+            .count();
+        assert!(
+            store_count >= 2,
+            "should have at least 2 stores (init + assignment), got {}",
+            store_count
+        );
     }
 
     #[test]
@@ -2118,7 +2433,11 @@ mod tests {
         let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
         // Should generate IR for the inc method
         let method = ir.functions.iter().find(|f| f.name.contains("inc"));
-        assert!(method.is_some(), "should have inc method, functions: {:?}", ir.functions.iter().map(|f| &f.name).collect::<Vec<_>>());
+        assert!(
+            method.is_some(),
+            "should have inc method, functions: {:?}",
+            ir.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
     }
 
     // ── Edge cases ─────────────────────────────────────────────────────
@@ -2132,7 +2451,8 @@ mod tests {
 
     #[test]
     fn test_deeply_nested() {
-        let ir = gen("fn main() -> int { let x = if true { if false { 1 } else { 2 } } else { 3 }; x }");
+        let ir =
+            gen("fn main() -> int { let x = if true { if false { 1 } else { 2 } } else { 3 }; x }");
         let f = find_fn(&ir, "main");
         assert!(f.blocks.len() >= 4, "nested if should have multiple blocks");
     }
@@ -2161,8 +2481,11 @@ mod tests {
         let ir = gen("fn main() -> int { (42) }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
-            "grouped should unwrap inner literal, got: {:?}", ops);
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
+            "grouped should unwrap inner literal, got: {:?}",
+            ops
+        );
     }
 
     #[test]
@@ -2170,8 +2493,10 @@ mod tests {
         let ir = gen("fn main() { println!(\"hello\") }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "println should emit CallBuiltin");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "println should emit CallBuiltin"
+        );
     }
 
     #[test]
@@ -2179,8 +2504,10 @@ mod tests {
         let ir = gen("fn main() -> int { let a = [0; 5]; 0 }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "repeat should emit CallBuiltin");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "repeat should emit CallBuiltin"
+        );
     }
 
     #[test]
@@ -2195,8 +2522,10 @@ mod tests {
         let ir = gen("fn main() -> int { let fut = async { 42 }; fut.await }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
-            "await should emit CallBuiltin");
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "await should emit CallBuiltin"
+        );
     }
 
     // ── Gaps from audit: WhileLet, ForDestructure, LetPattern ──────────
@@ -2205,14 +2534,23 @@ mod tests {
     fn test_while_let() {
         let ir = gen("fn main() -> int { let x = Option::Some(1); while let Option::Some(v) = x { break; } 0 }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 3, "while-let should have multiple blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 3,
+            "while-let should have multiple blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
     fn test_for_destructure() {
-        let ir = gen("fn main() -> int { for (a, b) in vec![(1, 2), (3, 4)] { let _x = a + b; } 0 }");
+        let ir =
+            gen("fn main() -> int { for (a, b) in vec![(1, 2), (3, 4)] { let _x = a + b; } 0 }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 3, "for-destructure should have multiple blocks, got {}", f.blocks.len());
+        assert!(
+            f.blocks.len() >= 3,
+            "for-destructure should have multiple blocks, got {}",
+            f.blocks.len()
+        );
     }
 
     #[test]
@@ -2220,8 +2558,13 @@ mod tests {
         let ir = gen("fn main() -> int { let (x, y) = (1, 2); x + y }");
         let f = find_fn(&ir, "main");
         let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().filter(|op| matches!(op, IrOp::StoreLocal(_, _))).count() >= 2,
-            "let-pattern should bind both vars");
+        assert!(
+            ops.iter()
+                .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+                .count()
+                >= 2,
+            "let-pattern should bind both vars"
+        );
     }
 
     // ── Gaps from audit: nested closures, labeled break ────────────────
@@ -2230,7 +2573,11 @@ mod tests {
     fn test_closure_inside_match() {
         let ir = gen("fn main() -> int { let x = 10; let f = match 1 { 1 => || -> int { x }, _ => || -> int { 0 } }; f() }");
         let f = find_fn(&ir, "main");
-        let closures: Vec<_> = ir.functions.iter().filter(|f| f.name.contains("closure")).collect();
+        let closures: Vec<_> = ir
+            .functions
+            .iter()
+            .filter(|f| f.name.contains("closure"))
+            .collect();
         assert!(closures.len() >= 1, "should have closure inside match");
     }
 

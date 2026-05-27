@@ -22,11 +22,19 @@ pub fn run_compiled_jit_with_options(
     _source_path: Option<&str>,
     _externs: HashMap<String, PathBuf>,
 ) -> Result<Value, crate::errors::FerriError> {
-    let mut jit_vm = super::jit::JitVm::compile(source)
-        .map_err(|e| crate::errors::FerriError::Runtime { message: e, line: 0, column: 0 })?;
+    let mut jit_vm =
+        super::jit::JitVm::compile(source).map_err(|e| crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        })?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
-        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime { message: e, line: 0, column: 0 }),
+        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        }),
     }
 }
 
@@ -34,12 +42,20 @@ pub fn run_compiled_jit_with_options(
 pub fn run_compiled_capturing_jit(
     source: &str,
 ) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
-    let mut jit_vm = super::jit::JitVm::compile(source)
-        .map_err(|e| crate::errors::FerriError::Runtime { message: e, line: 0, column: 0 })?;
+    let mut jit_vm =
+        super::jit::JitVm::compile(source).map_err(|e| crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        })?;
     jit_vm.with_captured_output();
     match jit_vm.run() {
         VmResult::Value(v) => Ok((v, jit_vm.captured_output())),
-        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime { message: e, line: 0, column: 0 }),
+        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        }),
     }
 }
 
@@ -85,9 +101,17 @@ pub fn run_tests_jit_with_options(
     crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
 
     // Build JIT engine from the typed program
-    let engine = super::jit::JitEngine::compile(&normal_program)
-        .map_err(|e| crate::errors::FerriError::Runtime { message: e, line: 0, column: 0 })?;
-    let mut jit_vm = super::jit::JitVm { engine, output: None };
+    let engine = super::jit::JitEngine::compile(&normal_program).map_err(|e| {
+        crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        }
+    })?;
+    let mut jit_vm = super::jit::JitVm {
+        engine,
+        output: None,
+    };
 
     // Collect test functions
     let test_fns: Vec<&crate::ast::FnDef> = normal_program
