@@ -1,12 +1,18 @@
 //! FFI bridge: Rust functions callable from JIT-compiled code.
 //!
-//! All functions use `extern "C"` ABI and operate on `*mut JitContext`,
-//! reading/writing Value slots in the context's buffer.
+//! All functions use `extern "C"` ABI and operate on `*mut JitContext`.
 //!
 //! The JitContext buffer layout:
 //! ```text
 //! [locals: local_count × Value] [operand stack: sp × Value]
 //! ```
+
+/// Set ctx.result directly (bypasses operand stack for simple returns).
+#[no_mangle]
+extern "C" fn oxy_set_result_i64(ctx: *mut super::JitContext, val: i64) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.result = crate::types::Value::I64(val);
+}
 
 use super::context::JitContext;
 use crate::types::Value;

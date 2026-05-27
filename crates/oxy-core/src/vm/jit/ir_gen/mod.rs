@@ -16,7 +16,7 @@ use super::ir::*;
 /// IR code generator. Walks a typed AST and produces register IR.
 pub(crate) struct IrGen {
     /// All generated functions (including closures, async blocks).
-    functions: Vec<IrFunction>,
+    pub(crate) functions: Vec<IrFunction>,
     /// Current function being generated.
     current: IrFunction,
     /// Current basic block being built.

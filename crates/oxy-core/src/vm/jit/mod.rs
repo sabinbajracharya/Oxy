@@ -9,6 +9,7 @@ mod context;
 pub(crate) mod ffi;
 pub(crate) mod ir;
 pub(crate) mod ir_gen;
+mod codegen;
 
 pub(crate) use context::JitContext;
 pub(crate) use ffi::register_ffi_symbols;
@@ -29,6 +30,7 @@ type FfiDecl = (&'static str, &'static [types::Type], Option<types::Type>);
 
 fn ffi_decls() -> Vec<FfiDecl> {
     vec![
+        ("oxy_set_result_i64", &[types::I64, types::I64], None),
         ("oxy_push_unit", &[types::I64], None),
         ("oxy_push_bool", &[types::I64, types::I8], None),
         ("oxy_push_int", &[types::I64, types::I64], None),
@@ -112,35 +114,80 @@ fn ffi_decls() -> Vec<FfiDecl> {
 pub(crate) struct JitEngine {
     /// Function name → JIT fn pointer.
     pub(crate) functions: HashMap<String, *const u8>,
+    /// Entry point name.
+    entry_name: String,
 }
 
 impl JitEngine {
-    pub fn new(_chunk: Chunk) -> Result<Self, String> {
-        // Stub: bytecode path retired. Will be replaced with ir_gen→codegen.
-        Err("JIT engine: bytecode path retired. Awaiting AST→IR→CLIF wiring.".to_string())
+    /// Build a JIT engine from a typed AST program.
+    pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
+        // 1. Generate register IR + CFG
+        let mut ir = ir_gen::IrGen::new();
+        ir.gen_program(program);
+        let functions: Vec<ir::IrFunction> = std::mem::take(&mut ir.functions);
+
+        // 2. Detect ISA, build JIT module
+        let isa_builder = cranelift_native::builder()
+            .map_err(|e| format!("host ISA: {e}"))?;
+        let mut flag_builder = settings::builder();
+        flag_builder.set("opt_level", "speed")
+            .map_err(|e| format!("opt_level: {e}"))?;
+        let isa = isa_builder
+            .finish(settings::Flags::new(flag_builder))
+            .map_err(|e| format!("ISA: {e}"))?;
+
+        let mut jit_builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        register_ffi_symbols(&mut jit_builder);
+        let mut module = JITModule::new(jit_builder);
+        let mut fn_ctx = FunctionBuilderContext::new();
+
+        // 3. Set up codegen with FFI declarations
+        let mut cg = codegen::Codegen::new(&mut module, &mut fn_ctx);
+        for (name, params, ret) in ffi_decls() {
+            cg.declare_ffi(name, params.to_vec(), ret);
+        }
+
+        // 4. Compile IR → native
+        cg.compile(functions)?;
+
+        // 5. Build engine
+        let entry_name = "main".to_string();
+        Ok(Self {
+            functions: std::mem::take(&mut cg.fn_names).into_iter()
+                .map(|(name, idx)| (name, cg.fn_ptrs[&idx]))
+                .collect(),
+            entry_name,
+        })
     }
 
     pub(crate) fn get_fn_ptr(&self, name: &str) -> Option<*const u8> {
         self.functions.get(name).copied()
     }
+
+    pub(crate) fn entry_fn_ptr(&self) -> Option<*const u8> {
+        self.functions.get(&self.entry_name).copied()
+    }
 }
 
-// ── JitVm (stub) ────────────────────────────────────────────────────────
+// ── JitVm ──────────────────────────────────────────────────────────────
 
 pub(crate) struct JitVm {
     pub(crate) engine: JitEngine,
-    output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
+    pub(crate) output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
 }
 
 impl JitVm {
-    pub fn new(chunk: Chunk) -> Result<Self, String> {
-        let engine = JitEngine::new(chunk)?;
+    /// Compile an Oxy program and prepare to run it.
+    pub fn compile(source: &str) -> Result<Self, String> {
+        let program = crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
+        crate::type_checker::TypeChecker::new().check_program(&program)
+            .map_err(|e| format!("type check: {e}"))?;
+        let engine = JitEngine::compile(&program)?;
         Ok(Self { engine, output: None })
     }
 
-    pub fn with_captured_output(chunk: Chunk) -> Result<Self, String> {
-        let engine = JitEngine::new(chunk)?;
-        Ok(Self { engine, output: Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new()))) })
+    pub fn with_captured_output(&mut self) {
+        self.output = Some(std::rc::Rc::new(std::cell::RefCell::new(Vec::new())));
     }
 
     pub fn captured_output(&self) -> Vec<String> {
@@ -148,10 +195,40 @@ impl JitVm {
     }
 
     pub fn run(&mut self) -> VmResult {
-        VmResult::Error("JIT path not yet wired".to_string())
+        match self.engine.entry_fn_ptr() {
+            Some(ptr) => self.call_fn(ptr),
+            None => VmResult::Error("no entry point".to_string()),
+        }
     }
 
-    pub fn run_function(&mut self, _name: &str) -> VmResult {
-        VmResult::Error("JIT path not yet wired".to_string())
+    pub fn run_function(&mut self, name: &str) -> VmResult {
+        match self.engine.get_fn_ptr(name) {
+            Some(ptr) => self.call_fn(ptr),
+            None => VmResult::Error(format!("function not found: {name}")),
+        }
+    }
+
+    fn call_fn(&self, ptr: *const u8) -> VmResult {
+        let local_count = 8; // default
+        let mut ctx = context::JitContext::new(local_count);
+        ctx.result = crate::types::Value::Unit;
+
+        if let Some(ref output_rc) = self.output {
+            ctx.output = output_rc as *const _;
+        }
+
+        let fn_ptr: extern "C" fn(*mut context::JitContext) -> u64 =
+            unsafe { std::mem::transmute(ptr) };
+        let disc = fn_ptr(&mut ctx as *mut context::JitContext);
+
+        match disc {
+            0 => VmResult::Value(ctx.result.clone()),
+            2 => {
+                let msg = String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)])
+                    .into_owned();
+                VmResult::Error(msg)
+            }
+            other => VmResult::Error(format!("unexpected discriminant {other}")),
+        }
     }
 }
