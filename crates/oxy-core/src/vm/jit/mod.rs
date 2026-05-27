@@ -129,6 +129,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_bind_ident", &[types::I64, types::I64], None),
         ("oxy_enum_data_get", &[types::I64, types::I64], None),
         (
+            "oxy_enum_variant_equal",
+            &[types::I64, types::I64, types::I64, types::I64, types::I64],
+            None,
+        ),
+        (
             "oxy_path_call_builtin",
             &[types::I64, types::I64, types::I64],
             None,
@@ -324,5 +329,48 @@ mod tests {
         let result =
             run_compiled_jit("fn main() -> int { let x = 5; if x > 3 { 1 } else { 0 } }").unwrap();
         assert_eq!(result, crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_jit_path_call_builtin() {
+        let result = run_compiled_jit("fn main() -> int { std::env::var(\"HOME\"); 42 }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_jit_string_literal() {
+        let result = run_compiled_jit("fn main() -> String { \"hello\" }").unwrap();
+        assert_eq!(result, crate::types::Value::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_jit_int_to_string() {
+        let result = run_compiled_jit("fn main() -> String { let x = 42; x.to_string() }").unwrap();
+        assert_eq!(result, crate::types::Value::String("42".to_string()));
+    }
+
+    #[test]
+    fn test_jit_cast_int() {
+        let result = run_compiled_jit("fn main() -> int { let x: int = 5; x }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_jit_call_and_cast() {
+        let result = run_compiled_jit("fn main() -> int { 100.to_string(); 42 }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_jit_string_method_discard() {
+        let result =
+            run_compiled_jit("fn main() -> int { let s = \"hello\"; s.len(); 42 }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_jit_string_len_method() {
+        let result = run_compiled_jit("fn main() -> int { let s = \"hello\"; s.len() }").unwrap();
+        assert_eq!(result, crate::types::Value::I64(5));
     }
 }

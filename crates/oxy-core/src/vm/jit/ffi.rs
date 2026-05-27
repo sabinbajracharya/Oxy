@@ -27,7 +27,13 @@ unsafe fn pop(ctx: &mut JitContext) -> Value {
         panic!("JIT stack underflow");
     }
     ctx.sp -= 1;
-    unsafe { ctx.buffer.add(ctx.local_count + ctx.sp).read() }
+    let ptr = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp) };
+    let val = unsafe { ptr.read() };
+    // Zero the slot so the original Value isn't dropped later by JitContext::drop.
+    // Without this, heap-allocated fields (String, Vec) would be double-freed:
+    // once when the popped copy drops, once when JitContext::drop cleans up.
+    unsafe { ptr.write(Value::Unit) };
+    val
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -91,6 +97,8 @@ extern "C" fn oxy_dup(ctx: *mut JitContext) {
     }
     let val = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp - 1).read() };
     let val_clone = val.clone();
+    // Prevent double-free: val is a shallow copy sharing heap pointers with the original
+    std::mem::forget(val);
     unsafe {
         push(ctx, val_clone);
     }
@@ -102,16 +110,16 @@ extern "C" fn oxy_load_local(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { ctx.buffer.add(index).read() };
     // If it's a Cell, load through it; otherwise clone
-    match &val {
-        Value::Cell(rc) => {
-            let inner = rc.borrow().clone();
-            unsafe {
-                push(ctx, inner);
-            }
-        }
-        other => unsafe {
-            push(ctx, other.clone());
-        },
+    let to_push = match &val {
+        Value::Cell(rc) => rc.borrow().clone(),
+        other => other.clone(),
+    };
+    // CRITICAL: val is a shallow bitwise copy (ptr::read). Its Drop would
+    // free heap memory still owned by the original in the locals buffer.
+    // Forget it to prevent a double-free.
+    std::mem::forget(val);
+    unsafe {
+        push(ctx, to_push);
     }
 }
 
@@ -136,6 +144,9 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { ctx.buffer.add(index).read() };
     let cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(val)));
+    // val was a shallow copy; it has been moved into the Rc so it won't Drop.
+    // The original in the buffer is overwritten by write() below (write does
+    // not drop the old value, so no double-free).
     unsafe {
         ctx.buffer.add(index).write(cell);
     }
@@ -1334,6 +1345,33 @@ extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
     }
 }
 
+extern "C" fn oxy_enum_variant_equal(
+    ctx: *mut JitContext,
+    enum_name_ptr: *const u8,
+    enum_name_len: usize,
+    variant_ptr: *const u8,
+    variant_len: usize,
+) {
+    let ctx = unsafe { &mut *ctx };
+    let enum_name = unsafe {
+        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+    let variant = unsafe {
+        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+    let val = unsafe { pop(ctx) };
+    let matched = matches!(
+        &val,
+        Value::EnumVariant { enum_name: en, variant: v, .. }
+            if en == &enum_name && v == &variant
+    );
+    unsafe {
+        push(ctx, Value::Bool(matched));
+    }
+}
+
 // ── PathCall builtins ─────────────────────────────────────────────────
 
 extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_count: usize) {
@@ -1723,6 +1761,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_cast_to_char", oxy_cast_to_char as _),
         ("oxy_bind_ident", oxy_bind_ident as _),
         ("oxy_enum_data_get", oxy_enum_data_get as _),
+        ("oxy_enum_variant_equal", oxy_enum_variant_equal as _),
         ("oxy_path_call_builtin", oxy_path_call_builtin as _),
         ("oxy_display_arg", oxy_display_arg as _),
         ("oxy_await_ffi", oxy_await_ffi as _),

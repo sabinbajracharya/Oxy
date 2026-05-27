@@ -297,6 +297,17 @@ fn translate_op(
         let f = fref(ffi_refs, name);
         builder.ins().call(f, &[ctx_val, a1, a2, a3]);
     };
+    // Call FFI with 4 extra args.
+    let call4 = |builder: &mut FunctionBuilder,
+                 ffi_refs: &HashMap<String, FuncRef>,
+                 name: &str,
+                 a1,
+                 a2,
+                 a3,
+                 a4| {
+        let f = fref(ffi_refs, name);
+        builder.ins().call(f, &[ctx_val, a1, a2, a3, a4]);
+    };
 
     match op {
         // ── Constants ──────────────────────────────────────────
@@ -647,6 +658,24 @@ fn translate_op(
             false
         }
 
+        OpCode::EnumVariantEqual { enum_name, variant } => {
+            let enp = builder.ins().iconst(types::I64, enum_name.as_ptr() as i64);
+            let enl = builder.ins().iconst(types::I64, enum_name.len() as i64);
+            let vp = builder.ins().iconst(types::I64, variant.as_ptr() as i64);
+            let vl = builder.ins().iconst(types::I64, variant.len() as i64);
+            call4(
+                builder,
+                ffi_refs,
+                "oxy_enum_variant_equal",
+                enp,
+                enl,
+                vp,
+                vl,
+            );
+            // Pops scrutinee, pushes Bool — net stack change is 0
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
         _ => {
             // For stubbed opcodes, just track stack balance based on known effects
@@ -659,7 +688,6 @@ fn translate_op(
                 OpCode::MakeEnumVariant { arg_count, .. } => {
                     *stack_depth = *stack_depth - arg_count + 1
                 }
-                OpCode::EnumVariantEqual { .. } => *stack_depth += 1,
                 OpCode::EnumDataGet(idx) => {
                     let i = builder.ins().iconst(types::I64, *idx as i64);
                     call1(builder, ffi_refs, "oxy_enum_data_get", i);
