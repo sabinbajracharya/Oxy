@@ -649,16 +649,18 @@ impl IrGen {
                     arg_regs.push(self.gen_expr(a));
                 }
                 let r = self.alloc_reg();
-                let func = if name == "println" { "oxy_println_val" }
-                    else if name == "print" { "oxy_print_val" }
-                    else if name == "format" { "oxy_format" }
-                    else { "oxy_path_call_builtin" };
+                let (func, strings) = match name.as_str() {
+                    "println" => ("oxy_println_val", vec![]),
+                    "print" => ("oxy_print_val", vec![]),
+                    "format" => ("oxy_format", vec![]),
+                    _ => ("oxy_path_call_builtin", vec![name.clone()]),
+                };
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func,
                     args: arg_regs,
                     immediates: vec![],
-                    strings: vec![],
+                    strings,
                 });
                 r
             }
@@ -967,7 +969,7 @@ impl IrGen {
                         func: "oxy_field_access",
                         args: vec![val_reg],
                         immediates: vec![i],
-                        strings: vec![],
+                        strings: vec![_fname.clone()],
                     });
                     let field_match = self.gen_pattern_check(p, field_val);
                     let new_r = self.alloc_reg();
@@ -1262,14 +1264,14 @@ impl IrGen {
                 }
             }
             Pattern::Struct { fields, .. } => {
-                for (i, (fname, p)) in fields.iter().enumerate() {
+                for (i, (_fname, p)) in fields.iter().enumerate() {
                     let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: "oxy_field_access",
                         args: vec![val_reg],
                         immediates: vec![i],
-                        strings: vec![],
+                        strings: vec![_fname.clone()],
                     });
                     self.gen_pattern_bind(p, r);
                 }
