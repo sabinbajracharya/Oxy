@@ -86,18 +86,22 @@ impl<'a> Translator<'a> {
     }
 
     fn compile_function(&mut self, entry_ip: usize, _frame_size: usize) -> Result<(), String> {
-        let func_name = self
+        let func_name: String = self
             .chunk
             .functions
             .iter()
             .find(|(_, &ip)| ip == entry_ip)
-            .map(|(n, _)| n.as_str())
-            .unwrap_or("main");
+            .map(|(n, _)| n.clone())
+            .unwrap_or_else(|| format!("closure_{entry_ip}"));
+        let func_name: &str = func_name.as_str();
 
         // --- Pre-compute all metadata BEFORE creating FunctionBuilder ---
         // (avoids borrow conflicts: builder borrows self.ctx mutably)
         let fn_end_ip = self.compute_function_end(entry_ip);
         let jump_targets = self.compute_jump_targets(entry_ip, fn_end_ip);
+        let nested_entry_ips: std::collections::HashSet<usize> = (0..self.chunk.code.len())
+            .filter(|&ip| self.is_nested_entry(ip))
+            .collect();
 
         let mut sig = self.module.make_signature();
         sig.params.push(AbiParam::new(types::I64));
@@ -136,8 +140,9 @@ impl<'a> Translator<'a> {
                 blocks.insert(t, builder.create_block());
             }
         }
+        let mut visited_blocks: std::collections::HashSet<Block> = std::collections::HashSet::new();
         blocks.insert(entry_ip, entry_block);
-
+        visited_blocks.insert(entry_block);
         let mut block_stack_depths: HashMap<usize, usize> = HashMap::new();
         block_stack_depths.insert(entry_ip, 0);
 
@@ -161,6 +166,7 @@ impl<'a> Translator<'a> {
                     }
                     if cur != blk {
                         builder.switch_to_block(blk);
+                        visited_blocks.insert(blk);
                     }
                     if let Some(&expected) = block_stack_depths.get(&ip) {
                         stack_depth = expected;
@@ -185,21 +191,54 @@ impl<'a> Translator<'a> {
                 if matches!(op, OpCode::Jump(_)) {
                     current_block_terminated = true;
                     let next_ip = ip + 1;
-                    if next_ip < fn_end_ip && next_ip < self.chunk.code.len() {
+                    let is_closure_body = nested_entry_ips.contains(&next_ip);
+                    let ip_after = if is_closure_body {
+                        if let OpCode::Jump(target) = op {
+                            *target
+                        } else {
+                            next_ip
+                        }
+                    } else {
+                        next_ip
+                    };
+                    if ip_after < fn_end_ip && ip_after < self.chunk.code.len() {
                         let next_block = blocks
-                            .entry(next_ip)
+                            .entry(ip_after)
                             .or_insert_with(|| builder.create_block());
                         builder.switch_to_block(*next_block);
-                        if let Some(&expected) = block_stack_depths.get(&next_ip) {
+                        visited_blocks.insert(*next_block);
+                        if let Some(&expected) = block_stack_depths.get(&ip_after) {
                             stack_depth = expected;
                         } else {
-                            block_stack_depths.insert(next_ip, stack_depth);
+                            block_stack_depths.insert(ip_after, stack_depth);
                         }
-                        ip = next_ip;
+                        ip = ip_after;
                         continue;
                     }
                 }
-                break;
+
+                // For Panic/Return/Halt: check if there are unvisited
+                // jump target blocks and switch to the first one.
+                let mut found = false;
+                for (&target_ip, &blk) in &blocks {
+                    if target_ip > ip && !visited_blocks.contains(&blk) {
+                        builder.switch_to_block(blk);
+                        visited_blocks.insert(blk);
+                        if let Some(&expected) = block_stack_depths.get(&target_ip) {
+                            stack_depth = expected;
+                        } else {
+                            block_stack_depths.insert(target_ip, stack_depth);
+                        }
+                        ip = target_ip;
+                        current_block_terminated = false;
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    break;
+                }
+                continue;
             }
             ip += 1;
         }
@@ -207,22 +246,64 @@ impl<'a> Translator<'a> {
         builder.seal_all_blocks();
         builder.finalize();
 
-        self.module
-            .define_function(fid, &mut fn_ctx)
-            .map_err(|e| format!("define {func_name}: {e}"))?;
+        self.module.define_function(fid, &mut fn_ctx).map_err(|e| {
+            let bytecode = self.dump_function_bytecode(entry_ip);
+            format!("define {func_name}: {e}\nBytecode:\n{bytecode}")
+        })?;
         self.module.clear_context(&mut fn_ctx);
         Ok(())
     }
 
+    // Helper to dump bytecode for context when verifier fails
+    fn dump_function_bytecode(&self, entry_ip: usize) -> String {
+        let fn_end_ip = self.compute_function_end(entry_ip);
+        let mut s = String::new();
+        let mut ip = entry_ip;
+        while ip < fn_end_ip && ip < self.chunk.code.len() {
+            let op = &self.chunk.code[ip];
+            use std::fmt::Write;
+            let _ = writeln!(s, "  {ip:4}: {op:?}");
+            ip += 1;
+        }
+        s
+    }
+
+    /// Returns true if an entry at `ip` is a nested closure/async block.
+    /// Closures are preceded by a forward Jump that skips over the closure body;
+    /// the jump target contains a Closure, AsyncBlock, or similar opcode.
+    fn is_nested_entry(&self, ip: usize) -> bool {
+        if ip == 0 {
+            return false;
+        }
+        match self.chunk.code.get(ip - 1) {
+            Some(OpCode::Jump(target)) if *target > ip => {
+                // Verify the jump target is a closure-related opcode
+                matches!(
+                    self.chunk.code.get(*target),
+                    Some(OpCode::Closure { .. } | OpCode::AsyncBlock { .. })
+                )
+            }
+            _ => false,
+        }
+    }
+
     fn compute_function_end(&self, entry_ip: usize) -> usize {
+        // If this entry is a closure/async block (preceded by a forward Jump),
+        // find its end from the jump target that skips over it.
+        if self.is_nested_entry(entry_ip) {
+            if let Some(OpCode::Jump(skip_target)) = self.chunk.code.get(entry_ip - 1) {
+                return *skip_target;
+            }
+        }
+
         let mut next = self.chunk.code.len();
         for &ip in self.ip_to_func.keys() {
-            if ip > entry_ip && ip < next {
+            if ip > entry_ip && ip < next && !self.is_nested_entry(ip) {
                 next = ip;
             }
         }
         for &ip in self.chunk.fn_frame_sizes.keys() {
-            if ip > entry_ip && ip < next {
+            if ip > entry_ip && ip < next && !self.is_nested_entry(ip) {
                 next = ip;
             }
         }
@@ -237,10 +318,6 @@ impl<'a> Translator<'a> {
             match &self.chunk.code[ip] {
                 OpCode::Jump(t) | OpCode::JumpIfFalse(t) | OpCode::JumpIfTrue(t) => {
                     targets.insert(*t);
-                }
-                OpCode::Call { target, .. } => {
-                    targets.insert(*target);
-                    targets.insert(ip + 1);
                 }
                 _ => {}
             }
@@ -737,7 +814,16 @@ fn translate_op(
             let vp = builder.ins().iconst(types::I64, variant.as_ptr() as i64);
             let vl = builder.ins().iconst(types::I64, variant.len() as i64);
             let ac = builder.ins().iconst(types::I64, *arg_count as i64);
-            call5(builder, ffi_refs, "oxy_make_enum_variant", enp, enl, vp, vl, ac);
+            call5(
+                builder,
+                ffi_refs,
+                "oxy_make_enum_variant",
+                enp,
+                enl,
+                vp,
+                vl,
+                ac,
+            );
             // Pops arg_count values, pushes one enum variant
             *stack_depth = *stack_depth - arg_count + 1;
             false

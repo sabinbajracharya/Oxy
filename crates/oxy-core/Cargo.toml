@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+# Cranelift-generated JIT code has no unwind tables. Panics in extern "C"
+# FFI functions called from JIT code must abort — unwinding is UB.
+# Individual FFI functions that can fail should write to ctx.error_msg
+# instead of panicking (see the set_error helper in ffi.rs).
 [features]
 default = ["http", "db", "server"]
 http = ["dep:ureq"]

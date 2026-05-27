@@ -11,7 +11,9 @@ pub(crate) mod ffi;
 mod translator;
 
 pub(crate) use context::JitContext;
-pub(crate) use ffi::{register_ffi_symbols, set_async_fn_meta, set_closure_meta, set_fn_table};
+pub(crate) use ffi::{
+    register_ffi_symbols, set_async_fn_meta, set_closure_meta, set_fn_table, set_method_ips,
+};
 
 use crate::vm::Chunk;
 use cranelift_codegen::ir::types;
@@ -137,7 +139,12 @@ fn ffi_decls() -> Vec<FfiDecl> {
         (
             "oxy_make_enum_variant",
             &[
-                types::I64, types::I64, types::I64, types::I64, types::I64, types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
             ],
             None,
         ),
@@ -197,6 +204,7 @@ impl JitEngine {
 
         // Store function pointer table and closure metadata for FFI access
         set_fn_table(fn_ptrs.clone());
+        set_method_ips(chunk.method_ips.clone());
         set_closure_meta(chunk.closure_meta.clone());
         set_async_fn_meta(
             chunk

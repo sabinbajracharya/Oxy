@@ -31,7 +31,6 @@ fn set_error(ctx: &mut JitContext, msg: String) {
 
 unsafe fn pop(ctx: &mut JitContext) -> Value {
     if ctx.sp == 0 {
-        set_error(ctx, "JIT stack underflow".to_string());
         return Value::Unit;
     }
     ctx.sp -= 1;
@@ -475,7 +474,7 @@ pub(crate) fn register_struct_init(
 // Value contains non-thread-safe types (Rc, RefCell) but we only access
 // them from a single thread (JIT compilation + execution are sequential).
 
-struct ConstEnumVariantStore(Box<Vec<(String, String, Vec<Value>)>>);
+struct ConstEnumVariantStore(Vec<(String, String, Vec<Value>)>);
 unsafe impl Send for ConstEnumVariantStore {}
 unsafe impl Sync for ConstEnumVariantStore {}
 
@@ -484,9 +483,7 @@ static CONST_ENUM_VARIANTS: std::sync::OnceLock<std::sync::Mutex<ConstEnumVarian
 
 fn const_enum_variants_lock() -> std::sync::MutexGuard<'static, ConstEnumVariantStore> {
     CONST_ENUM_VARIANTS
-        .get_or_init(|| {
-            std::sync::Mutex::new(ConstEnumVariantStore(Box::new(Vec::new())))
-        })
+        .get_or_init(|| std::sync::Mutex::new(ConstEnumVariantStore(Vec::new())))
         .lock()
         .unwrap()
 }
@@ -539,14 +536,34 @@ pub(crate) fn set_fn_table(table: HashMap<usize, *const u8>) {
     }
 }
 
+/// Method IPs: (type_name, method_name) → bytecode IP
+static METHOD_IPS: std::sync::OnceLock<std::sync::Mutex<HashMap<(String, String), usize>>> =
+    std::sync::OnceLock::new();
+
+fn method_ips_lock() -> std::sync::MutexGuard<'static, HashMap<(String, String), usize>> {
+    METHOD_IPS
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn set_method_ips(ips: HashMap<(String, String), usize>) {
+    let mut m = method_ips_lock();
+    m.clear();
+    m.extend(ips);
+}
+
 extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
     let ctx = unsafe { &mut *ctx };
     let fn_ptr = {
         let table = fn_table_lock();
-        table
-            .get(&target_ip)
-            .copied()
-            .unwrap_or_else(|| panic!("JIT: no function at ip={target_ip}"))
+        match table.get(&target_ip).copied() {
+            Some(p) => p,
+            None => {
+                set_error(ctx, format!("JIT: no function at ip={target_ip}"));
+                return;
+            }
+        }
     };
 
     // Save caller state
@@ -697,13 +714,28 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
             f.captured_names.clone(),
             f.closure_env.clone(),
         ),
-        _ => panic!("CallClosure: value is not a callable closure"),
+        _ => {
+            set_error(
+                ctx,
+                "CallClosure: value is not a callable closure".to_string(),
+            );
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
     };
 
-    let target_ip = target_ip.unwrap_or_else(|| panic!("CallClosure: no target_ip"));
-    if target_ip == usize::MAX {
-        panic!("CallClosure: invalid target_ip");
-    }
+    let target_ip = match target_ip {
+        Some(ip) if ip != usize::MAX => ip,
+        _ => {
+            set_error(ctx, "CallClosure: invalid target_ip".to_string());
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+    };
 
     if is_async {
         // Create Future instead of executing
@@ -738,10 +770,19 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     // Sync closure: look up JIT fn, call it
     let fn_ptr = {
         let table = fn_table_lock();
-        table
-            .get(&target_ip)
-            .copied()
-            .unwrap_or_else(|| panic!("JIT: no function for closure at ip={target_ip}"))
+        match table.get(&target_ip).copied() {
+            Some(p) => p,
+            None => {
+                set_error(
+                    ctx,
+                    format!("JIT: no function for closure at ip={target_ip}"),
+                );
+                unsafe {
+                    push(ctx, Value::Unit);
+                }
+                return;
+            }
+        }
     };
 
     // Save caller state
@@ -816,7 +857,11 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
 
 extern "C" fn oxy_error_discriminant(ctx: *const JitContext) -> u64 {
     let ctx = unsafe { &*ctx };
-    if ctx.error_len > 0 { 2 } else { 0 }
+    if ctx.error_len > 0 {
+        2
+    } else {
+        0
+    }
 }
 
 extern "C" fn oxy_return(ctx: *mut JitContext) {
@@ -885,36 +930,15 @@ extern "C" fn oxy_make_tuple(ctx: *mut JitContext, count: usize) {
 extern "C" fn oxy_make_iter(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let iter = match val {
-        Value::Vec(rc) => {
-            let data = rc.borrow().clone();
-            Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
-                crate::types::IteratorState::VecSource { data, index: 0 },
-            )))
-        }
-        Value::Range(start, end) => Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
-            crate::types::IteratorState::RangeSource {
-                current: start,
-                end,
-            },
-        ))),
-        Value::String(s) => {
-            let chars: Vec<Value> = s.chars().map(Value::Char).collect();
-            Value::Iterator(std::rc::Rc::new(std::cell::RefCell::new(
-                crate::types::IteratorState::VecSource {
-                    data: chars,
-                    index: 0,
-                },
-            )))
-        }
-        Value::Iterator(_) => val,
-        _ => {
-            set_error(ctx, format!("cannot iterate over {val:?}"));
+    let result = match val.into_iterable() {
+        Ok(vec) => Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec))),
+        Err(e) => {
+            set_error(ctx, e);
             Value::Unit
         }
     };
     unsafe {
-        push(ctx, iter);
+        push(ctx, result);
     }
 }
 
@@ -922,18 +946,13 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let len = match &val {
-        Value::Iterator(rc) => {
-            let state = rc.borrow();
-            match &*state {
-                crate::types::IteratorState::VecSource { data, index: _ } => data.len() as i64,
-                crate::types::IteratorState::RangeSource { current, end } => end - current,
-                _ => 0,
-            }
-        }
-        Value::String(s) => s.len() as i64,
         Value::Vec(rc) => rc.borrow().len() as i64,
+        Value::String(s) => s.len() as i64,
         Value::Array(a) => a.len() as i64,
-        _ => 0,
+        _ => {
+            set_error(ctx, format!("cannot get length of {}", val.type_name()));
+            0i64
+        }
     };
     unsafe {
         push(ctx, Value::I64(len));
@@ -952,6 +971,7 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
             let c = s.chars().nth(idx).unwrap_or('\0');
             Value::Char(c)
         }
+        Value::Tuple(ref t) => t.get(idx).cloned().unwrap_or(Value::Unit),
         _ => {
             set_error(ctx, format!("cannot index {collection:?}"));
             Value::Unit
@@ -975,7 +995,13 @@ extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
                 v[idx] = value.clone();
             }
         }
-        _ => panic!("cannot index-store {collection:?}"),
+        _ => {
+            set_error(ctx, format!("cannot index-store {collection:?}"));
+            unsafe {
+                push(ctx, value);
+            }
+            return;
+        }
     }
     unsafe {
         push(ctx, value);
@@ -989,12 +1015,24 @@ extern "C" fn oxy_make_range(ctx: *mut JitContext) {
     let s = match &start {
         Value::I64(n) => *n,
         Value::U8(n) => *n as i64,
-        _ => panic!("range start must be integer"),
+        _ => {
+            set_error(ctx, format!("range start must be integer, got {start:?}"));
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
     };
     let e = match &end {
         Value::I64(n) => *n,
         Value::U8(n) => *n as i64,
-        _ => panic!("range end must be integer"),
+        _ => {
+            set_error(ctx, format!("range end must be integer, got {end:?}"));
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
     };
     unsafe {
         push(ctx, Value::Range(s, e));
@@ -1082,7 +1120,10 @@ extern "C" fn oxy_struct_init(ctx: *mut JitContext, meta_idx: usize) {
     let mut fields = HashMap::new();
     for i in (0..field_count).rev() {
         let val = unsafe { pop(ctx) };
-        let fname = field_names.get(i).cloned().unwrap_or_else(|| format!("_f{i}"));
+        let fname = field_names
+            .get(i)
+            .cloned()
+            .unwrap_or_else(|| format!("_f{i}"));
         fields.insert(fname, val);
     }
     unsafe {
@@ -1113,14 +1154,28 @@ extern "C" fn oxy_struct_update(ctx: *mut JitContext, meta_idx: usize) {
         Value::Struct { name, fields } => {
             let mut new_fields = fields.clone();
             for (i, val) in overrides.into_iter().enumerate() {
-                let fname = field_names.get(i).cloned().unwrap_or_else(|| format!("_f{i}"));
+                let fname = field_names
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| format!("_f{i}"));
                 new_fields.insert(fname, val);
             }
             unsafe {
-                push(ctx, Value::Struct { name, fields: new_fields });
+                push(
+                    ctx,
+                    Value::Struct {
+                        name,
+                        fields: new_fields,
+                    },
+                );
             }
         }
-        _ => panic!("struct update on non-struct"),
+        _ => {
+            set_error(ctx, format!("struct update on non-struct: {base:?}"));
+            unsafe {
+                push(ctx, base);
+            }
+        }
     }
 }
 
@@ -1131,7 +1186,13 @@ extern "C" fn oxy_field_access(ctx: *mut JitContext, name_ptr: *const u8, name_l
     let name = String::from_utf8_lossy(name_bytes);
     let result = match &obj {
         Value::Struct { fields, .. } => fields.get(name.as_ref()).cloned().unwrap_or(Value::Unit),
-        _ => panic!("field access on non-struct"),
+        _ => {
+            set_error(ctx, format!("field access on non-struct: {obj:?}"));
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
     };
     unsafe {
         push(ctx, result);
@@ -1160,7 +1221,12 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
                 );
             }
         }
-        _ => panic!("field store on non-struct"),
+        _ => {
+            set_error(ctx, format!("field store on non-struct: {obj:?}"));
+            unsafe {
+                push(ctx, obj);
+            }
+        }
     }
 }
 
@@ -1232,7 +1298,69 @@ extern "C" fn oxy_method_call(
     args.reverse();
     let receiver = unsafe { pop(ctx) };
 
-    // Try the same dispatch path as the VM
+    // Determine lookup name from receiver type (like old VM does)
+    let type_name = receiver.type_name().to_string();
+    let lookup_name = match &receiver {
+        Value::Struct { name, .. } => name.clone(),
+        Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+        _ => type_name,
+    };
+
+    // First try direct method dispatch (for struct/impl methods)
+    let method_ip = method_ips_lock()
+        .get(&(lookup_name.clone(), method_name.to_string()))
+        .copied();
+    if let Some(target_ip) = method_ip {
+        let fn_ptr = {
+            let table = fn_table_lock();
+            table.get(&target_ip).copied()
+        };
+        if let Some(fp) = fn_ptr {
+            // Build callee frame: locals = [receiver, args...]
+            let frame_size = 1 + arg_count;
+            while ctx.local_count + frame_size > ctx.capacity {
+                let new_cap = (ctx.local_count + frame_size) * 2;
+                let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
+                let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
+                }
+                unsafe {
+                    std::alloc::dealloc(
+                        ctx.buffer as *mut u8,
+                        std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
+                    );
+                }
+                ctx.buffer = new_buf;
+                ctx.capacity = new_cap;
+            }
+            let saved_local_count = ctx.local_count;
+            let saved_sp = ctx.sp;
+            ctx.local_count = frame_size;
+            ctx.sp = 0;
+            unsafe {
+                ctx.buffer.add(0).write(receiver);
+            }
+            for (i, arg) in args.into_iter().enumerate() {
+                unsafe {
+                    ctx.buffer.add(1 + i).write(arg);
+                }
+            }
+            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+                unsafe { std::mem::transmute(fp as *const ()) };
+            let _disc = fn_ptr(ctx);
+            let result = std::mem::replace(&mut ctx.result, Value::Unit);
+            ctx.local_count = saved_local_count;
+            ctx.sp = saved_sp;
+            // disc == 0 (done), disc == 2 (error, already in ctx.error_msg)
+            unsafe {
+                push(ctx, result);
+            }
+            return;
+        }
+    }
+
+    // Fall back to built-in dispatch
     let result = dispatch_builtin_method(receiver.clone(), &method_name, args.clone());
 
     match result {
@@ -1241,7 +1369,9 @@ extern "C" fn oxy_method_call(
         },
         Err(e) => {
             set_error(ctx, format!("method call '{method_name}' failed: {e}"));
-            unsafe { push(ctx, Value::Unit); }
+            unsafe {
+                push(ctx, Value::Unit);
+            }
         }
     }
 }
@@ -1491,7 +1621,12 @@ extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
                 push(ctx, inner);
             }
         }
-        _ => panic!("EnumDataGet on non-enum"),
+        _ => {
+            set_error(ctx, format!("EnumDataGet on non-enum: {val:?}"));
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+        }
     }
 }
 
@@ -1545,11 +1680,14 @@ extern "C" fn oxy_make_enum_variant(
     }
     data.reverse();
     unsafe {
-        push(ctx, Value::EnumVariant {
-            enum_name,
-            variant,
-            data,
-        });
+        push(
+            ctx,
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data,
+            },
+        );
     }
 }
 
@@ -1595,7 +1733,16 @@ extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_c
             Ok(val) => unsafe {
                 push(ctx, val);
             },
-            Err(e) => panic!("builtin call '{}' failed: {e}", seg_refs.join("::")),
+            Err(e) => {
+                set_error(
+                    ctx,
+                    format!("builtin call '{}' failed: {e}", seg_refs.join("::")),
+                );
+                unsafe {
+                    push(ctx, Value::Unit);
+                }
+                return;
+            }
         }
         return;
     }
@@ -1612,13 +1759,25 @@ extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_c
                 Ok(val) => unsafe {
                     push(ctx, val);
                 },
-                Err(e) => panic!("module call '{module}::{func}' failed: {e}"),
+                Err(e) => {
+                    set_error(ctx, format!("module call '{module}::{func}' failed: {e}"));
+                    unsafe {
+                        push(ctx, Value::Unit);
+                    }
+                    return;
+                }
             }
             return;
         }
     }
 
-    panic!("unknown built-in path: {}", seg_refs.join("::"));
+    set_error(
+        ctx,
+        format!("unknown built-in path: {}", seg_refs.join("::")),
+    );
+    unsafe {
+        push(ctx, Value::Unit);
+    }
 }
 
 /// Call a stdlib module function with JIT closure support.
@@ -1725,9 +1884,19 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
             let target_ip = fut.target_ip;
             let fn_ptr = {
                 let table = fn_table_lock();
-                *table
-                    .get(&target_ip)
-                    .unwrap_or_else(|| panic!("JIT: no function for future at ip={target_ip}"))
+                match table.get(&target_ip) {
+                    Some(p) => *p,
+                    None => {
+                        set_error(
+                            ctx,
+                            format!("JIT: no function for future at ip={target_ip}"),
+                        );
+                        unsafe {
+                            push(ctx, Value::Unit);
+                        }
+                        return 2;
+                    }
+                }
             };
             let saved_local_count = ctx.local_count;
             let saved_sp = ctx.sp;
@@ -1832,7 +2001,12 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 push(ctx, Value::JoinHandle { task_id });
             }
         }
-        _ => panic!("spawn requires a closure"),
+        _ => {
+            set_error(ctx, "spawn requires a closure".to_string());
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+        }
     }
 }
 
@@ -1901,13 +2075,28 @@ extern "C" fn oxy_make_future(ctx: *mut JitContext, target_ip: usize, arg_count:
     args.reverse();
     let meta = {
         let lock = async_fn_meta_lock();
-        lock.iter()
-            .find(|m| m.target_ip == target_ip)
-            .map(|m| (m.name.clone(), m.params.clone(), m.return_type.clone(), m.body.clone()))
+        lock.iter().find(|m| m.target_ip == target_ip).map(|m| {
+            (
+                m.name.clone(),
+                m.params.clone(),
+                m.return_type.clone(),
+                m.body.clone(),
+            )
+        })
     };
-    let (name, params, return_type, body) = meta.unwrap_or_else(|| {
-        panic!("MakeFuture: no async function found at target_ip={target_ip}")
-    });
+    let (name, params, return_type, body) = match meta {
+        Some(m) => m,
+        None => {
+            set_error(
+                ctx,
+                format!("MakeFuture: no async function found at target_ip={target_ip}"),
+            );
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+    };
     let future = Value::Future(Box::new(crate::types::FutureData {
         name,
         params,
