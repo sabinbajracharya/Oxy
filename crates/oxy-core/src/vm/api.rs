@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{disassemble_chunk, VmResult};
+use super::VmResult;
 use crate::types::Value;
 
 // ── JIT entry points ──────────────────────────────────────────────────
@@ -137,8 +137,8 @@ pub fn run_tests_jit_with_options(
 
     let mut results = Vec::new();
     for test_fn in &test_fns {
-        if let Some(&ip) = jit_vm.engine.functions.get(&test_fn.name) {
-            let result = jit_vm.run_function(ip);
+        if jit_vm.engine.functions.contains_key(&test_fn.name) {
+            let result = jit_vm.run_function(&test_fn.name);
             match result {
                 VmResult::Value(_) => results.push(TestResult {
                     name: test_fn.name.clone(),
@@ -238,12 +238,13 @@ pub fn run(source: &str) -> Result<Value, crate::errors::FerriError> {
     run_compiled(source)
 }
 
-/// Parse, type-check, compile, and disassemble a source file to a debug string.
-pub fn disassemble_source(path: &str, source: &str) -> Result<String, crate::errors::FerriError> {
-    let program = crate::parser::parse(source)?;
-    crate::type_checker::TypeChecker::new().check_program(&program)?;
-    let chunk = crate::compiler::Compiler::new_for_tests(Some(path)).compile(&program)?;
-    Ok(disassemble_chunk(&chunk))
+/// Parse, type-check, and disassemble a source file.
+pub fn disassemble_source(_path: &str, _source: &str) -> Result<String, crate::errors::FerriError> {
+    Err(crate::errors::FerriError::Runtime {
+        message: "disassemble not yet wired for IR path".to_string(),
+        line: 0,
+        column: 0,
+    })
 }
 
 /// Result of running a test suite.

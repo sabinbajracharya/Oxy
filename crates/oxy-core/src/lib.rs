@@ -23,7 +23,7 @@
 
 /// Abstract syntax tree node definitions.
 pub mod ast;
-/// Bytecode compiler: AST → stack-based VM opcodes.
+/// Stub — bytecode compiler retired in favor of AST → Register IR + CFG in vm/jit/.
 pub mod compiler;
 /// Environment and lexical scope management.
 pub mod env;

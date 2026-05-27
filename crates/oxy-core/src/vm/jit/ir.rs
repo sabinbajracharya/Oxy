@@ -1,0 +1,192 @@
+//! Register-based IR with basic blocks and CFG.
+//!
+//! Virtual registers are infinite (`Reg = usize`). Each `IrOp` defines a register.
+//! Complex operations call FFI helpers via `CallBuiltin`; simple arithmetic/comparison
+//! is inlined in codegen. The IR has no operand stack — register allocation is done
+//! by Cranelift's SSA construction.
+
+use crate::type_checker::TypeInfo;
+
+/// Virtual register index.
+pub(crate) type Reg = usize;
+
+/// Block identifier.
+pub(crate) type BlockId = usize;
+
+/// A function in register IR form with basic-block CFG.
+pub(crate) struct IrFunction {
+    pub name: String,
+    pub blocks: Vec<BasicBlock>,
+    pub entry: BlockId,
+    /// Number of local variable slots needed (captures + declared locals).
+    pub local_count: usize,
+    pub return_type: TypeInfo,
+    /// Parameter names and types.
+    pub params: Vec<(String, TypeInfo)>,
+    /// Captured variables from enclosing scope (name, slot_index).
+    pub captures: Vec<(String, usize)>,
+    /// Whether this is an async function (needs yield state save/restore).
+    pub is_async: bool,
+}
+
+/// A basic block: straight-line register operations ending with a terminator.
+pub(crate) struct BasicBlock {
+    pub id: BlockId,
+    pub ops: Vec<IrOp>,
+    pub terminator: Terminator,
+    pub predecessors: Vec<BlockId>,
+}
+
+/// A register operation. The result register is always the first field.
+#[derive(Debug, Clone)]
+pub(crate) enum IrOp {
+    // ── Constants ──────────────────────────────────────────────────────
+    ConstInt(Reg, i64),
+    ConstFloat(Reg, f64),
+    ConstBool(Reg, bool),
+    ConstChar(Reg, char),
+    ConstUnit(Reg),
+    /// String constant (stored inline in the IR, codegen pushes it via FFI).
+    ConstString(Reg, String),
+
+    // ── Locals ─────────────────────────────────────────────────────────
+    /// Load a local variable from slot `index` into register.
+    LoadLocal(Reg, usize),
+    /// Store register value into local slot `index`.
+    StoreLocal(usize, Reg),
+
+    // ── Binary arithmetic (inlined in CLIF) ────────────────────────────
+    Add(Reg, Reg, Reg),
+    Sub(Reg, Reg, Reg),
+    Mul(Reg, Reg, Reg),
+    Div(Reg, Reg, Reg),
+    Rem(Reg, Reg, Reg),
+    Eq(Reg, Reg, Reg),
+    Neq(Reg, Reg, Reg),
+    Lt(Reg, Reg, Reg),
+    Gt(Reg, Reg, Reg),
+    Le(Reg, Reg, Reg),
+    Ge(Reg, Reg, Reg),
+    And(Reg, Reg, Reg),
+    Or(Reg, Reg, Reg),
+
+    // ── Bitwise (inlined in CLIF) ──────────────────────────────────────
+    BitAnd(Reg, Reg, Reg),
+    BitOr(Reg, Reg, Reg),
+    BitXor(Reg, Reg, Reg),
+    Shl(Reg, Reg, Reg),
+    Shr(Reg, Reg, Reg),
+
+    // ── Unary (inlined in CLIF) ────────────────────────────────────────
+    Neg(Reg, Reg),
+    Not(Reg, Reg),
+    BitNot(Reg, Reg),
+
+    // ── FFI-backed operations ──────────────────────────────────────────
+    /// Call an `oxy_*` FFI function. Codegen pushes args onto the operand
+    /// stack (in JitContext), calls the FFI function, and pops the result
+    /// into `result` register.
+    CallBuiltin {
+        result: Reg,
+        /// FFI function name (e.g. "oxy_push_int", "oxy_add", "oxy_struct_init").
+        func: &'static str,
+        /// Register arguments to push before calling.
+        args: Vec<Reg>,
+        /// Extra immediate arguments (e.g. field_count, meta_idx, usize params).
+        immediates: Vec<usize>,
+    },
+
+    // ── Special ────────────────────────────────────────────────────────
+    /// Copy a register value (used when a value is needed in multiple places).
+    Copy(Reg, Reg),
+    /// Read the result slot from ctx after a function call returns.
+    ReadResult(Reg),
+    /// Write register to ctx.result for function return.
+    WriteResult(Reg),
+    /// Set error message in ctx.
+    SetError(Reg),
+    /// Check if ctx has an error set (returns bool-like in result register).
+    CheckError(Reg),
+
+    // ── Phi node (block parameter) ─────────────────────────────────────
+    Phi(Reg, Reg, Reg),
+}
+
+/// How control flow leaves a basic block.
+#[derive(Debug, Clone)]
+pub(crate) enum Terminator {
+    /// Return from the function with the given register value.
+    Return(Reg),
+    /// Unconditional jump to another block.
+    Jump(BlockId),
+    /// Conditional branch: if `cond` is truthy, go to `then_block`, else `else_block`.
+    Branch {
+        cond: Reg,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+    /// Call another function. Returns to `return_block` with the result in ctx.result.
+    Call {
+        fn_name: String,
+        args: Vec<Reg>,
+        result: Reg,
+        return_block: BlockId,
+    },
+    /// Halt execution (end of program).
+    Halt,
+    /// Panic: push error message, go to error path.
+    Panic(Reg),
+}
+
+impl IrFunction {
+    pub(crate) fn new(name: String, entry: BlockId, local_count: usize) -> Self {
+        Self {
+            name,
+            blocks: Vec::new(),
+            entry,
+            local_count,
+            return_type: TypeInfo::Unit,
+            params: Vec::new(),
+            captures: Vec::new(),
+            is_async: false,
+        }
+    }
+
+    pub(crate) fn add_block(&mut self) -> BlockId {
+        let id = self.blocks.len();
+        self.blocks.push(BasicBlock {
+            id,
+            ops: Vec::new(),
+            terminator: Terminator::Halt,
+            predecessors: Vec::new(),
+        });
+        id
+    }
+
+    pub(crate) fn block(&self, id: BlockId) -> &BasicBlock {
+        &self.blocks[id]
+    }
+
+    pub(crate) fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
+        &mut self.blocks[id]
+    }
+}
+
+impl BasicBlock {
+    pub(crate) fn new(id: BlockId) -> Self {
+        Self {
+            id,
+            ops: Vec::new(),
+            terminator: Terminator::Halt,
+            predecessors: Vec::new(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, op: IrOp) {
+        self.ops.push(op);
+    }
+
+    pub(crate) fn terminate(&mut self, term: Terminator) {
+        self.terminator = term;
+    }
+}
