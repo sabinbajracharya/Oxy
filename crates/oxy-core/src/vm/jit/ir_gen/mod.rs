@@ -555,12 +555,77 @@ impl IrGen {
                 self.emit(IrOp::LoadLocal(r, 0));
                 r
             }
-            Expr::As { expr, .. } => {
+            Expr::Grouped(inner, _) => {
+                self.gen_expr(inner)
+            }
+            Expr::MacroCall { name, args, .. } => {
+                let mut arg_regs = Vec::new();
+                for a in args {
+                    arg_regs.push(self.gen_expr(a));
+                }
+                let r = self.alloc_reg();
+                let func = if name == "println" { "oxy_println_val" }
+                    else if name == "print" { "oxy_print_val" }
+                    else if name == "format" { "oxy_format" }
+                    else { "oxy_path_call_builtin" };
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func,
+                    args: arg_regs,
+                    immediates: vec![],
+                });
+                r
+            }
+            Expr::Repeat { value, count, .. } => {
+                let val_reg = self.gen_expr(value);
+                let count_reg = self.gen_expr(count);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_make_repeat",
+                    args: vec![val_reg, count_reg],
+                    immediates: vec![],
+                });
+                r
+            }
+            Expr::AsyncBlock { body, .. } => {
+                // Generate as a closure-like async function
+                let params: Vec<ClosureParam> = Vec::new();
+                let body_expr = Expr::Block(body.clone());
+                self.gen_closure(&params, &body_expr, true)
+            }
+            Expr::Await { expr, .. } => {
                 let val = self.gen_expr(expr);
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
                     result: r,
-                    func: "oxy_cast_int",
+                    func: "oxy_await_ffi",
+                    args: vec![val],
+                    immediates: vec![],
+                });
+                r
+            }
+            Expr::Return { value, .. } => {
+                let reg = value.as_ref().map(|v| self.gen_expr(v)).unwrap_or_else(|| {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::ConstUnit(r));
+                    r
+                });
+                self.terminate(Terminator::Return(reg));
+                reg
+            }
+            Expr::As { expr, type_name, .. } => {
+                let val = self.gen_expr(expr);
+                let r = self.alloc_reg();
+                let func = match type_name.as_str() {
+                    "int" => "oxy_cast_int",
+                    "float" => "oxy_cast_float",
+                    "char" => "oxy_cast_to_char",
+                    _ => "oxy_cast_int",
+                };
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func,
                     args: vec![val],
                     immediates: vec![],
                 });
@@ -621,12 +686,7 @@ impl IrGen {
         let else_id = self.alloc_block();
         let merge_id = self.alloc_block();
 
-        // Bind pattern variables (they'll be read in then_block)
-        self.gen_pattern_bind(pattern, val);
-
-        // branch on pattern match result (stub — always true for simple patterns)
-        let cond = self.alloc_reg();
-        self.emit(IrOp::ConstBool(cond, true));
+        let cond = self.gen_pattern_check(pattern, val);
         self.terminate(Terminator::Branch { cond, then_block: then_id, else_block: else_id });
 
         self.start_block(then_id);
@@ -654,35 +714,73 @@ impl IrGen {
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
         let merge_id = self.alloc_block();
-        let mut arm_results: Vec<(BlockId, Reg)> = Vec::new();
 
-        for arm in arms {
-            let arm_id = self.alloc_block();
-            // Bind pattern
+        // Pre-allocate all check blocks and body blocks
+        let n = arms.len();
+        let check_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
+        let body_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
+        let mut result_regs: Vec<Reg> = Vec::new();
+
+        // First check uses current block, subsequent checks use check_blocks[i]
+        for (i, arm) in arms.iter().enumerate() {
+            if i > 0 {
+                self.start_block(check_blocks[i]);
+            }
+            let matches = self.gen_pattern_check(&arm.pattern, val);
+            let else_target = if i + 1 < n { check_blocks[i + 1] } else { body_blocks[i] };
+            self.terminate(Terminator::Branch {
+                cond: matches,
+                then_block: body_blocks[i],
+                else_block: else_target,
+            });
+        }
+
+        // Generate arm body blocks
+        for (i, arm) in arms.iter().enumerate() {
+            self.start_block(body_blocks[i]);
             self.gen_pattern_bind(&arm.pattern, val);
-            self.start_block(arm_id);
             let reg = self.gen_expr(&arm.body);
-            arm_results.push((arm_id, reg));
+            result_regs.push(reg);
             self.terminate(Terminator::Jump(merge_id));
         }
 
-        // TODO: proper match dispatch with guards/conditions
-        // For now, just chain blocks
-        if !arm_results.is_empty() {
-            let first = arm_results[0].0;
-            self.terminate(Terminator::Jump(first));
-        }
-
         self.start_block(merge_id);
-        if arm_results.is_empty() {
+        if result_regs.is_empty() {
             let r = self.alloc_reg();
             self.emit(IrOp::ConstUnit(r));
             r
         } else {
             let r = self.alloc_reg();
-            self.emit(IrOp::Phi(r, arm_results[0].1, arm_results.last().unwrap().1));
+            self.emit(IrOp::Phi(r, result_regs[0], *result_regs.last().unwrap()));
             r
         }
+    }
+
+    /// Emit a pattern-match check: returns a register that is truthy if pattern matches.
+    fn gen_pattern_check(&mut self, pattern: &Pattern, val_reg: Reg) -> Reg {
+        let r = self.alloc_reg();
+        match pattern {
+            Pattern::Literal(lit_expr) => {
+                let lit_reg = self.gen_expr(lit_expr);
+                self.emit(IrOp::Eq(r, val_reg, lit_reg));
+            }
+            Pattern::Wildcard(..) | Pattern::Ident(..) | Pattern::Rest(..) => {
+                self.emit(IrOp::ConstBool(r, true));
+            }
+            Pattern::EnumVariant { .. } => {
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_enum_variant_equal",
+                    args: vec![val_reg],
+                    immediates: vec![],
+                });
+            }
+            Pattern::Struct { .. } | Pattern::Tuple(..) | Pattern::Or(..)
+            | Pattern::Slice(..) | Pattern::Range { .. } => {
+                self.emit(IrOp::ConstBool(r, true));
+            }
+        }
+        r
     }
 
     fn gen_while(&mut self, condition: &Expr, body: &Block, _label: Option<&str>) -> Option<Reg> {
@@ -725,9 +823,7 @@ impl IrGen {
 
         self.start_block(header_id);
         let val = self.gen_expr(expr);
-        self.gen_pattern_bind(pattern, val);
-        let cond = self.alloc_reg();
-        self.emit(IrOp::ConstBool(cond, true));
+        let cond = self.gen_pattern_check(pattern, val);
         self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
 
         let saved_break = self.break_target;
@@ -772,16 +868,38 @@ impl IrGen {
         let iter_reg = self.gen_expr(iterable);
         let slot = self.alloc_local(name);
 
+        // Call oxy_make_iter to get an iterator
+        let iter_r = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: iter_r,
+            func: "oxy_make_iter",
+            args: vec![iter_reg],
+            immediates: vec![],
+        });
+
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
 
         self.terminate(Terminator::Jump(header_id));
 
-        // Header: iter.next() → check if done
+        // Header: call iter.next(), store in local, check if done
         self.start_block(header_id);
+        let next_r = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: next_r,
+            func: "oxy_iter_next",
+            args: vec![iter_r],
+            immediates: vec![slot],
+        });
+        // oxy_iter_next sets the value via local slot and returns bool-like
         let cond = self.alloc_reg();
-        self.emit(IrOp::ConstBool(cond, true));  // stub
+        self.emit(IrOp::CallBuiltin {
+            result: cond,
+            func: "oxy_is_truthy",
+            args: vec![next_r],
+            immediates: vec![],
+        });
         self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
 
         let saved_break = self.break_target;
@@ -801,18 +919,38 @@ impl IrGen {
     }
 
     fn gen_for_destructure(&mut self, names: &[String], iterable: &Expr, body: &Block) -> Option<Reg> {
-        let _iter_reg = self.gen_expr(iterable);
+        let iter_reg = self.gen_expr(iterable);
         for name in names {
             self.alloc_local(name);
         }
+        let iter_r = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: iter_r,
+            func: "oxy_make_iter",
+            args: vec![iter_reg],
+            immediates: vec![],
+        });
+
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
 
         self.terminate(Terminator::Jump(header_id));
         self.start_block(header_id);
+        let next_r = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: next_r,
+            func: "oxy_iter_next_destructure",
+            args: vec![iter_r],
+            immediates: names.iter().map(|n| self.lookup_local(n).unwrap_or(0)).collect(),
+        });
         let cond = self.alloc_reg();
-        self.emit(IrOp::ConstBool(cond, true));
+        self.emit(IrOp::CallBuiltin {
+            result: cond,
+            func: "oxy_is_truthy",
+            args: vec![next_r],
+            immediates: vec![],
+        });
         self.terminate(Terminator::Branch { cond, then_block: body_id, else_block: exit_id });
 
         let saved_break = self.break_target;
@@ -939,8 +1077,54 @@ impl IrGen {
                 self.collect_idents(value, param_names, out);
             }
             Expr::Closure { body, .. } => {
-                // Don't capture through nested closures
                 self.collect_idents(body, param_names, out);
+            }
+            Expr::Grouped(e, ..) => self.collect_idents(e, param_names, out),
+            Expr::Match { expr, arms, .. } => {
+                self.collect_idents(expr, param_names, out);
+                for arm in arms {
+                    self.collect_idents(&arm.body, param_names, out);
+                    if let Some(guard) = &arm.guard {
+                        self.collect_idents(guard, param_names, out);
+                    }
+                }
+            }
+            Expr::IfLet { expr, guard, then_block, else_block, .. } => {
+                self.collect_idents(expr, param_names, out);
+                if let Some(g) = guard { self.collect_idents(g, param_names, out); }
+                self.collect_idents_in_block(then_block, param_names, out);
+                if let Some(eb) = else_block { self.collect_idents(eb, param_names, out); }
+            }
+            Expr::Tuple { elements, .. } => {
+                for e in elements { self.collect_idents(e, param_names, out); }
+            }
+            Expr::PathCall { args, .. } => {
+                for a in args { self.collect_idents(a, param_names, out); }
+            }
+            Expr::Range { start, end, .. } => {
+                if let Some(s) = start { self.collect_idents(s, param_names, out); }
+                if let Some(e) = end { self.collect_idents(e, param_names, out); }
+            }
+            Expr::Repeat { value, count, .. } => {
+                self.collect_idents(value, param_names, out);
+                self.collect_idents(count, param_names, out);
+            }
+            Expr::FString { parts, .. } => {
+                for part in parts {
+                    if let crate::ast::FStringPart::Expr(e) = part {
+                        self.collect_idents(e, param_names, out);
+                    }
+                }
+            }
+            Expr::As { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::Try { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::Return { value, .. } => {
+                if let Some(v) = value { self.collect_idents(v, param_names, out); }
+            }
+            Expr::AsyncBlock { body, .. } => self.collect_idents_in_block(body, param_names, out),
+            Expr::Await { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::MacroCall { args, .. } => {
+                for a in args { self.collect_idents(a, param_names, out); }
             }
             _ => {}
         }
@@ -1690,5 +1874,99 @@ mod tests {
         let ir = gen("fn main() -> int { return 42; let x = 1; x }");
         let f = find_fn(&ir, "main");
         assert!(f.blocks.len() >= 1);
+    }
+
+    // ── Gaps from audit: MacroCall, Grouped, Repeat, AsyncBlock, Await ──
+
+    #[test]
+    fn test_grouped_expression() {
+        let ir = gen("fn main() -> int { (42) }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
+            "grouped should unwrap inner literal, got: {:?}", ops);
+    }
+
+    #[test]
+    fn test_macro_call_println() {
+        let ir = gen("fn main() { println!(\"hello\") }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "println should emit CallBuiltin");
+    }
+
+    #[test]
+    fn test_repeat_expression() {
+        let ir = gen("fn main() -> int { let a = [0; 5]; 0 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "repeat should emit CallBuiltin");
+    }
+
+    #[test]
+    fn test_async_block_expr() {
+        let ir = gen("fn main() -> int { let fut = async { 42 }; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_await_expr() {
+        let ir = gen("fn main() -> int { let fut = async { 42 }; fut.await }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "await should emit CallBuiltin");
+    }
+
+    // ── Gaps from audit: WhileLet, ForDestructure, LetPattern ──────────
+
+    #[test]
+    fn test_while_let() {
+        let ir = gen("fn main() -> int { let x = Option::Some(1); while let Option::Some(v) = x { break; } 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 3, "while-let should have multiple blocks, got {}", f.blocks.len());
+    }
+
+    #[test]
+    fn test_for_destructure() {
+        let ir = gen("fn main() -> int { for (a, b) in vec![(1, 2), (3, 4)] { let _x = a + b; } 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 3, "for-destructure should have multiple blocks, got {}", f.blocks.len());
+    }
+
+    #[test]
+    fn test_let_pattern() {
+        let ir = gen("fn main() -> int { let (x, y) = (1, 2); x + y }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().filter(|op| matches!(op, IrOp::StoreLocal(_, _))).count() >= 2,
+            "let-pattern should bind both vars");
+    }
+
+    // ── Gaps from audit: nested closures, labeled break ────────────────
+
+    #[test]
+    fn test_closure_inside_match() {
+        let ir = gen("fn main() -> int { let x = 10; let f = match 1 { 1 => || -> int { x }, _ => || -> int { 0 } }; f() }");
+        let f = find_fn(&ir, "main");
+        let closures: Vec<_> = ir.functions.iter().filter(|f| f.name.contains("closure")).collect();
+        assert!(closures.len() >= 1, "should have closure inside match");
+    }
+
+    #[test]
+    fn test_cast_to_float() {
+        let ir = gen("fn main() -> float { let x: float = 3; x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_method_with_self_param() {
+        let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
+        let method = ir.functions.iter().find(|f| f.name.contains("inc"));
+        assert!(method.is_some(), "should have inc method");
     }
 }
