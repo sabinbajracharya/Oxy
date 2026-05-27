@@ -761,123 +761,144 @@ fn translate_op(
             false
         }
 
+        OpCode::TryPop => {
+            call_void(builder, ffi_refs, "oxy_try_pop");
+            // Pops one, pushes one (or triggers early return) — net 0
+            false
+        }
+
+        OpCode::Closure {
+            target_ip,
+            param_count,
+            meta_idx,
+            is_async,
+        } => {
+            let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
+            let pc = builder.ins().iconst(types::I64, *param_count as i64);
+            let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
+            let ia = builder.ins().iconst(types::I8, i64::from(*is_async as u8));
+            let f = fref(ffi_refs, "oxy_push_closure");
+            builder.ins().call(f, &[ctx_val, tgt, pc, mi, ia]);
+            *stack_depth += 1;
+            false
+        }
+
+        OpCode::AsyncBlock {
+            target_ip,
+            meta_idx,
+        } => {
+            let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
+            let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
+            let f = fref(ffi_refs, "oxy_push_async_block");
+            builder.ins().call(f, &[ctx_val, tgt, mi]);
+            *stack_depth += 1;
+            false
+        }
+
+        OpCode::CallClosure { arg_count } => {
+            let ac = builder.ins().iconst(types::I64, *arg_count as i64);
+            let f = fref(ffi_refs, "oxy_call_closure");
+            builder.ins().call(f, &[ctx_val, ac]);
+            *stack_depth -= arg_count;
+            false
+        }
+
+        OpCode::Await => {
+            let f = fref(ffi_refs, "oxy_await_ffi");
+            let inst = builder.ins().call(f, &[ctx_val]);
+            let disc = builder.inst_results(inst)[0];
+            let zero = builder.ins().iconst(types::I64, 0);
+            let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
+            let cont_blk = builder.create_block();
+            let ret_blk = builder.create_block();
+            builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
+            builder.switch_to_block(ret_blk);
+            builder.ins().return_(&[disc]);
+            builder.switch_to_block(cont_blk);
+            *stack_depth += 1;
+            false
+        }
+
+        OpCode::Spawn => {
+            call_void(builder, ffi_refs, "oxy_spawn_ffi");
+            false
+        }
+
+        OpCode::Sleep => {
+            let f = fref(ffi_refs, "oxy_sleep_ffi");
+            let inst = builder.ins().call(f, &[ctx_val]);
+            *stack_depth -= 1;
+            let disc = builder.inst_results(inst)[0];
+            let zero = builder.ins().iconst(types::I64, 0);
+            let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
+            let cont_blk = builder.create_block();
+            let ret_blk = builder.create_block();
+            builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
+            builder.switch_to_block(ret_blk);
+            builder.ins().return_(&[disc]);
+            builder.switch_to_block(cont_blk);
+            false
+        }
+
+        OpCode::Select { count } => {
+            let c = builder.ins().iconst(types::I64, *count as i64);
+            let f = fref(ffi_refs, "oxy_select_ffi");
+            let inst = builder.ins().call(f, &[ctx_val, c]);
+            let disc = builder.inst_results(inst)[0];
+            let zero = builder.ins().iconst(types::I64, 0);
+            let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
+            let cont_blk = builder.create_block();
+            let ret_blk = builder.create_block();
+            builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
+            builder.switch_to_block(ret_blk);
+            builder.ins().return_(&[disc]);
+            builder.switch_to_block(cont_blk);
+            *stack_depth = *stack_depth - count + 1;
+            false
+        }
+
+        OpCode::CastInt(_) => {
+            call_void(builder, ffi_refs, "oxy_cast_int");
+            false
+        }
+
+        OpCode::CastFloat(_) => {
+            call_void(builder, ffi_refs, "oxy_cast_float");
+            false
+        }
+
+        OpCode::CastToChar => {
+            call_void(builder, ffi_refs, "oxy_cast_to_char");
+            false
+        }
+
+        OpCode::BindIdent(idx) => {
+            let i = builder.ins().iconst(types::I64, *idx as i64);
+            call1(builder, ffi_refs, "oxy_bind_ident", i);
+            *stack_depth -= 1;
+            false
+        }
+
+        OpCode::PathCallBuiltin {
+            segments,
+            arg_count,
+        } => {
+            let path_idx = crate::vm::jit::ffi::register_builtin_path(segments.clone());
+            let pi = builder.ins().iconst(types::I64, path_idx as i64);
+            let ac = builder.ins().iconst(types::I64, *arg_count as i64);
+            call2(builder, ffi_refs, "oxy_path_call_builtin", pi, ac);
+            *stack_depth = *stack_depth - arg_count + 1;
+            false
+        }
+
+        OpCode::DisplayArg => {
+            call_void(builder, ffi_refs, "oxy_display_arg");
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
-        _ => {
-            // For stubbed opcodes, just track stack balance based on known effects
-            match op {
-                OpCode::Closure {
-                    target_ip,
-                    param_count,
-                    meta_idx,
-                    is_async,
-                } => {
-                    let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
-                    let pc = builder.ins().iconst(types::I64, *param_count as i64);
-                    let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
-                    let ia = builder.ins().iconst(types::I8, i64::from(*is_async as u8));
-                    // oxy_push_closure(ctx, target_ip, param_count, meta_idx, is_async)
-                    let f = fref(ffi_refs, "oxy_push_closure");
-                    builder.ins().call(f, &[ctx_val, tgt, pc, mi, ia]);
-                    *stack_depth += 1; // pushes one closure value
-                }
-                OpCode::AsyncBlock {
-                    target_ip,
-                    meta_idx,
-                } => {
-                    let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
-                    let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
-                    // oxy_push_async_block(ctx, target_ip, meta_idx)
-                    let f = fref(ffi_refs, "oxy_push_async_block");
-                    builder.ins().call(f, &[ctx_val, tgt, mi]);
-                    *stack_depth += 1;
-                }
-                OpCode::CallClosure { arg_count } => {
-                    let ac = builder.ins().iconst(types::I64, *arg_count as i64);
-                    // oxy_call_closure(ctx, arg_count)
-                    let f = fref(ffi_refs, "oxy_call_closure");
-                    builder.ins().call(f, &[ctx_val, ac]);
-                    // Pops closure + args, pushes result
-                    *stack_depth -= arg_count;
-                }
-                OpCode::MakeFuture { arg_count, .. } => *stack_depth = *stack_depth - arg_count + 1,
-                OpCode::Await => {
-                    let f = fref(ffi_refs, "oxy_await_ffi");
-                    let inst = builder.ins().call(f, &[ctx_val]);
-                    let disc = builder.inst_results(inst)[0];
-                    let zero = builder.ins().iconst(types::I64, 0);
-                    let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
-                    let cont_blk = builder.create_block();
-                    let ret_blk = builder.create_block();
-                    builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
-                    builder.switch_to_block(ret_blk);
-                    builder.ins().return_(&[disc]);
-                    builder.switch_to_block(cont_blk);
-                    *stack_depth += 1;
-                }
-                OpCode::Spawn => {
-                    call_void(builder, ffi_refs, "oxy_spawn_ffi");
-                }
-                OpCode::Sleep => {
-                    let f = fref(ffi_refs, "oxy_sleep_ffi");
-                    let inst = builder.ins().call(f, &[ctx_val]);
-                    *stack_depth -= 1;
-                    let disc = builder.inst_results(inst)[0];
-                    let zero = builder.ins().iconst(types::I64, 0);
-                    let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
-                    let cont_blk = builder.create_block();
-                    let ret_blk = builder.create_block();
-                    builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
-                    builder.switch_to_block(ret_blk);
-                    builder.ins().return_(&[disc]);
-                    builder.switch_to_block(cont_blk);
-                }
-                OpCode::Select { count } => {
-                    let c = builder.ins().iconst(types::I64, *count as i64);
-                    let f = fref(ffi_refs, "oxy_select_ffi");
-                    let inst = builder.ins().call(f, &[ctx_val, c]);
-                    let disc = builder.inst_results(inst)[0];
-                    let zero = builder.ins().iconst(types::I64, 0);
-                    let is_done = builder.ins().icmp(IntCC::Equal, disc, zero);
-                    let cont_blk = builder.create_block();
-                    let ret_blk = builder.create_block();
-                    builder.ins().brif(is_done, cont_blk, &[], ret_blk, &[]);
-                    builder.switch_to_block(ret_blk);
-                    builder.ins().return_(&[disc]);
-                    builder.switch_to_block(cont_blk);
-                    *stack_depth = *stack_depth - count + 1;
-                }
-                OpCode::TryPop => {
-                    call_void(builder, ffi_refs, "oxy_try_pop");
-                }
-                OpCode::CastInt(_) => {
-                    call_void(builder, ffi_refs, "oxy_cast_int");
-                }
-                OpCode::CastFloat(_) => {
-                    call_void(builder, ffi_refs, "oxy_cast_float");
-                }
-                OpCode::CastToChar => {
-                    call_void(builder, ffi_refs, "oxy_cast_to_char");
-                }
-                OpCode::BindIdent(idx) => {
-                    let i = builder.ins().iconst(types::I64, *idx as i64);
-                    call1(builder, ffi_refs, "oxy_bind_ident", i);
-                    *stack_depth -= 1;
-                }
-                OpCode::PathCallBuiltin {
-                    segments,
-                    arg_count,
-                } => {
-                    let path_idx = crate::vm::jit::ffi::register_builtin_path(segments.clone());
-                    let pi = builder.ins().iconst(types::I64, path_idx as i64);
-                    let ac = builder.ins().iconst(types::I64, *arg_count as i64);
-                    call2(builder, ffi_refs, "oxy_path_call_builtin", pi, ac);
-                    *stack_depth = *stack_depth - arg_count + 1;
-                }
-                OpCode::DisplayArg => {
-                    call_void(builder, ffi_refs, "oxy_display_arg");
-                }
-                _ => {}
-            }
+        OpCode::MakeFuture { arg_count, .. } => {
+            *stack_depth = *stack_depth - arg_count + 1;
             false
         }
     }
