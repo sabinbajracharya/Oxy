@@ -986,9 +986,20 @@ extern "C" fn oxy_struct_init(ctx: *mut JitContext, meta_idx: usize) {
     }
 }
 
-extern "C" fn oxy_struct_update(ctx: *mut JitContext, field_count: usize) {
+extern "C" fn oxy_struct_update(ctx: *mut JitContext, meta_idx: usize) {
     let ctx = unsafe { &mut *ctx };
     let base = unsafe { pop(ctx) };
+    let meta = {
+        let lock = struct_init_meta_lock();
+        lock.get(meta_idx).map(|m| StructInitMeta {
+            name: m.name.clone(),
+            field_names: m.field_names.clone(),
+            field_count: m.field_count,
+        })
+    };
+    let (field_names, field_count) = meta
+        .map(|m| (m.field_names, m.field_count))
+        .unwrap_or_default();
     let mut overrides = Vec::with_capacity(field_count);
     for _ in 0..field_count {
         overrides.push(unsafe { pop(ctx) });
@@ -998,16 +1009,11 @@ extern "C" fn oxy_struct_update(ctx: *mut JitContext, field_count: usize) {
         Value::Struct { name, fields } => {
             let mut new_fields = fields.clone();
             for (i, val) in overrides.into_iter().enumerate() {
-                new_fields.insert(format!("_f{i}"), val);
+                let fname = field_names.get(i).cloned().unwrap_or_else(|| format!("_f{i}"));
+                new_fields.insert(fname, val);
             }
             unsafe {
-                push(
-                    ctx,
-                    Value::Struct {
-                        name,
-                        fields: new_fields,
-                    },
-                );
+                push(ctx, Value::Struct { name, fields: new_fields });
             }
         }
         _ => panic!("struct update on non-struct"),
