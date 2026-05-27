@@ -738,11 +738,26 @@ fn translate_op(
             false
         }
 
+        OpCode::ConstEnumVariant {
+            enum_name,
+            variant,
+            data,
+        } => {
+            let meta_idx = crate::vm::jit::ffi::register_const_enum_variant(
+                enum_name.clone(),
+                variant.clone(),
+                data.clone(),
+            );
+            let mi = builder.ins().iconst(types::I64, meta_idx as i64);
+            call1(builder, ffi_refs, "oxy_const_enum_variant", mi);
+            *stack_depth += 1;
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
         _ => {
             // For stubbed opcodes, just track stack balance based on known effects
             match op {
-                OpCode::ConstEnumVariant { .. } => *stack_depth += 1,
                 OpCode::EnumDataGet(idx) => {
                     let i = builder.ins().iconst(types::I64, *idx as i64);
                     call1(builder, ffi_refs, "oxy_enum_data_get", i);

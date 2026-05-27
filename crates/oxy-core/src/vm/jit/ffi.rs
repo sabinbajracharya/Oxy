@@ -409,6 +409,39 @@ pub(crate) fn register_struct_init(
     idx
 }
 
+// ── Const enum variant registry ──────────────────────────────────────
+//
+// Uses a Box behind a newtype that manually implements Send+Sync because
+// Value contains non-thread-safe types (Rc, RefCell) but we only access
+// them from a single thread (JIT compilation + execution are sequential).
+
+struct ConstEnumVariantStore(Box<Vec<(String, String, Vec<Value>)>>);
+unsafe impl Send for ConstEnumVariantStore {}
+unsafe impl Sync for ConstEnumVariantStore {}
+
+static CONST_ENUM_VARIANTS: std::sync::OnceLock<std::sync::Mutex<ConstEnumVariantStore>> =
+    std::sync::OnceLock::new();
+
+fn const_enum_variants_lock() -> std::sync::MutexGuard<'static, ConstEnumVariantStore> {
+    CONST_ENUM_VARIANTS
+        .get_or_init(|| {
+            std::sync::Mutex::new(ConstEnumVariantStore(Box::new(Vec::new())))
+        })
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn register_const_enum_variant(
+    enum_name: String,
+    variant: String,
+    data: Vec<Value>,
+) -> usize {
+    let mut lock = const_enum_variants_lock();
+    let idx = lock.0.len();
+    lock.0.push((enum_name, variant, data));
+    idx
+}
+
 // ── Function calls ───────────────────────────────────────────────────
 
 /// Call stack for nested Oxy function invocations.
@@ -1446,6 +1479,24 @@ extern "C" fn oxy_make_enum_variant(
     }
 }
 
+extern "C" fn oxy_const_enum_variant(ctx: *mut JitContext, meta_idx: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let val = {
+        let lock = const_enum_variants_lock();
+        lock.0
+            .get(meta_idx)
+            .map(|(en, vr, d)| Value::EnumVariant {
+                enum_name: en.clone(),
+                variant: vr.clone(),
+                data: d.clone(),
+            })
+            .unwrap_or(Value::Unit)
+    };
+    unsafe {
+        push(ctx, val);
+    }
+}
+
 // ── PathCall builtins ─────────────────────────────────────────────────
 
 extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_count: usize) {
@@ -1837,6 +1888,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_enum_data_get", oxy_enum_data_get as _),
         ("oxy_enum_variant_equal", oxy_enum_variant_equal as _),
         ("oxy_make_enum_variant", oxy_make_enum_variant as _),
+        ("oxy_const_enum_variant", oxy_const_enum_variant as _),
         ("oxy_path_call_builtin", oxy_path_call_builtin as _),
         ("oxy_display_arg", oxy_display_arg as _),
         ("oxy_await_ffi", oxy_await_ffi as _),

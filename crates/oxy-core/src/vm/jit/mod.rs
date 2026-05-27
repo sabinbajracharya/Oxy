@@ -146,6 +146,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
             None,
         ),
         ("oxy_struct_init", &[types::I64, types::I64], None),
+        ("oxy_const_enum_variant", &[types::I64, types::I64], None),
         ("oxy_struct_update", &[types::I64, types::I64], None),
         ("oxy_display_arg", &[types::I64], None),
         ("oxy_await_ffi", &[types::I64], Some(types::I64)),
@@ -417,5 +418,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, crate::types::Value::I64(99));
+    }
+
+    #[test]
+    fn test_jit_const_enum_variant() {
+        let result = run_compiled_jit(
+            "enum Color { Red, Blue, Green } fn main() -> int { let c = Color::Red; 1 }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(1));
     }
 }
