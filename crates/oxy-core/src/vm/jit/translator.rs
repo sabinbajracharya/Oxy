@@ -896,8 +896,13 @@ fn translate_op(
             false
         }
 
-        // ── Stubbed / deferred ─────────────────────────────────
-        OpCode::MakeFuture { arg_count, .. } => {
+        OpCode::MakeFuture {
+            target_ip,
+            arg_count,
+        } => {
+            let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
+            let ac = builder.ins().iconst(types::I64, *arg_count as i64);
+            call2(builder, ffi_refs, "oxy_make_future", tgt, ac);
             *stack_depth = *stack_depth - arg_count + 1;
             false
         }

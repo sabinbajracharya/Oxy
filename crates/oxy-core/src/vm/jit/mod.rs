@@ -11,7 +11,7 @@ pub(crate) mod ffi;
 mod translator;
 
 pub(crate) use context::JitContext;
-pub(crate) use ffi::{register_ffi_symbols, set_closure_meta, set_fn_table};
+pub(crate) use ffi::{register_ffi_symbols, set_async_fn_meta, set_closure_meta, set_fn_table};
 
 use crate::vm::Chunk;
 use cranelift_codegen::ir::types;
@@ -157,6 +157,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
             &[types::I64, types::I64],
             Some(types::I64),
         ),
+        (
+            "oxy_make_future",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
     ]
 }
 
@@ -192,6 +197,15 @@ impl JitEngine {
         // Store function pointer table and closure metadata for FFI access
         set_fn_table(fn_ptrs.clone());
         set_closure_meta(chunk.closure_meta.clone());
+        set_async_fn_meta(
+            chunk
+                .async_fns
+                .iter()
+                .map(|(name, params, ret, body, ip)| {
+                    (name.clone(), params.clone(), ret.clone(), body.clone(), *ip)
+                })
+                .collect(),
+        );
 
         Ok(Self {
             fn_ptrs: fn_ptrs.clone(),

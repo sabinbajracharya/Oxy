@@ -355,6 +355,50 @@ pub(crate) fn set_closure_meta(
     }
 }
 
+// ── Async function metadata ───────────────────────────────────────────
+
+struct AsyncFnMeta {
+    name: String,
+    params: Vec<crate::ast::Param>,
+    return_type: Option<crate::ast::TypeAnnotation>,
+    body: Box<crate::ast::Block>,
+    target_ip: usize,
+}
+unsafe impl Send for AsyncFnMeta {}
+unsafe impl Sync for AsyncFnMeta {}
+
+static ASYNC_FN_META: std::sync::OnceLock<std::sync::Mutex<Vec<AsyncFnMeta>>> =
+    std::sync::OnceLock::new();
+
+fn async_fn_meta_lock() -> std::sync::MutexGuard<'static, Vec<AsyncFnMeta>> {
+    ASYNC_FN_META
+        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn set_async_fn_meta(
+    meta: Vec<(
+        String,
+        Vec<crate::ast::Param>,
+        Option<crate::ast::TypeAnnotation>,
+        crate::ast::Block,
+        usize,
+    )>,
+) {
+    let mut lock = async_fn_meta_lock();
+    lock.clear();
+    for (name, params, return_type, body, target_ip) in meta {
+        lock.push(AsyncFnMeta {
+            name,
+            params,
+            return_type,
+            body: Box::new(body),
+            target_ip,
+        });
+    }
+}
+
 // ── Builtin path table ────────────────────────────────────────────────
 
 /// Global registry of PathCallBuiltin segment lists, keyed by index.
@@ -1818,6 +1862,37 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) -> u64 {
     1
 }
 
+extern "C" fn oxy_make_future(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let mut args = Vec::with_capacity(arg_count);
+    for _ in 0..arg_count {
+        args.push(unsafe { pop(ctx) });
+    }
+    args.reverse();
+    let meta = {
+        let lock = async_fn_meta_lock();
+        lock.iter()
+            .find(|m| m.target_ip == target_ip)
+            .map(|m| (m.name.clone(), m.params.clone(), m.return_type.clone(), m.body.clone()))
+    };
+    let (name, params, return_type, body) = meta.unwrap_or_else(|| {
+        panic!("MakeFuture: no async function found at target_ip={target_ip}")
+    });
+    let future = Value::Future(Box::new(crate::types::FutureData {
+        name,
+        params,
+        return_type,
+        body: (*body).clone(),
+        closure_env: crate::env::Environment::new(),
+        args,
+        target_ip,
+        captured_names: Vec::new(),
+    }));
+    unsafe {
+        push(ctx, future);
+    }
+}
+
 // ── Symbol registry ──────────────────────────────────────────────────
 
 pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
@@ -1895,6 +1970,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_spawn_ffi", oxy_spawn_ffi as _),
         ("oxy_sleep_ffi", oxy_sleep_ffi as _),
         ("oxy_select_ffi", oxy_select_ffi as _),
+        ("oxy_make_future", oxy_make_future as _),
     ];
 
     for (name, ptr) in syms {
