@@ -637,11 +637,40 @@ fn translate_op(
                     let i = builder.ins().iconst(types::I64, *idx as i64);
                     call1(builder, ffi_refs, "oxy_enum_data_get", i);
                 }
-                OpCode::Closure { param_count, .. } => {
-                    *stack_depth = *stack_depth - param_count + 1
+                OpCode::Closure {
+                    target_ip,
+                    param_count,
+                    meta_idx,
+                    is_async,
+                } => {
+                    let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
+                    let pc = builder.ins().iconst(types::I64, *param_count as i64);
+                    let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
+                    let ia = builder.ins().iconst(types::I8, i64::from(*is_async as u8));
+                    // oxy_push_closure(ctx, target_ip, param_count, meta_idx, is_async)
+                    let f = fref(ffi_refs, "oxy_push_closure");
+                    builder.ins().call(f, &[ctx_val, tgt, pc, mi, ia]);
+                    *stack_depth += 1; // pushes one closure value
                 }
-                OpCode::AsyncBlock { .. } => *stack_depth += 1,
-                OpCode::CallClosure { arg_count } => *stack_depth -= arg_count,
+                OpCode::AsyncBlock {
+                    target_ip,
+                    meta_idx,
+                } => {
+                    let tgt = builder.ins().iconst(types::I64, *target_ip as i64);
+                    let mi = builder.ins().iconst(types::I64, *meta_idx as i64);
+                    // oxy_push_async_block(ctx, target_ip, meta_idx)
+                    let f = fref(ffi_refs, "oxy_push_async_block");
+                    builder.ins().call(f, &[ctx_val, tgt, mi]);
+                    *stack_depth += 1;
+                }
+                OpCode::CallClosure { arg_count } => {
+                    let ac = builder.ins().iconst(types::I64, *arg_count as i64);
+                    // oxy_call_closure(ctx, arg_count)
+                    let f = fref(ffi_refs, "oxy_call_closure");
+                    builder.ins().call(f, &[ctx_val, ac]);
+                    // Pops closure + args, pushes result
+                    *stack_depth -= arg_count;
+                }
                 OpCode::MakeFuture { arg_count, .. } => *stack_depth = *stack_depth - arg_count + 1,
                 OpCode::Await => {
                     let f = fref(ffi_refs, "oxy_await_ffi");

@@ -11,7 +11,7 @@ mod ffi;
 mod translator;
 
 pub(crate) use context::JitContext;
-pub(crate) use ffi::{register_ffi_symbols, set_fn_table};
+pub(crate) use ffi::{register_ffi_symbols, set_closure_meta, set_fn_table};
 
 use crate::vm::Chunk;
 use cranelift_codegen::ir::types;
@@ -78,6 +78,17 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_is_falsy", &[types::I64], Some(types::I8)),
         ("oxy_is_truthy", &[types::I64], Some(types::I8)),
         ("oxy_call", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_push_closure",
+            &[types::I64, types::I64, types::I64, types::I64, types::I8],
+            None,
+        ),
+        (
+            "oxy_push_async_block",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
+        ("oxy_call_closure", &[types::I64, types::I64], None),
         ("oxy_return", &[types::I64], None),
         ("oxy_panic", &[types::I64], None),
         ("oxy_make_array", &[types::I64, types::I64], None),
@@ -158,8 +169,9 @@ impl JitEngine {
         // Compile all functions
         let fn_ptrs = translator.compile_all();
 
-        // Store function pointer table for FFI call resolution
+        // Store function pointer table and closure metadata for FFI access
         set_fn_table(fn_ptrs.clone());
+        set_closure_meta(chunk.closure_meta.clone());
 
         Ok(Self {
             fn_ptrs,

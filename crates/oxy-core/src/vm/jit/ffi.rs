@@ -303,13 +303,50 @@ extern "C" fn oxy_is_truthy(ctx: *mut JitContext) -> u8 {
     }
 }
 
+// ── Closure metadata ──────────────────────────────────────────────────
+
+/// Runtime metadata for a single closure, stored globally for FFI access.
+#[derive(Clone)]
+struct ClosureRuntimeMeta {
+    param_names: Vec<String>,
+    captured: Vec<(String, usize, bool)>, // (name, outer_slot, is_mut)
+    target_ip: usize,
+    is_async: bool,
+}
+
+/// Closure metadata table: meta_idx → ClosureRuntimeMeta.
+static CLOSURE_META: std::sync::OnceLock<std::sync::Mutex<Vec<ClosureRuntimeMeta>>> =
+    std::sync::OnceLock::new();
+
+fn closure_meta_lock() -> std::sync::MutexGuard<'static, Vec<ClosureRuntimeMeta>> {
+    CLOSURE_META
+        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn set_closure_meta(
+    meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
+) {
+    let mut lock = closure_meta_lock();
+    lock.clear();
+    for (param_names, _body_expr, captured) in meta {
+        lock.push(ClosureRuntimeMeta {
+            param_names,
+            captured,
+            target_ip: 0,    // populated by the compiler
+            is_async: false, // overridden per-entry if needed
+        });
+    }
+}
+
 // ── Function calls ───────────────────────────────────────────────────
 
 /// Call stack for nested Oxy function invocations.
-static CALL_STACK: std::sync::OnceLock<std::sync::Mutex<Vec<CallFrame>>> = std::sync::OnceLock::new();
+static CALL_STACK: std::sync::OnceLock<std::sync::Mutex<Vec<CallFrame>>> =
+    std::sync::OnceLock::new();
 
 struct CallFrame {
-    return_ip: usize,
     caller_local_count: usize,
     caller_sp: usize,
 }
@@ -340,7 +377,7 @@ pub(crate) fn set_fn_table(table: HashMap<usize, *const u8>) {
     }
 }
 
-extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, _arg_count: usize) {
+extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
     let ctx = unsafe { &mut *ctx };
     let fn_ptr = {
         let table = fn_table_lock();
@@ -354,16 +391,263 @@ extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, _arg_count: usize
     {
         let mut call_stack = call_stack_lock();
         call_stack.push(CallFrame {
-            return_ip: 0,
             caller_local_count: ctx.local_count,
             caller_sp: ctx.sp,
         });
     }
 
+    // Move args from operand stack to start of buffer as callee locals.
+    // Args are at buffer[local_count + sp - arg_count .. local_count + sp].
+    // Callee expects them at buffer[0..arg_count].
+    let args_start = ctx.sp - arg_count;
+    for i in 0..arg_count {
+        let src = unsafe { ctx.buffer.add(ctx.local_count + args_start + i).read() };
+        unsafe { ctx.buffer.add(i).write(src) };
+    }
+    ctx.sp = args_start; // pop args from stack
+
+    // Set up callee context
+    let saved_local_count = ctx.local_count;
+    ctx.local_count = arg_count;
+
     // Call the JIT function
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fn_ptr as *const ()) };
     let _discriminant = fn_ptr(ctx);
+
+    // Restore caller context and push result
+    let result = std::mem::replace(&mut ctx.result, Value::Unit);
+    ctx.local_count = saved_local_count;
+    unsafe {
+        push(ctx, result);
+    }
+
+    // Restore stack depth
+    let _call_stack = call_stack_lock();
+}
+
+// ── Closures ─────────────────────────────────────────────────────────
+
+extern "C" fn oxy_push_closure(
+    ctx: *mut JitContext,
+    target_ip: usize,
+    _param_count: usize,
+    meta_idx: usize,
+    is_async: u8,
+) {
+    let ctx = unsafe { &mut *ctx };
+    let meta = {
+        let lock = closure_meta_lock();
+        lock.get(meta_idx).cloned()
+    };
+    let (_param_names, captured) = meta
+        .map(|m| (m.param_names.clone(), m.captured.clone()))
+        .unwrap_or_default();
+
+    // Build captured values from current locals at the outer slots
+    let closure_env = crate::env::Environment::new();
+    for (name, outer_slot, is_mut) in &captured {
+        let val = unsafe { ctx.buffer.add(*outer_slot).read() };
+        let val = match &val {
+            Value::Cell(rc) => rc.borrow().clone(),
+            other => other.clone(),
+        };
+        closure_env.borrow_mut().define(name.clone(), val, *is_mut);
+    }
+
+    let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
+    let fn_data = crate::types::FunctionData {
+        name: "<closure>".into(),
+        params: vec![],
+        return_type: None,
+        body: crate::ast::Block {
+            stmts: vec![],
+            span: crate::lexer::Span {
+                start: 0,
+                end: 0,
+                line: 0,
+                column: 0,
+            },
+        },
+        closure_env,
+        target_ip: Some(target_ip),
+        captured_names,
+        is_async: is_async != 0,
+    };
+    unsafe {
+        push(ctx, Value::Function(Box::new(fn_data)));
+    }
+}
+
+extern "C" fn oxy_push_async_block(ctx: *mut JitContext, target_ip: usize, meta_idx: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let meta = {
+        let lock = closure_meta_lock();
+        lock.get(meta_idx).cloned()
+    };
+    let captured = meta.map(|m| m.captured.clone()).unwrap_or_default();
+
+    let closure_env = crate::env::Environment::new();
+    for (name, outer_slot, is_mut) in &captured {
+        let val = unsafe { ctx.buffer.add(*outer_slot).read() };
+        let val = match &val {
+            Value::Cell(rc) => rc.borrow().clone(),
+            other => other.clone(),
+        };
+        closure_env.borrow_mut().define(name.clone(), val, *is_mut);
+    }
+
+    let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
+    let future_data = crate::types::FutureData {
+        name: "<async_block>".into(),
+        params: vec![],
+        return_type: None,
+        body: crate::ast::Block {
+            stmts: vec![],
+            span: crate::lexer::Span {
+                start: 0,
+                end: 0,
+                line: 0,
+                column: 0,
+            },
+        },
+        closure_env,
+        args: vec![],
+        target_ip,
+        captured_names,
+    };
+    unsafe {
+        push(ctx, Value::Future(Box::new(future_data)));
+    }
+}
+
+extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
+    let ctx = unsafe { &mut *ctx };
+
+    // Pop closure value (receiver) from below the args
+    let closure_idx = ctx.sp - arg_count - 1;
+    let closure_val = unsafe { ctx.buffer.add(ctx.local_count + closure_idx).read() };
+
+    let (target_ip, is_async, captured_names, closure_env) = match &closure_val {
+        Value::Function(f) => (
+            f.target_ip,
+            f.is_async,
+            f.captured_names.clone(),
+            f.closure_env.clone(),
+        ),
+        _ => panic!("CallClosure: value is not a callable closure"),
+    };
+
+    let target_ip = target_ip.unwrap_or_else(|| panic!("CallClosure: no target_ip"));
+    if target_ip == usize::MAX {
+        panic!("CallClosure: invalid target_ip");
+    }
+
+    if is_async {
+        // Create Future instead of executing
+        // Pop closure + args, push Future
+        let drain_start = ctx.sp - arg_count - 1;
+        let mut args = Vec::new();
+        for i in 0..arg_count {
+            args.push(unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i).read() });
+        }
+        ctx.sp = drain_start; // pop everything
+
+        let fn_data = match &closure_val {
+            Value::Function(f) => f.clone(),
+            _ => unreachable!(),
+        };
+        let future = crate::types::FutureData {
+            name: fn_data.name,
+            params: fn_data.params,
+            return_type: fn_data.return_type,
+            body: fn_data.body,
+            closure_env,
+            args,
+            target_ip,
+            captured_names,
+        };
+        unsafe {
+            push(ctx, Value::Future(Box::new(future)));
+        }
+        return;
+    }
+
+    // Sync closure: look up JIT fn, call it
+    let fn_ptr = {
+        let table = fn_table_lock();
+        table
+            .get(&target_ip)
+            .copied()
+            .unwrap_or_else(|| panic!("JIT: no function for closure at ip={target_ip}"))
+    };
+
+    // Save caller state
+    let saved_local_count = ctx.local_count;
+    let saved_sp = ctx.sp;
+
+    // Build callee frame: captures at [0..N], args at [N..N+arg_count]
+    let captures_end = captured_names.len();
+    let drain_start = ctx.sp - arg_count - 1;
+
+    // Read args
+    let mut args_vals = Vec::new();
+    for i in 0..arg_count {
+        args_vals.push(unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i).read() });
+    }
+    // Pop everything
+    ctx.sp = drain_start;
+
+    // Fill locals: captures first, then args
+    let total_frame = captures_end + arg_count;
+    // Grow buffer if needed
+    while ctx.local_count + total_frame > ctx.capacity {
+        // simple: just ensure enough room
+        let new_cap = (ctx.local_count + total_frame) * 2;
+        let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
+        let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
+        unsafe {
+            std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
+        }
+        unsafe {
+            std::alloc::dealloc(
+                ctx.buffer as *mut u8,
+                std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
+            );
+        }
+        ctx.buffer = new_buf;
+        ctx.capacity = new_cap;
+    }
+    ctx.local_count = total_frame;
+
+    // Write captures
+    for (i, name) in captured_names.iter().enumerate() {
+        let val = closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
+        unsafe {
+            ctx.buffer.add(i).write(val);
+        }
+    }
+    // Write args
+    for (i, arg) in args_vals.into_iter().enumerate() {
+        unsafe {
+            ctx.buffer.add(captures_end + i).write(arg);
+        }
+    }
+
+    ctx.sp = 0; // callee starts with empty stack
+
+    // Call
+    let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+        unsafe { std::mem::transmute(fn_ptr as *const ()) };
+    let _discriminant = fn_ptr(ctx);
+
+    // Restore and push result
+    let result = std::mem::replace(&mut ctx.result, Value::Unit);
+    ctx.local_count = saved_local_count;
+    ctx.sp = saved_sp - arg_count - 1; // we popped closure + args
+    unsafe {
+        push(ctx, result);
+    }
 }
 
 // ── Return / panic ──────────────────────────────────────────────────
@@ -482,6 +766,9 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_is_falsy", oxy_is_falsy as _),
         ("oxy_is_truthy", oxy_is_truthy as _),
         ("oxy_call", oxy_call as _),
+        ("oxy_push_closure", oxy_push_closure as _),
+        ("oxy_push_async_block", oxy_push_async_block as _),
+        ("oxy_call_closure", oxy_call_closure as _),
         ("oxy_return", oxy_return as _),
         ("oxy_panic", oxy_panic as _),
         ("oxy_make_array", oxy_make_array as _),
