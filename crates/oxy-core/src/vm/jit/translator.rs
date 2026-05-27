@@ -739,10 +739,11 @@ fn translate_op(
                     segments,
                     arg_count,
                 } => {
-                    let sptr = builder.ins().iconst(types::I64, segments.as_ptr() as i64);
-                    let slen = builder.ins().iconst(types::I64, segments.len() as i64);
+                    let path_idx =
+                        crate::vm::jit::ffi::register_builtin_path(segments.clone());
+                    let pi = builder.ins().iconst(types::I64, path_idx as i64);
                     let ac = builder.ins().iconst(types::I64, *arg_count as i64);
-                    call3(builder, ffi_refs, "oxy_path_call_builtin", sptr, slen, ac);
+                    call2(builder, ffi_refs, "oxy_path_call_builtin", pi, ac);
                     *stack_depth = *stack_depth - arg_count + 1;
                 }
                 OpCode::DisplayArg => {

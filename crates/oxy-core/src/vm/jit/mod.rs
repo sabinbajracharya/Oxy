@@ -7,7 +7,7 @@
 #![allow(dead_code)]
 
 mod context;
-mod ffi;
+pub(crate) mod ffi;
 mod translator;
 
 pub(crate) use context::JitContext;
@@ -125,7 +125,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_enum_data_get", &[types::I64, types::I64], None),
         (
             "oxy_path_call_builtin",
-            &[types::I64, types::I64, types::I64, types::I64],
+            &[types::I64, types::I64, types::I64],
             None,
         ),
         ("oxy_display_arg", &[types::I64], None),
