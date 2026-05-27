@@ -754,14 +754,17 @@ fn translate_op(
             false
         }
 
+        OpCode::EnumDataGet(idx) => {
+            let i = builder.ins().iconst(types::I64, *idx as i64);
+            call1(builder, ffi_refs, "oxy_enum_data_get", i);
+            // Pops one enum variant, pushes one data element — net stack change is 0
+            false
+        }
+
         // ── Stubbed / deferred ─────────────────────────────────
         _ => {
             // For stubbed opcodes, just track stack balance based on known effects
             match op {
-                OpCode::EnumDataGet(idx) => {
-                    let i = builder.ins().iconst(types::I64, *idx as i64);
-                    call1(builder, ffi_refs, "oxy_enum_data_get", i);
-                }
                 OpCode::Closure {
                     target_ip,
                     param_count,

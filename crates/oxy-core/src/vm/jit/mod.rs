@@ -428,4 +428,13 @@ mod tests {
         .unwrap();
         assert_eq!(result, crate::types::Value::I64(1));
     }
+
+    #[test]
+    fn test_jit_if_let_option() {
+        let result = run_compiled_jit(
+            "fn main() -> int { let r = std::env::var(\"HOME\"); if let Option::Some(val) = r { 1 } else { 0 } }",
+        )
+        .unwrap();
+        assert_eq!(result, crate::types::Value::I64(1));
+    }
 }
