@@ -13,7 +13,7 @@ mod translator;
 pub(crate) use context::JitContext;
 pub(crate) use ffi::{register_ffi_symbols, set_closure_meta, set_fn_table};
 
-use crate::vm::{Chunk, OpCode};
+use crate::vm::Chunk;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::FunctionBuilderContext;
@@ -34,8 +34,6 @@ pub(crate) struct JitEngine {
     /// Keeps the Chunk (and all string data) alive.
     #[allow(dead_code)]
     chunk: Chunk,
-    /// All ConstString values, kept alive so raw pointers stay valid.
-    _strings: Vec<String>,
 }
 
 /// FFI function declarations with their parameter types and return type.
@@ -180,22 +178,11 @@ impl JitEngine {
         set_fn_table(fn_ptrs.clone());
         set_closure_meta(chunk.closure_meta.clone());
 
-        // Collect all ConstString values to ensure their heap data stays alive.
-        let const_strings: Vec<String> = chunk
-            .code
-            .iter()
-            .filter_map(|op| match op {
-                OpCode::ConstString(s) => Some(s.clone()),
-                _ => None,
-            })
-            .collect();
-
         Ok(Self {
             fn_ptrs: fn_ptrs.clone(),
             functions: chunk.functions.clone(),
             entry_point: chunk.entry_point,
             chunk,
-            _strings: const_strings,
         })
     }
 
@@ -303,10 +290,10 @@ mod tests {
     #[test]
     fn test_jit_print_captured() {
         let (val, output) =
-            run_compiled_capturing_jit("fn main() { println!(\"x\"); }")
+            run_compiled_capturing_jit("fn main() { println!(\"hello\"); println!(\"world\"); }")
                 .unwrap();
         assert_eq!(val, crate::types::Value::Unit);
-        assert_eq!(output, vec!["x\n"]);
+        assert_eq!(output, vec!["hello\n", "world\n"]);
     }
 
     #[test]

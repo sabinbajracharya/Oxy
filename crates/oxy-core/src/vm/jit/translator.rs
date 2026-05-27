@@ -170,9 +170,9 @@ impl<'a> Translator<'a> {
                 }
             }
 
-            let op = self.chunk.code[ip].clone();
+            let op = &self.chunk.code[ip];
             let terminated = translate_op(
-                &op,
+                op,
                 &mut builder,
                 ctx_val,
                 &ffi_refs,

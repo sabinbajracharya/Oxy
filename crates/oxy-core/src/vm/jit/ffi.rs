@@ -70,10 +70,8 @@ extern "C" fn oxy_push_char(ctx: *mut JitContext, val: u32) {
 
 extern "C" fn oxy_push_string(ctx: *mut JitContext, ptr: *const u8, len: usize) {
     let ctx = unsafe { &mut *ctx };
-    eprintln!("[DEBUG] oxy_push_string ptr={ptr:p} len={len}");
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
     let s = String::from_utf8_lossy(bytes).into_owned();
-    eprintln!("[DEBUG] oxy_push_string result={s:?}");
     unsafe {
         push(ctx, Value::String(s));
     }
