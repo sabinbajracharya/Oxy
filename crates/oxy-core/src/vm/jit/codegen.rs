@@ -612,22 +612,23 @@ fn compile_op(
             immediates,
             strings,
         } => {
-            for imm in immediates {
-                let v = builder.ins().iconst(types::I64, *imm as i64);
-                push_int(builder, ctx, ffi_refs, v);
-            }
+            // Build Cranelift ABI arguments:
+            // ctx, then each string as (ptr: I64, len: I64), then each immediate as I64.
+            // Register args go on the operand stack, not as ABI params.
+            let mut abi_args: Vec<cranelift_codegen::ir::Value> = vec![ctx];
             for s in strings {
-                let ptr = builder.ins().iconst(types::I64, s.as_ptr() as i64);
-                let len = builder.ins().iconst(types::I64, s.len() as i64);
-                if let Some(push) = ffi_refs.get("oxy_push_string") {
-                    builder.ins().call(*push, &[ctx, ptr, len]);
-                }
+                abi_args.push(builder.ins().iconst(types::I64, s.as_ptr() as i64));
+                abi_args.push(builder.ins().iconst(types::I64, s.len() as i64));
             }
+            for imm in immediates {
+                abi_args.push(builder.ins().iconst(types::I64, *imm as i64));
+            }
+            // Push register arguments onto the operand stack.
             for arg in args.iter().rev() {
                 push_reg(builder, ctx, ffi_refs, *arg, regs, reg_slot);
             }
             if let Some(f) = ffi_refs.get(*func) {
-                builder.ins().call(*f, &[ctx]);
+                builder.ins().call(*f, &abi_args);
             }
             spill_result(builder, ctx, ffi_refs, *result, reg_slot, next_spill_slot);
         }

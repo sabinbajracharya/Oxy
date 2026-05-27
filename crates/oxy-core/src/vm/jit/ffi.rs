@@ -973,16 +973,115 @@ extern "C" fn oxy_make_tuple(ctx: *mut JitContext, count: usize) {
     }
 }
 
+extern "C" fn oxy_make_repeat(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let count_val = unsafe { pop(ctx) };
+    let value = unsafe { pop(ctx) };
+    let count = match &count_val {
+        Value::I64(n) => *n as usize,
+        Value::U8(n) => *n as usize,
+        _ => {
+            set_error(
+                ctx,
+                format!("repeat count must be integer, got {count_val:?}"),
+            );
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+    };
+    let mut elements = Vec::with_capacity(count);
+    for _ in 0..count {
+        elements.push(value.clone());
+    }
+    unsafe {
+        push(
+            ctx,
+            Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements))),
+        );
+    }
+}
+
+extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize) {
+    // Like oxy_iter_next, but stores each destructured element to local slots
+    // state_slot..state_slot+n. The element is also pushed to the stack for truthiness check.
+    let ctx = unsafe { &mut *ctx };
+    let target_ptr = unsafe { ctx.buffer.add(state_slot) };
+    let target = unsafe { &*target_ptr };
+
+    let (vec_clone, index) = match target {
+        Value::Tuple(ref elements) if elements.len() >= 2 => (
+            elements[0].clone(),
+            match &elements[1] {
+                Value::I64(n) => *n as usize,
+                Value::U8(n) => *n as usize,
+                _ => 0,
+            },
+        ),
+        _ => {
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+    };
+
+    let len = match &vec_clone {
+        Value::Vec(rc) => rc.borrow().len(),
+        Value::Array(a) => a.len(),
+        _ => 0,
+    };
+
+    if index < len {
+        let elem = match &vec_clone {
+            Value::Vec(rc) => rc.borrow().get(index).cloned().unwrap_or(Value::Unit),
+            Value::Array(a) => a.get(index).cloned().unwrap_or(Value::Unit),
+            _ => Value::Unit,
+        };
+        // Store destructured bindings: each element of the tuple to state_slot+i
+        if let Value::Tuple(ref fields) = elem {
+            for (i, field) in fields.iter().enumerate() {
+                let dest_ptr = unsafe { ctx.buffer.add(state_slot + 1 + i) };
+                unsafe {
+                    std::ptr::drop_in_place(dest_ptr);
+                }
+                unsafe {
+                    dest_ptr.write(field.clone());
+                }
+            }
+        }
+        unsafe {
+            std::ptr::drop_in_place(target_ptr);
+            target_ptr.write(Value::Tuple(vec![
+                vec_clone,
+                Value::I64((index + 1) as i64),
+            ]));
+            push(ctx, elem);
+        }
+    } else {
+        unsafe {
+            push(ctx, Value::Unit);
+        }
+    }
+}
+
 // ── Iteration ─────────────────────────────────────────────────────────
 
 extern "C" fn oxy_make_iter(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let result = match val.into_iterable() {
-        Ok(vec) => Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec))),
+        Ok(vec) => {
+            // Store (Vec, index: 0) as a tuple to track iteration state.
+            Value::Tuple(vec![
+                Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec))),
+                Value::I64(0),
+            ])
+        }
         Err(e) => {
             set_error(ctx, e);
-            Value::Unit
+            Value::Tuple(vec![Value::Unit, Value::I64(0)])
         }
     };
     unsafe {
@@ -994,6 +1093,18 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let len = match &val {
+        Value::Tuple(elements) if elements.len() >= 2 => match &elements[0] {
+            Value::Vec(rc) => rc.borrow().len() as i64,
+            Value::String(s) => s.len() as i64,
+            Value::Array(a) => a.len() as i64,
+            _ => {
+                set_error(
+                    ctx,
+                    format!("cannot get length of {}", elements[0].type_name()),
+                );
+                0i64
+            }
+        },
         Value::Vec(rc) => rc.borrow().len() as i64,
         Value::String(s) => s.len() as i64,
         Value::Array(a) => a.len() as i64,
@@ -1004,6 +1115,60 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
     };
     unsafe {
         push(ctx, Value::I64(len));
+    }
+}
+
+extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let target_ptr = unsafe { ctx.buffer.add(state_slot) };
+    let target = unsafe { &*target_ptr };
+
+    let (vec_clone, index) = match target {
+        Value::Tuple(ref elements) if elements.len() >= 2 => (
+            elements[0].clone(),
+            match &elements[1] {
+                Value::I64(n) => *n as usize,
+                Value::U8(n) => *n as usize,
+                _ => 0,
+            },
+        ),
+        _ => {
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+    };
+
+    let len = match &vec_clone {
+        Value::Vec(rc) => rc.borrow().len(),
+        Value::Array(a) => a.len(),
+        Value::String(s) => s.chars().count(),
+        _ => 0,
+    };
+
+    if index < len {
+        let elem = match &vec_clone {
+            Value::Vec(rc) => rc.borrow().get(index).cloned().unwrap_or(Value::Unit),
+            Value::Array(a) => a.get(index).cloned().unwrap_or(Value::Unit),
+            Value::String(s) => {
+                let c = s.chars().nth(index).unwrap_or('\0');
+                Value::Char(c)
+            }
+            _ => Value::Unit,
+        };
+        unsafe {
+            std::ptr::drop_in_place(target_ptr);
+            target_ptr.write(Value::Tuple(vec![
+                vec_clone,
+                Value::I64((index + 1) as i64),
+            ]));
+            push(ctx, elem);
+        }
+    } else {
+        unsafe {
+            push(ctx, Value::Unit);
+        }
     }
 }
 
@@ -2234,7 +2399,10 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_make_fixed_array", oxy_make_fixed_array as _),
         ("oxy_make_tuple", oxy_make_tuple as _),
         ("oxy_make_iter", oxy_make_iter as _),
+        ("oxy_make_repeat", oxy_make_repeat as _),
         ("oxy_iter_len", oxy_iter_len as _),
+        ("oxy_iter_next", oxy_iter_next as _),
+        ("oxy_iter_next_destructure", oxy_iter_next_destructure as _),
         ("oxy_vec_index", oxy_vec_index as _),
         ("oxy_vec_index_store", oxy_vec_index_store as _),
         ("oxy_make_range", oxy_make_range as _),

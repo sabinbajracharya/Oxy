@@ -969,7 +969,7 @@ impl IrGen {
 
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
-        let merge_id = self.alloc_block();
+        let final_merge = self.alloc_block();
 
         // Pre-allocate all check blocks and body blocks
         let n = arms.len();
@@ -1001,19 +1001,75 @@ impl IrGen {
             self.gen_pattern_bind(&arm.pattern, val);
             let reg = self.gen_expr(&arm.body);
             result_regs.push(reg);
-            self.terminate(Terminator::Jump(merge_id));
+            if n <= 2 {
+                self.terminate(Terminator::Jump(final_merge));
+            }
+            // For 3+ arms, jump targets set below
         }
 
-        self.start_block(merge_id);
         if result_regs.is_empty() {
+            self.start_block(final_merge);
             let r = self.alloc_reg();
             self.emit(IrOp::ConstUnit(r));
-            r
-        } else {
-            let r = self.alloc_reg();
-            self.emit(IrOp::Phi(r, result_regs[0], *result_regs.last().unwrap()));
-            r
+            return r;
         }
+
+        if n <= 2 {
+            self.start_block(final_merge);
+            let r = self.alloc_reg();
+            let last = *result_regs.last().unwrap();
+            self.emit(IrOp::Phi(r, result_regs[0], last));
+            return r;
+        }
+
+        // For 3+ arms: cascade intermediate merges, each combining two results.
+        // body_0 → merge_01 ← body_1
+        // merge_01 → merge_012 ← body_2
+        // ... → final_merge ← body_{n-1}
+        let mut prev_merge: Option<(BlockId, Reg)> = None;
+        // Pair up results: body_0 + body_1 at merge_01, then cascade
+        let mut idx = 0;
+        while idx < n {
+            if idx == 0 {
+                // First pair: body_0, body_1
+                self.start_block(body_blocks[0]);
+                if n > 1 {
+                    let merge_01 = self.alloc_block();
+                    self.terminate(Terminator::Jump(merge_01));
+                    self.start_block(body_blocks[1]);
+                    self.terminate(Terminator::Jump(merge_01));
+                    self.start_block(merge_01);
+                    let phi_r = self.alloc_reg();
+                    self.emit(IrOp::Phi(phi_r, result_regs[0], result_regs[1]));
+                    prev_merge = Some((merge_01, phi_r));
+                    idx = 2;
+                } else {
+                    // Only one arm — jump directly to final_merge
+                    self.terminate(Terminator::Jump(final_merge));
+                    self.start_block(final_merge);
+                    return result_regs[0];
+                }
+            } else {
+                // Cascade: prev_merge + body_{idx}
+                let (prev_block, prev_reg) = prev_merge.unwrap();
+                let cascade_merge = if idx + 1 < n {
+                    self.alloc_block()
+                } else {
+                    final_merge
+                };
+                // Patch prev block's terminator to jump to cascade_merge
+                self.current.blocks[prev_block].terminator = Terminator::Jump(cascade_merge);
+                // Body block jumps to cascade_merge
+                self.current.blocks[body_blocks[idx]].terminator = Terminator::Jump(cascade_merge);
+                self.start_block(cascade_merge);
+                let phi_r = self.alloc_reg();
+                self.emit(IrOp::Phi(phi_r, prev_reg, result_regs[idx]));
+                prev_merge = Some((cascade_merge, phi_r));
+                idx += 1;
+            }
+        }
+        // prev_merge now holds the final merge block with the final phi result
+        prev_merge.unwrap().1
     }
 
     /// Emit a pattern-match check: returns a register that is truthy if pattern matches.
@@ -1266,8 +1322,9 @@ impl IrGen {
         body: &Block,
         label: Option<&str>,
     ) -> Option<Reg> {
-        let iter_reg = self.gen_expr(iterable);
-        let slot = self.alloc_local(name);
+        let iter_expr_reg = self.gen_expr(iterable);
+        let var_slot = self.alloc_local(name);
+        let state_slot = self.alloc_local("__iter_state");
 
         // Pre-allocate blocks so label can refer to them
         let header_id = self.alloc_block();
@@ -1278,34 +1335,35 @@ impl IrGen {
                 .insert(lbl.to_string(), (exit_id, header_id));
         }
 
-        // Call oxy_make_iter to get an iterator
-        let iter_r = self.alloc_reg();
+        // Create iterator and store state to local slot
+        let iter_tmp = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: iter_r,
+            result: iter_tmp,
             func: "oxy_make_iter",
-            args: vec![iter_reg],
+            args: vec![iter_expr_reg],
             immediates: vec![],
             strings: vec![],
         });
+        self.emit(IrOp::StoreLocal(state_slot, iter_tmp));
 
         self.terminate(Terminator::Jump(header_id));
 
-        // Header: call iter.next(), store in local, check if done
+        // Header: call iter.next(), store element, check if done
         self.start_block(header_id);
-        let next_r = self.alloc_reg();
+        let elem_r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: next_r,
+            result: elem_r,
             func: "oxy_iter_next",
-            args: vec![iter_r],
-            immediates: vec![slot],
+            args: vec![],
+            immediates: vec![state_slot],
             strings: vec![],
         });
-        // oxy_iter_next sets the value via local slot and returns bool-like
+        self.emit(IrOp::StoreLocal(var_slot, elem_r));
         let cond = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: cond,
             func: "oxy_is_truthy",
-            args: vec![next_r],
+            args: vec![elem_r],
             immediates: vec![],
             strings: vec![],
         });
@@ -1338,18 +1396,21 @@ impl IrGen {
         body: &Block,
         label: Option<&str>,
     ) -> Option<Reg> {
-        let iter_reg = self.gen_expr(iterable);
+        let iter_expr_reg = self.gen_expr(iterable);
         for name in names {
             self.alloc_local(name);
         }
-        let iter_r = self.alloc_reg();
+        let state_slot = self.alloc_local("__iter_state");
+
+        let iter_tmp = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: iter_r,
+            result: iter_tmp,
             func: "oxy_make_iter",
-            args: vec![iter_reg],
+            args: vec![iter_expr_reg],
             immediates: vec![],
             strings: vec![],
         });
+        self.emit(IrOp::StoreLocal(state_slot, iter_tmp));
 
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
@@ -1365,11 +1426,8 @@ impl IrGen {
         self.emit(IrOp::CallBuiltin {
             result: next_r,
             func: "oxy_iter_next_destructure",
-            args: vec![iter_r],
-            immediates: names
-                .iter()
-                .map(|n| self.lookup_local(n).unwrap_or(0))
-                .collect(),
+            args: vec![],
+            immediates: vec![state_slot],
             strings: vec![],
         });
         let cond = self.alloc_reg();
