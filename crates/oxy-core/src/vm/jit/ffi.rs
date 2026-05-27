@@ -22,9 +22,17 @@ unsafe fn push(ctx: &mut JitContext, val: Value) {
     }
 }
 
+/// Write an error message to the context, replacing any existing error.
+fn set_error(ctx: &mut JitContext, msg: String) {
+    let len = msg.len().min(1023);
+    ctx.error_msg[..len].copy_from_slice(&msg.as_bytes()[..len]);
+    ctx.error_len = len;
+}
+
 unsafe fn pop(ctx: &mut JitContext) -> Value {
     if ctx.sp == 0 {
-        panic!("JIT stack underflow");
+        set_error(ctx, "JIT stack underflow".to_string());
+        return Value::Unit;
     }
     ctx.sp -= 1;
     let ptr = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp) };
@@ -93,7 +101,8 @@ extern "C" fn oxy_pop(ctx: *mut JitContext) {
 extern "C" fn oxy_dup(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     if ctx.sp == 0 {
-        panic!("JIT stack underflow on dup");
+        set_error(ctx, "JIT stack underflow on dup".to_string());
+        return;
     }
     let val = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp - 1).read() };
     let val_clone = val.clone();
@@ -179,9 +188,16 @@ macro_rules! binary_op {
             let ctx = unsafe { &mut *ctx };
             let rhs = unsafe { pop(ctx) };
             let lhs = unsafe { pop(ctx) };
-            let result = $func(lhs, rhs).unwrap_or_else(|e| panic!("{e}"));
-            unsafe {
-                push(ctx, result);
+            match $func(lhs, rhs) {
+                Ok(result) => unsafe { push(ctx, result) },
+                Err(e) => {
+                    // Write error to context instead of panicking — panics
+                    // across the FFI boundary are UB (no unwind tables in JIT code).
+                    let len = e.len().min(1023);
+                    ctx.error_msg[..len].copy_from_slice(&e.as_bytes()[..len]);
+                    ctx.error_len = len;
+                    unsafe { push(ctx, Value::I64(0)) };
+                }
             }
         }
     };
@@ -218,7 +234,7 @@ fn vm_lt(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a < b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a < b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a < b),
-        _ => panic!("cannot compare {lhs:?} < {rhs:?}"),
+        _ => Value::Bool(false),
     }
 }
 fn vm_gt(lhs: Value, rhs: Value) -> Value {
@@ -226,7 +242,7 @@ fn vm_gt(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a > b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a > b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a > b),
-        _ => panic!("cannot compare {lhs:?} > {rhs:?}"),
+        _ => Value::Bool(false),
     }
 }
 fn vm_le(lhs: Value, rhs: Value) -> Value {
@@ -234,7 +250,7 @@ fn vm_le(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a <= b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a <= b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a <= b),
-        _ => panic!("cannot compare {lhs:?} <= {rhs:?}"),
+        _ => Value::Bool(false),
     }
 }
 fn vm_ge(lhs: Value, rhs: Value) -> Value {
@@ -242,7 +258,7 @@ fn vm_ge(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a >= b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a >= b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a >= b),
-        _ => panic!("cannot compare {lhs:?} >= {rhs:?}"),
+        _ => Value::Bool(false),
     }
 }
 fn vm_and(lhs: Value, rhs: Value) -> Value {
@@ -798,6 +814,11 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
 
 // ── Return / panic ──────────────────────────────────────────────────
 
+extern "C" fn oxy_error_discriminant(ctx: *const JitContext) -> u64 {
+    let ctx = unsafe { &*ctx };
+    if ctx.error_len > 0 { 2 } else { 0 }
+}
+
 extern "C" fn oxy_return(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     // Mirror VM: self.stack.pop().unwrap_or(Value::Unit)
@@ -887,7 +908,10 @@ extern "C" fn oxy_make_iter(ctx: *mut JitContext) {
             )))
         }
         Value::Iterator(_) => val,
-        _ => panic!("cannot iterate over {val:?}"),
+        _ => {
+            set_error(ctx, format!("cannot iterate over {val:?}"));
+            Value::Unit
+        }
     };
     unsafe {
         push(ctx, iter);
@@ -928,7 +952,10 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
             let c = s.chars().nth(idx).unwrap_or('\0');
             Value::Char(c)
         }
-        _ => panic!("cannot index {collection:?}"),
+        _ => {
+            set_error(ctx, format!("cannot index {collection:?}"));
+            Value::Unit
+        }
     };
     unsafe {
         push(ctx, result);
@@ -1212,7 +1239,10 @@ extern "C" fn oxy_method_call(
         Ok(val) => unsafe {
             push(ctx, val);
         },
-        Err(e) => panic!("method call '{method_name}' failed: {e}"),
+        Err(e) => {
+            set_error(ctx, format!("method call '{method_name}' failed: {e}"));
+            unsafe { push(ctx, Value::Unit); }
+        }
     }
 }
 
@@ -1938,6 +1968,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_push_async_block", oxy_push_async_block as _),
         ("oxy_call_closure", oxy_call_closure as _),
         ("oxy_return", oxy_return as _),
+        ("oxy_error_discriminant", oxy_error_discriminant as _),
         ("oxy_panic", oxy_panic as _),
         ("oxy_make_array", oxy_make_array as _),
         ("oxy_make_fixed_array", oxy_make_fixed_array as _),

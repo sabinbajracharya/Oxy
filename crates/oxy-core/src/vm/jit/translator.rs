@@ -564,13 +564,18 @@ fn translate_op(
         OpCode::Return => {
             call_void(builder, ffi_refs, "oxy_return");
             *stack_depth = (*stack_depth).saturating_sub(1);
-            let zero = builder.ins().iconst(types::I64, 0);
-            builder.ins().return_(&[zero]);
+            // Return 2 if any FFI function set an error, otherwise 0
+            let f = fref(ffi_refs, "oxy_error_discriminant");
+            let disc = builder.ins().call(f, &[ctx_val]);
+            let disc_val = builder.inst_results(disc)[0];
+            builder.ins().return_(&[disc_val]);
             true
         }
         OpCode::Halt => {
-            let zero = builder.ins().iconst(types::I64, 0);
-            builder.ins().return_(&[zero]);
+            let f = fref(ffi_refs, "oxy_error_discriminant");
+            let disc = builder.ins().call(f, &[ctx_val]);
+            let disc_val = builder.inst_results(disc)[0];
+            builder.ins().return_(&[disc_val]);
             true
         }
         OpCode::Panic => {

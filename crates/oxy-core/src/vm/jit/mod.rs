@@ -95,6 +95,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ),
         ("oxy_call_closure", &[types::I64, types::I64], None),
         ("oxy_return", &[types::I64], None),
+        ("oxy_error_discriminant", &[types::I64], Some(types::I64)),
         ("oxy_panic", &[types::I64], None),
         ("oxy_make_array", &[types::I64, types::I64], None),
         ("oxy_make_fixed_array", &[types::I64, types::I64], None),
@@ -450,5 +451,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_jit_div_zero_error() {
+        let result = run_compiled_jit("fn main() -> int { 1 / 0 }");
+        assert!(result.is_err());
     }
 }
