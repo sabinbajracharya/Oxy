@@ -278,7 +278,6 @@ impl JitVm {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::vm::api::{run_compiled_capturing_jit, run_compiled_jit};
 
     #[test]

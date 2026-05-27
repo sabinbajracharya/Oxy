@@ -23,3 +23,5 @@ lcov.info
 coverage/
 core
 bin/
+.claude/worktrees/
+node-compile-cache/

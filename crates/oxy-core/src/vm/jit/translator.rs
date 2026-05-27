@@ -158,7 +158,6 @@ impl<'a> Translator<'a> {
                     let cur = builder.current_block().unwrap_or(entry_block);
                     if cur != blk && !current_block_terminated {
                         builder.ins().jump(blk, &[]);
-                        current_block_terminated = true;
                     }
                     if cur != blk {
                         builder.switch_to_block(blk);
@@ -182,9 +181,9 @@ impl<'a> Translator<'a> {
             );
 
             if terminated {
-                current_block_terminated = true;
                 // After a Jump, continue processing at ip+1 in a NEW block.
                 if matches!(op, OpCode::Jump(_)) {
+                    current_block_terminated = true;
                     let next_ip = ip + 1;
                     if next_ip < fn_end_ip && next_ip < self.chunk.code.len() {
                         let next_block = blocks
