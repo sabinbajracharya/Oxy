@@ -114,6 +114,51 @@ pub(crate) enum IrOp {
     Phi(Reg, Reg, Reg),
 }
 
+impl IrOp {
+    /// Return the register that this op defines (if any).
+    /// StoreLocal returns 0 as it defines no register.
+    pub(crate) fn result_reg(&self) -> Reg {
+        match self {
+            IrOp::ConstInt(r, _)
+            | IrOp::ConstBool(r, _)
+            | IrOp::ConstUnit(r)
+            | IrOp::ConstFloat(r, _)
+            | IrOp::ConstChar(r, _)
+            | IrOp::ConstString(r, _)
+            | IrOp::LoadLocal(r, _)
+            | IrOp::Add(r, _, _)
+            | IrOp::Sub(r, _, _)
+            | IrOp::Mul(r, _, _)
+            | IrOp::Div(r, _, _)
+            | IrOp::Rem(r, _, _)
+            | IrOp::Eq(r, _, _)
+            | IrOp::Neq(r, _, _)
+            | IrOp::Lt(r, _, _)
+            | IrOp::Gt(r, _, _)
+            | IrOp::Le(r, _, _)
+            | IrOp::Ge(r, _, _)
+            | IrOp::And(r, _, _)
+            | IrOp::Or(r, _, _)
+            | IrOp::BitAnd(r, _, _)
+            | IrOp::BitOr(r, _, _)
+            | IrOp::BitXor(r, _, _)
+            | IrOp::Shl(r, _, _)
+            | IrOp::Shr(r, _, _)
+            | IrOp::Neg(r, _)
+            | IrOp::Not(r, _)
+            | IrOp::BitNot(r, _)
+            | IrOp::Copy(r, _)
+            | IrOp::Phi(r, _, _)
+            | IrOp::CallBuiltin { result: r, .. }
+            | IrOp::ReadResult(r)
+            | IrOp::WriteResult(r)
+            | IrOp::SetError(r)
+            | IrOp::CheckError(r) => *r,
+            IrOp::StoreLocal(_, _) => 0,
+        }
+    }
+}
+
 /// How control flow leaves a basic block.
 #[derive(Debug, Clone)]
 pub(crate) enum Terminator {

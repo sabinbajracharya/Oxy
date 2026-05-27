@@ -90,10 +90,89 @@ impl<'a> Codegen<'a> {
             cl_blocks.insert(b.id, builder.create_block());
         }
 
+        // ── Phi / block-param pre-scan ────────────────────────────────
+        // Build predecessor lists.
+        let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+        for block in &ir_fn.blocks {
+            match &block.terminator {
+                Terminator::Jump(t) => {
+                    preds.entry(*t).or_default().push(block.id);
+                }
+                Terminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    preds.entry(*then_block).or_default().push(block.id);
+                    preds.entry(*else_block).or_default().push(block.id);
+                }
+                _ => {}
+            }
+        }
+
+        // Collect Phi nodes per block: phi_result → [source_regs in pred order]
+        let mut block_phis: HashMap<BlockId, Vec<(Reg, Vec<Reg>)>> = HashMap::new();
+        for block in &ir_fn.blocks {
+            for op in &block.ops {
+                if let IrOp::Phi(r, a, b) = op {
+                    block_phis
+                        .entry(block.id)
+                        .or_default()
+                        .push((*r, vec![*a, *b]));
+                }
+            }
+        }
+
+        // Find which block defines a register.
+        let mut reg_def_block: HashMap<Reg, BlockId> = HashMap::new();
+        for block in &ir_fn.blocks {
+            for op in &block.ops {
+                if matches!(op, IrOp::StoreLocal(..)) {
+                    continue;
+                }
+                let r = op.result_reg();
+                reg_def_block.insert(r, block.id);
+            }
+        }
+
+        // Build forward map: (pred, succ) → Vec<Reg> to pass as jump args.
+        // Match Phi sources to predecessors by finding which predecessor defines each source.
+        let mut phi_args: HashMap<(BlockId, BlockId), Vec<Reg>> = HashMap::new();
+        for (succ_id, phis) in &block_phis {
+            let pred_list = preds.get(succ_id).cloned().unwrap_or_default();
+            for (_phi_result, sources) in phis {
+                // Try each source → match to predecessor that defines it
+                for src in sources {
+                    if let Some(def_block) = reg_def_block.get(src) {
+                        if pred_list.contains(def_block) {
+                            phi_args
+                                .entry((*def_block, *succ_id))
+                                .or_default()
+                                .push(*src);
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Block parameters ──────────────────────────────────────────
         let entry_block = cl_blocks[&ir_fn.entry];
         builder.append_block_params_for_function_params(entry_block);
 
-        let mut ctx_val: Option<cranelift_codegen::ir::Value> = None;
+        // Every non-entry block gets: ctx (I64), then one I64 per Phi result.
+        let mut phi_result_param: HashMap<(BlockId, Reg), usize> = HashMap::new();
+        for (id, cb) in &cl_blocks {
+            if *id != ir_fn.entry {
+                builder.append_block_param(*cb, types::I64); // ctx
+                if let Some(phis) = block_phis.get(id) {
+                    for (phi_r, _sources) in phis {
+                        builder.append_block_param(*cb, types::I64);
+                        let param_idx = builder.block_params(*cb).len() - 1;
+                        phi_result_param.insert((*id, *phi_r), param_idx);
+                    }
+                }
+            }
+        }
 
         let mut regs: HashMap<Reg, cranelift_codegen::ir::Value> = HashMap::new();
         let mut reg_slot: HashMap<Reg, usize> = HashMap::new();
@@ -103,13 +182,22 @@ impl<'a> Codegen<'a> {
             let cb = cl_blocks[&block.id];
             builder.switch_to_block(cb);
 
-            if block.id == ir_fn.entry {
-                ctx_val = Some(builder.block_params(cb)[0]);
+            let params = builder.block_params(cb);
+            let ctx = params[0];
+
+            // Map Phi result registers to their block parameters.
+            if let Some(phis) = block_phis.get(&block.id) {
+                for (phi_r, _sources) in phis {
+                    if let Some(param_idx) = phi_result_param.get(&(block.id, *phi_r)) {
+                        regs.insert(*phi_r, params[*param_idx]);
+                    }
+                }
             }
 
-            let ctx = ctx_val.unwrap();
-
             for op in &block.ops {
+                if matches!(op, IrOp::Phi(..)) {
+                    continue; // handled above
+                }
                 compile_op(
                     &mut builder,
                     ctx,
@@ -159,7 +247,21 @@ impl<'a> Codegen<'a> {
                     builder.ins().return_(&[disc]);
                 }
                 Terminator::Jump(target) => {
-                    builder.ins().jump(cl_blocks[target], &[]);
+                    let extra = phi_args
+                        .get(&(block.id, *target))
+                        .map(|v| {
+                            v.iter()
+                                .filter_map(|r| {
+                                    regs.get(r).copied().or_else(|| {
+                                        reg_slot.get(r).map(|_| builder.ins().iconst(types::I64, 0))
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let mut jump_args = vec![ctx];
+                    jump_args.extend(extra);
+                    builder.ins().jump(cl_blocks[target], &jump_args);
                 }
                 Terminator::Branch {
                     cond,
@@ -168,12 +270,32 @@ impl<'a> Codegen<'a> {
                 } => {
                     let c = regs[cond];
                     let c_bool = builder.ins().icmp_imm(IntCC::NotEqual, c, 0);
+                    let then_extra = phi_args
+                        .get(&(block.id, *then_block))
+                        .map(|v| {
+                            v.iter()
+                                .filter_map(|r| regs.get(r).copied())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let else_extra = phi_args
+                        .get(&(block.id, *else_block))
+                        .map(|v| {
+                            v.iter()
+                                .filter_map(|r| regs.get(r).copied())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let mut then_args = vec![ctx];
+                    then_args.extend(then_extra);
+                    let mut else_args = vec![ctx];
+                    else_args.extend(else_extra);
                     builder.ins().brif(
                         c_bool,
                         cl_blocks[then_block],
-                        &[],
+                        &then_args,
                         cl_blocks[else_block],
-                        &[],
+                        &else_args,
                     );
                 }
                 Terminator::Halt => {
@@ -573,5 +695,35 @@ mod tests {
         let result = run_compiled_jit("fn main() -> bool { true || false }");
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::Bool(true));
+    }
+
+    #[test]
+    fn test_e2e_if_true() {
+        let result = run_compiled_jit("fn main() -> int { if true { 10 } else { 20 } }");
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(10));
+    }
+
+    #[test]
+    fn test_e2e_if_false() {
+        let result = run_compiled_jit("fn main() -> int { if false { 10 } else { 20 } }");
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(20));
+    }
+
+    #[test]
+    fn test_e2e_nested_if() {
+        let src = "fn main() -> int { if true { if false { 1 } else { 2 } } else { 3 } }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(2));
+    }
+
+    #[test]
+    fn test_e2e_if_cmp_cond() {
+        let src = "fn main() -> int { if 1 < 2 { 10 } else { 20 } }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(10));
     }
 }
