@@ -15,6 +15,31 @@ use cranelift_jit::JITModule;
 use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::{BTreeSet, HashMap};
 
+// ── CFG types ──────────────────────────────────────────────────────
+
+struct BasicBlock {
+    /// First bytecode IP in this block (inclusive).
+    start_ip: usize,
+    /// One past the last bytecode IP in this block (exclusive).
+    end_ip: usize,
+    /// CFG successors (block indices, not IPs).
+    successors: Vec<usize>,
+    /// Cranelift block assigned during translation.
+    clif_block: Option<Block>,
+    /// Expected operand-stack depth on entry.
+    stack_in: usize,
+}
+
+struct Cfg {
+    blocks: Vec<BasicBlock>,
+    /// RPO traversal order (block indices).
+    rpo: Vec<usize>,
+    /// Map from bytecode IP → block index.
+    ip_to_block: HashMap<usize, usize>,
+}
+
+// ── Translator ─────────────────────────────────────────────────────
+
 pub(crate) struct Translator<'a> {
     chunk: &'a Chunk,
     module: &'a mut JITModule,
@@ -103,7 +128,6 @@ impl<'a> Translator<'a> {
         // --- Pre-compute all metadata BEFORE creating FunctionBuilder ---
         // (avoids borrow conflicts: builder borrows self.ctx mutably)
         let fn_end_ip = self.compute_function_end(entry_ip);
-        let jump_targets = self.compute_jump_targets(entry_ip, fn_end_ip);
         let nested_entry_ips: std::collections::HashSet<usize> = (0..self.chunk.code.len())
             .filter(|&ip| self.is_nested_entry(ip))
             .collect();
@@ -127,120 +151,90 @@ impl<'a> Translator<'a> {
             }
         }
 
+        // Build the CFG BEFORE creating the FunctionBuilder (to avoid
+        // borrow conflicts: builder borrows self.ctx mutably).
+        let mut cfg = self.analyze_cfg(entry_ip, fn_end_ip, &nested_entry_ips);
+
         let mut builder = FunctionBuilder::new(&mut fn_ctx.func, self.ctx);
         let entry_block = builder.create_block();
         builder.append_block_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block);
         let ctx_val = builder.block_params(entry_block)[0];
 
-        // Create Cranelift blocks for each jump target
-        let mut blocks: HashMap<usize, Block> = HashMap::new();
-        for &t in &jump_targets {
-            if t != entry_ip {
-                blocks.insert(t, builder.create_block());
+        // Assign Cranelift blocks to each CFG basic block
+        for idx in 0..cfg.blocks.len() {
+            if cfg.blocks[idx].start_ip == entry_ip {
+                cfg.blocks[idx].clif_block = Some(entry_block);
+            } else {
+                cfg.blocks[idx].clif_block = Some(builder.create_block());
             }
         }
-        let mut visited_blocks: std::collections::HashSet<Block> = std::collections::HashSet::new();
-        blocks.insert(entry_ip, entry_block);
-        visited_blocks.insert(entry_block);
+
+        // Build a HashMap for compatibility with translate_op (IP→Block lookups)
+        let mut blocks: HashMap<usize, Block> = HashMap::new();
+        for block in &cfg.blocks {
+            if let Some(clif_blk) = block.clif_block {
+                blocks.insert(block.start_ip, clif_blk);
+            }
+        }
+
+        // Build the block_stack_depths map for JumpIfTrue/False targets
         let mut block_stack_depths: HashMap<usize, usize> = HashMap::new();
-        block_stack_depths.insert(entry_ip, 0);
 
-        // Walk bytecode and emit CLIF
-        let mut ip = entry_ip;
-        let mut stack_depth: usize = 0;
-        let mut current_block_terminated = false;
+        // Walk blocks in RPO order, emitting each block's bytecodes
+        let rpo = cfg.rpo.clone();
+        let block_data = std::mem::take(&mut cfg.blocks);
+        let mut is_first = true;
+        for &blk_idx in &rpo {
+            let block = &block_data[blk_idx];
+            let clif_blk = block.clif_block.expect("block has no clif_block");
 
-        loop {
-            if ip >= fn_end_ip || ip >= self.chunk.code.len() {
-                break;
-            }
-
-            // Switch to block if needed. If the current block isn't
-            // terminated, add a fallthrough jump first.
-            if let Some(&blk) = blocks.get(&ip) {
-                if ip != entry_ip {
-                    let cur = builder.current_block().unwrap_or(entry_block);
-                    if cur != blk && !current_block_terminated {
-                        builder.ins().jump(blk, &[]);
-                    }
-                    if cur != blk {
-                        builder.switch_to_block(blk);
-                        visited_blocks.insert(blk);
-                    }
-                    if let Some(&expected) = block_stack_depths.get(&ip) {
-                        stack_depth = expected;
-                    }
-                    current_block_terminated = false;
+            if !is_first {
+                // If the current block isn't terminated, add a fallthrough jump
+                let cur = builder.current_block().unwrap_or(entry_block);
+                if cur != clif_blk {
+                    // Don't add jump if the current block is already terminated
+                    builder.switch_to_block(clif_blk);
                 }
             }
+            is_first = false;
 
-            let op = &self.chunk.code[ip];
-            let terminated = translate_op(
-                op,
-                &mut builder,
-                ctx_val,
-                &ffi_refs,
-                &blocks,
-                &mut block_stack_depths,
-                &mut stack_depth,
-            );
+            let mut stack_depth = block_stack_depths
+                .get(&block.start_ip)
+                .copied()
+                .unwrap_or(0);
 
-            if terminated {
-                // After a Jump, continue processing at ip+1 in a NEW block.
-                if matches!(op, OpCode::Jump(_)) {
-                    current_block_terminated = true;
-                    let next_ip = ip + 1;
-                    let is_closure_body = nested_entry_ips.contains(&next_ip);
-                    let ip_after = if is_closure_body {
-                        if let OpCode::Jump(target) = op {
-                            *target
-                        } else {
-                            next_ip
-                        }
-                    } else {
-                        next_ip
-                    };
-                    if ip_after < fn_end_ip && ip_after < self.chunk.code.len() {
-                        let next_block = blocks
-                            .entry(ip_after)
-                            .or_insert_with(|| builder.create_block());
-                        builder.switch_to_block(*next_block);
-                        visited_blocks.insert(*next_block);
-                        if let Some(&expected) = block_stack_depths.get(&ip_after) {
-                            stack_depth = expected;
-                        } else {
-                            block_stack_depths.insert(ip_after, stack_depth);
-                        }
-                        ip = ip_after;
-                        continue;
-                    }
-                }
+            // Translate each opcode in this block
+            let mut block_terminated = false;
+            for ip in block.start_ip..block.end_ip {
+                let op = &self.chunk.code[ip];
+                let terminated = translate_op(
+                    op,
+                    &mut builder,
+                    ctx_val,
+                    &ffi_refs,
+                    &blocks,
+                    &mut block_stack_depths,
+                    &mut stack_depth,
+                    ip,
+                );
 
-                // For Panic/Return/Halt: check if there are unvisited
-                // jump target blocks and switch to the first one.
-                let mut found = false;
-                for (&target_ip, &blk) in &blocks {
-                    if target_ip > ip && !visited_blocks.contains(&blk) {
-                        builder.switch_to_block(blk);
-                        visited_blocks.insert(blk);
-                        if let Some(&expected) = block_stack_depths.get(&target_ip) {
-                            stack_depth = expected;
-                        } else {
-                            block_stack_depths.insert(target_ip, stack_depth);
-                        }
-                        ip = target_ip;
-                        current_block_terminated = false;
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
+                if terminated {
+                    block_terminated = true;
                     break;
                 }
-                continue;
             }
-            ip += 1;
+
+            // If this block didn't have a terminator, it falls through
+            // to its unique successor. Add an explicit jump.
+            if !block_terminated {
+                if let Some(&succ_idx) = block.successors.first() {
+                    let succ_block = block_data[succ_idx]
+                        .clif_block
+                        .expect("successor has no clif_block");
+                    builder.ins().jump(succ_block, &[]);
+                }
+            }
         }
 
         builder.seal_all_blocks();
@@ -330,6 +324,178 @@ impl<'a> Translator<'a> {
         }
         targets.into_iter().collect()
     }
+
+    // ── CFG analysis ────────────────────────────────────────────────
+
+    /// Build the CFG for a function body ranging from `entry_ip` to `fn_end_ip`.
+    fn analyze_cfg(
+        &self,
+        entry_ip: usize,
+        fn_end_ip: usize,
+        nested_entry_ips: &std::collections::HashSet<usize>,
+    ) -> Cfg {
+        let end = fn_end_ip.min(self.chunk.code.len());
+
+        // Pre-compute ranges of nested entries (closure/async bodies) to skip.
+        // Don't include the current function's own entry IP (closures need to
+        // compile their own body).
+        let mut nested_ranges: Vec<(usize, usize)> = Vec::new();
+        for &nip in nested_entry_ips {
+            if nip > entry_ip && nip < end && nip > 0 {
+                if let Some(OpCode::Jump(skip_target)) = self.chunk.code.get(nip - 1) {
+                    nested_ranges.push((nip, *skip_target));
+                }
+            }
+        }
+        nested_ranges.sort_by_key(|&(s, _)| s);
+
+        // Helper: check if an IP is inside a nested (closure) range
+        let is_in_nested = |ip: usize| -> bool {
+            nested_ranges
+                .iter()
+                .any(|&(start, end)| ip >= start && ip < end)
+        };
+
+        let mut leaders = BTreeSet::new();
+        leaders.insert(entry_ip);
+
+        // First pass: find block leaders (instructions that start a new block)
+        for ip in entry_ip..end {
+            // Skip bytecodes that belong to nested entries (closures),
+            // but don't skip the function's own entry IP.
+            if is_in_nested(ip) && ip != entry_ip {
+                continue;
+            }
+            match &self.chunk.code[ip] {
+                OpCode::Jump(target) => {
+                    leaders.insert(*target);
+                    let next_ip = ip + 1;
+                    if next_ip < end && !nested_entry_ips.contains(&next_ip) {
+                        leaders.insert(next_ip);
+                    }
+                }
+                OpCode::JumpIfTrue(target) | OpCode::JumpIfFalse(target) => {
+                    leaders.insert(*target);
+                    leaders.insert(ip + 1);
+                }
+                OpCode::Return | OpCode::Halt | OpCode::Panic => {
+                    if ip + 1 < end {
+                        leaders.insert(ip + 1);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Build blocks from leaders, trimming at nested range boundaries
+        let sorted_leaders: Vec<usize> = leaders.into_iter().collect();
+        let mut ip_to_block: HashMap<usize, usize> = HashMap::new();
+        let mut blocks: Vec<BasicBlock> = Vec::new();
+
+        // Merge all "cut points": leaders + nested range starts + function end
+        let mut cut_points: BTreeSet<usize> = BTreeSet::new();
+        for &l in &sorted_leaders {
+            cut_points.insert(l);
+        }
+        for &(start, _end) in &nested_ranges {
+            cut_points.insert(start);
+        }
+        cut_points.insert(fn_end_ip);
+
+        let sorted_cuts: Vec<usize> = cut_points.into_iter().collect();
+        for i in 0..sorted_cuts.len() - 1 {
+            let start = sorted_cuts[i];
+            let block_end = sorted_cuts[i + 1];
+
+            // Skip blocks that are entirely inside nested ranges,
+            // but don't skip the function's own entry point (closures
+            // have their entry inside their own nested range).
+            if is_in_nested(start) && start != entry_ip {
+                continue;
+            }
+
+            ip_to_block.insert(start, blocks.len());
+            blocks.push(BasicBlock {
+                start_ip: start,
+                end_ip: block_end,
+                successors: Vec::new(),
+                clif_block: None,
+                stack_in: 0,
+            });
+        }
+
+        // Second pass: compute successors by examining each block's last instruction
+        for idx in 0..blocks.len() {
+            if blocks[idx].end_ip <= blocks[idx].start_ip {
+                continue;
+            }
+            let last_ip = blocks[idx].end_ip - 1;
+            let last_op = &self.chunk.code[last_ip];
+            let succs = match last_op {
+                OpCode::Jump(target) => {
+                    let mut s = Vec::new();
+                    if let Some(&si) = ip_to_block.get(target) {
+                        s.push(si);
+                    }
+                    s
+                }
+                OpCode::JumpIfTrue(target) | OpCode::JumpIfFalse(target) => {
+                    let mut s = Vec::new();
+                    if let Some(&si) = ip_to_block.get(target) {
+                        s.push(si);
+                    }
+                    // Fallthrough
+                    if let Some(&si) = ip_to_block.get(&(last_ip + 1)) {
+                        s.push(si);
+                    }
+                    s
+                }
+                OpCode::Return | OpCode::Halt | OpCode::Panic => Vec::new(),
+                _ => {
+                    // Non-terminator: falls through to next block
+                    let mut s = Vec::new();
+                    if idx + 1 < blocks.len() {
+                        s.push(idx + 1);
+                    }
+                    s
+                }
+            };
+            blocks[idx].successors = succs;
+        }
+
+        // Compute RPO via iterative post-order DFS
+        let n = blocks.len();
+        let mut rpo = Vec::with_capacity(n);
+        let mut visited = vec![false; n];
+        let mut in_stack = vec![false; n];
+        let mut stack: Vec<(usize, usize)> = Vec::new();
+        stack.push((0, 0));
+        in_stack[0] = true;
+
+        while let Some(&(idx, succ_idx)) = stack.last() {
+            let succs = &blocks[idx].successors;
+            if succ_idx < succs.len() {
+                let next = succs[succ_idx];
+                stack.last_mut().unwrap().1 = succ_idx + 1;
+                if !visited[next] && !in_stack[next] {
+                    stack.push((next, 0));
+                    in_stack[next] = true;
+                }
+            } else {
+                stack.pop();
+                in_stack[idx] = false;
+                visited[idx] = true;
+                rpo.push(idx);
+            }
+        }
+        rpo.reverse();
+
+        Cfg {
+            blocks,
+            rpo,
+            ip_to_block,
+        }
+    }
 }
 
 // ── Free function: translates a single opcode ────────────────────────
@@ -344,6 +510,7 @@ fn translate_op(
     blocks: &HashMap<usize, Block>,
     block_stack_depths: &mut HashMap<usize, usize>,
     stack_depth: &mut usize,
+    current_ip: usize,
 ) -> bool {
     // Helper: get a FuncRef by name.
     fn fref(ffi_refs: &HashMap<String, FuncRef>, name: &str) -> FuncRef {
@@ -607,7 +774,10 @@ fn translate_op(
             let tgt = *blocks
                 .get(target)
                 .unwrap_or_else(|| panic!("no block for {target}"));
-            let else_blk = builder.create_block();
+            // Use the CFG-created block for the false branch (ip+1)
+            let else_blk = *blocks
+                .get(&(current_ip + 1))
+                .unwrap_or_else(|| panic!("no block for false branch at {}", current_ip + 1));
             let f = fref(ffi_refs, "oxy_is_falsy");
             let inst = builder.ins().call(f, &[ctx_val]);
             let val = builder.inst_results(inst)[0];
@@ -615,15 +785,16 @@ fn translate_op(
             let cond = builder.ins().icmp(IntCC::NotEqual, val, zero);
             block_stack_depths.insert(*target, *stack_depth - 1);
             builder.ins().brif(cond, tgt, &[], else_blk, &[]);
-            builder.switch_to_block(else_blk);
             *stack_depth -= 1;
-            false
+            true
         }
         OpCode::JumpIfTrue(target) => {
             let tgt = *blocks
                 .get(target)
                 .unwrap_or_else(|| panic!("no block for {target}"));
-            let else_blk = builder.create_block();
+            let else_blk = *blocks
+                .get(&(current_ip + 1))
+                .unwrap_or_else(|| panic!("no block for false branch at {}", current_ip + 1));
             let f = fref(ffi_refs, "oxy_is_truthy");
             let inst = builder.ins().call(f, &[ctx_val]);
             let val = builder.inst_results(inst)[0];
@@ -631,9 +802,8 @@ fn translate_op(
             let cond = builder.ins().icmp(IntCC::NotEqual, val, zero);
             block_stack_depths.insert(*target, *stack_depth - 1);
             builder.ins().brif(cond, tgt, &[], else_blk, &[]);
-            builder.switch_to_block(else_blk);
             *stack_depth -= 1;
-            false
+            true
         }
 
         // ── Functions ──────────────────────────────────────────
