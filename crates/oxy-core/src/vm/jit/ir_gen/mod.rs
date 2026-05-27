@@ -33,6 +33,12 @@ pub(crate) struct IrGen {
     break_target: Option<BlockId>,
     /// Current continue target (loop header block).
     continue_target: Option<BlockId>,
+    /// Slot to store break value for `loop { break expr; }` result propagation.
+    break_value_slot: Option<usize>,
+    /// Labeled loop targets: label → (break_block, continue_block).
+    labeled_targets: std::collections::HashMap<String, (BlockId, BlockId)>,
+    /// Global const values: name → value expression (from `const NAME = expr;`).
+    global_consts: std::collections::HashMap<String, crate::ast::Expr>,
 }
 
 impl IrGen {
@@ -47,6 +53,9 @@ impl IrGen {
             local_count: 0,
             break_target: None,
             continue_target: None,
+            break_value_slot: None,
+            labeled_targets: std::collections::HashMap::new(),
+            global_consts: std::collections::HashMap::new(),
         }
     }
 
@@ -102,7 +111,10 @@ impl IrGen {
                         self.gen_fn(method);
                     }
                 }
-                // Struct/enum/mod/use/const/type items don't generate IR directly
+                Item::Const { name, value, .. } => {
+                    self.global_consts.insert(name.clone(), value.clone());
+                }
+                // Struct/enum/mod/use/type items don't generate IR directly
                 _ => {}
             }
         }
@@ -206,34 +218,47 @@ impl IrGen {
                 self.terminate(Terminator::Return(reg));
                 None
             }
-            Stmt::While { condition, body, .. } => {
-                self.gen_while(condition, body, None)
+            Stmt::While { condition, body, label, .. } => {
+                self.gen_while(condition, body, label.as_deref())
             }
-            Stmt::WhileLet { pattern, expr, body, .. } => {
-                self.gen_while_let(pattern, expr, body)
+            Stmt::WhileLet { pattern, expr, body, label, .. } => {
+                self.gen_while_let(pattern, expr, body, label.as_deref())
             }
-            Stmt::Loop { body, .. } => {
-                self.gen_loop(body)
+            Stmt::Loop { body, label, .. } => {
+                self.gen_loop(body, label.as_deref())
             }
-            Stmt::For { name, iterable, body, .. } => {
-                self.gen_for_in(name, iterable, body)
+            Stmt::For { name, iterable, body, label, .. } => {
+                self.gen_for_in(name, iterable, body, label.as_deref())
             }
-            Stmt::ForDestructure { names, iterable, body, .. } => {
-                self.gen_for_destructure(names, iterable, body)
+            Stmt::ForDestructure { names, iterable, body, label, .. } => {
+                self.gen_for_destructure(names, iterable, body, label.as_deref())
             }
-            Stmt::Break { value, .. } => {
+            Stmt::Break { label, value, .. } => {
                 let reg = value.as_ref().map(|v| self.gen_expr(v)).unwrap_or_else(|| {
                     let r = self.alloc_reg();
                     self.emit(IrOp::ConstUnit(r));
                     r
                 });
-                if let Some(target) = self.break_target {
+                if let Some(break_slot) = self.break_value_slot {
+                    self.emit(IrOp::StoreLocal(break_slot, reg));
+                }
+                let target = if let Some(lbl) = label {
+                    self.labeled_targets.get(lbl).map(|(b, _)| *b)
+                } else {
+                    self.break_target
+                };
+                if let Some(target) = target {
                     self.terminate(Terminator::Jump(target));
                 }
                 Some(reg)
             }
-            Stmt::Continue { .. } => {
-                if let Some(target) = self.continue_target {
+            Stmt::Continue { label, .. } => {
+                let target = if let Some(lbl) = label {
+                    self.labeled_targets.get(lbl).map(|(_, c)| *c)
+                } else {
+                    self.continue_target
+                };
+                if let Some(target) = target {
                     self.terminate(Terminator::Jump(target));
                 }
                 None
@@ -276,10 +301,12 @@ impl IrGen {
                     let r = self.alloc_reg();
                     self.emit(IrOp::LoadLocal(r, slot));
                     r
+                } else if let Some(const_val) = self.global_consts.get(name).cloned() {
+                    // Inline const value at use site
+                    self.gen_expr(&const_val)
                 } else {
-                    // Global function or builtin — return as ident ref for Call handling
+                    // Global function or builtin — reference for Call handling
                     let r = self.alloc_reg();
-                    // Load from globals/environment — for now, stub
                     self.emit(IrOp::ConstUnit(r));
                     r
                 }
@@ -365,11 +392,8 @@ impl IrGen {
                 self.gen_if(condition, then_block, else_block.as_deref())
             }
             Expr::IfLet { pattern, expr, then_block, else_block, guard, .. } => {
-                if guard.is_some() {
-                    // if-let with guard — complex, stub for now
-                    let r = self.alloc_reg();
-                    self.emit(IrOp::ConstUnit(r));
-                    r
+                if let Some(guard_expr) = guard {
+                    self.gen_if_let_guarded(pattern, expr, guard_expr, then_block, else_block.as_deref())
                 } else {
                     self.gen_if_let(pattern, expr, then_block, else_block.as_deref())
                 }
@@ -492,10 +516,34 @@ impl IrGen {
             }
             Expr::Assign { target, value, .. } => {
                 let val_reg = self.gen_expr(value);
-                if let Expr::Ident(name, ..) = target.as_ref() {
-                    if let Some(slot) = self.lookup_local(name) {
-                        self.emit(IrOp::StoreLocal(slot, val_reg));
+                match target.as_ref() {
+                    Expr::Ident(name, ..) => {
+                        if let Some(slot) = self.lookup_local(name) {
+                            self.emit(IrOp::StoreLocal(slot, val_reg));
+                        }
                     }
+                    Expr::FieldAccess { object, field, .. } => {
+                        let obj_reg = self.gen_expr(object);
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_field_store",
+                            args: vec![obj_reg, val_reg],
+                            immediates: vec![],
+                        });
+                    }
+                    Expr::Index { object, index, .. } => {
+                        let obj_reg = self.gen_expr(object);
+                        let idx_reg = self.gen_expr(index);
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_vec_index_store",
+                            args: vec![obj_reg, idx_reg, val_reg],
+                            immediates: vec![],
+                        });
+                    }
+                    _ => {}
                 }
                 val_reg
             }
@@ -719,6 +767,63 @@ impl IrGen {
         r
     }
 
+    fn gen_if_let_guarded(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        guard: &Expr,
+        then_block: &Block,
+        else_block: Option<&Expr>,
+    ) -> Reg {
+        let val = self.gen_expr(expr);
+        let guard_check_id = self.alloc_block();
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+
+        // Entry: check pattern, branch to guard-check or else
+        let matches = self.gen_pattern_check(pattern, val);
+        self.terminate(Terminator::Branch {
+            cond: matches,
+            then_block: guard_check_id,
+            else_block: else_id,
+        });
+
+        // Guard check: bind pattern (so guard can reference vars), evaluate guard
+        self.start_block(guard_check_id);
+        self.gen_pattern_bind(pattern, val);
+        let guard_val = self.gen_expr(guard);
+        self.terminate(Terminator::Branch {
+            cond: guard_val,
+            then_block: then_id,
+            else_block: else_id,
+        });
+
+        // Then: bind pattern again (idempotent) and run body
+        self.start_block(then_id);
+        self.gen_pattern_bind(pattern, val);
+        let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        self.terminate(Terminator::Jump(merge_id));
+
+        // Else
+        self.start_block(else_id);
+        let else_reg = else_block.map(|eb| self.gen_expr(eb)).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        self.terminate(Terminator::Jump(merge_id));
+
+        self.start_block(merge_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::Phi(r, then_reg, else_reg));
+        r
+    }
+
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
         let merge_id = self.alloc_block();
@@ -877,10 +982,15 @@ impl IrGen {
         r
     }
 
-    fn gen_while(&mut self, condition: &Expr, body: &Block, _label: Option<&str>) -> Option<Reg> {
+    fn gen_while(&mut self, condition: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
+
+        // Register label if present
+        if let Some(lbl) = label {
+            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+        }
 
         // Jump to header
         self.terminate(Terminator::Jump(header_id));
@@ -908,10 +1018,14 @@ impl IrGen {
         None
     }
 
-    fn gen_while_let(&mut self, pattern: &Pattern, expr: &Expr, body: &Block) -> Option<Reg> {
+    fn gen_while_let(&mut self, pattern: &Pattern, expr: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
+
+        if let Some(lbl) = label {
+            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+        }
 
         self.terminate(Terminator::Jump(header_id));
 
@@ -936,14 +1050,24 @@ impl IrGen {
         None
     }
 
-    fn gen_loop(&mut self, body: &Block) -> Option<Reg> {
+    fn gen_loop(&mut self, body: &Block, label: Option<&str>) -> Option<Reg> {
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
+
+        if let Some(lbl) = label {
+            self.labeled_targets.insert(lbl.to_string(), (exit_id, body_id));
+        }
 
         self.terminate(Terminator::Jump(body_id));
 
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
+        let saved_break_slot = self.break_value_slot;
+
+        // Allocate a temp slot to hold the break value
+        let break_slot = self.alloc_local("__loop_break_val");
+        self.break_value_slot = Some(break_slot);
+
         self.break_target = Some(exit_id);
         self.continue_target = Some(body_id);
 
@@ -953,14 +1077,26 @@ impl IrGen {
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;
+        self.break_value_slot = saved_break_slot;
 
+        // Exit block: load break value as the loop result
         self.start_block(exit_id);
-        None
+        let r = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r, break_slot));
+        Some(r)
     }
 
-    fn gen_for_in(&mut self, name: &str, iterable: &Expr, body: &Block) -> Option<Reg> {
+    fn gen_for_in(&mut self, name: &str, iterable: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
         let iter_reg = self.gen_expr(iterable);
         let slot = self.alloc_local(name);
+
+        // Pre-allocate blocks so label can refer to them
+        let header_id = self.alloc_block();
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+        if let Some(lbl) = label {
+            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+        }
 
         // Call oxy_make_iter to get an iterator
         let iter_r = self.alloc_reg();
@@ -970,10 +1106,6 @@ impl IrGen {
             args: vec![iter_reg],
             immediates: vec![],
         });
-
-        let header_id = self.alloc_block();
-        let body_id = self.alloc_block();
-        let exit_id = self.alloc_block();
 
         self.terminate(Terminator::Jump(header_id));
 
@@ -1012,7 +1144,7 @@ impl IrGen {
         None
     }
 
-    fn gen_for_destructure(&mut self, names: &[String], iterable: &Expr, body: &Block) -> Option<Reg> {
+    fn gen_for_destructure(&mut self, names: &[String], iterable: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
         let iter_reg = self.gen_expr(iterable);
         for name in names {
             self.alloc_local(name);
@@ -1028,6 +1160,9 @@ impl IrGen {
         let header_id = self.alloc_block();
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
+        if let Some(lbl) = label {
+            self.labeled_targets.insert(lbl.to_string(), (exit_id, header_id));
+        }
 
         self.terminate(Terminator::Jump(header_id));
         self.start_block(header_id);
