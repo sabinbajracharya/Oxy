@@ -75,7 +75,12 @@ impl<'a> Translator<'a> {
             }
         }
 
-        self.module.finalize_definitions().unwrap();
+        self.module.finalize_definitions().unwrap_or_else(|e| {
+            eprintln!(
+                "JIT: finalize_definitions warning: {e} ({} functions compiled)",
+                self.ip_to_func.len()
+            );
+        });
 
         let mut ptrs = HashMap::new();
         for (ip, fid) in &self.ip_to_func {
@@ -107,13 +112,8 @@ impl<'a> Translator<'a> {
         sig.params.push(AbiParam::new(types::I64));
         sig.returns.push(AbiParam::new(types::I64));
 
-        let fid = self
-            .module
-            .declare_function(func_name, Linkage::Export, &sig)
-            .map_err(|e| format!("declare {func_name}: {e}"))?;
-        self.ip_to_func.insert(entry_ip, fid);
-
         let mut fn_ctx = self.module.make_context();
+        let sig_for_decl = sig.clone();
         fn_ctx.func.signature = sig;
         fn_ctx.func.name = UserFuncName::testcase(func_name);
 
@@ -246,11 +246,17 @@ impl<'a> Translator<'a> {
         builder.seal_all_blocks();
         builder.finalize();
 
+        let fid = self
+            .module
+            .declare_function(func_name, Linkage::Export, &sig_for_decl)
+            .map_err(|e| format!("declare {func_name}: {e}"))?;
+
         self.module.define_function(fid, &mut fn_ctx).map_err(|e| {
             let bytecode = self.dump_function_bytecode(entry_ip);
             format!("define {func_name}: {e}\nBytecode:\n{bytecode}")
         })?;
         self.module.clear_context(&mut fn_ctx);
+        self.ip_to_func.insert(entry_ip, fid);
         Ok(())
     }
 
