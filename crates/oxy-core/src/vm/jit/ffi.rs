@@ -654,11 +654,15 @@ extern "C" fn oxy_push_closure(
     // Build captured values from current locals at the outer slots
     let closure_env = crate::env::Environment::new();
     for (name, outer_slot, is_mut) in &captured {
-        let val = unsafe { ctx.buffer.add(*outer_slot).read() };
-        let val = match &val {
+        let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
+        let val = match &shallow {
             Value::Cell(rc) => rc.borrow().clone(),
             other => other.clone(),
         };
+        // shallow is a bitwise copy that shares heap pointers with
+        // the original in the buffer. Forget it to prevent a double-free
+        // when the shallow copy is dropped at end of scope.
+        std::mem::forget(shallow);
         closure_env.borrow_mut().define(name.clone(), val, *is_mut);
     }
 
@@ -696,11 +700,12 @@ extern "C" fn oxy_push_async_block(ctx: *mut JitContext, target_ip: usize, meta_
 
     let closure_env = crate::env::Environment::new();
     for (name, outer_slot, is_mut) in &captured {
-        let val = unsafe { ctx.buffer.add(*outer_slot).read() };
-        let val = match &val {
+        let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
+        let val = match &shallow {
             Value::Cell(rc) => rc.borrow().clone(),
             other => other.clone(),
         };
+        std::mem::forget(shallow);
         closure_env.borrow_mut().define(name.clone(), val, *is_mut);
     }
 
