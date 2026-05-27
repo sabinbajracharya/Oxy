@@ -714,15 +714,249 @@ extern "C" fn oxy_path_call_builtin(
 ) {
 }
 extern "C" fn oxy_display_arg(_ctx: *mut JitContext) {}
-extern "C" fn oxy_await_ffi(_ctx: *mut JitContext) -> u64 {
-    0
+// ── Async runtime ────────────────────────────────────────────────────
+
+/// Global scheduler for async task management.
+static SCHEDULER: std::sync::OnceLock<std::sync::Mutex<crate::vm::scheduler::Scheduler>> =
+    std::sync::OnceLock::new();
+
+fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::scheduler::Scheduler> {
+    SCHEDULER
+        .get_or_init(|| std::sync::Mutex::new(crate::vm::scheduler::Scheduler::new()))
+        .lock()
+        .unwrap()
 }
-extern "C" fn oxy_spawn_ffi(_ctx: *mut JitContext) {}
-extern "C" fn oxy_sleep_ffi(_ctx: *mut JitContext) -> u64 {
-    0
+
+/// Build a JitTaskState from the current JitContext.
+fn jit_state_from_ctx(ctx: &JitContext, resume_ip: usize) -> crate::vm::scheduler::JitTaskState {
+    let mut locals = Vec::new();
+    for i in 0..ctx.local_count {
+        locals.push(unsafe { ctx.buffer.add(i).read() });
+    }
+    let mut operand_stack = Vec::new();
+    for i in 0..ctx.sp {
+        operand_stack.push(unsafe { ctx.buffer.add(ctx.local_count + i).read() });
+    }
+    crate::vm::scheduler::JitTaskState {
+        resume_ip,
+        locals,
+        operand_stack,
+        local_count: ctx.local_count,
+        yield_reason: ctx.yield_reason,
+        yield_data: ctx.yield_data,
+    }
 }
-extern "C" fn oxy_select_ffi(_ctx: *mut JitContext, _count: usize) -> u64 {
-    0
+
+/// Restore JitContext from a JitTaskState.
+fn ctx_from_jit_state(ctx: &mut JitContext, state: &crate::vm::scheduler::JitTaskState) {
+    // Ensure buffer is large enough
+    let needed = state.local_count + state.operand_stack.len();
+    while ctx.capacity < needed {
+        let new_cap = ctx.capacity * 2;
+        let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
+        let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
+        unsafe {
+            std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
+            std::alloc::dealloc(
+                ctx.buffer as *mut u8,
+                std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
+            );
+        }
+        ctx.buffer = new_buf;
+        ctx.capacity = new_cap;
+    }
+    ctx.local_count = state.local_count;
+    ctx.sp = state.operand_stack.len();
+    ctx.resume_ip = state.resume_ip;
+    ctx.yield_reason = state.yield_reason;
+    ctx.yield_data = state.yield_data;
+    for (i, v) in state.locals.iter().enumerate() {
+        unsafe {
+            ctx.buffer.add(i).write(v.clone());
+        }
+    }
+    for (i, v) in state.operand_stack.iter().enumerate() {
+        unsafe {
+            ctx.buffer.add(state.local_count + i).write(v.clone());
+        }
+    }
+}
+
+extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
+    let ctx = unsafe { &mut *ctx };
+    let val = unsafe { pop(ctx) };
+
+    match val {
+        Value::Future(fut) => {
+            // Run the future's body synchronously
+            let target_ip = fut.target_ip;
+            let fn_ptr = {
+                let table = fn_table_lock();
+                *table
+                    .get(&target_ip)
+                    .unwrap_or_else(|| panic!("JIT: no function for future at ip={target_ip}"))
+            };
+            let saved_local_count = ctx.local_count;
+            let saved_sp = ctx.sp;
+            let captures_end = fut.captured_names.len();
+            ctx.local_count = captures_end + fut.args.len();
+            ctx.sp = 0;
+            for (i, name) in fut.captured_names.iter().enumerate() {
+                let v = fut
+                    .closure_env
+                    .borrow()
+                    .get(name)
+                    .ok()
+                    .unwrap_or(Value::Unit);
+                unsafe {
+                    ctx.buffer.add(i).write(v);
+                }
+            }
+            for (i, arg) in fut.args.iter().enumerate() {
+                unsafe {
+                    ctx.buffer.add(captures_end + i).write(arg.clone());
+                }
+            }
+            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+                unsafe { std::mem::transmute(fn_ptr as *const ()) };
+            let disc = fn_ptr(ctx);
+            if disc != 0 {
+                ctx.local_count = saved_local_count;
+                ctx.sp = saved_sp;
+                unsafe {
+                    push(ctx, Value::Future(fut));
+                }
+                return disc;
+            }
+            let result = std::mem::replace(&mut ctx.result, Value::Unit);
+            ctx.local_count = saved_local_count;
+            ctx.sp = saved_sp;
+            unsafe {
+                push(ctx, result);
+            }
+            0
+        }
+        Value::JoinHandle { task_id } => {
+            let result = scheduler_lock().task_result(task_id);
+            if let Some(v) = result {
+                unsafe {
+                    push(ctx, v);
+                }
+                return 0;
+            }
+            // Not done — yield the current JIT task
+            ctx.yield_reason = 2;
+            ctx.yield_data = task_id as u64;
+            let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
+            scheduler_lock().yield_jit_for_task(task_id, jit_state);
+            unsafe {
+                push(ctx, Value::JoinHandle { task_id });
+            }
+            1
+        }
+        other => {
+            unsafe {
+                push(ctx, other);
+            }
+            0
+        }
+    }
+}
+
+extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let closure = unsafe { pop(ctx) };
+
+    match closure {
+        Value::Function(f) => {
+            let target_ip = f.target_ip.unwrap_or(0);
+            let capture_count = f.captured_names.len();
+            let mut locals = Vec::with_capacity(capture_count);
+            for name in &f.captured_names {
+                locals.push(f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit));
+            }
+            let jit_state = crate::vm::scheduler::JitTaskState {
+                resume_ip: target_ip,
+                locals,
+                operand_stack: vec![],
+                local_count: capture_count,
+                yield_reason: 0,
+                yield_data: 0,
+            };
+            let mut sched = scheduler_lock();
+            let task_id = sched.create_task();
+            sched.save_new_task(
+                task_id,
+                crate::vm::scheduler::TaskSnapshot {
+                    ip: target_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(jit_state),
+                },
+            );
+            drop(sched);
+            unsafe {
+                push(ctx, Value::JoinHandle { task_id });
+            }
+        }
+        _ => panic!("spawn requires a closure"),
+    }
+}
+
+extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) -> u64 {
+    let ctx = unsafe { &mut *ctx };
+    let ms_val = unsafe { pop(ctx) };
+    let ms = match ms_val {
+        Value::I64(n) => n as u64,
+        Value::U8(n) => n as u64,
+        _ => 0,
+    };
+    if ms == 0 {
+        unsafe {
+            push(ctx, Value::Unit);
+        }
+        return 0;
+    }
+    let wake = crate::vm::scheduler::delay_from_now(ms);
+    ctx.yield_reason = 1;
+    ctx.yield_data = ms;
+    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
+    scheduler_lock().yield_jit_for_timer(jit_state, wake);
+    1
+}
+
+extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) -> u64 {
+    let ctx = unsafe { &mut *ctx };
+    let mut task_ids = Vec::new();
+    for _ in 0..count {
+        let val = unsafe { pop(ctx) };
+        if let Value::JoinHandle { task_id } = val {
+            task_ids.push(task_id);
+        }
+    }
+    {
+        let sched = scheduler_lock();
+        for &tid in &task_ids {
+            if let Some(v) = sched.task_result(tid) {
+                drop(sched);
+                unsafe {
+                    push(ctx, v);
+                }
+                return 0;
+            }
+        }
+    }
+    // None ready — yield
+    ctx.yield_reason = 3;
+    ctx.yield_data = task_ids.first().copied().unwrap_or(0) as u64;
+    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
+    scheduler_lock().yield_jit_for_multiple(task_ids.clone(), jit_state);
+    for &tid in task_ids.iter().rev() {
+        unsafe {
+            push(ctx, Value::JoinHandle { task_id: tid });
+        }
+    }
+    1
 }
 
 // ── Symbol registry ──────────────────────────────────────────────────

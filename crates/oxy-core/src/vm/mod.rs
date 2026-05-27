@@ -544,6 +544,7 @@ impl Vm {
             ip: self.ip,
             stack: self.stack.clone(),
             call_stack: self.call_stack.clone(),
+            jit_state: None,
         };
         self.scheduler.save_current(snapshot);
         let _ = task_id;
@@ -555,6 +556,7 @@ impl Vm {
             ip,
             stack: self.stack.clone(),
             call_stack: self.call_stack.clone(),
+            jit_state: None,
         };
         self.scheduler.save_current(snapshot);
         let _ = task_id;
@@ -601,6 +603,7 @@ impl Vm {
                 fn_ip: target,
                 write_back_slot: None,
             }],
+            jit_state: None,
         })
     }
 

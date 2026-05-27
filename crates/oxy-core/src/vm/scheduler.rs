@@ -15,6 +15,26 @@ pub struct TaskSnapshot {
     pub ip: usize,
     pub stack: Vec<crate::types::Value>,
     pub call_stack: Vec<super::Frame>,
+    /// JIT execution state (used instead of stack/call_stack when running under Cranelift).
+    #[allow(dead_code)]
+    pub jit_state: Option<JitTaskState>,
+}
+
+/// Execution state for a JIT-compiled task.
+#[derive(Debug, Clone)]
+pub struct JitTaskState {
+    /// Bytecode IP to resume at.
+    pub resume_ip: usize,
+    /// Locals (copied from JitContext buffer).
+    pub locals: Vec<crate::types::Value>,
+    /// Operand stack values.
+    pub operand_stack: Vec<crate::types::Value>,
+    /// Number of local slots.
+    pub local_count: usize,
+    /// Yield reason (1=sleep, 2=await_task, 3=select).
+    pub yield_reason: u32,
+    /// Associated data (ms for sleep, task_id for await, etc.).
+    pub yield_data: u64,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -205,6 +225,21 @@ impl Scheduler {
         self.current = None;
     }
 
+    /// Save the current JIT task's execution state.
+    #[allow(dead_code)]
+    pub fn save_current_jit(&mut self, jit_state: JitTaskState) {
+        if let Some(id) = self.current {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.snapshot = Some(TaskSnapshot {
+                    ip: jit_state.resume_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(jit_state),
+                });
+            }
+        }
+    }
+
     /// Save the current task's execution state.
     pub fn save_current(&mut self, snapshot: TaskSnapshot) {
         if let Some(id) = self.current {
@@ -224,11 +259,42 @@ impl Scheduler {
         }
     }
 
+    /// Yield the current task with JIT state and a timer.
+    pub fn yield_jit_for_timer(&mut self, jit_state: JitTaskState, wake: TimeMark) {
+        if let Some(id) = self.current.take() {
+            self.timers.push(TimerEntry(wake, id));
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.status = TaskStatus::WaitingOnTimer(wake);
+                task.snapshot = Some(TaskSnapshot {
+                    ip: jit_state.resume_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(jit_state),
+                });
+            }
+        }
+    }
+
     /// Yield the current task because it's waiting on another task.
     pub fn yield_for_task(&mut self, waited: TaskId) {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {
                 task.status = TaskStatus::WaitingOnTask(waited);
+            }
+        }
+    }
+
+    /// Yield the current JIT task waiting on another task.
+    pub fn yield_jit_for_task(&mut self, waited: TaskId, jit_state: JitTaskState) {
+        if let Some(id) = self.current.take() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.status = TaskStatus::WaitingOnTask(waited);
+                task.snapshot = Some(TaskSnapshot {
+                    ip: jit_state.resume_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(jit_state),
+                });
             }
         }
     }
@@ -239,6 +305,21 @@ impl Scheduler {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {
                 task.status = TaskStatus::WaitingOnMultiple(task_ids);
+            }
+        }
+    }
+
+    /// Yield the current JIT task waiting on multiple tasks.
+    pub fn yield_jit_for_multiple(&mut self, task_ids: Vec<TaskId>, jit_state: JitTaskState) {
+        if let Some(id) = self.current.take() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.status = TaskStatus::WaitingOnMultiple(task_ids);
+                task.snapshot = Some(TaskSnapshot {
+                    ip: jit_state.resume_ip,
+                    stack: vec![],
+                    call_stack: vec![],
+                    jit_state: Some(jit_state),
+                });
             }
         }
     }
@@ -317,3 +398,12 @@ impl Scheduler {
             .map(|entry| clock::duration_until(&entry.0))
     }
 }
+
+// SAFETY: The Oxy VM (and JIT) are single-threaded. Rc<RefCell<...>> in Value
+// is never shared across threads. The Mutex wrapping in static storage is for
+// safe in-thread access, not for cross-thread synchronization.
+unsafe impl Send for Scheduler {}
+unsafe impl Send for TaskSnapshot {}
+unsafe impl Send for JitTaskState {}
+unsafe impl Send for Task {}
+unsafe impl Send for super::Frame {}
