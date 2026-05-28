@@ -1555,7 +1555,14 @@ impl IrGen {
                 }
             }
             Pattern::Literal(..) => {}
-            Pattern::Or(..) => {}
+            Pattern::Or(patterns, ..) => {
+                // Bind from the first sub-pattern. The type checker ensures all
+                // arms bind the same variables with the same types, so any arm
+                // produces equivalent bindings.
+                if let Some(first) = patterns.first() {
+                    self.gen_pattern_bind(first, val_reg);
+                }
+            }
             Pattern::Rest(..) => {}
             Pattern::Slice(patterns, ..) => {
                 let mut elem_idx = 0usize;
