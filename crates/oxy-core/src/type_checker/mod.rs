@@ -424,6 +424,9 @@ pub struct TypeChecker {
     /// to a consistent concrete type across all argument positions, and to
     /// substitute concrete types into the return type.
     fn_generic_info: HashMap<String, (Vec<String>, Vec<TypeAnnotation>, Option<TypeAnnotation>)>,
+    /// Tracks nesting depth of loop constructs (while, for, loop) for
+    /// detecting break/continue used outside any loop.
+    loop_depth: usize,
 }
 
 impl TypeChecker {
@@ -441,6 +444,7 @@ impl TypeChecker {
             enum_defs: std::collections::HashSet::new(),
             current_fn_return: TypeInfo::Unit,
             fn_generic_info: HashMap::new(),
+            loop_depth: 0,
         }
     }
 }

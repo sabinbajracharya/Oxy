@@ -129,11 +129,15 @@ impl TypeChecker {
                 condition, body, ..
             } => {
                 self.infer_expr(condition)?;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 Ok(())
             }
             Stmt::Loop { body, .. } => {
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 Ok(())
             }
             Stmt::For {
@@ -147,7 +151,9 @@ impl TypeChecker {
                 body_env.borrow_mut().define(name, TypeInfo::Unknown);
                 let saved = self.env.clone();
                 self.env = body_env;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 self.env = saved;
                 Ok(())
             }
@@ -155,7 +161,9 @@ impl TypeChecker {
                 expr: inner, body, ..
             } => {
                 let _ = self.infer_expr(inner)?;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 Ok(())
             }
             Stmt::ForDestructure {
@@ -171,7 +179,9 @@ impl TypeChecker {
                 }
                 let saved = self.env.clone();
                 self.env = body_env;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 self.env = saved;
                 Ok(())
             }
@@ -179,7 +189,26 @@ impl TypeChecker {
                 self.infer_expr(value)?;
                 Ok(())
             }
-            Stmt::Break { .. } | Stmt::Continue { .. } => Ok(()),
+            Stmt::Break { span, .. } => {
+                if self.loop_depth == 0 {
+                    return Err(FerriError::TypeError {
+                        message: "break outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(())
+            }
+            Stmt::Continue { span, .. } => {
+                if self.loop_depth == 0 {
+                    return Err(FerriError::TypeError {
+                        message: "continue outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(())
+            }
             // Nested items are hoisted to top-level by the parser when they
             // appear inside a fn body; a Stmt::Item only survives in unusual
             // call paths (e.g. tests that invoke parse_stmt directly). Skip
