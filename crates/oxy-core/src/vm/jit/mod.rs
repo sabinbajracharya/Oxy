@@ -206,9 +206,18 @@ pub(crate) struct JitEngine {
     pub(crate) local_count: usize,
 }
 
+/// Serialize compilation so parallel tests don't race on global fn tables.
+static COMPILE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 impl JitEngine {
     /// Build a JIT engine from a typed AST program.
     pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
+        let _guard = COMPILE_LOCK.lock().unwrap();
+
+        // Reset the global scheduler so tasks from previous compilations
+        // don't leak into this run (the scheduler is a OnceLock singleton).
+        ffi::scheduler_lock().reset();
+
         // 1. Generate register IR + CFG
         let mut ir = ir_gen::IrGen::new();
         ir.gen_program(program);
