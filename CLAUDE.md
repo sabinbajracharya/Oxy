@@ -394,7 +394,10 @@ Compares struct's defining module against current `module_stack`. Private fields
 ## Debug Tools
 
 ### `OXY_VM_TRACE=1` (env var)
-Not yet wired for the JIT path. Currently a no-op.
+```bash
+OXY_VM_TRACE=1 cargo test -p oxy-core --test feature_examples 2> ir_dump.txt
+```
+Dumps the register IR for every compiled function to stderr. Each function shows its basic blocks with register ops and terminators. Use when debugging a specific test failure to see what IR was generated.
 
 ## Context-Mode MCP Tools
 

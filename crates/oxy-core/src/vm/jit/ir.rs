@@ -242,3 +242,97 @@ impl BasicBlock {
         self.terminator = term;
     }
 }
+
+// ── Display for tracing ────────────────────────────────────────────────
+
+impl std::fmt::Display for IrOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IrOp::ConstInt(r, n) => write!(f, "r{r} = ConstInt({n})"),
+            IrOp::ConstFloat(r, n) => write!(f, "r{r} = ConstFloat({n})"),
+            IrOp::ConstBool(r, b) => write!(f, "r{r} = ConstBool({b})"),
+            IrOp::ConstChar(r, c) => write!(f, "r{r} = ConstChar('{c}')"),
+            IrOp::ConstUnit(r) => write!(f, "r{r} = ConstUnit"),
+            IrOp::ConstString(r, s) => write!(f, "r{r} = ConstString(\"{s}\")"),
+            IrOp::LoadLocal(r, s) => write!(f, "r{r} = LoadLocal({s})"),
+            IrOp::LoadLocalRaw(r, s) => write!(f, "r{r} = LoadLocalRaw({s})"),
+            IrOp::StoreLocal(s, r) => write!(f, "StoreLocal({s}, r{r})"),
+            IrOp::Add(r, a, b) => write!(f, "r{r} = Add(r{a}, r{b})"),
+            IrOp::Sub(r, a, b) => write!(f, "r{r} = Sub(r{a}, r{b})"),
+            IrOp::Mul(r, a, b) => write!(f, "r{r} = Mul(r{a}, r{b})"),
+            IrOp::Div(r, a, b) => write!(f, "r{r} = Div(r{a}, r{b})"),
+            IrOp::Rem(r, a, b) => write!(f, "r{r} = Rem(r{a}, r{b})"),
+            IrOp::Eq(r, a, b) => write!(f, "r{r} = Eq(r{a}, r{b})"),
+            IrOp::Neq(r, a, b) => write!(f, "r{r} = Neq(r{a}, r{b})"),
+            IrOp::Lt(r, a, b) => write!(f, "r{r} = Lt(r{a}, r{b})"),
+            IrOp::Gt(r, a, b) => write!(f, "r{r} = Gt(r{a}, r{b})"),
+            IrOp::Le(r, a, b) => write!(f, "r{r} = Le(r{a}, r{b})"),
+            IrOp::Ge(r, a, b) => write!(f, "r{r} = Ge(r{a}, r{b})"),
+            IrOp::And(r, a, b) => write!(f, "r{r} = And(r{a}, r{b})"),
+            IrOp::Or(r, a, b) => write!(f, "r{r} = Or(r{a}, r{b})"),
+            IrOp::BitAnd(r, a, b) => write!(f, "r{r} = BitAnd(r{a}, r{b})"),
+            IrOp::BitOr(r, a, b) => write!(f, "r{r} = BitOr(r{a}, r{b})"),
+            IrOp::BitXor(r, a, b) => write!(f, "r{r} = BitXor(r{a}, r{b})"),
+            IrOp::Shl(r, a, b) => write!(f, "r{r} = Shl(r{a}, r{b})"),
+            IrOp::Shr(r, a, b) => write!(f, "r{r} = Shr(r{a}, r{b})"),
+            IrOp::Neg(r, a) => write!(f, "r{r} = Neg(r{a})"),
+            IrOp::Not(r, a) => write!(f, "r{r} = Not(r{a})"),
+            IrOp::BitNot(r, a) => write!(f, "r{r} = BitNot(r{a})"),
+            IrOp::Copy(r, a) => write!(f, "r{r} = Copy(r{a})"),
+            IrOp::Phi(r, a, b) => write!(f, "r{r} = Phi(r{a}, r{b})"),
+            IrOp::CallBuiltin {
+                result,
+                func,
+                args,
+                immediates,
+                strings,
+            } => {
+                write!(
+                    f,
+                    "r{result} = Call {func}(args={args:?}, imm={immediates:?}, strs={strings:?})"
+                )
+            }
+            IrOp::ReadResult(r) => write!(f, "r{r} = ReadResult"),
+            IrOp::WriteResult(r) => write!(f, "r{r} = WriteResult"),
+            IrOp::SetError(r) => write!(f, "r{r} = SetError"),
+            IrOp::CheckError(r) => write!(f, "r{r} = CheckError"),
+        }
+    }
+}
+
+impl std::fmt::Display for Terminator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Terminator::Return(r) => write!(f, "Return(r{r})"),
+            Terminator::Jump(b) => write!(f, "Jump(block{b})"),
+            Terminator::Branch {
+                cond,
+                then_block,
+                else_block,
+            } => {
+                write!(
+                    f,
+                    "Branch(r{cond}, then=block{then_block}, else=block{else_block})"
+                )
+            }
+            Terminator::Halt => write!(f, "Halt"),
+            Terminator::Panic(r) => write!(f, "Panic(r{r})"),
+        }
+    }
+}
+
+impl IrFunction {
+    pub(crate) fn dump(&self) -> String {
+        let mut out = String::new();
+        use std::fmt::Write;
+        let _ = writeln!(out, "── fn {} (locals={}) ──", self.name, self.local_count);
+        for block in &self.blocks {
+            let _ = writeln!(out, "  block{}:", block.id);
+            for op in &block.ops {
+                let _ = writeln!(out, "    {op}");
+            }
+            let _ = writeln!(out, "    {term}", term = block.terminator);
+        }
+        out
+    }
+}
