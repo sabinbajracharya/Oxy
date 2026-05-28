@@ -52,6 +52,8 @@ pub(crate) enum IrOp {
     // ── Locals ─────────────────────────────────────────────────────────
     /// Load a local variable from slot `index` into register.
     LoadLocal(Reg, usize),
+    /// Load a local variable WITHOUT Cell unwrapping (for method-call receivers).
+    LoadLocalRaw(Reg, usize),
     /// Store register value into local slot `index`.
     StoreLocal(usize, Reg),
 
@@ -126,6 +128,7 @@ impl IrOp {
             | IrOp::ConstChar(r, _)
             | IrOp::ConstString(r, _)
             | IrOp::LoadLocal(r, _)
+            | IrOp::LoadLocalRaw(r, _)
             | IrOp::Add(r, _, _)
             | IrOp::Sub(r, _, _)
             | IrOp::Mul(r, _, _)

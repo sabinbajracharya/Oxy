@@ -43,6 +43,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_pop", &[types::I64], None),
         ("oxy_dup", &[types::I64], None),
         ("oxy_load_local", &[types::I64, types::I64], None),
+        ("oxy_load_local_raw", &[types::I64, types::I64], None),
         (
             "oxy_read_local_i64",
             &[types::I64, types::I64],

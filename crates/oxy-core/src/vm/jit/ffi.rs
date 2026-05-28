@@ -137,6 +137,20 @@ extern "C" fn oxy_load_local(ctx: *mut JitContext, index: usize) {
     }
 }
 
+/// Load a local WITHOUT Cell unwrapping — preserves Cell for mutable receivers.
+extern "C" fn oxy_load_local_raw(ctx: *mut JitContext, index: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let val = unsafe { ctx.buffer.add(index).read() };
+    let to_push = match &val {
+        Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
+        other => other.clone(),
+    };
+    std::mem::forget(val);
+    unsafe {
+        push(ctx, to_push);
+    }
+}
+
 extern "C" fn oxy_store_local(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
@@ -1628,10 +1642,16 @@ fn jit_closure_invoker(func: &Value, args: &[Value]) -> Result<Value, String> {
             .ok_or(format!("JIT: no function for closure at ip={target_ip}"))?
     };
 
-    // Build a temporary JitContext for the closure call
+    // Build a temporary JitContext for the closure call.
+    // The closure function's local slots are: captures at [0..captures_end),
+    // then params at [captures_end..captures_end+params), then any body locals.
+    // Use the actual local_count from codegen to size the buffer correctly.
     let captures_end = ft.captured_names.len();
-    let frame_size = captures_end + args.len();
-    let mut call_ctx = JitContext::new(frame_size);
+    let actual_local_count = lookup_fn_local_count(target_ip);
+    // Ensure we have room for at least captures + args.
+    let min_locals = captures_end + args.len();
+    let local_count = actual_local_count.max(min_locals);
+    let mut call_ctx = JitContext::new(local_count);
     for (i, name) in ft.captured_names.iter().enumerate() {
         let val = ft
             .closure_env
@@ -1648,7 +1668,7 @@ fn jit_closure_invoker(func: &Value, args: &[Value]) -> Result<Value, String> {
             call_ctx.buffer.add(captures_end + i).write(arg.clone());
         }
     }
-    call_ctx.local_count = frame_size;
+    call_ctx.local_count = local_count;
 
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fn_ptr as *const ()) };
@@ -1813,6 +1833,13 @@ fn dispatch_builtin_method(
     method_name: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
+    // Unwrap Cell for method dispatch. The inner value (e.g. Vec, HashMap)
+    // has its own interior mutability via Rc<RefCell<>>, so mutations
+    // through the clone are visible to the original Cell owner.
+    let receiver = match receiver {
+        Value::Cell(rc) => rc.borrow().clone(),
+        other => other,
+    };
     if method_name == "to_json" {
         return match crate::json::serialize(&receiver) {
             Ok(s) => Ok(Value::ok(Value::String(s))),
@@ -2629,6 +2656,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_pop", oxy_pop as _),
         ("oxy_dup", oxy_dup as _),
         ("oxy_load_local", oxy_load_local as _),
+        ("oxy_load_local_raw", oxy_load_local_raw as _),
         ("oxy_read_local_i64", oxy_read_local_i64 as _),
         ("oxy_store_local", oxy_store_local as _),
         ("oxy_make_cell", oxy_make_cell as _),

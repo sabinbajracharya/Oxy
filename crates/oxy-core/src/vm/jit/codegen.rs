@@ -669,6 +669,13 @@ fn compile_op(
             }
             spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
+        IrOp::LoadLocalRaw(r, slot) => {
+            if let Some(load) = ffi_refs.get("oxy_load_local_raw") {
+                let slot_val = builder.ins().iconst(types::I64, *slot as i64);
+                builder.ins().call(*load, &[ctx, slot_val]);
+            }
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+        }
         IrOp::StoreLocal(slot, src) => {
             push_reg(builder, ctx, ffi_refs, *src, regs, reg_slot);
             if let Some(store) = ffi_refs.get("oxy_store_local") {

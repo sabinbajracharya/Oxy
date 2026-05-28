@@ -545,7 +545,19 @@ impl IrGen {
                 args,
                 ..
             } => {
-                let obj_reg = self.gen_expr(object);
+                // For local-variable receivers, use LoadLocalRaw to preserve
+                // Cell wrapping so mutations through method calls are visible.
+                let obj_reg = if let Expr::Ident(name, ..) = object.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::LoadLocalRaw(r, slot));
+                        r
+                    } else {
+                        self.gen_expr(object)
+                    }
+                } else {
+                    self.gen_expr(object)
+                };
                 let mut arg_regs = vec![obj_reg];
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
@@ -2028,6 +2040,18 @@ impl IrGen {
         self.closure_meta
             .push((param_names_for_meta, captures_with_mut, is_async));
 
+        // Allocate locals for captures FIRST so the closure body can access
+        // them via LoadLocal. Slot indices must match what jit_closure_invoker
+        // writes to the buffer: captures at 0..captures_end, then params.
+        let capture_names: Vec<String> = self
+            .current
+            .captures
+            .iter()
+            .map(|(n, _)| n.clone())
+            .collect();
+        for name in &capture_names {
+            self.alloc_local(name);
+        }
         // Allocate locals for params
         for p in params {
             self.alloc_local(&p.name);
