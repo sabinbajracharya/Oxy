@@ -78,8 +78,8 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_is_falsy", &[types::I64], Some(types::I8)),
         ("oxy_is_truthy", &[types::I64], Some(types::I8)),
         (
-            "oxy_call",
-            &[types::I64, types::I64, types::I64, types::I64],
+            "oxy_push_named_fn",
+            &[types::I64, types::I64, types::I64],
             None,
         ),
         (
@@ -218,9 +218,9 @@ impl JitEngine {
     pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
         let _guard = COMPILE_LOCK.lock().unwrap();
 
-        // Reset the global scheduler so tasks from previous compilations
+        // Reset the async scheduler so tasks from previous compilations
         // don't leak into this run (the scheduler is a OnceLock singleton).
-        ffi::scheduler_lock().reset();
+        ffi::reset_runtime_state();
 
         // 1. Generate register IR + CFG
         let mut ir = ir_gen::IrGen::new();

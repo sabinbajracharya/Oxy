@@ -594,6 +594,14 @@ pub(crate) fn register_const_enum_variant(
     idx
 }
 
+// ── Global state reset ──────────────────────────────────────────────
+
+/// Reset the async scheduler between compilations to prevent task state
+/// from leaking across test runs.
+pub(crate) fn reset_runtime_state() {
+    scheduler_lock().reset();
+}
+
 // ── Function calls ───────────────────────────────────────────────────
 
 /// Call stack for nested Oxy function invocations.
@@ -694,6 +702,76 @@ pub(crate) fn set_method_ips(ips: HashMap<(String, String), usize>) {
     m.extend(ips);
 }
 
+// ── CalleeFrame: buffer lifecycle for JIT function calls ────────────────
+//
+// Every JIT function call needs a fresh buffer where the callee's locals
+// and operand stack live. CalleeFrame encapsulates the alloc / swap / call /
+// drop / dealloc / restore pattern so it isn't duplicated at every call site.
+
+const STACK_CAP: usize = 2048;
+
+struct CalleeFrame {
+    buf: *mut Value,
+    layout: std::alloc::Layout,
+    capacity: usize,
+    local_count: usize,
+}
+
+impl CalleeFrame {
+    fn new(min_locals: usize) -> Self {
+        let capacity = min_locals + STACK_CAP;
+        let layout = std::alloc::Layout::array::<Value>(capacity).unwrap();
+        let buf = unsafe { std::alloc::alloc_zeroed(layout) as *mut Value };
+        Self { buf, layout, capacity, local_count: min_locals }
+    }
+
+    fn buf_mut(&mut self) -> *mut Value {
+        self.buf
+    }
+
+    /// Swap this frame into ctx, call fn_ptr, drop callee state, dealloc,
+    /// restore the caller's buffer, and push the result onto the caller's stack.
+    ///
+    /// `saved_local_count` is the caller's local_count before the call.
+    /// `result_sp` is the caller's sp value after consuming args (where the
+    ///   callee's result should be pushed).
+    unsafe fn execute(
+        self, ctx: &mut JitContext, fn_ptr: *const u8,
+        saved_local_count: usize, result_sp: usize,
+    ) {
+        let saved_buf = ctx.buffer;
+        let saved_cap = ctx.capacity;
+
+        ctx.buffer = self.buf;
+        ctx.capacity = self.capacity;
+        ctx.local_count = self.local_count;
+        ctx.sp = 0;
+
+        let jit_fn: extern "C" fn(*mut JitContext) -> u64 =
+            std::mem::transmute(fn_ptr as *const ());
+        let _discriminant = jit_fn(ctx);
+
+        // Drop callee's locals and any remaining stack
+        for i in 0..ctx.local_count {
+            std::ptr::drop_in_place(ctx.buffer.add(i));
+        }
+        for i in 0..ctx.sp {
+            std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
+        }
+        std::alloc::dealloc(ctx.buffer as *mut u8, self.layout);
+
+        // Restore caller's buffer
+        ctx.buffer = saved_buf;
+        ctx.capacity = saved_cap;
+
+        // Push result onto caller's operand stack
+        let result = std::mem::replace(&mut ctx.result, Value::Unit);
+        ctx.local_count = saved_local_count;
+        ctx.sp = result_sp;
+        push(ctx, result);
+    }
+}
+
 /// Call a JIT-compiled function identified by fn_ptr with args already on
 /// the caller's operand stack. This is the shared call path used by both
 /// oxy_call (simple calls) and oxy_path_call_builtin (module-qualified calls).
@@ -707,81 +785,20 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
         });
     }
 
-    // Match codegen's capacity formula exactly: local_count + STACK_CAP.
-    const STACK_CAP: usize = 2048;
-    let callee_cap = local_count + STACK_CAP;
-    let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
-    let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
-
     // Move args from the caller's operand stack to the callee's buffer.
     // Uses move_value so source slots are cleared to Value::Unit, preventing
     // double-free of heap-allocated data when the caller's buffer is dropped.
     let args_start = ctx.sp - arg_count;
+    let mut frame = CalleeFrame::new(local_count);
     for i in 0..arg_count {
         let src = unsafe { ctx.buffer.add(ctx.local_count + args_start + i) };
-        let dst = unsafe { callee_buf.add(i) };
+        let dst = unsafe { frame.buf_mut().add(i) };
         unsafe { move_value(src, dst) };
     }
-    ctx.sp = args_start;
+    let result_sp = args_start;
 
-    let saved_buffer = ctx.buffer;
-    let saved_capacity = ctx.capacity;
     let saved_local_count = ctx.local_count;
-    ctx.buffer = callee_buf;
-    ctx.capacity = callee_cap;
-    ctx.local_count = local_count;
-
-    let jit_fn: extern "C" fn(*mut JitContext) -> u64 =
-        unsafe { std::mem::transmute(fn_ptr as *const ()) };
-    let _discriminant = jit_fn(ctx);
-
-    // Drop callee's locals and stack
-    for i in 0..ctx.local_count {
-        unsafe {
-            std::ptr::drop_in_place(ctx.buffer.add(i));
-        }
-    }
-    for i in 0..ctx.sp {
-        unsafe {
-            std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
-        }
-    }
-    unsafe {
-        std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
-    }
-
-    // Restore caller's buffer and push result
-    let result = std::mem::replace(&mut ctx.result, Value::Unit);
-    ctx.buffer = saved_buffer;
-    ctx.capacity = saved_capacity;
-    ctx.local_count = saved_local_count;
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_call(ctx: *mut JitContext, name_ptr: usize, name_len: usize, arg_count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr as *const u8, name_len) };
-    let name = String::from_utf8_lossy(name_bytes);
-
-    let fn_idx = match lookup_fn_index_by_name(&name) {
-        Some(idx) => idx,
-        None => {
-            set_error(ctx, format!("JIT: function not found: {name}"));
-            return;
-        }
-    };
-    let fn_ptr = match lookup_fn_ptr(fn_idx) {
-        Some(p) => p,
-        None => {
-            set_error(ctx, format!("JIT: no fn_ptr for {name}"));
-            return;
-        }
-    };
-    let local_count = lookup_fn_local_count(fn_idx);
-
-    invoke_jit_fn(ctx, fn_ptr, local_count, arg_count);
+    unsafe { frame.execute(ctx, fn_ptr, saved_local_count, result_sp); }
 }
 
 // ── Closures ─────────────────────────────────────────────────────────
@@ -859,6 +876,38 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
         target_ip: Some(fn_index),
         captured_names,
         is_async,
+    };
+    unsafe {
+        push(ctx, Value::Function(Box::new(fn_data)));
+    }
+}
+
+/// Create a `Value::Function` for a named (non-closure) function so it can
+/// be called through the same `oxy_call_closure` path as everything else.
+extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: i64, name_len: i64) {
+    let ctx = unsafe { &mut *ctx };
+    let name = unsafe {
+        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+    let fn_index = match lookup_fn_index_by_name(&name) {
+        Some(idx) => idx,
+        None => {
+            set_error(ctx, format!("JIT: function not found: {name}"));
+            unsafe { push(ctx, Value::Unit) };
+            return;
+        }
+    };
+    let placeholder_span = crate::lexer::Span { start: 0, end: 0, line: 0, column: 0 };
+    let fn_data = crate::types::FunctionData {
+        name,
+        params: vec![],
+        return_type: None,
+        body: crate::ast::Block { stmts: vec![], span: placeholder_span },
+        closure_env: crate::env::Environment::new(),
+        target_ip: Some(fn_index),
+        captured_names: vec![],
+        is_async: false,
     };
     unsafe {
         push(ctx, Value::Function(Box::new(fn_data)));
@@ -1017,23 +1066,18 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
         }
     };
 
-    // Save caller state
     let saved_local_count = ctx.local_count;
-    let saved_sp = ctx.sp;
-
-    // Build callee frame: captures at [0..N], args at [N..N+arg_count]
     let captures_end = captured_names.len();
     let drain_start = ctx.sp - arg_count - 1;
 
     // Move args off the caller's stack, clearing each source slot.
-    let mut args_vals = Vec::new();
+    let mut args_vals = Vec::with_capacity(arg_count);
     for i in 0..arg_count {
         let src = unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i) };
-        let val = unsafe { src.read() };
+        args_vals.push(unsafe { src.read() });
         unsafe { src.write(Value::Unit) };
-        args_vals.push(val);
     }
-    // Clear the closure slot too
+    // Clear the closure slot
     unsafe {
         ctx.buffer
             .add(ctx.local_count + drain_start)
@@ -1041,69 +1085,18 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     };
     ctx.sp = drain_start;
 
-    // Create a separate buffer for the callee so the caller's locals
-    // (at buffer[0..saved_local_count]) are never touched.
-    // Use the callee's actual local_count, not just captures+args, so the
-    // callee's codegen spills don't collide with the operand stack.
     let fn_local_count = lookup_fn_local_count(target_ip);
     let total_frame = fn_local_count.max(captures_end + arg_count);
-    const STACK_CAP: usize = 2048;
-    let callee_cap = total_frame + STACK_CAP;
-    let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
-    let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
-
-    // Write captures and args into the callee's buffer
+    let mut frame = CalleeFrame::new(total_frame);
     for (i, name) in captured_names.iter().enumerate() {
         let val = closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
-        unsafe {
-            callee_buf.add(i).write(val);
-        }
+        unsafe { frame.buf_mut().add(i).write(val); }
     }
     for (i, arg) in args_vals.into_iter().enumerate() {
-        unsafe {
-            callee_buf.add(captures_end + i).write(arg);
-        }
+        unsafe { frame.buf_mut().add(captures_end + i).write(arg); }
     }
 
-    // Save caller's buffer info, swap to callee's buffer
-    let saved_buffer = ctx.buffer;
-    let saved_capacity = ctx.capacity;
-    ctx.buffer = callee_buf;
-    ctx.capacity = callee_cap;
-    ctx.local_count = total_frame;
-    ctx.sp = 0;
-
-    // Call
-    let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
-        unsafe { std::mem::transmute(fn_ptr as *const ()) };
-    let _discriminant = fn_ptr(ctx);
-
-    // Drop callee's locals and stack, then free callee's buffer
-    for i in 0..ctx.local_count {
-        unsafe {
-            std::ptr::drop_in_place(ctx.buffer.add(i));
-        }
-    }
-    for i in 0..ctx.sp {
-        unsafe {
-            std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
-        }
-    }
-    unsafe {
-        std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
-    }
-
-    // Restore caller's buffer
-    ctx.buffer = saved_buffer;
-    ctx.capacity = saved_capacity;
-
-    // Restore and push result
-    let result = std::mem::replace(&mut ctx.result, Value::Unit);
-    ctx.local_count = saved_local_count;
-    ctx.sp = saved_sp - arg_count - 1; // we popped closure + args
-    unsafe {
-        push(ctx, result);
-    }
+    unsafe { frame.execute(ctx, fn_ptr as *const u8, saved_local_count, ctx.sp); }
 }
 
 // ── Return / panic ──────────────────────────────────────────────────
@@ -2492,7 +2485,6 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
 
     match val {
         Value::Future(fut) => {
-            // Run the future's body synchronously
             let target_ip = fut.target_ip;
             let fn_ptr = {
                 let table = fn_table_lock();
@@ -2503,79 +2495,26 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
                             ctx,
                             format!("JIT: no function for future at ip={target_ip}"),
                         );
-                        unsafe {
-                            push(ctx, Value::Unit);
-                        }
+                        unsafe { push(ctx, Value::Unit) };
                         return;
                     }
                 }
             };
-            // Run the future's body in its own buffer so the callee's locals
-            // don't corrupt the caller's buffer. Same pattern as invoke_jit_fn.
+
             let fn_local_count = lookup_fn_local_count(target_ip);
             let captures_end = fut.captured_names.len();
             let total_frame = fn_local_count.max(captures_end + fut.args.len());
-            const STACK_CAP: usize = 2048;
-            let callee_cap = total_frame + STACK_CAP;
-            let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
-            let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
-
-            // Write captures and args into the callee's buffer.
+            let mut frame = CalleeFrame::new(total_frame);
             for (i, name) in fut.captured_names.iter().enumerate() {
-                let v = fut
-                    .closure_env
-                    .borrow()
-                    .get(name)
-                    .ok()
-                    .unwrap_or(Value::Unit);
-                unsafe {
-                    callee_buf.add(i).write(v);
-                }
+                let v = fut.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
+                unsafe { frame.buf_mut().add(i).write(v); }
             }
             for (i, arg) in fut.args.iter().enumerate() {
-                unsafe {
-                    callee_buf.add(captures_end + i).write(arg.clone());
-                }
+                unsafe { frame.buf_mut().add(captures_end + i).write(arg.clone()); }
             }
 
-            // Swap to the callee's buffer.
-            let saved_buffer = ctx.buffer;
-            let saved_capacity = ctx.capacity;
-            let saved_local_count = ctx.local_count;
             let saved_sp = ctx.sp;
-            ctx.buffer = callee_buf;
-            ctx.capacity = callee_cap;
-            ctx.local_count = total_frame;
-            ctx.sp = 0;
-
-            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
-                unsafe { std::mem::transmute(fn_ptr as *const ()) };
-            let _disc = fn_ptr(ctx);
-
-            // Clean up callee's locals and stack, then free the buffer.
-            for i in 0..ctx.local_count {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(i));
-                }
-            }
-            for i in 0..ctx.sp {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
-                }
-            }
-            unsafe {
-                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
-            }
-
-            // Restore caller's buffer and push result.
-            let result = std::mem::replace(&mut ctx.result, Value::Unit);
-            ctx.buffer = saved_buffer;
-            ctx.capacity = saved_capacity;
-            ctx.local_count = saved_local_count;
-            ctx.sp = saved_sp;
-            unsafe {
-                push(ctx, result);
-            }
+            unsafe { frame.execute(ctx, fn_ptr as *const u8, ctx.local_count, saved_sp); }
         }
         Value::JoinHandle { task_id } => {
             // Tasks run eagerly in oxy_spawn_ffi, so the result is always ready.
@@ -2785,7 +2724,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_bitnot", oxy_bitnot as _),
         ("oxy_is_falsy", oxy_is_falsy as _),
         ("oxy_is_truthy", oxy_is_truthy as _),
-        ("oxy_call", oxy_call as _),
+        ("oxy_push_named_fn", oxy_push_named_fn as _),
         ("oxy_push_closure", oxy_push_closure as _),
         ("oxy_push_async_block", oxy_push_async_block as _),
         ("oxy_call_closure", oxy_call_closure as _),

@@ -43,8 +43,6 @@ pub(crate) struct IrGen {
     global_consts: std::collections::HashMap<String, crate::ast::Expr>,
     /// Use aliases: local_name → qualified_name (from `use path::to::item;`).
     use_aliases: std::collections::HashMap<String, String>,
-    /// Local slot → closure IR function name (for calling closures by their local name).
-    local_closure_names: std::collections::HashMap<usize, String>,
     /// Variant name → parent enum name (e.g. "Some" → "Option").
     /// Seeded from AST enum definitions so user-defined enums work without hardcoding.
     variant_to_enum: std::collections::HashMap<String, String>,
@@ -80,7 +78,6 @@ impl IrGen {
             labeled_targets: std::collections::HashMap::new(),
             global_consts: std::collections::HashMap::new(),
             use_aliases: std::collections::HashMap::new(),
-            local_closure_names: std::collections::HashMap::new(),
             variant_to_enum: Self::builtin_variants(),
             local_types: std::collections::HashMap::new(),
         }
@@ -376,12 +373,6 @@ impl IrGen {
             } => {
                 let slot = self.alloc_local(name);
                 if let Some(val) = value {
-                    // If the value is a closure, record the mapping from local
-                    // slot to closure function name so Call can use oxy_call.
-                    if matches!(val, crate::ast::Expr::Closure { .. }) {
-                        let closure_name = format!("closure_{}", self.closure_meta.len());
-                        self.local_closure_names.insert(slot, closure_name);
-                    }
                     let reg = self.gen_expr(val);
                     let reg = if let Some(ta) = type_ann {
                         if let TypeAnnotation::Named { name, .. } = ta {
@@ -608,61 +599,30 @@ impl IrGen {
                 r
             }
             Expr::Call { callee, args, .. } => {
-                let mut fname = match callee.as_ref() {
-                    Expr::Ident(name, ..) => name.clone(),
-                    Expr::Path { segments, .. } => segments.join("::"),
-                    _ => String::from("<anon>"),
-                };
-                // If the callee is a local variable that holds a closure, use the
-                // closure's registered function name so oxy_call can dispatch it.
-                if let Expr::Ident(name, _) = callee.as_ref() {
-                    if let Some(slot) = self.lookup_local(name) {
-                        if let Some(closure_name) = self.local_closure_names.get(&slot) {
-                            // Locally-defined closure: use the registered function name.
-                            fname = closure_name.clone();
-                        } else {
-                            // Parameter or dynamically-assigned closure: call via FFI.
-                            let mut arg_regs = Vec::new();
-                            for a in args {
-                                arg_regs.push(self.gen_expr(a));
-                            }
-                            let closure_reg = self.alloc_reg();
-                            self.emit(IrOp::LoadLocalRaw(closure_reg, slot));
-                            let mut all_regs = vec![closure_reg];
-                            all_regs.extend(arg_regs);
-                            let r = self.alloc_reg();
-                            self.emit(IrOp::CallBuiltin {
-                                result: r,
-                                func: "oxy_call_closure",
-                                args: all_regs,
-                                immediates: vec![args.len()],
-                                strings: vec![],
-                            });
-                            return r;
-                        }
+                // Build fname for special-form detection (enum constructors,
+                // spawn/sleep/select). Regular calls go through the unified
+                // oxy_call_closure path regardless of whether the callee is a
+                // named function, closure, or parameter.
+                let fname = match callee.as_ref() {
+                    Expr::Ident(name, ..) => {
+                        self.use_aliases.get(name).cloned().unwrap_or(name.clone())
                     }
-                }
-                // Resolve use aliases: `use calc::triple; triple(7)` → call "calc::triple"
-                if let Some(resolved) = self.use_aliases.get(&fname) {
-                    fname = resolved.clone();
-                }
+                    Expr::Path { segments, .. } => segments.join("::"),
+                    _ => String::new(),
+                };
+
+                // Evaluate arguments first — the callee register depends on
+                // whether it's a local or a named reference.
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
                 }
-                let r = self.alloc_reg();
 
-                // Route enum variant constructors to oxy_make_enum_variant.
-                // Resolves short names (Some) and qualified paths (Option::Some)
-                // via the variant_to_enum map built from AST enum definitions.
+                // Route enum variant constructors.
                 let enum_ctor = 'ctor: {
-                    // Try short name first
                     if let Some(enum_name) = self.variant_to_enum.get(&fname) {
                         break 'ctor Some((enum_name.clone(), fname.clone()));
                     }
-                    // Try qualified path like "EnumName::Variant" or
-                    // "module::Enum::Variant" — split on the LAST :: to
-                    // get (enum_path, variant_name).
                     if let Some((enum_name, variant)) = fname.rsplit_once("::") {
                         if self
                             .variant_to_enum
@@ -675,19 +635,25 @@ impl IrGen {
                     None
                 };
                 if let Some((enum_name, variant)) = enum_ctor {
+                    let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: "oxy_make_enum_variant",
                         args: arg_regs,
                         immediates: vec![args.len()],
-                        strings: vec![enum_name.to_string(), variant.to_string()],
+                        strings: vec![enum_name, variant],
                     });
-                } else if let Some((ffi_func, immediates)) = match fname.as_str() {
+                    return r;
+                }
+
+                // Route spawn / sleep / select to their FFI functions.
+                if let Some((ffi_func, immediates)) = match fname.as_str() {
                     "spawn" => Some(("oxy_spawn_ffi", vec![])),
                     "sleep" => Some(("oxy_sleep_ffi", vec![])),
                     "select" => Some(("oxy_select_ffi", vec![args.len()])),
                     _ => None,
                 } {
+                    let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: ffi_func,
@@ -695,15 +661,51 @@ impl IrGen {
                         immediates,
                         strings: vec![],
                     });
+                    return r;
+                }
+
+                // Produce a register holding the callee as a Value::Function.
+                // Locals already hold a function value; named functions need
+                // oxy_push_named_fn to create one.
+                let callee_reg = if let Expr::Ident(name, _) = callee.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::LoadLocalRaw(r, slot));
+                        r
+                    } else {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_push_named_fn",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![fname],
+                        });
+                        r
+                    }
                 } else {
+                    let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
-                        func: "oxy_call",
-                        args: arg_regs,
-                        immediates: vec![args.len()],
+                        func: "oxy_push_named_fn",
+                        args: vec![],
+                        immediates: vec![],
                         strings: vec![fname],
                     });
-                }
+                    r
+                };
+
+                // Unified call: everything goes through oxy_call_closure.
+                let mut all_regs = vec![callee_reg];
+                all_regs.extend(arg_regs);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_call_closure",
+                    args: all_regs,
+                    immediates: vec![args.len()],
+                    strings: vec![],
+                });
                 r
             }
             Expr::MethodCall {
@@ -1065,7 +1067,7 @@ impl IrGen {
                 body,
                 is_async,
                 ..
-            } => self.gen_closure(params, body, *is_async),
+            } => self.gen_closure(params, body, *is_async, false),
             Expr::Path { segments, .. } => {
                 // Unit enum variant: Color::Red, or module::Color::Red.
                 // Join all but the last segment as the enum name.
@@ -1140,7 +1142,7 @@ impl IrGen {
                 // Generate as a closure-like async function
                 let params: Vec<ClosureParam> = Vec::new();
                 let body_expr = Expr::Block(body.clone());
-                self.gen_closure(&params, &body_expr, true)
+                self.gen_closure(&params, &body_expr, true, true)
             }
             Expr::Await { expr, .. } => {
                 let val = self.gen_expr(expr);
@@ -2250,7 +2252,13 @@ impl IrGen {
         }
     }
 
-    fn gen_closure(&mut self, params: &[ClosureParam], body: &Expr, is_async: bool) -> Reg {
+    fn gen_closure(
+        &mut self,
+        params: &[ClosureParam],
+        body: &Expr,
+        is_async: bool,
+        emit_as_future: bool,
+    ) -> Reg {
         // Find free variables (captures) by scanning the closure body for Idents
         // that reference outer-scope locals, not params.
         let param_names: std::collections::HashSet<String> =
@@ -2353,11 +2361,7 @@ impl IrGen {
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
-            func: if is_async {
-                "oxy_push_async_block"
-            } else {
-                "oxy_push_closure"
-            },
+            func: if emit_as_future { "oxy_push_async_block" } else { "oxy_push_closure" },
             args: vec![],
             immediates: vec![meta_idx],
             strings: vec![closure_name],
