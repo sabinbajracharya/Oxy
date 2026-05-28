@@ -182,20 +182,72 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 
 // ── Output ───────────────────────────────────────────────────────────
 
-extern "C" fn oxy_print_val(ctx: *mut JitContext) {
+extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    print!("{val}");
+    let mut vals = Vec::with_capacity(count);
+    for _ in 0..count {
+        vals.push(unsafe { pop(ctx) });
+    }
+    vals.reverse();
+    if vals.is_empty() {
+        return;
+    }
+    let template = vals[0].to_string();
+    if count == 1 {
+        print!("{template}");
+        return;
+    }
+    let mut result = String::new();
+    let mut arg_idx = 1;
+    let mut chars = template.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '{' && chars.peek() == Some(&'}') {
+            chars.next();
+            if arg_idx < vals.len() {
+                result.push_str(&vals[arg_idx].to_string());
+            }
+            arg_idx += 1;
+        } else {
+            result.push(c);
+        }
+    }
+    print!("{result}");
 }
 
-extern "C" fn oxy_println_val(ctx: *mut JitContext) {
+extern "C" fn oxy_println_val(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
+    let mut vals = Vec::with_capacity(count);
+    for _ in 0..count {
+        vals.push(unsafe { pop(ctx) });
+    }
+    vals.reverse();
+    let line = if vals.is_empty() {
+        String::new()
+    } else if count == 1 {
+        vals[0].to_string()
+    } else {
+        let template = vals[0].to_string();
+        let mut result = String::new();
+        let mut arg_idx = 1;
+        let mut chars = template.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '{' && chars.peek() == Some(&'}') {
+                chars.next();
+                if arg_idx < vals.len() {
+                    result.push_str(&vals[arg_idx].to_string());
+                }
+                arg_idx += 1;
+            } else {
+                result.push(c);
+            }
+        }
+        result
+    };
     if !ctx.output.is_null() {
         let output = unsafe { &*ctx.output };
-        output.borrow_mut().push(format!("{val}\n"));
+        output.borrow_mut().push(format!("{line}\n"));
     } else {
-        println!("{val}");
+        println!("{line}");
     }
 }
 
@@ -1312,11 +1364,10 @@ extern "C" fn oxy_make_range(ctx: *mut JitContext, inclusive: i64) {
             return;
         }
     };
+    let e = if inclusive != 0 { e + 1 } else { e };
     unsafe {
         push(ctx, Value::Range(s, e));
     }
-    // inclusive flag is ignored — Value::Range is always exclusive.
-    let _ = inclusive;
 }
 
 // ── String operations ─────────────────────────────────────────────────

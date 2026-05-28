@@ -751,7 +751,11 @@ fn compile_op(
                 if let Some(cv) = clif_val {
                     let ty = builder.func.dfg.value_type(cv);
                     // oxy_push_int expects i64; extend narrower types.
-                    let wide = if ty == types::I64 { cv } else { builder.ins().uextend(types::I64, cv) };
+                    let wide = if ty == types::I64 {
+                        cv
+                    } else {
+                        builder.ins().uextend(types::I64, cv)
+                    };
                     if let Some(push) = ffi_refs.get("oxy_push_int") {
                         builder.ins().call(*push, &[ctx, wide]);
                     }

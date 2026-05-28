@@ -768,8 +768,8 @@ impl IrGen {
                 }
                 let r = self.alloc_reg();
                 let (func, strings, extra_immediates) = match name.as_str() {
-                    "println" => ("oxy_println_val", vec![], vec![]),
-                    "print" => ("oxy_print_val", vec![], vec![]),
+                    "println" => ("oxy_println_val", vec![], vec![args.len()]),
+                    "print" => ("oxy_print_val", vec![], vec![args.len()]),
                     "format" => ("oxy_format", vec![], vec![args.len()]),
                     _ => (
                         "oxy_path_call_builtin",
@@ -855,52 +855,68 @@ impl IrGen {
         let cond = self.gen_expr(condition);
 
         let then_id = self.alloc_block();
-        let else_id = self.alloc_block();
-        let merge_id = self.alloc_block();
 
-        // Entry: branch
-        self.terminate(Terminator::Branch {
-            cond,
-            then_block: then_id,
-            else_block: else_id,
-        });
+        if let Some(eb) = else_block {
+            // If-else: full then / else / merge with phi.
+            let else_id = self.alloc_block();
+            let merge_id = self.alloc_block();
 
-        // Then block
-        self.start_block(then_id);
-        let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
-            let r = self.alloc_reg();
-            self.emit(IrOp::ConstUnit(r));
-            r
-        });
-        if self.current.blocks[self.current_block]
-            .terminator
-            .is_default()
-        {
-            self.terminate(Terminator::Jump(merge_id));
-        }
+            self.terminate(Terminator::Branch {
+                cond,
+                then_block: then_id,
+                else_block: else_id,
+            });
 
-        // Else block
-        self.start_block(else_id);
-        let else_reg = match else_block {
-            Some(eb) => self.gen_expr(eb),
-            None => {
+            self.start_block(then_id);
+            let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
                 let r = self.alloc_reg();
                 self.emit(IrOp::ConstUnit(r));
                 r
+            });
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(merge_id));
             }
-        };
-        if self.current.blocks[self.current_block]
-            .terminator
-            .is_default()
-        {
-            self.terminate(Terminator::Jump(merge_id));
-        }
 
-        // Merge block with phi
-        self.start_block(merge_id);
-        let r = self.alloc_reg();
-        self.emit(IrOp::Phi(r, then_reg, else_reg));
-        r
+            self.start_block(else_id);
+            let else_reg = self.gen_expr(eb);
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(merge_id));
+            }
+
+            self.start_block(merge_id);
+            let r = self.alloc_reg();
+            self.emit(IrOp::Phi(r, then_reg, else_reg));
+            r
+        } else {
+            // If without else: the false branch falls through to the continue block.
+            let continue_id = self.alloc_block();
+
+            self.terminate(Terminator::Branch {
+                cond,
+                then_block: then_id,
+                else_block: continue_id,
+            });
+
+            self.start_block(then_id);
+            self.gen_block_stmts(then_block);
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(continue_id));
+            }
+
+            self.start_block(continue_id);
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        }
     }
 
     fn gen_if_let(
