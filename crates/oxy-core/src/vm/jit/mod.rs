@@ -140,7 +140,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ),
         (
             "oxy_path_call_builtin",
-            &[types::I64, types::I64, types::I64],
+            &[types::I64, types::I64, types::I64, types::I64],
             None,
         ),
         (
@@ -148,7 +148,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
             &[types::I64, types::I64, types::I64, types::I64, types::I64, types::I64],
             None,
         ),
-        ("oxy_const_enum_variant", &[types::I64, types::I64], None),
+        (
+            "oxy_const_enum_variant",
+            &[types::I64, types::I64, types::I64, types::I64, types::I64],
+            None,
+        ),
         (
             "oxy_struct_update",
             &[types::I64, types::I64, types::I64, types::I64],

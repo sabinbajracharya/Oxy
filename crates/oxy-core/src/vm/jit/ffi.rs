@@ -1919,32 +1919,48 @@ extern "C" fn oxy_make_enum_variant(
     }
 }
 
-extern "C" fn oxy_const_enum_variant(ctx: *mut JitContext, meta_idx: usize) {
+extern "C" fn oxy_const_enum_variant(
+    ctx: *mut JitContext,
+    enum_name_ptr: *const u8,
+    enum_name_len: usize,
+    variant_ptr: *const u8,
+    variant_len: usize,
+) {
     let ctx = unsafe { &mut *ctx };
-    let val = {
-        let lock = const_enum_variants_lock();
-        lock.0
-            .get(meta_idx)
-            .map(|(en, vr, d)| Value::EnumVariant {
-                enum_name: en.clone(),
-                variant: vr.clone(),
-                data: d.clone(),
-            })
-            .unwrap_or(Value::Unit)
+    let enum_name = unsafe {
+        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
+        String::from_utf8_lossy(slice).into_owned()
+    };
+    let variant = unsafe {
+        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
+        String::from_utf8_lossy(slice).into_owned()
     };
     unsafe {
-        push(ctx, val);
+        push(
+            ctx,
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                data: vec![],
+            },
+        );
     }
 }
 
 // ── PathCall builtins ─────────────────────────────────────────────────
 
-extern "C" fn oxy_path_call_builtin(ctx: *mut JitContext, path_idx: usize, arg_count: usize) {
+extern "C" fn oxy_path_call_builtin(
+    ctx: *mut JitContext,
+    path_ptr: *const u8,
+    path_len: usize,
+    arg_count: usize,
+) {
     let ctx = unsafe { &mut *ctx };
-    let segments: Vec<String> = {
-        let lock = builtin_paths_lock();
-        lock.get(path_idx).cloned().unwrap_or_default()
-    };
+    let path_bytes = unsafe { std::slice::from_raw_parts(path_ptr, path_len) };
+    let segments: Vec<String> = path_bytes
+        .split(|b| *b == 0)
+        .map(|s| String::from_utf8_lossy(s).into_owned())
+        .collect();
     let seg_refs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
 
     let mut args = Vec::with_capacity(arg_count);

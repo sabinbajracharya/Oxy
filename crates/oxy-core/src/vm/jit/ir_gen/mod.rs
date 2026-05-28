@@ -552,8 +552,8 @@ impl IrGen {
                     result: r,
                     func: "oxy_path_call_builtin",
                     args: arg_regs,
-                    immediates: vec![],
-                    strings: path.clone(),
+                    immediates: vec![args.len()],
+                    strings: vec![path.join("\0")],
                 });
                 r
             }
@@ -1036,11 +1036,16 @@ impl IrGen {
             return r;
         }
 
-        if n <= 2 {
+        if n == 1 {
+            // Single arm — no Phi needed, return the result directly.
+            self.start_block(final_merge);
+            return result_regs[0];
+        }
+
+        if n == 2 {
             self.start_block(final_merge);
             let r = self.alloc_reg();
-            let last = *result_regs.last().unwrap();
-            self.emit(IrOp::Phi(r, result_regs[0], last));
+            self.emit(IrOp::Phi(r, result_regs[0], result_regs[1]));
             return r;
         }
 
@@ -1105,14 +1110,19 @@ impl IrGen {
             Pattern::Wildcard(..) | Pattern::Ident(..) | Pattern::Rest(..) => {
                 self.emit(IrOp::ConstBool(r, true));
             }
-            Pattern::EnumVariant { fields, .. } => {
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                fields,
+                ..
+            } => {
                 // Check variant discriminant, then recursively check inner field patterns
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func: "oxy_enum_variant_equal",
                     args: vec![val_reg],
                     immediates: vec![],
-                    strings: vec![],
+                    strings: vec![enum_name.clone(), variant.clone()],
                 });
                 // If there are inner patterns, also check them
                 for (i, inner) in fields.iter().enumerate() {
