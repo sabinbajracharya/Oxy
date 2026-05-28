@@ -347,7 +347,11 @@ impl<'a> Codegen<'a> {
                     let disc = builder.ins().iconst(types::I64, 0);
                     builder.ins().return_(&[disc]);
                 }
-                Terminator::Panic(_) => {
+                Terminator::Panic(msg_reg) => {
+                    push_reg(&mut builder, ctx, &ffi_refs, *msg_reg, &regs, &reg_slot);
+                    if let Some(panic) = ffi_refs.get("oxy_panic") {
+                        builder.ins().call(*panic, &[ctx]);
+                    }
                     let disc = builder.ins().iconst(types::I64, 2);
                     builder.ins().return_(&[disc]);
                 }
@@ -754,7 +758,12 @@ fn compile_op(
             }
         }
         IrOp::CheckError(r) => {
-            regs.insert(*r, builder.ins().iconst(types::I64, 0));
+            if let Some(f) = ffi_refs.get("oxy_error_discriminant") {
+                let inst = builder.ins().call(*f, &[ctx]);
+                regs.insert(*r, builder.func.dfg.inst_results(inst)[0]);
+            } else {
+                regs.insert(*r, builder.ins().iconst(types::I64, 0));
+            }
         }
     }
 }
