@@ -253,7 +253,14 @@ impl<'a> Codegen<'a> {
                             v.iter()
                                 .filter_map(|r| {
                                     regs.get(r).copied().or_else(|| {
-                                        reg_slot.get(r).map(|_| builder.ins().iconst(types::I64, 0))
+                                        reg_slot.get(r).and_then(|slot| {
+                                            ffi_refs.get("oxy_read_local_i64").map(|f| {
+                                                let sv =
+                                                    builder.ins().iconst(types::I64, *slot as i64);
+                                                let inst = builder.ins().call(*f, &[ctx, sv]);
+                                                builder.func.dfg.inst_results(inst)[0]
+                                            })
+                                        })
                                     })
                                 })
                                 .collect::<Vec<_>>()
@@ -295,10 +302,12 @@ impl<'a> Codegen<'a> {
                             if let Some(v) = regs.get(r).copied() {
                                 return Some(v);
                             }
-                            if reg_slot.contains_key(r) {
-                                // Push to stack and return a zero placeholder — the real value
-                                // is on the stack after this call.
-                                push_reg(builder, ctx, ffi_refs, *r, regs, reg_slot);
+                            if let Some(slot) = reg_slot.get(r) {
+                                return ffi_refs.get("oxy_read_local_i64").map(|f| {
+                                    let sv = builder.ins().iconst(types::I64, *slot as i64);
+                                    let inst = builder.ins().call(*f, &[ctx, sv]);
+                                    builder.func.dfg.inst_results(inst)[0]
+                                });
                             }
                             None
                         };

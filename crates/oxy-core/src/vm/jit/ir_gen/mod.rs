@@ -893,12 +893,15 @@ impl IrGen {
         });
 
         self.start_block(then_id);
+        self.gen_pattern_bind(pattern, val);
         let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
             let r = self.alloc_reg();
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        self.terminate(Terminator::Jump(merge_id));
+        if self.current.blocks[self.current_block].terminator.is_default() {
+            self.terminate(Terminator::Jump(merge_id));
+        }
 
         self.start_block(else_id);
         let else_reg = else_block.map(|eb| self.gen_expr(eb)).unwrap_or_else(|| {
@@ -906,7 +909,9 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        self.terminate(Terminator::Jump(merge_id));
+        if self.current.blocks[self.current_block].terminator.is_default() {
+            self.terminate(Terminator::Jump(merge_id));
+        }
 
         self.start_block(merge_id);
         let r = self.alloc_reg();
@@ -1277,6 +1282,7 @@ impl IrGen {
         self.continue_target = Some(header_id);
 
         self.start_block(body_id);
+        self.gen_pattern_bind(pattern, val);
         self.gen_block_stmts(body);
         if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(header_id));

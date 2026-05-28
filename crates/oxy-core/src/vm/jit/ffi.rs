@@ -154,6 +154,20 @@ extern "C" fn oxy_store_local(ctx: *mut JitContext, index: usize) {
     }
 }
 
+/// Read a local slot and return its raw i64 representation.
+/// Returns 0 for non-integer types (they always flow through the FFI stack).
+extern "C" fn oxy_read_local_i64(ctx: *mut JitContext, index: usize) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let slot = unsafe { &*ctx.buffer.add(index) };
+    match slot {
+        Value::I64(n) => *n,
+        Value::Bool(b) => *b as i64,
+        Value::U8(b) => *b as i64,
+        Value::Unit => 0,
+        _ => 0,
+    }
+}
+
 extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { ctx.buffer.add(index).read() };
@@ -2360,6 +2374,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_pop", oxy_pop as _),
         ("oxy_dup", oxy_dup as _),
         ("oxy_load_local", oxy_load_local as _),
+        ("oxy_read_local_i64", oxy_read_local_i64 as _),
         ("oxy_store_local", oxy_store_local as _),
         ("oxy_make_cell", oxy_make_cell as _),
         ("oxy_print_val", oxy_print_val as _),
