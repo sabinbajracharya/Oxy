@@ -771,6 +771,7 @@ impl IrGen {
                     "println" => ("oxy_println_val", vec![], vec![args.len()]),
                     "print" => ("oxy_print_val", vec![], vec![args.len()]),
                     "format" => ("oxy_format", vec![], vec![args.len()]),
+                    "vec" => ("oxy_make_array", vec![], vec![args.len()]),
                     _ => (
                         "oxy_path_call_builtin",
                         vec![name.clone()],
@@ -1062,8 +1063,6 @@ impl IrGen {
         r2
     }
 
-    /// Guarded if-let: same as if-let but with an additional guard condition.
-
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
 
@@ -1193,7 +1192,9 @@ impl IrGen {
         // stack ops from user code and keeps reg_def_block correct for nesting.
         let (last_merge, phi_r) = prev_merge.unwrap();
         let phi_temp = self.alloc_local("__phi_tmp");
-        self.current.block_mut(last_merge).push(IrOp::StoreLocal(phi_temp, phi_r));
+        self.current
+            .block_mut(last_merge)
+            .push(IrOp::StoreLocal(phi_temp, phi_r));
         let cont = self.alloc_block();
         self.current.block_mut(last_merge).terminator = Terminator::Jump(cont);
         self.start_block(cont);

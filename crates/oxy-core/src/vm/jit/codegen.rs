@@ -173,6 +173,8 @@ impl<'a> Codegen<'a> {
         let mut phi_slot: HashMap<Reg, usize> = HashMap::new();
         // Spill slots start at local_count + 1 to avoid overlapping with the
         // first operand-stack position (buffer[local_count + sp] where sp=0).
+        // Note: this still has a known issue where deep operand stacks can
+        // overwrite spill slots. The proper fix is a separate spill buffer.
         let mut next_spill_slot: usize = ir_fn.local_count + 1;
         for phis in block_phis.values() {
             for (phi_r, _) in phis {
@@ -316,7 +318,6 @@ impl<'a> Codegen<'a> {
 
         Ok((fid, ir_fn.name.clone()))
     }
-
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -1080,5 +1081,4 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(6));
     }
-
 }
