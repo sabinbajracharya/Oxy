@@ -21,6 +21,7 @@ use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::FunctionBuilderContext;
 use cranelift_jit::{JITBuilder, JITModule};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Compiled native function pointer type.
 pub(crate) type JitFn = extern "C" fn(*mut JitContext) -> u64;
@@ -192,7 +193,81 @@ fn ffi_decls() -> Vec<FfiDecl> {
     ]
 }
 
-// ── JitEngine (stub — will be wired to ir_gen+codegen) ──────────────────
+// ── Module resolution ────────────────────────────────────────────────────
+
+/// Resolve file-based `mod <name>;` declarations by loading and parsing the
+/// referenced source files. Mutates `program` in place, filling in `body` for
+/// each unresolved module.
+///
+/// Resolution order (mirrors the old `Compiler::load_module_file`):
+/// 1. Externs map (caller-supplied, like rustc `--extern`)
+/// 2. `<source_dir>/<name>.ox`
+/// 3. `<source_dir>/<name>/mod.ox`
+///
+/// Recursively resolves modules inside loaded files.
+pub(crate) fn resolve_modules(
+    items: &mut Vec<crate::ast::Item>,
+    source_dir: Option<&str>,
+    externs: &HashMap<String, PathBuf>,
+) -> Result<(), String> {
+    for item in items.iter_mut() {
+        if let crate::ast::Item::Module(m) = item {
+            if m.body.is_some() {
+                // Already resolved (inline module or already loaded).
+                // Recurse into the body.
+                if let Some(ref mut body) = m.body {
+                    resolve_modules(body, source_dir, externs)?;
+                }
+            } else {
+                // File-based module: load and parse.
+                let source = load_module_file(&m.name, m.span, source_dir, externs)?;
+                let program = crate::parser::parse(&source)
+                    .map_err(|e| format!("parse module `{}`: {e}", m.name))?;
+                let mut body = program.items;
+                resolve_modules(&mut body, source_dir, externs)?;
+                m.body = Some(body);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Try to find and read a module file.
+fn load_module_file(
+    name: &str,
+    _span: crate::lexer::Span,
+    source_dir: Option<&str>,
+    externs: &HashMap<String, PathBuf>,
+) -> Result<String, String> {
+    // 1. Externs
+    if let Some(extern_path) = externs.get(name) {
+        return std::fs::read_to_string(extern_path).map_err(|e| {
+            format!(
+                "could not read extern module `{name}` from '{}': {e}",
+                extern_path.display()
+            )
+        });
+    }
+
+    // 2. Sibling file, 3. Sibling mod directory
+    let base = source_dir.unwrap_or(".");
+    let path1 = format!("{base}/{name}.ox");
+    let path2 = format!("{base}/{name}/mod.ox");
+
+    if let Ok(source) = std::fs::read_to_string(&path1) {
+        return Ok(source);
+    }
+    if let Ok(source) = std::fs::read_to_string(&path2) {
+        return Ok(source);
+    }
+
+    Err(format!(
+        "could not find module `{name}`: tried '{path1}' and '{path2}' \
+         (pass --extern {name}=<path> if it's an external dependency)"
+    ))
+}
+
+// ── JitEngine ────────────────────────────────────────────────────────────
 
 pub(crate) struct JitEngine {
     /// Function name → JIT fn pointer.
@@ -327,7 +402,23 @@ pub(crate) struct JitVm {
 impl JitVm {
     /// Compile an Oxy program and prepare to run it.
     pub fn compile(source: &str) -> Result<Self, String> {
-        let program = crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
+        Self::compile_with_options(source, None, HashMap::new())
+    }
+
+    /// Compile with module resolution (source path for sibling files, externs map).
+    pub fn compile_with_options(
+        source: &str,
+        source_path: Option<&str>,
+        externs: HashMap<String, PathBuf>,
+    ) -> Result<Self, String> {
+        let source_dir = source_path.and_then(|p| {
+            std::path::Path::new(p)
+                .parent()
+                .and_then(|parent| parent.to_str())
+        });
+        let mut program =
+            crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
+        resolve_modules(&mut program.items, source_dir, &externs)?;
         crate::type_checker::TypeChecker::new()
             .check_program(&program)
             .map_err(|e| format!("type check: {e}"))?;

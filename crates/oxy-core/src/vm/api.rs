@@ -19,14 +19,16 @@ pub fn run_compiled_jit(source: &str) -> Result<Value, crate::errors::FerriError
 /// Compile and run with JIT, with optional source path and externs.
 pub fn run_compiled_jit_with_options(
     source: &str,
-    _source_path: Option<&str>,
-    _externs: HashMap<String, PathBuf>,
+    source_path: Option<&str>,
+    externs: HashMap<String, PathBuf>,
 ) -> Result<Value, crate::errors::FerriError> {
     let mut jit_vm =
-        super::jit::JitVm::compile(source).map_err(|e| crate::errors::FerriError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
+        super::jit::JitVm::compile_with_options(source, source_path, externs).map_err(|e| {
+            crate::errors::FerriError::Runtime {
+                message: e,
+                line: 0,
+                column: 0,
+            }
         })?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
@@ -74,11 +76,20 @@ pub fn run_tests_jit(
 
 /// Same as run_tests_jit with externs.
 pub fn run_tests_jit_with_options(
-    _path: &str,
+    path: &str,
     source: &str,
-    _externs: HashMap<String, PathBuf>,
+    externs: HashMap<String, PathBuf>,
 ) -> Result<Vec<TestResult>, crate::errors::FerriError> {
-    let program = crate::parser::parse(source)?;
+    let mut program = crate::parser::parse(source)?;
+    let source_dir = std::path::Path::new(path)
+        .parent()
+        .and_then(|p| p.to_str());
+    super::jit::resolve_modules(&mut program.items, source_dir, &externs)
+        .map_err(|e| crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
+        })?;
 
     let mut normal_items: Vec<crate::ast::Item> = Vec::new();
     let mut compile_error_fns: Vec<crate::ast::FnDef> = Vec::new();
