@@ -737,7 +737,23 @@ fn compile_op(
                 push_reg(builder, ctx, ffi_refs, *arg, regs, reg_slot);
             }
             if let Some(f) = ffi_refs.get(*func) {
-                builder.ins().call(*f, &abi_args);
+                let call_inst = builder.ins().call(*f, &abi_args);
+                // If the FFI function returned a value via CLIF (not void),
+                // push it to the operand stack so spill_result can pop+store it.
+                let clif_val = {
+                    let results = builder.func.dfg.inst_results(call_inst);
+                    if results.is_empty() {
+                        None
+                    } else {
+                        Some(results[0])
+                    }
+                };
+                if let Some(cv) = clif_val {
+                    let wide = builder.ins().uextend(types::I64, cv);
+                    if let Some(push) = ffi_refs.get("oxy_push_int") {
+                        builder.ins().call(*push, &[ctx, wide]);
+                    }
+                }
             }
             spill_result(builder, ctx, ffi_refs, *result, reg_slot, next_spill_slot);
         }

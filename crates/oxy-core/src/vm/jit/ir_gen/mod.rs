@@ -1450,22 +1450,22 @@ impl IrGen {
 
         self.terminate(Terminator::Jump(header_id));
 
-        // Header: call iter.next(), store element, check if done
+        // Header: call iter.next(). The FFI stores the raw element in var_slot
+        // and pushes Option::Some(elem) / Option::None for the truthiness check.
         self.start_block(header_id);
-        let elem_r = self.alloc_reg();
+        let opt_r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: elem_r,
+            result: opt_r,
             func: "oxy_iter_next",
             args: vec![],
-            immediates: vec![state_slot],
+            immediates: vec![state_slot, var_slot],
             strings: vec![],
         });
-        self.emit(IrOp::StoreLocal(var_slot, elem_r));
         let cond = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: cond,
             func: "oxy_is_truthy",
-            args: vec![elem_r],
+            args: vec![opt_r],
             immediates: vec![],
             strings: vec![],
         });
@@ -1529,9 +1529,9 @@ impl IrGen {
 
         self.terminate(Terminator::Jump(header_id));
         self.start_block(header_id);
-        let next_r = self.alloc_reg();
+        let opt_r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: next_r,
+            result: opt_r,
             func: "oxy_iter_next_destructure",
             args: vec![],
             immediates: vec![state_slot],
@@ -1541,7 +1541,7 @@ impl IrGen {
         self.emit(IrOp::CallBuiltin {
             result: cond,
             func: "oxy_is_truthy",
-            args: vec![next_r],
+            args: vec![opt_r],
             immediates: vec![],
             strings: vec![],
         });

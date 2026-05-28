@@ -1187,7 +1187,7 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize) {
+extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: usize) {
     let ctx = unsafe { &mut *ctx };
     let target_ptr = unsafe { ctx.buffer.add(state_slot) };
     let target = unsafe { &*target_ptr };
@@ -1203,7 +1203,7 @@ extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize) {
         ),
         _ => {
             unsafe {
-                push(ctx, Value::Unit);
+                push(ctx, Value::none());
             }
             return;
         }
@@ -1226,17 +1226,24 @@ extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize) {
             }
             _ => Value::Unit,
         };
+        // Store raw element in the loop variable's local slot.
+        let dest_ptr = unsafe { ctx.buffer.add(var_slot) };
+        let flag = Value::ok(elem.clone());
+        unsafe {
+            std::ptr::drop_in_place(dest_ptr);
+            dest_ptr.write(elem);
+        }
         unsafe {
             std::ptr::drop_in_place(target_ptr);
             target_ptr.write(Value::Tuple(vec![
                 vec_clone,
                 Value::I64((index + 1) as i64),
             ]));
-            push(ctx, elem);
+            push(ctx, flag);
         }
     } else {
         unsafe {
-            push(ctx, Value::Unit);
+            push(ctx, Value::none());
         }
     }
 }
