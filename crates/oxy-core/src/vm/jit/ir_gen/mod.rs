@@ -111,6 +111,11 @@ impl IrGen {
                         self.gen_fn(method);
                     }
                 }
+                Item::ImplTrait(imp) => {
+                    for method in &imp.methods {
+                        self.gen_fn(method);
+                    }
+                }
                 Item::Const { name, value, .. } => {
                     self.global_consts.insert(name.clone(), value.clone());
                 }
