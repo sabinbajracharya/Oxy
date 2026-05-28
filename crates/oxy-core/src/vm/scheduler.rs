@@ -11,6 +11,7 @@ pub type TaskId = usize;
 
 /// Snapshot of a task's execution state when it yields.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TaskSnapshot {
     pub ip: usize,
     pub stack: Vec<crate::types::Value>,
@@ -40,6 +41,7 @@ pub struct JitTaskState {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 mod clock {
     use std::time::Instant;
 
@@ -98,7 +100,7 @@ mod clock {
     }
 }
 
-pub use clock::{delay_from_now, TimeMark};
+pub use clock::TimeMark;
 
 /// What a task is currently doing (or waiting for).
 #[derive(Debug, Clone)]
@@ -172,6 +174,7 @@ pub struct Scheduler {
     current: Option<TaskId>,
 }
 
+#[allow(dead_code)]
 impl Scheduler {
     pub fn new() -> Self {
         Self {

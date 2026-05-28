@@ -23,8 +23,6 @@
 
 /// Abstract syntax tree node definitions.
 pub mod ast;
-/// Stub — bytecode compiler retired in favor of AST → Register IR + CFG in vm/jit/.
-pub mod compiler;
 /// Environment and lexical scope management.
 pub mod env;
 /// Error types used throughout the interpreter.

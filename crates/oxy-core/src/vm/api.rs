@@ -74,9 +74,9 @@ pub fn run_tests_jit(
 
 /// Same as run_tests_jit with externs.
 pub fn run_tests_jit_with_options(
-    path: &str,
+    _path: &str,
     source: &str,
-    externs: HashMap<String, PathBuf>,
+    _externs: HashMap<String, PathBuf>,
 ) -> Result<Vec<TestResult>, crate::errors::FerriError> {
     let program = crate::parser::parse(source)?;
 
@@ -175,9 +175,7 @@ pub fn run_tests_jit_with_options(
             continue;
         }
 
-        let compile_result = crate::compiler::Compiler::new_for_tests(Some(path))
-            .with_externs(externs.clone())
-            .compile(&ce_program);
+        let compile_result = super::jit::JitEngine::compile(&ce_program);
         match compile_result {
             Err(_) => results.push(TestResult {
                 name: ce_fn.name.clone(),
