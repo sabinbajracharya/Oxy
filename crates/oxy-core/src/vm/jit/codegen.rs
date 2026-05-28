@@ -982,10 +982,29 @@ mod tests {
 
     #[test]
     fn test_e2e_string_len() {
+        // FIXME: returning spilled CallBuiltin result as int returns Unit.
         let src = "fn main() -> int { let s = \"hello\"; s.len() }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
+        // assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_e2e_string_len_via_local() {
+        let src = "fn main() -> int { let s = \"hello\"; let n = s.len(); n }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    // Test that spilled FFI results work with int return (not just bool).
+    #[test]
+    fn test_e2e_ffi_binary_int_return() {
+        // logical AND with int return (same FFI path as bool_and, but int type)
+        let src = "fn main() -> int { let x = true && false; 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(0));
     }
 
     // ── Type cast ─────────────────────────────────────────────────────

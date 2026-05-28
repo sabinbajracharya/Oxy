@@ -457,7 +457,7 @@ impl IrGen {
                     result: r,
                     func: "oxy_method_call",
                     args: arg_regs,
-                    immediates: vec![],
+                    immediates: vec![args.len()],
                     strings: vec![method.clone()],
                 });
                 r
