@@ -1202,9 +1202,29 @@ impl IrGen {
                     r = new_r;
                 }
             }
-            Pattern::Slice(..) => {
-                // Slice patterns: stub as always matching for now
+            Pattern::Slice(patterns, ..) => {
+                // Check each element against sub-patterns, skipping Rest (..).
+                // No length check — we don't have a collection-len FFI function yet.
                 self.emit(IrOp::ConstBool(r, true));
+                let mut elem_idx = 0usize;
+                for p in patterns {
+                    if matches!(p, Pattern::Rest(..)) {
+                        continue;
+                    }
+                    let elem_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: elem_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![elem_idx],
+                        strings: vec![],
+                    });
+                    let sub = self.gen_pattern_check(p, elem_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, sub));
+                    r = new_r;
+                    elem_idx += 1;
+                }
             }
         }
         r
@@ -1537,7 +1557,24 @@ impl IrGen {
             Pattern::Literal(..) => {}
             Pattern::Or(..) => {}
             Pattern::Rest(..) => {}
-            Pattern::Slice(..) => {}
+            Pattern::Slice(patterns, ..) => {
+                let mut elem_idx = 0usize;
+                for p in patterns {
+                    if matches!(p, Pattern::Rest(..)) {
+                        continue;
+                    }
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![elem_idx],
+                        strings: vec![],
+                    });
+                    self.gen_pattern_bind(p, r);
+                    elem_idx += 1;
+                }
+            }
             Pattern::Range { .. } => {}
         }
     }
