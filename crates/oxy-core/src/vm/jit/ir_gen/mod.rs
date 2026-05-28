@@ -512,15 +512,29 @@ impl IrGen {
                 }
                 let r = self.alloc_reg();
 
-                // Route async-runtime builtins to their FFI functions.
-                // These are language primitives, not user-defined JIT functions.
-                let builtin = match fname.as_str() {
-                    "spawn" => Some(("oxy_spawn_ffi", vec![])),
-                    "sleep" => Some(("oxy_sleep_ffi", vec![])),
-                    "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                // Route enum variant constructors (Some, Ok, Err) to their FFI.
+                let enum_ctor = match fname.as_str() {
+                    "Some" => Some(("Option", "Some")),
+                    "Ok" => Some(("Result", "Ok")),
+                    "Err" => Some(("Result", "Err")),
                     _ => None,
                 };
-                if let Some((ffi_func, immediates)) = builtin {
+                if let Some((enum_name, variant)) = enum_ctor {
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_make_enum_variant",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![enum_name.to_string(), variant.to_string()],
+                    });
+                } else if let Some((ffi_func, immediates)) =
+                    match fname.as_str() {
+                        "spawn" => Some(("oxy_spawn_ffi", vec![])),
+                        "sleep" => Some(("oxy_sleep_ffi", vec![])),
+                        "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                        _ => None,
+                    }
+                {
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: ffi_func,
@@ -845,12 +859,16 @@ impl IrGen {
             } => self.gen_closure(params, body, *is_async),
             Expr::Path { segments, .. } => {
                 // Unit enum variant: Color::Red, or module::Color::Red.
-                // Join all but the last segment as the enum name (e.g. "module::Color").
+                // Join all but the last segment as the enum name.
                 let variant = segments.last().cloned().unwrap_or_default();
                 let enum_name = if segments.len() > 1 {
                     segments[..segments.len() - 1].join("::")
                 } else {
-                    String::new()
+                    // Resolve known single-segment enum variants.
+                    match variant.as_str() {
+                        "None" => "Option".to_string(),
+                        _ => String::new(),
+                    }
                 };
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
