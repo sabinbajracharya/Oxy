@@ -75,7 +75,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_bitnot", &[types::I64], None),
         ("oxy_is_falsy", &[types::I64], Some(types::I8)),
         ("oxy_is_truthy", &[types::I64], Some(types::I8)),
-        ("oxy_call", &[types::I64, types::I64, types::I64], None),
+        (
+            "oxy_call",
+            &[types::I64, types::I64, types::I64, types::I64],
+            None,
+        ),
         (
             "oxy_push_closure",
             &[types::I64, types::I64, types::I64, types::I64],
@@ -254,6 +258,9 @@ impl JitEngine {
         if !cg.fn_ptrs.is_empty() {
             let fn_table: HashMap<usize, *const u8> = cg.fn_ptrs.clone();
             ffi::set_fn_table(fn_table);
+        }
+        if !cg.fn_local_counts.is_empty() {
+            ffi::set_fn_local_counts(cg.fn_local_counts.clone());
         }
         // 4b. Build closure name → fn_index mapping for runtime lookup.
         {

@@ -602,6 +602,27 @@ pub(super) fn lookup_fn_ptr(ip: usize) -> Option<*const u8> {
     fn_table_lock().get(&ip).map(|&p| p as *const u8)
 }
 
+/// Per-function local_count, populated during JIT compilation alongside fn_table.
+static FN_LOCAL_COUNTS: std::sync::OnceLock<std::sync::Mutex<HashMap<usize, usize>>> =
+    std::sync::OnceLock::new();
+
+fn fn_local_counts_lock() -> std::sync::MutexGuard<'static, HashMap<usize, usize>> {
+    FN_LOCAL_COUNTS
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn set_fn_local_counts(counts: HashMap<usize, usize>) {
+    let mut m = fn_local_counts_lock();
+    m.clear();
+    m.extend(counts);
+}
+
+fn lookup_fn_local_count(idx: usize) -> usize {
+    fn_local_counts_lock().get(&idx).copied().unwrap_or(8)
+}
+
 /// Closure/async-block name → fn_index (populated after JIT compilation).
 static CLOSURE_NAME_TO_INDEX: std::sync::OnceLock<std::sync::Mutex<HashMap<String, usize>>> =
     std::sync::OnceLock::new();
@@ -648,19 +669,10 @@ pub(crate) fn set_method_ips(ips: HashMap<(String, String), usize>) {
     m.extend(ips);
 }
 
-extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let fn_ptr = {
-        let table = fn_table_lock();
-        match table.get(&target_ip).copied() {
-            Some(p) => p,
-            None => {
-                set_error(ctx, format!("JIT: no function at ip={target_ip}"));
-                return;
-            }
-        }
-    };
-
+/// Call a JIT-compiled function identified by fn_ptr with args already on
+/// the caller's operand stack. This is the shared call path used by both
+/// oxy_call (simple calls) and oxy_path_call_builtin (module-qualified calls).
+fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, arg_count: usize) {
     // Save caller state on the call stack
     {
         let mut call_stack = call_stack_lock();
@@ -670,9 +682,9 @@ extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize)
         });
     }
 
-    // Create a separate buffer for the callee to avoid corrupting
-    // the caller's locals.
-    let callee_cap = arg_count + 256;
+    // Match codegen's capacity formula exactly: local_count + STACK_CAP.
+    const STACK_CAP: usize = 2048;
+    let callee_cap = local_count + STACK_CAP;
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
 
@@ -684,22 +696,20 @@ extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize)
             callee_buf.add(i).write(src);
         }
     }
-    ctx.sp = args_start; // pop args from caller's stack
+    ctx.sp = args_start;
 
-    // Swap to callee's buffer
     let saved_buffer = ctx.buffer;
     let saved_capacity = ctx.capacity;
     let saved_local_count = ctx.local_count;
     ctx.buffer = callee_buf;
     ctx.capacity = callee_cap;
-    ctx.local_count = arg_count;
+    ctx.local_count = local_count;
 
-    // Call the JIT function
-    let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+    let jit_fn: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fn_ptr as *const ()) };
-    let _discriminant = fn_ptr(ctx);
+    let _discriminant = jit_fn(ctx);
 
-    // Drop callee's locals and stack, free callee buffer
+    // Drop callee's locals and stack
     for i in 0..ctx.local_count {
         unsafe {
             std::ptr::drop_in_place(ctx.buffer.add(i));
@@ -722,6 +732,30 @@ extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize)
     unsafe {
         push(ctx, result);
     }
+}
+
+extern "C" fn oxy_call(ctx: *mut JitContext, name_ptr: usize, name_len: usize, arg_count: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr as *const u8, name_len) };
+    let name = String::from_utf8_lossy(name_bytes);
+
+    let fn_idx = match lookup_fn_index_by_name(&name) {
+        Some(idx) => idx,
+        None => {
+            set_error(ctx, format!("JIT: function not found: {name}"));
+            return;
+        }
+    };
+    let fn_ptr = match lookup_fn_ptr(fn_idx) {
+        Some(p) => p,
+        None => {
+            set_error(ctx, format!("JIT: no fn_ptr for {name}"));
+            return;
+        }
+    };
+    let local_count = lookup_fn_local_count(fn_idx);
+
+    invoke_jit_fn(ctx, fn_ptr, local_count, arg_count);
 }
 
 // ── Closures ─────────────────────────────────────────────────────────
@@ -2158,6 +2192,24 @@ extern "C" fn oxy_path_call_builtin(
         return;
     }
 
+    // Try function call lookup FIRST: join path segments with "::" and look
+    // up in the JIT function table. Must come before module dispatch so
+    // user-defined modules (e.g. `mod math { fn double }`) take priority
+    // over stdlib modules with the same name (e.g. math::sqrt).
+    let fn_name = seg_refs.join("::");
+    if let Some(fn_idx) = lookup_fn_index_by_name(&fn_name) {
+        if let Some(fn_ptr) = lookup_fn_ptr(fn_idx) {
+            let local_count = lookup_fn_local_count(fn_idx);
+            for a in args.into_iter().rev() {
+                unsafe {
+                    push(ctx, a);
+                }
+            }
+            invoke_jit_fn(ctx, fn_ptr, local_count, arg_count);
+            return;
+        }
+    }
+
     // Try module dispatch: [module, fn] or [std, module, fn]
     let module_route = match seg_refs.as_slice() {
         [module, func] => Some((module.to_string(), func.to_string())),
@@ -2183,7 +2235,7 @@ extern "C" fn oxy_path_call_builtin(
     }
 
     // Try enum variant construction: 2-segment paths like EnumName::VariantName
-    // that don't match any builtin or module are user-defined enum constructors.
+    // that don't match any builtin, module, or function are enum constructors.
     if let [enum_name, variant] = seg_refs.as_slice() {
         unsafe {
             push(

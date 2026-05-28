@@ -41,6 +41,8 @@ pub(crate) struct IrGen {
     labeled_targets: std::collections::HashMap<String, (BlockId, BlockId)>,
     /// Global const values: name → value expression (from `const NAME = expr;`).
     global_consts: std::collections::HashMap<String, crate::ast::Expr>,
+    /// Use aliases: local_name → qualified_name (from `use path::to::item;`).
+    use_aliases: std::collections::HashMap<String, String>,
 }
 
 impl IrGen {
@@ -59,6 +61,7 @@ impl IrGen {
             break_value_slot: None,
             labeled_targets: std::collections::HashMap::new(),
             global_consts: std::collections::HashMap::new(),
+            use_aliases: std::collections::HashMap::new(),
         }
     }
 
@@ -124,7 +127,47 @@ impl IrGen {
                 Item::Const { name, value, .. } => {
                     self.global_consts.insert(name.clone(), value.clone());
                 }
-                // Struct/enum/mod/use/type items don't generate IR directly
+                Item::Module(m) => {
+                    if let Some(ref items) = m.body {
+                        self.gen_module_items(items, &m.name);
+                    }
+                }
+                Item::Use(use_def) => {
+                    let base_path = use_def.path.join("::");
+                    match &use_def.tree {
+                        crate::ast::UseTree::Simple(alias) => {
+                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
+                                use_def.path.last().cloned().unwrap_or_default()
+                            });
+                            self.use_aliases.insert(local_name, base_path.clone());
+                        }
+                        crate::ast::UseTree::Group(items) => {
+                            for (name, alias) in items {
+                                let local_name = alias.as_ref().unwrap_or(name);
+                                let qualified = format!("{}::{}", base_path, name);
+                                self.use_aliases.insert(local_name.clone(), qualified);
+                            }
+                        }
+                        crate::ast::UseTree::Glob => {}
+                    }
+                }
+                // Struct/enum/type items don't generate IR directly
+                _ => {}
+            }
+        }
+    }
+
+    /// Recursively compile items inside a module with the given qualified prefix.
+    fn gen_module_items(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Function(f) => self.gen_fn(f, Some(prefix)),
+                Item::Module(m) => {
+                    let nested = format!("{prefix}::{}", m.name);
+                    if let Some(ref items) = m.body {
+                        self.gen_module_items(items, &nested);
+                    }
+                }
                 _ => {}
             }
         }
@@ -339,7 +382,30 @@ impl IrGen {
                 }
                 None
             }
-            Stmt::Use(_) | Stmt::Item(_) => None,
+            Stmt::Use(use_def) => {
+                let base_path = use_def.path.join("::");
+                match &use_def.tree {
+                    crate::ast::UseTree::Simple(alias) => {
+                        let local_name = alias
+                            .as_ref()
+                            .cloned()
+                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                        self.use_aliases.insert(local_name, base_path.clone());
+                    }
+                    crate::ast::UseTree::Group(items) => {
+                        for (name, alias) in items {
+                            let local_name = alias.as_ref().unwrap_or(name);
+                            let qualified = format!("{}::{}", base_path, name);
+                            self.use_aliases.insert(local_name.clone(), qualified);
+                        }
+                    }
+                    crate::ast::UseTree::Glob => {
+                        // Glob entries are resolved by the compiler
+                    }
+                }
+                None
+            }
+            Stmt::Item(_) => None,
         }
     }
 
@@ -431,11 +497,15 @@ impl IrGen {
                 r
             }
             Expr::Call { callee, args, .. } => {
-                let fname = match callee.as_ref() {
+                let mut fname = match callee.as_ref() {
                     Expr::Ident(name, ..) => name.clone(),
                     Expr::Path { segments, .. } => segments.join("::"),
                     _ => String::from("<anon>"),
                 };
+                // Resolve use aliases: `use calc::triple; triple(7)` → call "calc::triple"
+                if let Some(resolved) = self.use_aliases.get(&fname) {
+                    fname = resolved.clone();
+                }
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
@@ -445,7 +515,7 @@ impl IrGen {
                     result: r,
                     func: "oxy_call",
                     args: arg_regs,
-                    immediates: vec![],
+                    immediates: vec![args.len()],
                     strings: vec![fname],
                 });
                 r
