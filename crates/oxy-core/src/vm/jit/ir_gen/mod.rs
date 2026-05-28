@@ -1450,27 +1450,19 @@ impl IrGen {
 
         self.terminate(Terminator::Jump(header_id));
 
-        // Header: call iter.next(). The FFI stores the raw element in var_slot
-        // and pushes Option::Some(elem) / Option::None for the truthiness check.
+        // Header: call iter.next(). Returns i64 flag (1=has_next, 0=done)
+        // and stores the raw element directly in var_slot.
         self.start_block(header_id);
-        let opt_r = self.alloc_reg();
+        let has_next = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: opt_r,
+            result: has_next,
             func: "oxy_iter_next",
             args: vec![],
             immediates: vec![state_slot, var_slot],
             strings: vec![],
         });
-        let cond = self.alloc_reg();
-        self.emit(IrOp::CallBuiltin {
-            result: cond,
-            func: "oxy_is_truthy",
-            args: vec![opt_r],
-            immediates: vec![],
-            strings: vec![],
-        });
         self.terminate(Terminator::Branch {
-            cond,
+            cond: has_next,
             then_block: body_id,
             else_block: exit_id,
         });
@@ -1504,10 +1496,12 @@ impl IrGen {
         label: Option<&str>,
     ) -> Option<Reg> {
         let iter_expr_reg = self.gen_expr(iterable);
+        // Allocate state slot first so oxy_iter_next_destructure writes
+        // destructured fields to state_slot+1+i — matching the loop vars.
+        let state_slot = self.alloc_local("__iter_state");
         for name in names {
             self.alloc_local(name);
         }
-        let state_slot = self.alloc_local("__iter_state");
 
         let iter_tmp = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
@@ -1529,24 +1523,16 @@ impl IrGen {
 
         self.terminate(Terminator::Jump(header_id));
         self.start_block(header_id);
-        let opt_r = self.alloc_reg();
+        let has_next = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
-            result: opt_r,
+            result: has_next,
             func: "oxy_iter_next_destructure",
             args: vec![],
             immediates: vec![state_slot],
             strings: vec![],
         });
-        let cond = self.alloc_reg();
-        self.emit(IrOp::CallBuiltin {
-            result: cond,
-            func: "oxy_is_truthy",
-            args: vec![opt_r],
-            immediates: vec![],
-            strings: vec![],
-        });
         self.terminate(Terminator::Branch {
-            cond,
+            cond: has_next,
             then_block: body_id,
             else_block: exit_id,
         });

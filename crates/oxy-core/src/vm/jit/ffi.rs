@@ -1072,9 +1072,9 @@ extern "C" fn oxy_make_repeat(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize) {
-    // Like oxy_iter_next, but stores each destructured element to local slots
-    // state_slot..state_slot+n. The element is also pushed to the stack for truthiness check.
+extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize) -> i64 {
+    // Like oxy_iter_next, but stores each destructured element field to
+    // local slots state_slot+1..state_slot+n. Returns 1 (has_next) or 0 (done).
     let ctx = unsafe { &mut *ctx };
     let target_ptr = unsafe { ctx.buffer.add(state_slot) };
     let target = unsafe { &*target_ptr };
@@ -1089,10 +1089,7 @@ extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize)
             },
         ),
         _ => {
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
+            return 0;
         }
     };
 
@@ -1126,12 +1123,10 @@ extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize)
                 vec_clone,
                 Value::I64((index + 1) as i64),
             ]));
-            push(ctx, elem);
         }
+        1 // has next element
     } else {
-        unsafe {
-            push(ctx, Value::Unit);
-        }
+        0 // no more elements
     }
 }
 
@@ -1187,7 +1182,7 @@ extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: usize) {
+extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: usize) -> i64 {
     let ctx = unsafe { &mut *ctx };
     let target_ptr = unsafe { ctx.buffer.add(state_slot) };
     let target = unsafe { &*target_ptr };
@@ -1202,10 +1197,7 @@ extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: u
             },
         ),
         _ => {
-            unsafe {
-                push(ctx, Value::none());
-            }
-            return;
+            return 0; // no more elements
         }
     };
 
@@ -1228,7 +1220,6 @@ extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: u
         };
         // Store raw element in the loop variable's local slot.
         let dest_ptr = unsafe { ctx.buffer.add(var_slot) };
-        let flag = Value::ok(elem.clone());
         unsafe {
             std::ptr::drop_in_place(dest_ptr);
             dest_ptr.write(elem);
@@ -1239,12 +1230,10 @@ extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: u
                 vec_clone,
                 Value::I64((index + 1) as i64),
             ]));
-            push(ctx, flag);
         }
+        1 // has next element
     } else {
-        unsafe {
-            push(ctx, Value::none());
-        }
+        0 // no more elements
     }
 }
 

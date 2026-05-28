@@ -96,8 +96,16 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_make_iter", &[types::I64], None),
         ("oxy_make_repeat", &[types::I64], None),
         ("oxy_iter_len", &[types::I64], None),
-        ("oxy_iter_next", &[types::I64, types::I64, types::I64], None),
-        ("oxy_iter_next_destructure", &[types::I64, types::I64], None),
+        (
+            "oxy_iter_next",
+            &[types::I64, types::I64, types::I64],
+            Some(types::I64),
+        ),
+        (
+            "oxy_iter_next_destructure",
+            &[types::I64, types::I64],
+            Some(types::I64),
+        ),
         ("oxy_vec_index", &[types::I64], None),
         ("oxy_vec_index_store", &[types::I64], None),
         ("oxy_make_range", &[types::I64, types::I64], None),
