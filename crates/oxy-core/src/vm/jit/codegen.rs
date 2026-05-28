@@ -17,7 +17,6 @@ pub(crate) struct Codegen<'a> {
     pub(crate) fn_ptrs: HashMap<usize, *const u8>,
     pub(crate) fn_names: HashMap<String, usize>,
     pub(crate) fn_local_counts: HashMap<usize, usize>,
-    next_fn_idx: usize,
 }
 
 impl<'a> Codegen<'a> {
@@ -30,7 +29,6 @@ impl<'a> Codegen<'a> {
             fn_ptrs: HashMap::new(),
             fn_names: HashMap::new(),
             fn_local_counts: HashMap::new(),
-            next_fn_idx: 0,
         }
     }
 
@@ -52,19 +50,18 @@ impl<'a> Codegen<'a> {
     }
 
     pub fn compile(&mut self, functions: Vec<IrFunction>) -> Result<(), String> {
-        let mut pending: Vec<(FuncId, String, usize)> = Vec::new();
+        let mut pending: Vec<(FuncId, String, usize, usize)> = Vec::new();
         for func in functions {
+            let fn_index = func.fn_index;
             let local_count = func.local_count;
             let (fid, name) = self.compile_fn(&func)?;
-            pending.push((fid, name, local_count));
+            pending.push((fid, name, local_count, fn_index));
         }
         self.module
             .finalize_definitions()
             .map_err(|e| format!("finalize: {e}"))?;
-        for (fid, name, local_count) in pending {
+        for (fid, name, local_count, idx) in pending {
             let ptr = self.module.get_finalized_function(fid);
-            let idx = self.next_fn_idx;
-            self.next_fn_idx += 1;
             self.fn_ptrs.insert(idx, ptr);
             self.fn_names.insert(name, idx);
             self.fn_local_counts.insert(idx, local_count);
@@ -84,7 +81,7 @@ impl<'a> Codegen<'a> {
 
         let mut fn_ctx = self.module.make_context();
         fn_ctx.func.signature = sig.clone();
-        fn_ctx.func.name = UserFuncName::user(0, self.next_fn_idx as u32);
+        fn_ctx.func.name = UserFuncName::user(0, ir_fn.fn_index as u32);
 
         let mut ffi_refs: HashMap<String, cranelift_codegen::ir::FuncRef> = HashMap::new();
         for (name, ffid) in &self.ffi_ids {

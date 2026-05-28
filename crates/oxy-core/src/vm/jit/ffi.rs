@@ -561,7 +561,6 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
 extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i64, meta_idx: i64) {
     let ctx = unsafe { &mut *ctx };
 
-    // Read the closure function name from the pointer/length pair.
     let name = unsafe {
         let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
         String::from_utf8_lossy(bytes).into_owned()
@@ -590,7 +589,6 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
             .define(captured_name.clone(), val, *is_mut);
     }
 
-    // Look up the native fn index by the closure function name.
     let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
@@ -682,6 +680,8 @@ extern "C" fn oxy_push_async_block(
     };
 
     let tables = unsafe { &*ctx.tables };
+    let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
+
     let meta = tables.closure_meta(meta_idx as usize).cloned();
     let captured = meta.map(|m| m.captured.clone()).unwrap_or_default();
 
@@ -697,8 +697,6 @@ extern "C" fn oxy_push_async_block(
             .borrow_mut()
             .define(captured_name.clone(), val, *is_mut);
     }
-
-    let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
     let future_data = crate::types::FutureData {

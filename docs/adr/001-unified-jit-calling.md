@@ -209,4 +209,18 @@ r2 = Call oxy_call_closure(args=[1], imm=[0], strs=[])     ← captures set up f
 
 4. **Global mutable state in compilers is a test isolation risk.** The OnceLock tables were convenient but made test state non-local. A `reset()` function is a minimal fix; a longer-term improvement would be to pass a `CompilationUnit` struct through the pipeline instead of using globals.
 
-5. **Prefer data over dispatch.** If every function value carries its own `target_ip` (as `Value::Function` already does), you don't need a separate name-based lookup path. The data tells you what to call. The dispatch logic becomes: read the data, follow the pointer.
+5. **Prefer data over dispatch — but weigh the implementation complexity.** If every function value carries its own `target_ip` (as `Value::Function` already does), you don't need a separate name-based lookup path. The data tells you what to call. The dispatch logic becomes: read the data, follow the pointer. *However*, an attempt to resolve names to indices at compile time (May 2026) was abandoned after uncovering ordering fragility in ir_gen and the fundamental problem that external file-based modules add functions outside ir_gen's visibility. The runtime `name_to_index` HashMap lookup is O(1), cheap relative to buffer allocation and Cranelift calls, and handles all cases without ordering constraints. The lesson isn't wrong — it's just that the implementation cost outweighed the benefit for this codebase.
+
+### Retrospective: Attempted Compile-Time Name Resolution (May 2026)
+
+We attempted to eliminate `JitTables.name_to_index` by having ir_gen emit `fn_index` directly instead of function name strings. Three approaches were tried:
+
+1. **Direct emission in ir_gen**: Failed because `fn_index` (position in `Vec<IrFunction>`) shifts when closures are generated inside function bodies. Recursive functions also need their own name registered before body generation.
+
+2. **Post-processing pass**: A `resolve_fn_indices` pass between ir_gen and codegen that walked all `CallBuiltin` ops and replaced name strings with resolved indices. This handled ordering correctly but failed for external file-based modules (`mod foo;` — the parser leaves `body: None` and file loading happens elsewhere), meaning some functions are simply not present in ir_gen's function list.
+
+3. **Fallback approach**: Keep both name strings and fn_index. Abandoned as adding complexity for negligible gain.
+
+**Where we landed**: `fn_index` on `IrFunction` is used by codegen (replacing the `next_fn_idx` manual counter), which is a clean improvement. But the FFI layer retains name-based lookup via `name_to_index`. The runtime HashMap lookup is not a bottleneck and handles all cases correctly.
+
+

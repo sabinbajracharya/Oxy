@@ -15,6 +15,8 @@ pub(crate) type BlockId = usize;
 
 /// A function in register IR form with basic-block CFG.
 pub(crate) struct IrFunction {
+    /// Position in the functions Vec = codegen fn_index. Set by ir_gen before pushing.
+    pub fn_index: usize,
     pub name: String,
     pub blocks: Vec<BasicBlock>,
     pub entry: BlockId,
@@ -191,8 +193,9 @@ impl Terminator {
 }
 
 impl IrFunction {
-    pub(crate) fn new(name: String, entry: BlockId, local_count: usize) -> Self {
+    pub(crate) fn new(name: String, entry: BlockId, local_count: usize, fn_index: usize) -> Self {
         Self {
+            fn_index,
             name,
             blocks: Vec::new(),
             entry,

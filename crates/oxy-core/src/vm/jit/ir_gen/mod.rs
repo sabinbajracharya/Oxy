@@ -66,7 +66,7 @@ impl IrGen {
         Self {
             functions: Vec::new(),
             closure_meta: Vec::new(),
-            current: IrFunction::new(String::new(), 0, 0),
+            current: IrFunction::new(String::new(), 0, 0, usize::MAX),
             current_block: 0,
             next_reg: 0,
             next_block: 0,
@@ -299,8 +299,8 @@ impl IrGen {
             Some(prefix) => format!("{prefix}::{}", f.name),
             None => f.name.clone(),
         };
-        // Save current state
-        let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0));
+        // Save current state. fn_index set at push time after body generation.
+        let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0, usize::MAX));
         self.current.return_type = ret_ty;
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_types = std::mem::take(&mut self.local_types);
@@ -341,6 +341,7 @@ impl IrGen {
         }
 
         self.current.local_count = self.local_count;
+        self.current.fn_index = self.functions.len();
         self.functions
             .push(std::mem::replace(&mut self.current, saved));
 
@@ -666,7 +667,8 @@ impl IrGen {
 
                 // Produce a register holding the callee as a Value::Function.
                 // Locals already hold a function value; named functions need
-                // oxy_push_named_fn to create one.
+                // oxy_push_named_fn to create one. Inline expressions (closures,
+                // parenthesized exprs) are generated directly.
                 let callee_reg = if let Expr::Ident(name, _) = callee.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
                         let r = self.alloc_reg();
@@ -683,7 +685,7 @@ impl IrGen {
                         });
                         r
                     }
-                } else {
+                } else if matches!(callee.as_ref(), Expr::Path { .. }) {
                     let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
@@ -693,6 +695,10 @@ impl IrGen {
                         strings: vec![fname],
                     });
                     r
+                } else {
+                    // Inline expression (closure, parenthesized expr, etc.).
+                    // Generate it directly — it produces a Value::Function on the stack.
+                    self.gen_expr(callee)
                 };
 
                 // Unified call: everything goes through oxy_call_closure.
@@ -2269,7 +2275,7 @@ impl IrGen {
         let closure_name = format!("closure_{}", meta_idx);
         let saved = std::mem::replace(
             &mut self.current,
-            IrFunction::new(closure_name.clone(), 0, 0),
+            IrFunction::new(closure_name.clone(), 0, 0, usize::MAX),
         );
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_count = self.local_count;
@@ -2346,6 +2352,7 @@ impl IrGen {
 
         self.current.local_count = self.local_count;
         self.current.is_async = is_async;
+        self.current.fn_index = self.functions.len();
         self.functions
             .push(std::mem::replace(&mut self.current, saved));
 
@@ -2357,7 +2364,7 @@ impl IrGen {
 
         // Return a register referencing the closure.
         // The closure body is compiled as a separate IrFunction in self.functions.
-        // meta_idx allows the FFI layer to look up the captures in the closure meta table.
+        // fn_index resolved later by the resolve_fn_indices post-processing pass.
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
