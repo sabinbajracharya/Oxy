@@ -159,18 +159,11 @@ impl<'a> Codegen<'a> {
         let entry_block = cl_blocks[&ir_fn.entry];
         builder.append_block_params_for_function_params(entry_block);
 
-        // Every non-entry block gets: ctx (I64), then one I64 per Phi result.
-        let mut phi_result_param: HashMap<(BlockId, Reg), usize> = HashMap::new();
+        // Every non-entry block gets ctx (I64) only.
+        // Phi values flow through the operand stack, not CLIF block params.
         for (id, cb) in &cl_blocks {
             if *id != ir_fn.entry {
                 builder.append_block_param(*cb, types::I64); // ctx
-                if let Some(phis) = block_phis.get(id) {
-                    for (phi_r, _sources) in phis {
-                        builder.append_block_param(*cb, types::I64);
-                        let param_idx = builder.block_params(*cb).len() - 1;
-                        phi_result_param.insert((*id, *phi_r), param_idx);
-                    }
-                }
             }
         }
 
@@ -185,12 +178,16 @@ impl<'a> Codegen<'a> {
             let params = builder.block_params(cb);
             let ctx = params[0];
 
-            // Map Phi result registers to their block parameters.
+            // Pop phi values from operand stack (pushed by predecessor's Jump).
             if let Some(phis) = block_phis.get(&block.id) {
-                for (phi_r, _sources) in phis {
-                    if let Some(param_idx) = phi_result_param.get(&(block.id, *phi_r)) {
-                        regs.insert(*phi_r, params[*param_idx]);
+                for (phi_r, _sources) in phis.iter().rev() {
+                    let slot = next_spill_slot;
+                    next_spill_slot += 1;
+                    if let Some(store) = ffi_refs.get("oxy_store_local") {
+                        let slot_val = builder.ins().iconst(types::I64, slot as i64);
+                        builder.ins().call(*store, &[ctx, slot_val]);
                     }
+                    reg_slot.insert(*phi_r, slot);
                 }
             }
 
@@ -247,28 +244,14 @@ impl<'a> Codegen<'a> {
                     builder.ins().return_(&[disc]);
                 }
                 Terminator::Jump(target) => {
-                    let extra = phi_args
-                        .get(&(block.id, *target))
-                        .map(|v| {
-                            v.iter()
-                                .filter_map(|r| {
-                                    regs.get(r).copied().or_else(|| {
-                                        reg_slot.get(r).and_then(|slot| {
-                                            ffi_refs.get("oxy_read_local_i64").map(|f| {
-                                                let sv =
-                                                    builder.ins().iconst(types::I64, *slot as i64);
-                                                let inst = builder.ins().call(*f, &[ctx, sv]);
-                                                builder.func.dfg.inst_results(inst)[0]
-                                            })
-                                        })
-                                    })
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
-                    let mut jump_args = vec![ctx];
-                    jump_args.extend(extra);
-                    builder.ins().jump(cl_blocks[target], &jump_args);
+                    // Push phi source values onto the operand stack so the target
+                    // block can pop them (preserving the Value enum's type).
+                    if let Some(phi_regs) = phi_args.get(&(block.id, *target)) {
+                        for r in phi_regs {
+                            push_reg(&mut builder, ctx, &ffi_refs, *r, &regs, &reg_slot);
+                        }
+                    }
+                    builder.ins().jump(cl_blocks[target], &[ctx]);
                 }
                 Terminator::Branch {
                     cond,
@@ -290,57 +273,12 @@ impl<'a> Codegen<'a> {
                     } else {
                         builder.ins().iconst(types::I8, 0)
                     };
-                    // Helper to resolve a register to a CLIF value, loading from slot if needed.
-                    let resolve_reg =
-                        |r: &Reg,
-                         builder: &mut FunctionBuilder,
-                         ctx: cranelift_codegen::ir::Value,
-                         ffi_refs: &HashMap<String, cranelift_codegen::ir::FuncRef>,
-                         regs: &HashMap<Reg, cranelift_codegen::ir::Value>,
-                         reg_slot: &HashMap<Reg, usize>|
-                         -> Option<cranelift_codegen::ir::Value> {
-                            if let Some(v) = regs.get(r).copied() {
-                                return Some(v);
-                            }
-                            if let Some(slot) = reg_slot.get(r) {
-                                return ffi_refs.get("oxy_read_local_i64").map(|f| {
-                                    let sv = builder.ins().iconst(types::I64, *slot as i64);
-                                    let inst = builder.ins().call(*f, &[ctx, sv]);
-                                    builder.func.dfg.inst_results(inst)[0]
-                                });
-                            }
-                            None
-                        };
-                    let then_extra = phi_args
-                        .get(&(block.id, *then_block))
-                        .map(|v| {
-                            v.iter()
-                                .filter_map(|r| {
-                                    resolve_reg(r, &mut builder, ctx, &ffi_refs, &regs, &reg_slot)
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
-                    let else_extra = phi_args
-                        .get(&(block.id, *else_block))
-                        .map(|v| {
-                            v.iter()
-                                .filter_map(|r| {
-                                    resolve_reg(r, &mut builder, ctx, &ffi_refs, &regs, &reg_slot)
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
-                    let mut then_args = vec![ctx];
-                    then_args.extend(then_extra);
-                    let mut else_args = vec![ctx];
-                    else_args.extend(else_extra);
                     builder.ins().brif(
                         c_bool,
                         cl_blocks[then_block],
-                        &then_args,
+                        &[ctx],
                         cl_blocks[else_block],
-                        &else_args,
+                        &[ctx],
                     );
                 }
                 Terminator::Halt => {
@@ -761,7 +699,14 @@ fn compile_op(
                     }
                 }
             }
-            spill_result(builder, ctx, ffi_refs, *result, reg_slot, next_spill_slot);
+            // oxy_print_val / oxy_println_val consume their args and do NOT push a
+            // result to the operand stack. Every other void-returning FFI function
+            // pushes its result to the stack, so spill_result is still correct.
+            if *func == "oxy_print_val" || *func == "oxy_println_val" {
+                regs.insert(*result, builder.ins().iconst(types::I64, 0));
+            } else {
+                spill_result(builder, ctx, ffi_refs, *result, reg_slot, next_spill_slot);
+            }
         }
 
         IrOp::ReadResult(r) => {
@@ -798,6 +743,7 @@ fn compile_op(
 #[cfg(test)]
 mod tests {
     use crate::vm::api::run_compiled_jit;
+    use crate::vm::api::run_compiled_capturing_jit;
 
     #[test]
     fn test_e2e_literal_int() {
@@ -1116,10 +1062,12 @@ mod tests {
     }
 
     #[test]
+
     fn test_e2e_break_from_loop() {
         let src = "fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(6));
     }
+
 }

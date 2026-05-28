@@ -1041,20 +1041,21 @@ impl IrGen {
         // is greater. Codegen processes blocks in ID order and the regs/reg_slot
         // maps are populated as blocks are visited. If final_merge were processed
         // before a body block, Return would see neither regs nor reg_slot.
+        //
+        // First check uses current block (no allocation), so we only need n-1 check blocks.
         let n = arms.len();
-        let check_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
+        let check_blocks: Vec<BlockId> = (1..n).map(|_| self.alloc_block()).collect();
         let body_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
         let final_merge = self.alloc_block();
         let mut result_regs: Vec<Reg> = Vec::new();
 
-        // First check uses current block, subsequent checks use check_blocks[i]
         for (i, arm) in arms.iter().enumerate() {
             if i > 0 {
-                self.start_block(check_blocks[i]);
+                self.start_block(check_blocks[i - 1]);
             }
             let matches = self.gen_pattern_check(&arm.pattern, val);
             let else_target = if i + 1 < n {
-                check_blocks[i + 1]
+                check_blocks[i]
             } else {
                 body_blocks[i]
             };
@@ -1090,8 +1091,17 @@ impl IrGen {
             return result_regs[0];
         }
 
+        // Use cascade merge for 2 arms — body blocks jump to an intermediate
+        // merge block (merge_01) instead of directly to final_merge. This lets
+        // codegen emit the Push/Jump phi sequence without polluting the final_merge
+        // block's operand stack state that subsequent lets/printlns depend on.
         if n == 2 {
-            self.start_block(final_merge);
+            self.start_block(body_blocks[0]);
+            let merge_01 = self.alloc_block();
+            self.terminate(Terminator::Jump(merge_01));
+            self.start_block(body_blocks[1]);
+            self.terminate(Terminator::Jump(merge_01));
+            self.start_block(merge_01);
             let r = self.alloc_reg();
             self.emit(IrOp::Phi(r, result_regs[0], result_regs[1]));
             return r;
