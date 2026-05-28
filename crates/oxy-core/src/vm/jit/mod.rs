@@ -189,11 +189,6 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_spawn_ffi", &[types::I64], None),
         ("oxy_sleep_ffi", &[types::I64], None),
         ("oxy_select_ffi", &[types::I64, types::I64], None),
-        (
-            "oxy_make_future",
-            &[types::I64, types::I64, types::I64],
-            None,
-        ),
     ]
 }
 
@@ -208,16 +203,14 @@ pub(crate) struct JitEngine {
     pub(crate) local_count: usize,
     /// Per-function local slot counts (name → local_count).
     fn_local_counts: HashMap<String, usize>,
+    /// Compilation output tables (fn pointers, local counts, name→index, closure meta).
+    /// Owned here, borrowed via `*const JitTables` on each JitContext.
+    pub(crate) tables: context::JitTables,
 }
-
-/// Serialize compilation so parallel tests don't race on global fn tables.
-static COMPILE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 impl JitEngine {
     /// Build a JIT engine from a typed AST program.
     pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
-        let _guard = COMPILE_LOCK.lock().unwrap();
-
         // Reset the async scheduler so tasks from previous compilations
         // don't leak into this run (the scheduler is a OnceLock singleton).
         ffi::reset_runtime_state();
@@ -227,10 +220,16 @@ impl JitEngine {
         ir.gen_program(program);
         let functions: Vec<ir::IrFunction> = std::mem::take(&mut ir.functions);
 
-        // 1a. Register closure metadata so oxy_push_closure can look up captures at runtime.
-        if !ir.closure_meta.is_empty() {
-            ffi::set_closure_meta(std::mem::take(&mut ir.closure_meta));
-        }
+        // 1a. Collect closure metadata (will be stored on JitTables).
+        let closure_meta: Vec<context::ClosureRuntimeMeta> = ir
+            .closure_meta
+            .drain(..)
+            .map(|(param_names, captured, is_async)| context::ClosureRuntimeMeta {
+                param_names,
+                captured,
+                is_async,
+            })
+            .collect();
 
         // 2. Detect ISA, build JIT module
         let isa_builder = cranelift_native::builder().map_err(|e| format!("host ISA: {e}"))?;
@@ -270,20 +269,17 @@ impl JitEngine {
         // 6. Compile IR → native
         cg.compile(functions)?;
 
-        // 4a. Populate fn_table for closure/async-block dispatch.
-        //     fn_index → native fn pointer (stored as usize).
-        if !cg.fn_ptrs.is_empty() {
-            let fn_table: HashMap<usize, *const u8> = cg.fn_ptrs.clone();
-            ffi::set_fn_table(fn_table);
-        }
-        if !cg.fn_local_counts.is_empty() {
-            ffi::set_fn_local_counts(cg.fn_local_counts.clone());
-        }
-        // 4b. Build closure name → fn_index mapping for runtime lookup.
-        {
-            let closure_indices: HashMap<String, usize> = cg.fn_names.clone();
-            ffi::set_closure_fn_indices(closure_indices);
-        }
+        // 4a. Build JitTables from codegen output (replaces global OnceLock tables).
+        let tables = context::JitTables {
+            fn_table: cg
+                .fn_ptrs
+                .iter()
+                .map(|(k, v)| (*k, *v as usize))
+                .collect(),
+            fn_local_counts: cg.fn_local_counts.clone(),
+            name_to_index: cg.fn_names.clone(),
+            closure_meta,
+        };
 
         // 5. Build engine
         let entry_name = "main".to_string();
@@ -308,6 +304,7 @@ impl JitEngine {
             entry_name,
             local_count: main_local_count,
             fn_local_counts,
+            tables,
         })
     }
 
@@ -376,6 +373,7 @@ impl JitVm {
     fn call_fn(&self, ptr: *const u8, local_count: usize) -> VmResult {
         let mut ctx = context::JitContext::new(local_count);
         ctx.result = crate::types::Value::Unit;
+        ctx.tables = &self.engine.tables as *const context::JitTables;
 
         if let Some(ref output_rc) = self.output {
             ctx.output = output_rc as *const _;

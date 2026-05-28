@@ -14,7 +14,7 @@ extern "C" fn oxy_set_result_i64(ctx: *mut super::JitContext, val: i64) {
     ctx.result = crate::types::Value::I64(val);
 }
 
-use super::context::JitContext;
+use super::context::{JitContext, JitTables};
 use crate::types::Value;
 use cranelift_jit::JITBuilder;
 use std::collections::HashMap;
@@ -431,169 +431,6 @@ extern "C" fn oxy_is_truthy(ctx: *mut JitContext) -> u8 {
     }
 }
 
-// ── Closure metadata ──────────────────────────────────────────────────
-
-/// Runtime metadata for a single closure, stored globally for FFI access.
-#[derive(Clone)]
-struct ClosureRuntimeMeta {
-    param_names: Vec<String>,
-    captured: Vec<(String, usize, bool)>,
-    target_ip: usize,
-    is_async: bool,
-}
-
-static CLOSURE_META: std::sync::OnceLock<std::sync::Mutex<Vec<ClosureRuntimeMeta>>> =
-    std::sync::OnceLock::new();
-
-fn closure_meta_lock() -> std::sync::MutexGuard<'static, Vec<ClosureRuntimeMeta>> {
-    CLOSURE_META
-        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn set_closure_meta(meta: Vec<(Vec<String>, Vec<(String, usize, bool)>, bool)>) {
-    let mut lock = closure_meta_lock();
-    lock.clear();
-    for (param_names, captured, is_async) in meta {
-        lock.push(ClosureRuntimeMeta {
-            param_names,
-            captured,
-            target_ip: 0,
-            is_async,
-        });
-    }
-}
-
-// ── Async function metadata ───────────────────────────────────────────
-
-struct AsyncFnMeta {
-    name: String,
-    params: Vec<crate::ast::Param>,
-    return_type: Option<crate::ast::TypeAnnotation>,
-    body: Box<crate::ast::Block>,
-    target_ip: usize,
-}
-unsafe impl Send for AsyncFnMeta {}
-unsafe impl Sync for AsyncFnMeta {}
-
-static ASYNC_FN_META: std::sync::OnceLock<std::sync::Mutex<Vec<AsyncFnMeta>>> =
-    std::sync::OnceLock::new();
-
-fn async_fn_meta_lock() -> std::sync::MutexGuard<'static, Vec<AsyncFnMeta>> {
-    ASYNC_FN_META
-        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn set_async_fn_meta(
-    meta: Vec<(
-        String,
-        Vec<crate::ast::Param>,
-        Option<crate::ast::TypeAnnotation>,
-        crate::ast::Block,
-        usize,
-    )>,
-) {
-    let mut lock = async_fn_meta_lock();
-    lock.clear();
-    for (name, params, return_type, body, target_ip) in meta {
-        lock.push(AsyncFnMeta {
-            name,
-            params,
-            return_type,
-            body: Box::new(body),
-            target_ip,
-        });
-    }
-}
-
-// ── Builtin path table ────────────────────────────────────────────────
-
-/// Global registry of PathCallBuiltin segment lists, keyed by index.
-static BUILTIN_PATHS: std::sync::OnceLock<std::sync::Mutex<Vec<Vec<String>>>> =
-    std::sync::OnceLock::new();
-
-fn builtin_paths_lock() -> std::sync::MutexGuard<'static, Vec<Vec<String>>> {
-    BUILTIN_PATHS
-        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn register_builtin_path(segments: Vec<String>) -> usize {
-    let mut lock = builtin_paths_lock();
-    let idx = lock.len();
-    lock.push(segments);
-    idx
-}
-
-// ── Struct init registry ──────────────────────────────────────────────
-
-/// Struct init metadata stored in a global registry.
-struct StructInitMeta {
-    name: String,
-    field_names: Vec<String>,
-    field_count: usize,
-}
-
-static STRUCT_INIT_META: std::sync::OnceLock<std::sync::Mutex<Vec<StructInitMeta>>> =
-    std::sync::OnceLock::new();
-
-fn struct_init_meta_lock() -> std::sync::MutexGuard<'static, Vec<StructInitMeta>> {
-    STRUCT_INIT_META
-        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn register_struct_init(
-    name: String,
-    field_names: Vec<String>,
-    field_count: usize,
-) -> usize {
-    let mut lock = struct_init_meta_lock();
-    let idx = lock.len();
-    lock.push(StructInitMeta {
-        name,
-        field_names,
-        field_count,
-    });
-    idx
-}
-
-// ── Const enum variant registry ──────────────────────────────────────
-//
-// Uses a Box behind a newtype that manually implements Send+Sync because
-// Value contains non-thread-safe types (Rc, RefCell) but we only access
-// them from a single thread (JIT compilation + execution are sequential).
-
-struct ConstEnumVariantStore(Vec<(String, String, Vec<Value>)>);
-unsafe impl Send for ConstEnumVariantStore {}
-unsafe impl Sync for ConstEnumVariantStore {}
-
-static CONST_ENUM_VARIANTS: std::sync::OnceLock<std::sync::Mutex<ConstEnumVariantStore>> =
-    std::sync::OnceLock::new();
-
-fn const_enum_variants_lock() -> std::sync::MutexGuard<'static, ConstEnumVariantStore> {
-    CONST_ENUM_VARIANTS
-        .get_or_init(|| std::sync::Mutex::new(ConstEnumVariantStore(Vec::new())))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn register_const_enum_variant(
-    enum_name: String,
-    variant: String,
-    data: Vec<Value>,
-) -> usize {
-    let mut lock = const_enum_variants_lock();
-    let idx = lock.0.len();
-    lock.0.push((enum_name, variant, data));
-    idx
-}
-
 // ── Global state reset ──────────────────────────────────────────────
 
 /// Reset the async scheduler between compilations to prevent task state
@@ -613,93 +450,11 @@ struct CallFrame {
     caller_sp: usize,
 }
 
-/// Function pointer table: bytecode IP → native fn pointer (stored as usize).
-static FN_TABLE: std::sync::OnceLock<std::sync::Mutex<HashMap<usize, usize>>> =
-    std::sync::OnceLock::new();
-
 fn call_stack_lock() -> std::sync::MutexGuard<'static, Vec<CallFrame>> {
     CALL_STACK
         .get_or_init(|| std::sync::Mutex::new(Vec::new()))
         .lock()
         .unwrap()
-}
-
-fn fn_table_lock() -> std::sync::MutexGuard<'static, HashMap<usize, usize>> {
-    FN_TABLE
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(super) fn lookup_fn_ptr(ip: usize) -> Option<*const u8> {
-    fn_table_lock().get(&ip).map(|&p| p as *const u8)
-}
-
-/// Per-function local_count, populated during JIT compilation alongside fn_table.
-static FN_LOCAL_COUNTS: std::sync::OnceLock<std::sync::Mutex<HashMap<usize, usize>>> =
-    std::sync::OnceLock::new();
-
-fn fn_local_counts_lock() -> std::sync::MutexGuard<'static, HashMap<usize, usize>> {
-    FN_LOCAL_COUNTS
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn set_fn_local_counts(counts: HashMap<usize, usize>) {
-    let mut m = fn_local_counts_lock();
-    m.clear();
-    m.extend(counts);
-}
-
-fn lookup_fn_local_count(idx: usize) -> usize {
-    fn_local_counts_lock().get(&idx).copied().unwrap_or(8)
-}
-
-/// Closure/async-block name → fn_index (populated after JIT compilation).
-static CLOSURE_NAME_TO_INDEX: std::sync::OnceLock<std::sync::Mutex<HashMap<String, usize>>> =
-    std::sync::OnceLock::new();
-
-fn closure_name_index_lock() -> std::sync::MutexGuard<'static, HashMap<String, usize>> {
-    CLOSURE_NAME_TO_INDEX
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn set_closure_fn_indices(indices: HashMap<String, usize>) {
-    let mut m = closure_name_index_lock();
-    m.clear();
-    m.extend(indices);
-}
-
-fn lookup_fn_index_by_name(name: &str) -> Option<usize> {
-    closure_name_index_lock().get(name).copied()
-}
-
-pub(crate) fn set_fn_table(table: HashMap<usize, *const u8>) {
-    let mut m = fn_table_lock();
-    m.clear();
-    for (ip, ptr) in table {
-        m.insert(ip, ptr as usize);
-    }
-}
-
-/// Method IPs: (type_name, method_name) → bytecode IP
-static METHOD_IPS: std::sync::OnceLock<std::sync::Mutex<HashMap<(String, String), usize>>> =
-    std::sync::OnceLock::new();
-
-fn method_ips_lock() -> std::sync::MutexGuard<'static, HashMap<(String, String), usize>> {
-    METHOD_IPS
-        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap()
-}
-
-pub(crate) fn set_method_ips(ips: HashMap<(String, String), usize>) {
-    let mut m = method_ips_lock();
-    m.clear();
-    m.extend(ips);
 }
 
 // ── CalleeFrame: buffer lifecycle for JIT function calls ────────────────
@@ -813,10 +568,8 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
     };
 
     // Look up captures metadata.
-    let meta = {
-        let lock = closure_meta_lock();
-        lock.get(meta_idx as usize).cloned()
-    };
+    let tables = unsafe { &*ctx.tables };
+    let meta = tables.closure_meta(meta_idx as usize).cloned();
     let (param_names, captured, is_async) = meta
         .map(|m| (m.param_names, m.captured, m.is_async))
         .unwrap_or_default();
@@ -838,7 +591,7 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
     }
 
     // Look up the native fn index by the closure function name.
-    let fn_index = lookup_fn_index_by_name(&name).unwrap_or(usize::MAX);
+    let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
     let placeholder_span = crate::lexer::Span {
@@ -890,7 +643,8 @@ extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: i64, name_len: i
         let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
         String::from_utf8_lossy(bytes).into_owned()
     };
-    let fn_index = match lookup_fn_index_by_name(&name) {
+    let tables = unsafe { &*ctx.tables };
+    let fn_index = match tables.name_to_index(&name) {
         Some(idx) => idx,
         None => {
             set_error(ctx, format!("JIT: function not found: {name}"));
@@ -927,10 +681,8 @@ extern "C" fn oxy_push_async_block(
         String::from_utf8_lossy(bytes).into_owned()
     };
 
-    let meta = {
-        let lock = closure_meta_lock();
-        lock.get(meta_idx as usize).cloned()
-    };
+    let tables = unsafe { &*ctx.tables };
+    let meta = tables.closure_meta(meta_idx as usize).cloned();
     let captured = meta.map(|m| m.captured.clone()).unwrap_or_default();
 
     let closure_env = crate::env::Environment::new();
@@ -946,7 +698,7 @@ extern "C" fn oxy_push_async_block(
             .define(captured_name.clone(), val, *is_mut);
     }
 
-    let fn_index = lookup_fn_index_by_name(&name).unwrap_or(usize::MAX);
+    let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
     let future_data = crate::types::FutureData {
@@ -1049,20 +801,18 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     }
 
     // Sync closure: look up JIT fn, call it
-    let fn_ptr = {
-        let table = fn_table_lock();
-        match table.get(&target_ip).copied() {
-            Some(p) => p,
-            None => {
-                set_error(
-                    ctx,
-                    format!("JIT: no function for closure at ip={target_ip}"),
-                );
-                unsafe {
-                    push(ctx, Value::Unit);
-                }
-                return;
+    let tables = unsafe { &*ctx.tables };
+    let fn_ptr = match tables.fn_ptr(target_ip) {
+        Some(p) => p,
+        None => {
+            set_error(
+                ctx,
+                format!("JIT: no function for closure at ip={target_ip}"),
+            );
+            unsafe {
+                push(ctx, Value::Unit);
             }
+            return;
         }
     };
 
@@ -1085,7 +835,7 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     };
     ctx.sp = drain_start;
 
-    let fn_local_count = lookup_fn_local_count(target_ip);
+    let fn_local_count = tables.local_count(target_ip);
     let total_frame = fn_local_count.max(captures_end + arg_count);
     let mut frame = CalleeFrame::new(total_frame);
     for (i, name) in captured_names.iter().enumerate() {
@@ -1654,30 +1404,26 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
 
 /// JIT-compatible closure invoker callback. Matches the signature
 /// `Fn(&Value, &[Value]) -> Result<Value, String>` used by builtins.
-fn jit_closure_invoker(func: &Value, args: &[Value]) -> Result<Value, String> {
+fn jit_closure_invoker(
+    tables: &JitTables,
+    func: &Value,
+    args: &[Value],
+) -> Result<Value, String> {
     let ft = match func {
         Value::Function(f) => f.clone(),
         _ => return Err("not a callable function".into()),
     };
     let target_ip = ft.target_ip.ok_or("function has no target_ip")?;
-    let fn_ptr = {
-        let table = fn_table_lock();
-        table
-            .get(&target_ip)
-            .copied()
-            .ok_or(format!("JIT: no function for closure at ip={target_ip}"))?
-    };
+    let fn_ptr = tables
+        .fn_ptr(target_ip)
+        .ok_or(format!("JIT: no function for closure at ip={target_ip}"))?;
 
-    // Build a temporary JitContext for the closure call.
-    // The closure function's local slots are: captures at [0..captures_end),
-    // then params at [captures_end..captures_end+params), then any body locals.
-    // Use the actual local_count from codegen to size the buffer correctly.
     let captures_end = ft.captured_names.len();
-    let actual_local_count = lookup_fn_local_count(target_ip);
-    // Ensure we have room for at least captures + args.
+    let actual_local_count = tables.local_count(target_ip);
     let min_locals = captures_end + args.len();
     let local_count = actual_local_count.max(min_locals);
     let mut call_ctx = JitContext::new(local_count);
+    call_ctx.tables = tables as *const JitTables;
     for (i, name) in ft.captured_names.iter().enumerate() {
         let val = ft
             .closure_env
@@ -1732,85 +1478,14 @@ extern "C" fn oxy_method_call(
         _ => type_name,
     };
 
-    // First try direct method dispatch (for struct/impl methods)
-    let method_ip = method_ips_lock()
-        .get(&(lookup_name.clone(), method_name.to_string()))
-        .copied();
-    if let Some(target_ip) = method_ip {
-        let fn_ptr = {
-            let table = fn_table_lock();
-            table.get(&target_ip).copied()
-        };
-        if let Some(fp) = fn_ptr {
-            // Run the method in its own buffer so callee locals don't corrupt
-            // the caller's buffer. Same pattern as invoke_jit_fn.
-            let fn_local_count = lookup_fn_local_count(target_ip);
-            let total_frame = fn_local_count.max(1 + arg_count);
-            const STACK_CAP: usize = 2048;
-            let callee_cap = total_frame + STACK_CAP;
-            let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
-            let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
-
-            unsafe {
-                callee_buf.add(0).write(receiver);
-            }
-            for (i, arg) in args.into_iter().enumerate() {
-                unsafe {
-                    callee_buf.add(1 + i).write(arg);
-                }
-            }
-
-            let saved_buffer = ctx.buffer;
-            let saved_capacity = ctx.capacity;
-            let saved_local_count = ctx.local_count;
-            let saved_sp = ctx.sp;
-            ctx.buffer = callee_buf;
-            ctx.capacity = callee_cap;
-            ctx.local_count = total_frame;
-            ctx.sp = 0;
-
-            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
-                unsafe { std::mem::transmute(fp as *const ()) };
-            let _disc = fn_ptr(ctx);
-
-            // Clean up callee's locals and stack, then free the buffer.
-            for i in 0..ctx.local_count {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(i));
-                }
-            }
-            for i in 0..ctx.sp {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
-                }
-            }
-            unsafe {
-                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
-            }
-
-            let result = std::mem::replace(&mut ctx.result, Value::Unit);
-            ctx.buffer = saved_buffer;
-            ctx.capacity = saved_capacity;
-            ctx.local_count = saved_local_count;
-            ctx.sp = saved_sp;
-            unsafe {
-                push(ctx, result);
-            }
-            return;
-        }
-    }
-
     // JIT name-based lookup for user-defined struct/enum methods.
+    let tables = unsafe { &*ctx.tables };
     // The old method_ips table is bytecode-only; JIT-compiled methods are
     // registered by qualified name (e.g. "Counter::inc") in the fn table.
     let qualified = format!("{lookup_name}::{method_name}");
-    if let Some(fn_index) = lookup_fn_index_by_name(&qualified) {
-        if let Some(fp) = {
-            let table = fn_table_lock();
-            table.get(&fn_index).copied()
-        } {
-            // Run in dedicated callee buffer. Same pattern as above.
-            let fn_local_count = lookup_fn_local_count(fn_index);
+    if let Some(fn_index) = tables.name_to_index(&qualified) {
+        if let Some(fp) = tables.fn_table.get(&fn_index).copied() {
+            let fn_local_count = tables.local_count(fn_index);
             let total_frame = fn_local_count.max(1 + arg_count);
             const STACK_CAP2: usize = 2048;
             let callee_cap = total_frame + STACK_CAP2;
@@ -1866,7 +1541,7 @@ extern "C" fn oxy_method_call(
     }
 
     // Fall back to built-in dispatch
-    let result = dispatch_builtin_method(receiver.clone(), &method_name, args.clone());
+    let result = dispatch_builtin_method(tables, receiver.clone(), &method_name, args.clone());
 
     match result {
         Ok(val) => unsafe {
@@ -1883,6 +1558,7 @@ extern "C" fn oxy_method_call(
 
 /// Reimplementation of Vm::builtin_method, minus the Vm dependency.
 fn dispatch_builtin_method(
+    tables: &JitTables,
     receiver: Value,
     method_name: &str,
     args: Vec<Value>,
@@ -1906,7 +1582,7 @@ fn dispatch_builtin_method(
                 Value::Vec(rc.clone()),
                 method_name,
                 &args,
-                |f, fa| jit_closure_invoker(&f, fa),
+                |f, fa| jit_closure_invoker(tables, &f, fa),
             );
             if result.is_ok() {
                 return result;
@@ -1922,7 +1598,7 @@ fn dispatch_builtin_method(
                 crate::types::IteratorState::VecSource { data, index: 0 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(&f, fa)
+                jit_closure_invoker(tables, &f, fa)
             })
         }
         Value::String(_) => crate::vm::builtins::string::dispatch(receiver, method_name, &args),
@@ -1956,12 +1632,12 @@ fn dispatch_builtin_method(
         }
         Value::EnumVariant { enum_name, .. } if enum_name == "Option" => {
             crate::vm::builtins::option::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(&f, fa)
+                jit_closure_invoker(tables, &f, fa)
             })
         }
         Value::EnumVariant { enum_name, .. } if enum_name == "Result" => {
             crate::vm::builtins::result::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(&f, fa)
+                jit_closure_invoker(tables, &f, fa)
             })
         }
         Value::EnumVariant { enum_name, .. } => match method_name {
@@ -1998,7 +1674,7 @@ fn dispatch_builtin_method(
         },
         Value::Iterator(_) => {
             crate::vm::builtins::iterator::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(&f, fa)
+                jit_closure_invoker(tables, &f, fa)
             })
         }
         Value::Tuple(ref _t) => match method_name {
@@ -2038,7 +1714,7 @@ fn dispatch_builtin_method(
                 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(&f, fa)
+                jit_closure_invoker(tables, &f, fa)
             })
         }
         _ => Err(format!(
@@ -2308,9 +1984,10 @@ extern "C" fn oxy_path_call_builtin(
     // user-defined modules (e.g. `mod math { fn double }`) take priority
     // over stdlib modules with the same name (e.g. math::sqrt).
     let fn_name = seg_refs.join("::");
-    if let Some(fn_idx) = lookup_fn_index_by_name(&fn_name) {
-        if let Some(fn_ptr) = lookup_fn_ptr(fn_idx) {
-            let local_count = lookup_fn_local_count(fn_idx);
+    let tables = unsafe { &*ctx.tables };
+    if let Some(fn_idx) = tables.name_to_index(&fn_name) {
+        if let Some(fn_ptr) = tables.fn_ptr(fn_idx) {
+            let local_count = tables.local_count(fn_idx);
             for a in args.into_iter().rev() {
                 unsafe {
                     push(ctx, a);
@@ -2329,7 +2006,7 @@ extern "C" fn oxy_path_call_builtin(
     };
     if let Some((module, func)) = module_route {
         if let Some(call) = registry::lookup_module(&module) {
-            match call_stdlib_jit(call, &func, &args) {
+            match call_stdlib_jit(tables, call, &func, &args) {
                 Ok(val) => unsafe {
                     push(ctx, val);
                 },
@@ -2372,11 +2049,12 @@ extern "C" fn oxy_path_call_builtin(
 
 /// Call a stdlib module function with JIT closure support.
 fn call_stdlib_jit(
+    tables: &JitTables,
     module_call: crate::stdlib::registry::ModuleCall,
     func: &str,
     args: &[Value],
 ) -> Result<Value, String> {
-    let mut cb = |f: &Value, fargs: &[Value]| jit_closure_invoker(f, fargs);
+    let mut cb = |f: &Value, fargs: &[Value]| jit_closure_invoker(tables, f, fargs);
     let span = crate::lexer::Span {
         start: 0,
         end: 0,
@@ -2486,22 +2164,20 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
     match val {
         Value::Future(fut) => {
             let target_ip = fut.target_ip;
-            let fn_ptr = {
-                let table = fn_table_lock();
-                match table.get(&target_ip) {
-                    Some(p) => *p,
-                    None => {
-                        set_error(
-                            ctx,
-                            format!("JIT: no function for future at ip={target_ip}"),
-                        );
-                        unsafe { push(ctx, Value::Unit) };
-                        return;
-                    }
+            let tables = unsafe { &*ctx.tables };
+            let fn_ptr = match tables.fn_ptr(target_ip) {
+                Some(p) => p,
+                None => {
+                    set_error(
+                        ctx,
+                        format!("JIT: no function for future at ip={target_ip}"),
+                    );
+                    unsafe { push(ctx, Value::Unit) };
+                    return;
                 }
             };
 
-            let fn_local_count = lookup_fn_local_count(target_ip);
+            let fn_local_count = tables.local_count(target_ip);
             let captures_end = fut.captured_names.len();
             let total_frame = fn_local_count.max(captures_end + fut.args.len());
             let mut frame = CalleeFrame::new(total_frame);
@@ -2536,15 +2212,17 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
     match closure {
         Value::Function(f) => {
             let target_ip = f.target_ip.unwrap_or(0);
+            let tables = unsafe { &*ctx.tables };
             let capture_count = f.captured_names.len();
-            let local_count = lookup_fn_local_count(target_ip).max(capture_count);
+            let local_count = tables.local_count(target_ip).max(capture_count);
 
             // Eagerly run the task function synchronously. JIT functions
             // are native code that runs start-to-finish — they can't be
             // paused mid-execution and resumed. By running the task now,
             // the result is immediately available when await is called.
-            let task_result = if let Some(fn_ptr) = lookup_fn_ptr(target_ip) {
+            let task_result = if let Some(fn_ptr) = tables.fn_ptr(target_ip) {
                 let mut task_ctx = JitContext::new(local_count);
+                task_ctx.tables = tables as *const JitTables;
                 task_ctx.local_count = local_count;
                 for (i, name) in f.captured_names.iter().enumerate() {
                     let val = f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
@@ -2635,51 +2313,6 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
     }
 }
 
-extern "C" fn oxy_make_future(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut args = Vec::with_capacity(arg_count);
-    for _ in 0..arg_count {
-        args.push(unsafe { pop(ctx) });
-    }
-    args.reverse();
-    let meta = {
-        let lock = async_fn_meta_lock();
-        lock.iter().find(|m| m.target_ip == target_ip).map(|m| {
-            (
-                m.name.clone(),
-                m.params.clone(),
-                m.return_type.clone(),
-                m.body.clone(),
-            )
-        })
-    };
-    let (name, params, return_type, body) = match meta {
-        Some(m) => m,
-        None => {
-            set_error(
-                ctx,
-                format!("MakeFuture: no async function found at target_ip={target_ip}"),
-            );
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
-        }
-    };
-    let future = Value::Future(Box::new(crate::types::FutureData {
-        name,
-        params,
-        return_type,
-        body: (*body).clone(),
-        closure_env: crate::env::Environment::new(),
-        args,
-        target_ip,
-        captured_names: Vec::new(),
-    }));
-    unsafe {
-        push(ctx, future);
-    }
-}
 
 // ── Symbol registry ──────────────────────────────────────────────────
 
@@ -2766,7 +2399,6 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_spawn_ffi", oxy_spawn_ffi as _),
         ("oxy_sleep_ffi", oxy_sleep_ffi as _),
         ("oxy_select_ffi", oxy_select_ffi as _),
-        ("oxy_make_future", oxy_make_future as _),
     ];
 
     for (name, ptr) in syms {

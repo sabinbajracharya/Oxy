@@ -18,9 +18,49 @@
 //! The `sp` field tracks the current operand stack depth in units of `Value`.
 
 use crate::types::Value;
+use std::collections::HashMap;
 
 /// Maximum operand stack depth (in Value units) before reallocation.
 const DEFAULT_STACK_CAP: usize = 2048;
+
+/// Compilation output tables shared across all execution contexts for a
+/// single JIT compilation unit. Read-only at runtime, owned by `JitEngine`.
+pub(crate) struct JitTables {
+    /// fn_index → native function pointer (stored as usize for Send safety).
+    pub fn_table: HashMap<usize, usize>,
+    /// fn_index → number of local slots.
+    pub fn_local_counts: HashMap<usize, usize>,
+    /// Function name → fn_index (for by-name lookups: push_closure, push_named_fn).
+    pub name_to_index: HashMap<String, usize>,
+    /// Per-closure capture metadata, indexed by meta_idx.
+    pub closure_meta: Vec<ClosureRuntimeMeta>,
+}
+
+/// Per-closure metadata describing captured variables.
+#[derive(Debug, Clone)]
+pub(crate) struct ClosureRuntimeMeta {
+    pub param_names: Vec<String>,
+    pub captured: Vec<(String, usize, bool)>,
+    pub is_async: bool,
+}
+
+impl JitTables {
+    pub fn fn_ptr(&self, ip: usize) -> Option<*const u8> {
+        self.fn_table.get(&ip).map(|&p| p as *const u8)
+    }
+
+    pub fn local_count(&self, idx: usize) -> usize {
+        self.fn_local_counts.get(&idx).copied().unwrap_or(8)
+    }
+
+    pub fn name_to_index(&self, name: &str) -> Option<usize> {
+        self.name_to_index.get(name).copied()
+    }
+
+    pub fn closure_meta(&self, idx: usize) -> Option<&ClosureRuntimeMeta> {
+        self.closure_meta.get(idx)
+    }
+}
 
 /// Runtime execution context for JIT-compiled code.
 ///
@@ -67,6 +107,10 @@ pub(crate) struct JitContext {
     /// Captured output buffer (if non-null, print goes here instead of stdout).
     /// This is a `*const Rc<RefCell<Vec<String>>>` pointer.
     pub output: *const std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+
+    /// Pointer to compilation tables (fn pointers, local counts, name→index,
+    /// closure metadata). Read-only at runtime, owned by JitEngine.
+    pub tables: *const JitTables,
 }
 
 impl JitContext {
@@ -93,6 +137,7 @@ impl JitContext {
             fn_table_len: 0,
             fn_table_base_ip: 0,
             output: std::ptr::null(),
+            tables: std::ptr::null(),
         }
     }
 
