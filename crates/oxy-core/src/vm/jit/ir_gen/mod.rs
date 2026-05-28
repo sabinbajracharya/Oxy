@@ -1013,7 +1013,8 @@ impl IrGen {
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
-                        let coerced = if self.local_types.get(&slot).map_or(false, |t| t == "byte") {
+                        let coerced = if self.local_types.get(&slot).map_or(false, |t| t == "byte")
+                        {
                             let cr = self.alloc_reg();
                             self.emit(IrOp::CallBuiltin {
                                 result: cr,
@@ -1420,16 +1421,36 @@ impl IrGen {
                 self.start_block(check_blocks[i - 1]);
             }
             let matches = self.gen_pattern_check(&arm.pattern, val);
-            let else_target = if i + 1 < n {
+            let next_target = if i + 1 < n {
                 check_blocks[i]
             } else {
                 body_blocks[i]
             };
-            self.terminate(Terminator::Branch {
-                cond: matches,
-                then_block: body_blocks[i],
-                else_block: else_target,
-            });
+            if let Some(guard) = &arm.guard {
+                // Pattern matches → evaluate guard before executing body.
+                let guard_block = self.alloc_block();
+                self.terminate(Terminator::Branch {
+                    cond: matches,
+                    then_block: guard_block,
+                    else_block: next_target,
+                });
+                self.start_block(guard_block);
+                self.gen_pattern_bind(&arm.pattern, val);
+                let guard_val = self.gen_expr(guard);
+                // Guard truthy → body; falsy → next arm.
+                // Last arm's guard failure falls through to body (exhaustive catch-all).
+                self.terminate(Terminator::Branch {
+                    cond: guard_val,
+                    then_block: body_blocks[i],
+                    else_block: next_target,
+                });
+            } else {
+                self.terminate(Terminator::Branch {
+                    cond: matches,
+                    then_block: body_blocks[i],
+                    else_block: next_target,
+                });
+            }
         }
 
         // Generate arm body blocks
