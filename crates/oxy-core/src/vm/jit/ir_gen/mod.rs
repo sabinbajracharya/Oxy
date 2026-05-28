@@ -446,6 +446,16 @@ impl IrGen {
                 } else if let Some(const_val) = self.global_consts.get(name).cloned() {
                     // Inline const value at use site
                     self.gen_expr(&const_val)
+                } else if *name == "None" {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_const_enum_variant",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec!["Option".to_string(), "None".to_string()],
+                    });
+                    r
                 } else {
                     // Global function or builtin — reference for Call handling
                     let r = self.alloc_reg();
@@ -513,10 +523,11 @@ impl IrGen {
                 let r = self.alloc_reg();
 
                 // Route enum variant constructors (Some, Ok, Err) to their FFI.
+                // Handles both short names and fully-qualified paths (after use alias resolution).
                 let enum_ctor = match fname.as_str() {
-                    "Some" => Some(("Option", "Some")),
-                    "Ok" => Some(("Result", "Ok")),
-                    "Err" => Some(("Result", "Err")),
+                    "Some" | "Option::Some" => Some(("Option", "Some")),
+                    "Ok" | "Result::Ok" => Some(("Result", "Ok")),
+                    "Err" | "Result::Err" => Some(("Result", "Err")),
                     _ => None,
                 };
                 if let Some((enum_name, variant)) = enum_ctor {
