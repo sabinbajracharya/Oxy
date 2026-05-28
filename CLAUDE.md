@@ -494,3 +494,7 @@ When debugging JIT codegen failures, do NOT brute-force individual test fixes. I
 The trampoline approach (IR continuation blocks for Phi isolation) and the spill-from-top approach (two stacks growing toward each other in one buffer) are examples of architectural fixes that eliminated entire classes of bugs at once.
 
 If a fix adds a magic constant, an offset, or a special-case guard, flag it — it's probably papering over an architectural issue.
+
+**If you fix the same bug pattern in more than one place, stop and create a shared abstraction.** The `move_value` helper is the canonical example: `invoke_jit_fn`, `oxy_call_closure`, and `pop` all moved `Value` between buffer slots via `ptr::read` — and two of the three had the "forgot to clear source" double-free bug. The moment you recognize a repeated unsafe pattern, encode the invariant once (e.g. `move_value(src, dst)` always clears the source) so the invariant can't be forgotten at the next call site.
+
+**Always check whether a design shortcut creates a mismatch that can silently corrupt state.** Per-function local counts stored in the engine vs. inferred from `main` is the canonical example: `call_fn` used `engine.local_count` (main's) for every function's buffer, but codegen computed spill offsets from each function's own `local_count`. The mismatch caused silent heap corruption only when a function had more locals than `main` — a latent bug that became a crash only when test files grew complex.
