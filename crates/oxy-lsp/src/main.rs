@@ -46,11 +46,6 @@ impl OxyLsp {
             diagnostics.push(error_to_diagnostic(&e));
         }
 
-        // Run bytecode compiler to catch visibility and other compile-time errors
-        if let Err(e) = oxy_core::compiler::Compiler::new_for_tests(None).compile(&program) {
-            diagnostics.push(error_to_diagnostic(&e));
-        }
-
         diagnostics
     }
 
