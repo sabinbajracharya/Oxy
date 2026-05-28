@@ -2139,6 +2139,24 @@ extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
                 push(ctx, inner);
             }
         }
+        Value::Tuple(ref t) => {
+            let inner = t.get(index).cloned().unwrap_or(Value::Unit);
+            unsafe {
+                push(ctx, inner);
+            }
+        }
+        Value::Array(ref a) => {
+            let inner = a.get(index).cloned().unwrap_or(Value::Unit);
+            unsafe {
+                push(ctx, inner);
+            }
+        }
+        Value::Vec(ref rc) => {
+            let inner = rc.borrow().get(index).cloned().unwrap_or(Value::Unit);
+            unsafe {
+                push(ctx, inner);
+            }
+        }
         _ => {
             set_error(ctx, format!("EnumDataGet on non-enum: {val:?}"));
             unsafe {

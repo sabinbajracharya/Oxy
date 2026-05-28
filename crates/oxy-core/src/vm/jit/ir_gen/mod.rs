@@ -733,14 +733,43 @@ impl IrGen {
                     });
                     r
                 } else {
+                    // Check if this is a struct-style enum variant constructor
+                    // (e.g. Message::Move { x: 10, y: 20 }). If so, route to
+                    // oxy_make_enum_variant to produce Value::EnumVariant instead
+                    // of Value::Struct.
+                    let enum_ctor: Option<(String, String)> = 'ctor: {
+                        if let Some((enum_name, variant)) = name.rsplit_once("::") {
+                            if self
+                                .variant_to_enum
+                                .get(variant)
+                                .map_or(false, |e| e == enum_name)
+                            {
+                                break 'ctor Some((
+                                    enum_name.to_string(),
+                                    variant.to_string(),
+                                ));
+                            }
+                        }
+                        None
+                    };
                     let r = self.alloc_reg();
-                    self.emit(IrOp::CallBuiltin {
-                        result: r,
-                        func: "oxy_struct_init",
-                        args: arg_regs,
-                        immediates: vec![fields.len()],
-                        strings: vec![name.clone(), names_joined],
-                    });
+                    if let Some((enum_name, variant)) = enum_ctor {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_make_enum_variant",
+                            args: arg_regs,
+                            immediates: vec![fields.len()],
+                            strings: vec![enum_name, variant],
+                        });
+                    } else {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_struct_init",
+                            args: arg_regs,
+                            immediates: vec![fields.len()],
+                            strings: vec![name.clone(), names_joined],
+                        });
+                    }
                     r
                 }
             }
