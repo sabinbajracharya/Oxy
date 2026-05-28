@@ -892,7 +892,22 @@ impl IrGen {
             self.start_block(merge_id);
             let r = self.alloc_reg();
             self.emit(IrOp::Phi(r, then_reg, else_reg));
-            r
+            // Store the phi result into a pseudo-local slot, then jump to a
+            // continuation block. The Jump's phi_args machinery will push r
+            // via push_reg, and the StoreLocal at the continuation site
+            // will load it back. This keeps Phi stack ops isolated.
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            // Reload from temp slot into a new register so the caller sees
+            // the value as defined in the continuation block (important for
+            // nested control flow where the continuation jumps to an outer
+            // merge block).
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            r2
         } else {
             // If without else: the false branch falls through to the continue block.
             let continue_id = self.alloc_block();
@@ -968,7 +983,14 @@ impl IrGen {
         self.start_block(merge_id);
         let r = self.alloc_reg();
         self.emit(IrOp::Phi(r, then_reg, else_reg));
-        r
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
     }
 
     fn gen_if_let_guarded(
@@ -1030,8 +1052,17 @@ impl IrGen {
         self.start_block(merge_id);
         let r = self.alloc_reg();
         self.emit(IrOp::Phi(r, then_reg, else_reg));
-        r
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
     }
+
+    /// Guarded if-let: same as if-let but with an additional guard condition.
 
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
@@ -1091,10 +1122,6 @@ impl IrGen {
             return result_regs[0];
         }
 
-        // Use cascade merge for 2 arms — body blocks jump to an intermediate
-        // merge block (merge_01) instead of directly to final_merge. This lets
-        // codegen emit the Push/Jump phi sequence without polluting the final_merge
-        // block's operand stack state that subsequent lets/printlns depend on.
         if n == 2 {
             self.start_block(body_blocks[0]);
             let merge_01 = self.alloc_block();
@@ -1104,7 +1131,14 @@ impl IrGen {
             self.start_block(merge_01);
             let r = self.alloc_reg();
             self.emit(IrOp::Phi(r, result_regs[0], result_regs[1]));
-            return r;
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            return r2;
         }
 
         // For 3+ arms: cascade intermediate merges, each combining two results.
@@ -1154,8 +1188,18 @@ impl IrGen {
                 idx += 1;
             }
         }
-        // prev_merge now holds the final merge block with the final phi result
-        prev_merge.unwrap().1
+        // prev_merge now holds the final merge block with the final phi result.
+        // Store it in a temp, jump to continuation, and reload — isolates Phi
+        // stack ops from user code and keeps reg_def_block correct for nesting.
+        let (last_merge, phi_r) = prev_merge.unwrap();
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.current.block_mut(last_merge).push(IrOp::StoreLocal(phi_temp, phi_r));
+        let cont = self.alloc_block();
+        self.current.block_mut(last_merge).terminator = Terminator::Jump(cont);
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
     }
 
     /// Emit a pattern-match check: returns a register that is truthy if pattern matches.
