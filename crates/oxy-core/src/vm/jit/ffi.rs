@@ -779,11 +779,13 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
         .unwrap_or_default();
 
     // Build captured values from current locals at the outer slots.
+    // For Cell (mutable) variables, share the Rc<RefCell> so mutations
+    // are visible in both the closure and the outer function.
     let closure_env = crate::env::Environment::new();
     for (captured_name, outer_slot, is_mut) in &captured {
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
-            Value::Cell(rc) => rc.borrow().clone(),
+            Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
             other => other.clone(),
         };
         std::mem::forget(shallow);
@@ -860,7 +862,7 @@ extern "C" fn oxy_push_async_block(
     for (captured_name, outer_slot, is_mut) in &captured {
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
-            Value::Cell(rc) => rc.borrow().clone(),
+            Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
             other => other.clone(),
         };
         std::mem::forget(shallow);

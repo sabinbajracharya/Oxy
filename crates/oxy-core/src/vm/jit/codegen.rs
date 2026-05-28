@@ -256,7 +256,14 @@ impl<'a> Codegen<'a> {
                     } else if let Some(ret) = ffi_refs.get("oxy_return") {
                         builder.ins().call(*ret, &[ctx]);
                     }
-                    let disc = builder.ins().iconst(types::I64, 0);
+                    // Check the error state from FFI calls (set_error)
+                    // rather than always returning success.
+                    let disc = if let Some(f) = ffi_refs.get("oxy_error_discriminant") {
+                        let inst = builder.ins().call(*f, &[ctx]);
+                        builder.func.dfg.inst_results(inst)[0]
+                    } else {
+                        builder.ins().iconst(types::I64, 0)
+                    };
                     builder.ins().return_(&[disc]);
                 }
                 Terminator::Jump(target) => {
@@ -298,7 +305,12 @@ impl<'a> Codegen<'a> {
                     );
                 }
                 Terminator::Halt => {
-                    let disc = builder.ins().iconst(types::I64, 0);
+                    let disc = if let Some(f) = ffi_refs.get("oxy_error_discriminant") {
+                        let inst = builder.ins().call(*f, &[ctx]);
+                        builder.func.dfg.inst_results(inst)[0]
+                    } else {
+                        builder.ins().iconst(types::I64, 0)
+                    };
                     builder.ins().return_(&[disc]);
                 }
                 Terminator::Panic(msg_reg) => {

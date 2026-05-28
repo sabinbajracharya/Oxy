@@ -511,13 +511,32 @@ impl IrGen {
                     arg_regs.push(self.gen_expr(a));
                 }
                 let r = self.alloc_reg();
-                self.emit(IrOp::CallBuiltin {
-                    result: r,
-                    func: "oxy_call",
-                    args: arg_regs,
-                    immediates: vec![args.len()],
-                    strings: vec![fname],
-                });
+
+                // Route async-runtime builtins to their FFI functions.
+                // These are language primitives, not user-defined JIT functions.
+                let builtin = match fname.as_str() {
+                    "spawn" => Some(("oxy_spawn_ffi", vec![])),
+                    "sleep" => Some(("oxy_sleep_ffi", vec![])),
+                    "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                    _ => None,
+                };
+                if let Some((ffi_func, immediates)) = builtin {
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: ffi_func,
+                        args: arg_regs,
+                        immediates,
+                        strings: vec![],
+                    });
+                } else {
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_call",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![fname],
+                    });
+                }
                 r
             }
             Expr::MethodCall {
