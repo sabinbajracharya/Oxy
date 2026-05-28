@@ -708,7 +708,9 @@ impl IrGen {
                 });
                 let end_reg = end.as_ref().map(|e| self.gen_expr(e)).unwrap_or_else(|| {
                     let r = self.alloc_reg();
-                    self.emit(IrOp::ConstInt(r, -1));
+                    // i64::MAX sentinel for unbounded — avoids conflicting with
+                    // legitimate -1 as a range endpoint.
+                    self.emit(IrOp::ConstInt(r, i64::MAX));
                     r
                 });
                 let r = self.alloc_reg();
@@ -1074,9 +1076,9 @@ impl IrGen {
                     final_merge
                 };
                 // Patch prev block's terminator to jump to cascade_merge
-                self.current.blocks[prev_block].terminator = Terminator::Jump(cascade_merge);
+                self.current.block_mut(prev_block).terminator = Terminator::Jump(cascade_merge);
                 // Body block jumps to cascade_merge
-                self.current.blocks[body_blocks[idx]].terminator = Terminator::Jump(cascade_merge);
+                self.current.block_mut(body_blocks[idx]).terminator = Terminator::Jump(cascade_merge);
                 self.start_block(cascade_merge);
                 let phi_r = self.alloc_reg();
                 self.emit(IrOp::Phi(phi_r, prev_reg, result_regs[idx]));
@@ -1824,7 +1826,10 @@ impl IrGen {
         self.locals = saved_locals;
         self.local_count = saved_local_count;
 
-        // Return a register (codegen will create the closure Value)
+        // Return a register referencing the closure.
+        // The closure body is compiled as a separate IrFunction in self.functions.
+        // Pass the closure name so the FFI layer can look up the native fn pointer
+        // at runtime. Captured outer-scope slots are tracked in self.current.captures.
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
@@ -1834,8 +1839,8 @@ impl IrGen {
                 "oxy_push_closure"
             },
             args: vec![],
-            immediates: vec![],
-            strings: vec![],
+            immediates: vec![self.current.captures.len()],
+            strings: vec![closure_name],
         });
         r
     }
