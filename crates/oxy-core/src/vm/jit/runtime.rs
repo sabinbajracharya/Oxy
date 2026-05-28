@@ -1,8 +1,7 @@
-// vm/arith.rs — Pure arithmetic and integer-cast free functions.
-//
-// These are standalone helpers (not impl Vm methods) used by dispatch_op and
-// the cast opcodes. Extracted from vm/mod.rs to keep that file focused on the
-// Vm struct and its execution loop.
+//! Pure arithmetic and cast helpers called by the JIT FFI bridge.
+//!
+//! These operate on `Value` types directly — the FFI functions in `ffi.rs`
+//! call them after popping operands from the JitContext operand stack.
 
 use crate::types::{FloatWidth, IntegerWidth, Value};
 
@@ -30,7 +29,6 @@ pub(crate) fn wrap_to(v: i64, target: &Value) -> Value {
 // --- Arithmetic ---
 
 pub(crate) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
-    // String concatenation
     if let (Value::String(sa), Value::String(sb)) = (&a, &b) {
         return Ok(Value::String(format!("{sa}{sb}")));
     }
@@ -40,7 +38,6 @@ pub(crate) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     if let Value::String(s) = &b {
         return Ok(Value::String(format!("{a}{s}")));
     }
-    // Float wins
     if a.is_float() || b.is_float() {
         return Ok(Value::F64(a.to_f64() + b.to_f64()));
     }

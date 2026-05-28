@@ -498,3 +498,14 @@ If a fix adds a magic constant, an offset, or a special-case guard, flag it — 
 **If you fix the same bug pattern in more than one place, stop and create a shared abstraction.** The `move_value` helper is the canonical example: `invoke_jit_fn`, `oxy_call_closure`, and `pop` all moved `Value` between buffer slots via `ptr::read` — and two of the three had the "forgot to clear source" double-free bug. The moment you recognize a repeated unsafe pattern, encode the invariant once (e.g. `move_value(src, dst)` always clears the source) so the invariant can't be forgotten at the next call site.
 
 **Always check whether a design shortcut creates a mismatch that can silently corrupt state.** Per-function local counts stored in the engine vs. inferred from `main` is the canonical example: `call_fn` used `engine.local_count` (main's) for every function's buffer, but codegen computed spill offsets from each function's own `local_count`. The mismatch caused silent heap corruption only when a function had more locals than `main` — a latent bug that became a crash only when test files grew complex.
+
+## JIT Debugging Protocol
+
+When debugging a JIT feature test failure, the ONLY valid investigation path is:
+
+1. **Read the failing `.ox` test** — what value does it expect vs get?
+2. **Trace `ir_gen` for that Expr/Stmt** — what IR ops does it emit?
+3. **Trace `codegen` for those IR ops** — what CLIF/FFI calls result?
+4. **If the FFI function looks wrong, read it in `ffi.rs` or `jit/runtime.rs`**
+
+**NEVER** grep through `vm/` to find how the old bytecode compiler handled a feature. The bytecode compiler is deleted. Its design decisions do not apply to the register IR pipeline. The `vm/` directory now contains only the public API entry points (`api.rs`), async scheduler (`scheduler.rs`), built-in method implementations (`builtins/`), and the shared `VmResult` type. There is no `arith.rs` — arithmetic helpers live in `jit/runtime.rs`.

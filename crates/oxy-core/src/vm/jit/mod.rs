@@ -10,6 +10,7 @@ mod context;
 pub(crate) mod ffi;
 pub(crate) mod ir;
 pub(crate) mod ir_gen;
+pub(crate) mod runtime;
 
 pub(crate) use context::JitContext;
 pub(crate) use ffi::register_ffi_symbols;

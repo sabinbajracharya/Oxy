@@ -313,11 +313,11 @@ macro_rules! binary_op_val {
     };
 }
 
-binary_op!(oxy_add, crate::vm::arith::vm_add);
-binary_op!(oxy_sub, crate::vm::arith::vm_sub);
-binary_op!(oxy_mul, crate::vm::arith::vm_mul);
-binary_op!(oxy_div, crate::vm::arith::vm_div);
-binary_op!(oxy_mod, crate::vm::arith::vm_rem);
+binary_op!(oxy_add, super::runtime::vm_add);
+binary_op!(oxy_sub, super::runtime::vm_sub);
+binary_op!(oxy_mul, super::runtime::vm_mul);
+binary_op!(oxy_div, super::runtime::vm_div);
+binary_op!(oxy_mod, super::runtime::vm_rem);
 
 fn vm_eq(lhs: Value, rhs: Value) -> Value {
     Value::Bool(lhs == rhs)
@@ -375,18 +375,18 @@ binary_op_val!(oxy_or, vm_or);
 
 // ── Bitwise ──────────────────────────────────────────────────────────
 
-binary_op!(oxy_bitand, crate::vm::arith::vm_bitand);
-binary_op!(oxy_bitor, crate::vm::arith::vm_bitor);
-binary_op!(oxy_bitxor, crate::vm::arith::vm_bitxor);
-binary_op!(oxy_shl, crate::vm::arith::vm_shl);
-binary_op!(oxy_shr, crate::vm::arith::vm_shr);
+binary_op!(oxy_bitand, super::runtime::vm_bitand);
+binary_op!(oxy_bitor, super::runtime::vm_bitor);
+binary_op!(oxy_bitxor, super::runtime::vm_bitxor);
+binary_op!(oxy_shl, super::runtime::vm_shl);
+binary_op!(oxy_shr, super::runtime::vm_shr);
 
 // ── Unary ────────────────────────────────────────────────────────────
 
 extern "C" fn oxy_neg(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let result = crate::vm::arith::vm_neg(val);
+    let result = super::runtime::vm_neg(val);
     unsafe {
         push(ctx, result);
     }
@@ -403,7 +403,7 @@ extern "C" fn oxy_not(ctx: *mut JitContext) {
 extern "C" fn oxy_bitnot(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let result = crate::vm::arith::vm_bitnot(val);
+    let result = super::runtime::vm_bitnot(val);
     unsafe {
         push(ctx, result);
     }
@@ -1376,7 +1376,7 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let index_val = unsafe { pop(ctx) };
     let collection = unsafe { pop(ctx) };
-    let idx = crate::vm::arith::value_to_i64(&index_val) as usize;
+    let idx = super::runtime::value_to_i64(&index_val) as usize;
     let result = match collection {
         Value::Vec(rc) => rc.borrow().get(idx).cloned().unwrap_or(Value::Unit),
         Value::Array(ref a) => a.get(idx).cloned().unwrap_or(Value::Unit),
@@ -1400,7 +1400,7 @@ extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
     let value = unsafe { pop(ctx) };
     let index_val = unsafe { pop(ctx) };
     let collection = unsafe { pop(ctx) };
-    let idx = crate::vm::arith::value_to_i64(&index_val) as usize;
+    let idx = super::runtime::value_to_i64(&index_val) as usize;
     match collection {
         Value::Vec(rc) => {
             let mut v = rc.borrow_mut();
@@ -2096,7 +2096,7 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
 extern "C" fn oxy_cast_int(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let result = crate::vm::arith::cast_to_int(&val, crate::types::IntegerWidth::I64);
+    let result = super::runtime::cast_to_int(&val, crate::types::IntegerWidth::I64);
     unsafe {
         push(ctx, result);
     }
@@ -2105,7 +2105,7 @@ extern "C" fn oxy_cast_int(ctx: *mut JitContext) {
 extern "C" fn oxy_cast_byte(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let result = crate::vm::arith::cast_to_int(&val, crate::types::IntegerWidth::U8);
+    let result = super::runtime::cast_to_int(&val, crate::types::IntegerWidth::U8);
     unsafe {
         push(ctx, result);
     }
@@ -2114,7 +2114,7 @@ extern "C" fn oxy_cast_byte(ctx: *mut JitContext) {
 extern "C" fn oxy_cast_float(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let result = crate::vm::arith::cast_to_float(&val, crate::types::FloatWidth::F64);
+    let result = super::runtime::cast_to_float(&val, crate::types::FloatWidth::F64);
     unsafe {
         push(ctx, result);
     }
@@ -2123,7 +2123,7 @@ extern "C" fn oxy_cast_float(ctx: *mut JitContext) {
 extern "C" fn oxy_cast_to_char(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
-    let n = crate::vm::arith::value_to_i64(&val);
+    let n = super::runtime::value_to_i64(&val);
     let c = char::from_u32(n as u32).unwrap_or('\u{FFFD}');
     unsafe {
         push(ctx, Value::Char(c));
@@ -2633,7 +2633,6 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 crate::vm::scheduler::TaskSnapshot {
                     ip: target_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: None,
                 },
             );

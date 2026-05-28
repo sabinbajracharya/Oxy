@@ -15,8 +15,7 @@ pub type TaskId = usize;
 pub struct TaskSnapshot {
     pub ip: usize,
     pub stack: Vec<crate::types::Value>,
-    pub call_stack: Vec<super::Frame>,
-    /// JIT execution state (used instead of stack/call_stack when running under Cranelift).
+    /// JIT execution state (used instead of stack when running under Cranelift).
     #[allow(dead_code)]
     pub jit_state: Option<JitTaskState>,
 }
@@ -247,7 +246,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -283,7 +281,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -308,7 +305,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -334,7 +330,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -423,4 +418,3 @@ unsafe impl Send for Scheduler {}
 unsafe impl Send for TaskSnapshot {}
 unsafe impl Send for JitTaskState {}
 unsafe impl Send for Task {}
-unsafe impl Send for super::Frame {}
