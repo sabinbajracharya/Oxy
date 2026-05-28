@@ -272,6 +272,7 @@ impl Scheduler {
     }
 
     /// Yield the current task with JIT state and a timer.
+    #[allow(dead_code)]
     pub fn yield_jit_for_timer(&mut self, jit_state: JitTaskState, wake: TimeMark) {
         if let Some(id) = self.current.take() {
             self.timers.push(TimerEntry(wake, id));
@@ -297,6 +298,7 @@ impl Scheduler {
     }
 
     /// Yield the current JIT task waiting on another task.
+    #[allow(dead_code)]
     pub fn yield_jit_for_task(&mut self, waited: TaskId, jit_state: JitTaskState) {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {
@@ -322,6 +324,7 @@ impl Scheduler {
     }
 
     /// Yield the current JIT task waiting on multiple tasks.
+    #[allow(dead_code)]
     pub fn yield_jit_for_multiple(&mut self, task_ids: Vec<TaskId>, jit_state: JitTaskState) {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {

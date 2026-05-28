@@ -2065,6 +2065,21 @@ impl IrGen {
             self.terminate(Terminator::Return(result_reg));
         }
 
+        // Infer return type from the closure body so codegen uses the right
+        // return mechanism (oxy_set_result_i64 for int, push+oxy_return for
+        // other types). Unknown triggers push_int which works for scalars.
+        self.current.return_type = match body {
+            Expr::IntLiteral(..) => crate::type_checker::TypeInfo::I64,
+            Expr::FloatLiteral(..) => crate::type_checker::TypeInfo::F64,
+            Expr::BoolLiteral(..) => crate::type_checker::TypeInfo::Bool,
+            Expr::CharLiteral(..) => crate::type_checker::TypeInfo::Char,
+            Expr::StringLiteral(..) => crate::type_checker::TypeInfo::UserStruct {
+                name: "String".into(),
+                generic_args: vec![],
+            },
+            _ => crate::type_checker::TypeInfo::Unknown,
+        };
+
         self.current.local_count = self.local_count;
         self.current.is_async = is_async;
         self.functions

@@ -183,14 +183,10 @@ fn ffi_decls() -> Vec<FfiDecl> {
             None,
         ),
         ("oxy_display_arg", &[types::I64], None),
-        ("oxy_await_ffi", &[types::I64], Some(types::I64)),
+        ("oxy_await_ffi", &[types::I64], None),
         ("oxy_spawn_ffi", &[types::I64], None),
-        ("oxy_sleep_ffi", &[types::I64], Some(types::I64)),
-        (
-            "oxy_select_ffi",
-            &[types::I64, types::I64],
-            Some(types::I64),
-        ),
+        ("oxy_sleep_ffi", &[types::I64], None),
+        ("oxy_select_ffi", &[types::I64, types::I64], None),
         (
             "oxy_make_future",
             &[types::I64, types::I64, types::I64],

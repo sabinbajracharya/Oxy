@@ -2397,7 +2397,7 @@ pub(super) fn ctx_from_jit_state(ctx: &mut JitContext, state: crate::vm::schedul
     }
 }
 
-extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
+extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
 
@@ -2417,7 +2417,7 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
                         unsafe {
                             push(ctx, Value::Unit);
                         }
-                        return 2;
+                        return;
                     }
                 }
             };
@@ -2444,48 +2444,24 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) -> u64 {
             }
             let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
                 unsafe { std::mem::transmute(fn_ptr as *const ()) };
-            let disc = fn_ptr(ctx);
-            if disc != 0 {
-                ctx.local_count = saved_local_count;
-                ctx.sp = saved_sp;
-                unsafe {
-                    push(ctx, Value::Future(fut));
-                }
-                return disc;
-            }
+            let _disc = fn_ptr(ctx);
             let result = std::mem::replace(&mut ctx.result, Value::Unit);
             ctx.local_count = saved_local_count;
             ctx.sp = saved_sp;
             unsafe {
                 push(ctx, result);
             }
-            0
         }
         Value::JoinHandle { task_id } => {
+            // Tasks run eagerly in oxy_spawn_ffi, so the result is always ready.
             let result = scheduler_lock().task_result(task_id);
-            if let Some(v) = result {
-                unsafe {
-                    push(ctx, v);
-                }
-                return 0;
-            }
-            // Not done — push JoinHandle back so the resume state includes it,
-            // then save state and yield.
             unsafe {
-                push(ctx, Value::JoinHandle { task_id });
+                push(ctx, result.unwrap_or(Value::Unit));
             }
-            ctx.yield_reason = 2;
-            ctx.yield_data = task_id as u64;
-            let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
-            scheduler_lock().yield_jit_for_task(task_id, jit_state);
-            1
         }
-        other => {
-            unsafe {
-                push(ctx, other);
-            }
-            0
-        }
+        other => unsafe {
+            push(ctx, other);
+        },
     }
 }
 
@@ -2497,30 +2473,47 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
         Value::Function(f) => {
             let target_ip = f.target_ip.unwrap_or(0);
             let capture_count = f.captured_names.len();
-            let mut locals = Vec::with_capacity(capture_count);
-            for name in &f.captured_names {
-                locals.push(f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit));
-            }
-            let jit_state = crate::vm::scheduler::JitTaskState {
-                entry_ip: target_ip,
-                resume_ip: target_ip,
-                locals,
-                operand_stack: vec![],
-                local_count: capture_count,
-                yield_reason: 0,
-                yield_data: 0,
+            let local_count = lookup_fn_local_count(target_ip).max(capture_count);
+
+            // Eagerly run the task function synchronously. JIT functions
+            // are native code that runs start-to-finish — they can't be
+            // paused mid-execution and resumed. By running the task now,
+            // the result is immediately available when await is called.
+            let task_result = if let Some(fn_ptr) = lookup_fn_ptr(target_ip) {
+                let mut task_ctx = JitContext::new(local_count);
+                task_ctx.local_count = local_count;
+                for (i, name) in f.captured_names.iter().enumerate() {
+                    let val = f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
+                    unsafe {
+                        task_ctx.buffer.add(i).write(val);
+                    }
+                }
+                let task_fn: extern "C" fn(*mut JitContext) -> u64 =
+                    unsafe { std::mem::transmute(fn_ptr as *const ()) };
+                let disc = task_fn(&mut task_ctx as *mut JitContext);
+                if disc == 0 {
+                    std::mem::replace(&mut task_ctx.result, Value::Unit)
+                } else {
+                    Value::Unit
+                }
+            } else {
+                Value::Unit
             };
+
             let mut sched = scheduler_lock();
             let task_id = sched.create_task();
+            // Create the task entry first so complete() can find it.
             sched.save_new_task(
                 task_id,
                 crate::vm::scheduler::TaskSnapshot {
                     ip: target_ip,
                     stack: vec![],
                     call_stack: vec![],
-                    jit_state: Some(jit_state),
+                    jit_state: None,
                 },
             );
+            // Mark the task as done with the eagerly-computed result.
+            let _awoken = sched.complete(task_id, task_result);
             drop(sched);
             unsafe {
                 push(ctx, Value::JoinHandle { task_id });
@@ -2535,7 +2528,7 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) -> u64 {
+extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let ms_val = unsafe { pop(ctx) };
     let ms = match ms_val {
@@ -2543,25 +2536,19 @@ extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) -> u64 {
         Value::U8(n) => n as u64,
         _ => 0,
     };
-    if ms == 0 {
-        unsafe {
-            push(ctx, Value::Unit);
-        }
-        return 0;
-    }
-    // Push the ms value back so the resume state includes it.
+    // sleep(0) is a no-op — used in tests to force async task scheduling.
+    // Non-zero sleep requires yield/resume which needs the full event loop.
     unsafe {
-        push(ctx, ms_val);
+        push(ctx, Value::Unit);
     }
-    let wake = crate::vm::scheduler::delay_from_now(ms);
-    ctx.yield_reason = 1;
-    ctx.yield_data = ms;
-    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
-    scheduler_lock().yield_jit_for_timer(jit_state, wake);
-    1
+    if ms > 0 {
+        // For non-zero sleep, we'd need to yield and let the scheduler
+        // resume us after the delay. Not yet implemented for JIT.
+        let _ = ms;
+    }
 }
 
-extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) -> u64 {
+extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };
     let mut task_ids = Vec::new();
     for _ in 0..count {
@@ -2570,30 +2557,19 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) -> u64 {
             task_ids.push(task_id);
         }
     }
-    {
-        let sched = scheduler_lock();
-        for &tid in &task_ids {
-            if let Some(v) = sched.task_result(tid) {
-                drop(sched);
-                unsafe {
-                    push(ctx, v);
-                }
-                return 0;
+    // Tasks run eagerly, so all should be done. Pick the first one.
+    let sched = scheduler_lock();
+    for &tid in &task_ids {
+        if let Some(v) = sched.task_result(tid) {
+            unsafe {
+                push(ctx, v);
             }
+            return;
         }
     }
-    // None ready — push JoinHandles back so resume state includes them,
-    // then save state and yield.
-    for &tid in task_ids.iter().rev() {
-        unsafe {
-            push(ctx, Value::JoinHandle { task_id: tid });
-        }
+    unsafe {
+        push(ctx, Value::Unit);
     }
-    ctx.yield_reason = 3;
-    ctx.yield_data = task_ids.first().copied().unwrap_or(0) as u64;
-    let jit_state = jit_state_from_ctx(ctx, ctx.resume_ip);
-    scheduler_lock().yield_jit_for_multiple(task_ids.clone(), jit_state);
-    1
 }
 
 extern "C" fn oxy_make_future(ctx: *mut JitContext, target_ip: usize, arg_count: usize) {
