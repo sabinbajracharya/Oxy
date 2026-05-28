@@ -375,17 +375,15 @@ fn closure_meta_lock() -> std::sync::MutexGuard<'static, Vec<ClosureRuntimeMeta>
         .unwrap()
 }
 
-pub(crate) fn set_closure_meta(
-    meta: Vec<(Vec<String>, crate::ast::Expr, Vec<(String, usize, bool)>)>,
-) {
+pub(crate) fn set_closure_meta(meta: Vec<(Vec<String>, Vec<(String, usize, bool)>, bool)>) {
     let mut lock = closure_meta_lock();
     lock.clear();
-    for (param_names, _body_expr, captured) in meta {
+    for (param_names, captured, is_async) in meta {
         lock.push(ClosureRuntimeMeta {
             param_names,
             captured,
             target_ip: 0,
-            is_async: false,
+            is_async,
         });
     }
 }
@@ -552,6 +550,27 @@ pub(super) fn lookup_fn_ptr(ip: usize) -> Option<*const u8> {
     fn_table_lock().get(&ip).map(|&p| p as *const u8)
 }
 
+/// Closure/async-block name → fn_index (populated after JIT compilation).
+static CLOSURE_NAME_TO_INDEX: std::sync::OnceLock<std::sync::Mutex<HashMap<String, usize>>> =
+    std::sync::OnceLock::new();
+
+fn closure_name_index_lock() -> std::sync::MutexGuard<'static, HashMap<String, usize>> {
+    CLOSURE_NAME_TO_INDEX
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap()
+}
+
+pub(crate) fn set_closure_fn_indices(indices: HashMap<String, usize>) {
+    let mut m = closure_name_index_lock();
+    m.clear();
+    m.extend(indices);
+}
+
+fn lookup_fn_index_by_name(name: &str) -> Option<usize> {
+    closure_name_index_lock().get(name).copied()
+}
+
 pub(crate) fn set_fn_table(table: HashMap<usize, *const u8>) {
     let mut m = fn_table_lock();
     m.clear();
@@ -655,41 +674,63 @@ extern "C" fn oxy_call(ctx: *mut JitContext, target_ip: usize, arg_count: usize)
 
 // ── Closures ─────────────────────────────────────────────────────────
 
-extern "C" fn oxy_push_closure(
-    ctx: *mut JitContext,
-    target_ip: usize,
-    _param_count: usize,
-    meta_idx: usize,
-    is_async: u8,
-) {
+extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i64, meta_idx: i64) {
     let ctx = unsafe { &mut *ctx };
+
+    // Read the closure function name from the pointer/length pair.
+    let name = unsafe {
+        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+
+    // Look up captures metadata.
     let meta = {
         let lock = closure_meta_lock();
-        lock.get(meta_idx).cloned()
+        lock.get(meta_idx as usize).cloned()
     };
-    let (_param_names, captured) = meta
-        .map(|m| (m.param_names.clone(), m.captured.clone()))
+    let (param_names, captured, is_async) = meta
+        .map(|m| (m.param_names, m.captured, m.is_async))
         .unwrap_or_default();
 
-    // Build captured values from current locals at the outer slots
+    // Build captured values from current locals at the outer slots.
     let closure_env = crate::env::Environment::new();
-    for (name, outer_slot, is_mut) in &captured {
+    for (captured_name, outer_slot, is_mut) in &captured {
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
             Value::Cell(rc) => rc.borrow().clone(),
             other => other.clone(),
         };
-        // shallow is a bitwise copy that shares heap pointers with
-        // the original in the buffer. Forget it to prevent a double-free
-        // when the shallow copy is dropped at end of scope.
         std::mem::forget(shallow);
-        closure_env.borrow_mut().define(name.clone(), val, *is_mut);
+        closure_env
+            .borrow_mut()
+            .define(captured_name.clone(), val, *is_mut);
     }
 
+    // Look up the native fn index by the closure function name.
+    let fn_index = lookup_fn_index_by_name(&name).unwrap_or(usize::MAX);
+
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
+    let placeholder_span = crate::lexer::Span {
+        start: 0,
+        end: 0,
+        line: 0,
+        column: 0,
+    };
     let fn_data = crate::types::FunctionData {
-        name: "<closure>".into(),
-        params: vec![],
+        name,
+        params: param_names
+            .iter()
+            .map(|n| crate::ast::Param {
+                name: n.clone(),
+                type_ann: crate::ast::TypeAnnotation::Named {
+                    name: "int".into(),
+                    generic_args: vec![],
+                    span: placeholder_span,
+                },
+                is_mut: false,
+                span: placeholder_span,
+            })
+            .collect(),
         return_type: None,
         body: crate::ast::Block {
             stmts: vec![],
@@ -701,37 +742,52 @@ extern "C" fn oxy_push_closure(
             },
         },
         closure_env,
-        target_ip: Some(target_ip),
+        target_ip: Some(fn_index),
         captured_names,
-        is_async: is_async != 0,
+        is_async,
     };
     unsafe {
         push(ctx, Value::Function(Box::new(fn_data)));
     }
 }
 
-extern "C" fn oxy_push_async_block(ctx: *mut JitContext, target_ip: usize, meta_idx: usize) {
+extern "C" fn oxy_push_async_block(
+    ctx: *mut JitContext,
+    name_ptr: i64,
+    name_len: i64,
+    meta_idx: i64,
+) {
     let ctx = unsafe { &mut *ctx };
+
+    let name = unsafe {
+        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+
     let meta = {
         let lock = closure_meta_lock();
-        lock.get(meta_idx).cloned()
+        lock.get(meta_idx as usize).cloned()
     };
     let captured = meta.map(|m| m.captured.clone()).unwrap_or_default();
 
     let closure_env = crate::env::Environment::new();
-    for (name, outer_slot, is_mut) in &captured {
+    for (captured_name, outer_slot, is_mut) in &captured {
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
             Value::Cell(rc) => rc.borrow().clone(),
             other => other.clone(),
         };
         std::mem::forget(shallow);
-        closure_env.borrow_mut().define(name.clone(), val, *is_mut);
+        closure_env
+            .borrow_mut()
+            .define(captured_name.clone(), val, *is_mut);
     }
+
+    let fn_index = lookup_fn_index_by_name(&name).unwrap_or(usize::MAX);
 
     let captured_names: Vec<String> = captured.iter().map(|(n, _, _)| n.clone()).collect();
     let future_data = crate::types::FutureData {
-        name: "<async_block>".into(),
+        name,
         params: vec![],
         return_type: None,
         body: crate::ast::Block {
@@ -745,7 +801,7 @@ extern "C" fn oxy_push_async_block(ctx: *mut JitContext, target_ip: usize, meta_
         },
         closure_env,
         args: vec![],
-        target_ip,
+        target_ip: fn_index,
         captured_names,
     };
     unsafe {
@@ -1234,7 +1290,7 @@ extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_make_range(ctx: *mut JitContext) {
+extern "C" fn oxy_make_range(ctx: *mut JitContext, inclusive: i64) {
     let ctx = unsafe { &mut *ctx };
     let end = unsafe { pop(ctx) };
     let start = unsafe { pop(ctx) };
@@ -1263,6 +1319,8 @@ extern "C" fn oxy_make_range(ctx: *mut JitContext) {
     unsafe {
         push(ctx, Value::Range(s, e));
     }
+    // inclusive flag is ignored — Value::Range is always exclusive.
+    let _ = inclusive;
 }
 
 // ── String operations ─────────────────────────────────────────────────

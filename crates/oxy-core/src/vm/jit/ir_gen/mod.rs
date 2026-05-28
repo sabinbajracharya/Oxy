@@ -17,6 +17,8 @@ use crate::type_checker::TypeInfo;
 pub(crate) struct IrGen {
     /// All generated functions (including closures, async blocks).
     pub(crate) functions: Vec<IrFunction>,
+    /// Closure metadata indexed by meta_idx (param_names, captures, is_async).
+    pub(crate) closure_meta: Vec<(Vec<String>, Vec<(String, usize, bool)>, bool)>,
     /// Current function being generated.
     current: IrFunction,
     /// Current basic block being built.
@@ -45,6 +47,7 @@ impl IrGen {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
+            closure_meta: Vec::new(),
             current: IrFunction::new(String::new(), 0, 0),
             current_block: 0,
             next_reg: 0,
@@ -105,15 +108,17 @@ impl IrGen {
     pub fn gen_program(&mut self, program: &Program) {
         for item in &program.items {
             match item {
-                Item::Function(f) => self.gen_fn(f),
+                Item::Function(f) => self.gen_fn(f, None),
                 Item::Impl(imp) => {
+                    let prefix = imp.type_name.clone();
                     for method in &imp.methods {
-                        self.gen_fn(method);
+                        self.gen_fn(method, Some(&prefix));
                     }
                 }
                 Item::ImplTrait(imp) => {
+                    let prefix = imp.type_name.clone();
                     for method in &imp.methods {
-                        self.gen_fn(method);
+                        self.gen_fn(method, Some(&prefix));
                     }
                 }
                 Item::Const { name, value, .. } => {
@@ -168,14 +173,18 @@ impl IrGen {
     }
 
     /// Generate IR for one function.
-    fn gen_fn(&mut self, f: &FnDef) {
+    fn gen_fn(&mut self, f: &FnDef, struct_prefix: Option<&str>) {
         let ret_ty = f
             .return_type
             .as_ref()
             .map(Self::type_ann_to_type_info)
             .unwrap_or(TypeInfo::Unit);
+        let name = match struct_prefix {
+            Some(prefix) => format!("{prefix}::{}", f.name),
+            None => f.name.clone(),
+        };
         // Save current state
-        let saved = std::mem::replace(&mut self.current, IrFunction::new(f.name.clone(), 0, 0));
+        let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0));
         self.current.return_type = ret_ty;
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_count = self.local_count;
@@ -758,17 +767,21 @@ impl IrGen {
                     arg_regs.push(self.gen_expr(a));
                 }
                 let r = self.alloc_reg();
-                let (func, strings) = match name.as_str() {
-                    "println" => ("oxy_println_val", vec![]),
-                    "print" => ("oxy_print_val", vec![]),
-                    "format" => ("oxy_format", vec![]),
-                    _ => ("oxy_path_call_builtin", vec![name.clone()]),
+                let (func, strings, extra_immediates) = match name.as_str() {
+                    "println" => ("oxy_println_val", vec![], vec![]),
+                    "print" => ("oxy_print_val", vec![], vec![]),
+                    "format" => ("oxy_format", vec![], vec![args.len()]),
+                    _ => (
+                        "oxy_path_call_builtin",
+                        vec![name.clone()],
+                        vec![args.len()],
+                    ),
                 };
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func,
                     args: arg_regs,
-                    immediates: vec![],
+                    immediates: extra_immediates,
                     strings,
                 });
                 r
@@ -1830,13 +1843,15 @@ impl IrGen {
             params.iter().map(|p| p.name.clone()).collect();
         let free_vars = self.collect_free_vars(body, &param_names);
 
-        let closure_name = format!("closure_{}", self.functions.len());
+        let meta_idx = self.closure_meta.len();
+        let closure_name = format!("closure_{}", meta_idx);
         let saved = std::mem::replace(
             &mut self.current,
             IrFunction::new(closure_name.clone(), 0, 0),
         );
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_count = self.local_count;
+        let saved_current_block = self.current_block;
         self.local_count = 0;
         self.next_reg = 0;
         self.next_block = 0;
@@ -1853,6 +1868,17 @@ impl IrGen {
             }
         }
         self.current.captures = captures;
+
+        // Register closure metadata for runtime capture lookup.
+        let param_names_for_meta: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        let captures_with_mut: Vec<(String, usize, bool)> = self
+            .current
+            .captures
+            .iter()
+            .map(|(name, slot)| (name.clone(), *slot, false))
+            .collect();
+        self.closure_meta
+            .push((param_names_for_meta, captures_with_mut, is_async));
 
         // Allocate locals for params
         for p in params {
@@ -1874,11 +1900,11 @@ impl IrGen {
 
         self.locals = saved_locals;
         self.local_count = saved_local_count;
+        self.current_block = saved_current_block;
 
         // Return a register referencing the closure.
         // The closure body is compiled as a separate IrFunction in self.functions.
-        // Pass the closure name so the FFI layer can look up the native fn pointer
-        // at runtime. Captured outer-scope slots are tracked in self.current.captures.
+        // meta_idx allows the FFI layer to look up the captures in the closure meta table.
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
@@ -1888,7 +1914,7 @@ impl IrGen {
                 "oxy_push_closure"
             },
             args: vec![],
-            immediates: vec![self.current.captures.len()],
+            immediates: vec![meta_idx],
             strings: vec![closure_name],
         });
         r

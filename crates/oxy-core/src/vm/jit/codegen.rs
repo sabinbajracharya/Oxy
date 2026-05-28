@@ -278,12 +278,12 @@ impl<'a> Codegen<'a> {
                     // Condition may be in regs (CLIF) or reg_slot (spilled).
                     let c_bool = if let Some(clif_val) = regs.get(cond).copied() {
                         builder.ins().icmp_imm(IntCC::NotEqual, clif_val, 0)
-                    } else if reg_slot.contains_key(cond) {
-                        push_reg(&mut builder, ctx, &ffi_refs, *cond, &regs, &reg_slot);
-                        if let Some(truthy) = ffi_refs.get("oxy_is_truthy") {
-                            let inst = builder.ins().call(*truthy, &[ctx]);
-                            let results = builder.func.dfg.inst_results(inst);
-                            results[0]
+                    } else if let Some(slot) = reg_slot.get(cond).copied() {
+                        if let Some(read) = ffi_refs.get("oxy_read_local_i64") {
+                            let slot_val = builder.ins().iconst(types::I64, slot as i64);
+                            let inst = builder.ins().call(*read, &[ctx, slot_val]);
+                            let i64_val = builder.func.dfg.inst_results(inst)[0];
+                            builder.ins().icmp_imm(IntCC::NotEqual, i64_val, 0)
                         } else {
                             builder.ins().iconst(types::I8, 0)
                         }
@@ -981,8 +981,6 @@ mod tests {
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
     }
-
-    // ── Method call ───────────────────────────────────────────────────
 
     #[test]
     fn test_e2e_string_len() {
