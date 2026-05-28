@@ -167,19 +167,17 @@ impl<'a> Codegen<'a> {
             }
         }
 
-        // Pre-allocate spill slots for all Phi results. This reserves slots
-        // before any ConstString/LoadLocal in the same block (or in predecessor
-        // blocks) can allocate, preventing operand-stack position conflicts.
+        // Pre-allocate spill slots for all Phi results. Spill slots grow downward
+        // from the top of the buffer (capacity-1), while the operand stack grows
+        // upward from local_count. They meet only if combined usage exceeds capacity.
         let mut phi_slot: HashMap<Reg, usize> = HashMap::new();
-        // Spill slots start at local_count + 1 to avoid overlapping with the
-        // first operand-stack position (buffer[local_count + sp] where sp=0).
-        // Note: this still has a known issue where deep operand stacks can
-        // overwrite spill slots. The proper fix is a separate spill buffer.
-        let mut next_spill_slot: usize = ir_fn.local_count + 1;
+        const STACK_CAP: usize = 2048;
+        let capacity = ir_fn.local_count + STACK_CAP;
+        let mut next_spill_slot: usize = capacity - 1;
         for phis in block_phis.values() {
             for (phi_r, _) in phis {
                 phi_slot.insert(*phi_r, next_spill_slot);
-                next_spill_slot += 1;
+                next_spill_slot -= 1;
             }
         }
 
@@ -342,7 +340,7 @@ fn spill_result(
     next_spill_slot: &mut usize,
 ) {
     let slot = *next_spill_slot;
-    *next_spill_slot += 1;
+    *next_spill_slot -= 1;
     if let Some(store) = ffi_refs.get("oxy_store_local") {
         let slot_val = builder.ins().iconst(types::I64, slot as i64);
         builder.ins().call(*store, &[ctx, slot_val]);
