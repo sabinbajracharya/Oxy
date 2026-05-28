@@ -304,6 +304,7 @@ impl<'a> Codegen<'a> {
 
         Ok((fid, ir_fn.name.clone()))
     }
+
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -743,7 +744,6 @@ fn compile_op(
 #[cfg(test)]
 mod tests {
     use crate::vm::api::run_compiled_jit;
-    use crate::vm::api::run_compiled_capturing_jit;
 
     #[test]
     fn test_e2e_literal_int() {
@@ -1062,7 +1062,6 @@ mod tests {
     }
 
     #[test]
-
     fn test_e2e_break_from_loop() {
         let src = "fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }";
         let result = run_compiled_jit(src);
