@@ -1646,6 +1646,57 @@ extern "C" fn oxy_method_call(
         }
     }
 
+    // JIT name-based lookup for user-defined struct/enum methods.
+    // The old method_ips table is bytecode-only; JIT-compiled methods are
+    // registered by qualified name (e.g. "Counter::inc") in the fn table.
+    let qualified = format!("{lookup_name}::{method_name}");
+    if let Some(fn_index) = lookup_fn_index_by_name(&qualified) {
+        if let Some(fp) = {
+            let table = fn_table_lock();
+            table.get(&fn_index).copied()
+        } {
+            let frame_size = 1 + arg_count;
+            while ctx.local_count + frame_size > ctx.capacity {
+                let new_cap = (ctx.local_count + frame_size) * 2;
+                let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
+                let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
+                }
+                unsafe {
+                    std::alloc::dealloc(
+                        ctx.buffer as *mut u8,
+                        std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
+                    );
+                }
+                ctx.buffer = new_buf;
+                ctx.capacity = new_cap;
+            }
+            let saved_local_count = ctx.local_count;
+            let saved_sp = ctx.sp;
+            ctx.local_count = frame_size;
+            ctx.sp = 0;
+            unsafe {
+                ctx.buffer.add(0).write(receiver);
+            }
+            for (i, arg) in args.into_iter().enumerate() {
+                unsafe {
+                    ctx.buffer.add(1 + i).write(arg);
+                }
+            }
+            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+                unsafe { std::mem::transmute(fp as *const ()) };
+            let _disc = fn_ptr(ctx);
+            let result = std::mem::replace(&mut ctx.result, Value::Unit);
+            ctx.local_count = saved_local_count;
+            ctx.sp = saved_sp;
+            unsafe {
+                push(ctx, result);
+            }
+            return;
+        }
+    }
+
     // Fall back to built-in dispatch
     let result = dispatch_builtin_method(receiver.clone(), &method_name, args.clone());
 
