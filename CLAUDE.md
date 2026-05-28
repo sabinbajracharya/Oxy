@@ -482,3 +482,15 @@ Bash is ONLY for: git, mkdir, rm, mv, navigation, and short-output commands. For
 | `ctx stats` | Display context consumption statistics |
 | `ctx doctor` | Diagnose context-mode installation |
 | `ctx upgrade` | Upgrade context-mode to latest |
+
+## JIT Codegen Anti-Patterns
+
+When debugging JIT codegen failures, do NOT brute-force individual test fixes. Instead, ask:
+
+1. **Is this a one-off routing bug?** (e.g. `vec!` not wired to `oxy_make_array`) — fix the routing.
+2. **Is it a shared-resource collision?** (e.g. two things sharing one buffer/block/stack and stepping on each other) — separate them architecturally, don't add offsets or guards.
+3. **Is it a missing IR concept?** (e.g. no way to express Phi isolation) — add the IR primitive.
+
+The trampoline approach (IR continuation blocks for Phi isolation) and the spill-from-top approach (two stacks growing toward each other in one buffer) are examples of architectural fixes that eliminated entire classes of bugs at once.
+
+If a fix adds a magic constant, an offset, or a special-case guard, flag it — it's probably papering over an architectural issue.

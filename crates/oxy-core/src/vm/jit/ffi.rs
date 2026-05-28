@@ -1519,6 +1519,17 @@ extern "C" fn oxy_field_access(ctx: *mut JitContext, name_ptr: *const u8, name_l
     let name = String::from_utf8_lossy(name_bytes);
     let result = match &obj {
         Value::Struct { fields, .. } => fields.get(name.as_ref()).cloned().unwrap_or(Value::Unit),
+        Value::Tuple(ref elements) => {
+            if let Ok(idx) = name.parse::<usize>() {
+                elements.get(idx).cloned().unwrap_or(Value::Unit)
+            } else {
+                set_error(ctx, format!("tuple field not an integer: {name}"));
+                unsafe {
+                    push(ctx, Value::Unit);
+                }
+                return;
+            }
+        }
         _ => {
             set_error(ctx, format!("field access on non-struct: {obj:?}"));
             unsafe {
