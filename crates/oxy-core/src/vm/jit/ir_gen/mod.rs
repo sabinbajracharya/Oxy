@@ -1225,7 +1225,10 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        self.terminate(Terminator::Jump(header_id));
+        // Don't overwrite Return/Panic/Halt from return/break inside body.
+        if !self.current.blocks[self.current_block].terminator.is_exit() {
+            self.terminate(Terminator::Jump(header_id));
+        }
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -1269,7 +1272,9 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        self.terminate(Terminator::Jump(header_id));
+        if !self.current.blocks[self.current_block].terminator.is_exit() {
+            self.terminate(Terminator::Jump(header_id));
+        }
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -1302,7 +1307,9 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        self.terminate(Terminator::Jump(body_id));
+        if !self.current.blocks[self.current_block].terminator.is_exit() {
+            self.terminate(Terminator::Jump(body_id));
+        }
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -1380,7 +1387,9 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        self.terminate(Terminator::Jump(header_id));
+        if !self.current.blocks[self.current_block].terminator.is_exit() {
+            self.terminate(Terminator::Jump(header_id));
+        }
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -1451,7 +1460,9 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        self.terminate(Terminator::Jump(header_id));
+        if !self.current.blocks[self.current_block].terminator.is_exit() {
+            self.terminate(Terminator::Jump(header_id));
+        }
 
         self.break_target = saved_break;
         self.continue_target = saved_continue;

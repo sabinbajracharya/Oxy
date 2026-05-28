@@ -914,7 +914,6 @@ extern "C" fn oxy_error_discriminant(ctx: *const JitContext) -> u64 {
 
 extern "C" fn oxy_return(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
-    // Mirror VM: self.stack.pop().unwrap_or(Value::Unit)
     let result = if ctx.sp == 0 {
         Value::Unit
     } else {

@@ -268,13 +268,47 @@ impl<'a> Codegen<'a> {
                     then_block,
                     else_block,
                 } => {
-                    let c = regs[cond];
-                    let c_bool = builder.ins().icmp_imm(IntCC::NotEqual, c, 0);
+                    // Condition may be in regs (CLIF) or reg_slot (spilled).
+                    let c_bool = if let Some(clif_val) = regs.get(cond).copied() {
+                        builder.ins().icmp_imm(IntCC::NotEqual, clif_val, 0)
+                    } else if reg_slot.contains_key(cond) {
+                        push_reg(&mut builder, ctx, &ffi_refs, *cond, &regs, &reg_slot);
+                        if let Some(truthy) = ffi_refs.get("oxy_is_truthy") {
+                            let inst = builder.ins().call(*truthy, &[ctx]);
+                            let results = builder.func.dfg.inst_results(inst);
+                            results[0]
+                        } else {
+                            builder.ins().iconst(types::I8, 0)
+                        }
+                    } else {
+                        builder.ins().iconst(types::I8, 0)
+                    };
+                    // Helper to resolve a register to a CLIF value, loading from slot if needed.
+                    let resolve_reg =
+                        |r: &Reg,
+                         builder: &mut FunctionBuilder,
+                         ctx: cranelift_codegen::ir::Value,
+                         ffi_refs: &HashMap<String, cranelift_codegen::ir::FuncRef>,
+                         regs: &HashMap<Reg, cranelift_codegen::ir::Value>,
+                         reg_slot: &HashMap<Reg, usize>|
+                         -> Option<cranelift_codegen::ir::Value> {
+                            if let Some(v) = regs.get(r).copied() {
+                                return Some(v);
+                            }
+                            if reg_slot.contains_key(r) {
+                                // Push to stack and return a zero placeholder — the real value
+                                // is on the stack after this call.
+                                push_reg(builder, ctx, ffi_refs, *r, regs, reg_slot);
+                            }
+                            None
+                        };
                     let then_extra = phi_args
                         .get(&(block.id, *then_block))
                         .map(|v| {
                             v.iter()
-                                .filter_map(|r| regs.get(r).copied())
+                                .filter_map(|r| {
+                                    resolve_reg(r, &mut builder, ctx, &ffi_refs, &regs, &reg_slot)
+                                })
                                 .collect::<Vec<_>>()
                         })
                         .unwrap_or_default();
@@ -282,7 +316,9 @@ impl<'a> Codegen<'a> {
                         .get(&(block.id, *else_block))
                         .map(|v| {
                             v.iter()
-                                .filter_map(|r| regs.get(r).copied())
+                                .filter_map(|r| {
+                                    resolve_reg(r, &mut builder, ctx, &ffi_refs, &regs, &reg_slot)
+                                })
                                 .collect::<Vec<_>>()
                         })
                         .unwrap_or_default();
@@ -382,8 +418,10 @@ fn call_ffi_binary(
     regs: &HashMap<Reg, cranelift_codegen::ir::Value>,
     reg_slot: &HashMap<Reg, usize>,
 ) {
-    push_reg(builder, ctx, ffi_refs, rhs, regs, reg_slot);
+    // Push lhs first, then rhs. FFI binary_op! macro pops rhs first (from top),
+    // so rhs must be on top of stack.
     push_reg(builder, ctx, ffi_refs, lhs, regs, reg_slot);
+    push_reg(builder, ctx, ffi_refs, rhs, regs, reg_slot);
     if let Some(f) = ffi_refs.get(name) {
         builder.ins().call(*f, &[ctx]);
     }
@@ -469,54 +507,109 @@ fn compile_op(
             regs.insert(*r, builder.ins().iconst(types::I64, 0));
         }
         IrOp::Add(r, a, b) => {
-            let v = builder.ins().iadd(regs[a], regs[b]);
-            regs.insert(*r, v);
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let v = builder.ins().iadd(regs[a], regs[b]);
+                regs.insert(*r, v);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_add", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Sub(r, a, b) => {
-            let v = builder.ins().isub(regs[a], regs[b]);
-            regs.insert(*r, v);
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let v = builder.ins().isub(regs[a], regs[b]);
+                regs.insert(*r, v);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_sub", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Mul(r, a, b) => {
-            let v = builder.ins().imul(regs[a], regs[b]);
-            regs.insert(*r, v);
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let v = builder.ins().imul(regs[a], regs[b]);
+                regs.insert(*r, v);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_mul", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Div(r, a, b) => {
-            let v = builder.ins().sdiv(regs[a], regs[b]);
-            regs.insert(*r, v);
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let v = builder.ins().sdiv(regs[a], regs[b]);
+                regs.insert(*r, v);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_div", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Rem(r, a, b) => {
-            let v = builder.ins().srem(regs[a], regs[b]);
-            regs.insert(*r, v);
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let v = builder.ins().srem(regs[a], regs[b]);
+                regs.insert(*r, v);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_mod", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Eq(r, a, b) => {
-            let c = builder.ins().icmp(IntCC::Equal, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder.ins().icmp(IntCC::Equal, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_eq", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Neq(r, a, b) => {
-            let c = builder.ins().icmp(IntCC::NotEqual, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder.ins().icmp(IntCC::NotEqual, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_neq", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Lt(r, a, b) => {
-            let c = builder.ins().icmp(IntCC::SignedLessThan, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder.ins().icmp(IntCC::SignedLessThan, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_lt", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Gt(r, a, b) => {
-            let c = builder
-                .ins()
-                .icmp(IntCC::SignedGreaterThan, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder
+                    .ins()
+                    .icmp(IntCC::SignedGreaterThan, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_gt", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Le(r, a, b) => {
-            let c = builder
-                .ins()
-                .icmp(IntCC::SignedLessThanOrEqual, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder
+                    .ins()
+                    .icmp(IntCC::SignedLessThanOrEqual, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_le", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Ge(r, a, b) => {
-            let c = builder
-                .ins()
-                .icmp(IntCC::SignedGreaterThanOrEqual, regs[a], regs[b]);
-            regs.insert(*r, builder.ins().uextend(types::I64, c));
+            if regs.contains_key(a) && regs.contains_key(b) {
+                let c = builder
+                    .ins()
+                    .icmp(IntCC::SignedGreaterThanOrEqual, regs[a], regs[b]);
+                regs.insert(*r, builder.ins().uextend(types::I64, c));
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, "oxy_ge", *a, *b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
+            }
         }
         IrOp::Copy(r, a) => {
             regs.insert(*r, regs[a]);
@@ -726,5 +819,64 @@ mod tests {
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(10));
+    }
+
+    #[test]
+    fn test_e2e_while_false() {
+        // Loop body never executes — should just return initial value.
+        let src = "fn main() -> int { let mut x = 42; while false { x = 1 } x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_e2e_let_mut_assign() {
+        let src = "fn main() -> int { let mut x = 0; x = 1; x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_e2e_while_true_return() {
+        // while true should enter the body.
+        let src = "fn main() -> int { while true { return 42 } 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_e2e_if_mutate() {
+        let src = "fn main() -> int { let mut x = 0; if true { x = 5 } else { x = 10 } x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_e2e_while_mut_return() {
+        // Mutate inside loop body then immediately return — tests StoreLocal in loop.
+        let src = "fn main() -> int { let mut x = 0; while x < 1 { x = 5; return x } 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    #[test]
+    fn test_e2e_while_once() {
+        let src = "fn main() -> int { let mut x = 0; while x < 1 { x = x + 1 } x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(1));
+    }
+
+    #[test]
+    fn test_e2e_while_simple() {
+        let src = "fn main() -> int { let mut x = 0; while x < 3 { x = x + 1 } x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(3));
     }
 }

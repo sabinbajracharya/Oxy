@@ -185,6 +185,14 @@ pub(crate) enum Terminator {
     Panic(Reg),
 }
 
+impl Terminator {
+    /// True if this terminator intentionally exits the function. Halt is the default
+    /// for a newly created block and does NOT indicate intentional exit.
+    pub(crate) fn is_exit(&self) -> bool {
+        matches!(self, Terminator::Return(_) | Terminator::Panic(_))
+    }
+}
+
 impl IrFunction {
     pub(crate) fn new(name: String, entry: BlockId, local_count: usize) -> Self {
         Self {
