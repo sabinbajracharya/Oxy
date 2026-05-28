@@ -528,49 +528,24 @@ fn compile_op(
             regs.insert(*r, builder.ins().iconst(types::I64, 0));
         }
         IrOp::Add(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let v = builder.ins().iadd(regs[a], regs[b]);
-                regs.insert(*r, v);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_add", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
+            call_ffi_binary(builder, ctx, ffi_refs, "oxy_add", *a, *b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Sub(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let v = builder.ins().isub(regs[a], regs[b]);
-                regs.insert(*r, v);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_sub", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
+            call_ffi_binary(builder, ctx, ffi_refs, "oxy_sub", *a, *b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Mul(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let v = builder.ins().imul(regs[a], regs[b]);
-                regs.insert(*r, v);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_mul", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
+            call_ffi_binary(builder, ctx, ffi_refs, "oxy_mul", *a, *b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Div(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let v = builder.ins().sdiv(regs[a], regs[b]);
-                regs.insert(*r, v);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_div", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
+            call_ffi_binary(builder, ctx, ffi_refs, "oxy_div", *a, *b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Rem(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let v = builder.ins().srem(regs[a], regs[b]);
-                regs.insert(*r, v);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_mod", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
+            call_ffi_binary(builder, ctx, ffi_refs, "oxy_mod", *a, *b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Eq(r, a, b) => {
             if regs.contains_key(a) && regs.contains_key(b) {

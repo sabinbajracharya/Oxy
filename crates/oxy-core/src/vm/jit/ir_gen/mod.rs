@@ -126,6 +126,42 @@ impl IrGen {
         self.current.block_mut(self.current_block).terminate(term);
     }
 
+    /// Emit a cast for a register value to the given type annotation.
+    /// Returns the (possibly new) register holding the coerced value.
+    fn coerce_reg(&mut self, reg: Reg, type_ann: &TypeAnnotation) -> Reg {
+        match type_ann {
+            TypeAnnotation::Named { name, .. } if name == "byte" => {
+                let result = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result,
+                    func: "oxy_cast_byte",
+                    args: vec![reg],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                result
+            }
+            _ => reg,
+        }
+    }
+
+    /// Emit a cast for a register value to the given TypeInfo.
+    fn coerce_reg_to_type_info(&mut self, reg: Reg, ty: &TypeInfo) -> Reg {
+        if *ty == TypeInfo::U8 {
+            let result = self.alloc_reg();
+            self.emit(IrOp::CallBuiltin {
+                result,
+                func: "oxy_cast_byte",
+                args: vec![reg],
+                immediates: vec![],
+                strings: vec![],
+            });
+            result
+        } else {
+            reg
+        }
+    }
+
     fn start_block(&mut self, id: BlockId) {
         while self.current.blocks.len() <= id {
             self.current.add_block();
@@ -298,6 +334,8 @@ impl IrGen {
                 self.emit(IrOp::ConstUnit(r));
                 r
             });
+            let ret_ty = self.current.return_type.clone();
+            let reg = self.coerce_reg_to_type_info(reg, &ret_ty);
             self.terminate(Terminator::Return(reg));
         }
 
@@ -325,7 +363,12 @@ impl IrGen {
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Option<Reg> {
         match stmt {
-            Stmt::Let { name, value, .. } => {
+            Stmt::Let {
+                name,
+                value,
+                type_ann,
+                ..
+            } => {
                 let slot = self.alloc_local(name);
                 if let Some(val) = value {
                     // If the value is a closure, record the mapping from local
@@ -335,6 +378,11 @@ impl IrGen {
                         self.local_closure_names.insert(slot, closure_name);
                     }
                     let reg = self.gen_expr(val);
+                    let reg = if let Some(ta) = type_ann {
+                        self.coerce_reg(reg, ta)
+                    } else {
+                        reg
+                    };
                     self.emit(IrOp::StoreLocal(slot, reg));
                 }
                 None
@@ -364,6 +412,8 @@ impl IrGen {
                         r
                     }
                 };
+                let ret_ty = self.current.return_type.clone();
+                let reg = self.coerce_reg_to_type_info(reg, &ret_ty);
                 self.terminate(Terminator::Return(reg));
                 None
             }
@@ -744,10 +794,7 @@ impl IrGen {
                                 .get(variant)
                                 .map_or(false, |e| e == enum_name)
                             {
-                                break 'ctor Some((
-                                    enum_name.to_string(),
-                                    variant.to_string(),
-                                ));
+                                break 'ctor Some((enum_name.to_string(), variant.to_string()));
                             }
                         }
                         None
@@ -1101,6 +1148,7 @@ impl IrGen {
                 let r = self.alloc_reg();
                 let func = match type_name.as_str() {
                     "int" => "oxy_cast_int",
+                    "byte" => "oxy_cast_byte",
                     "float" => "oxy_cast_float",
                     "char" => "oxy_cast_to_char",
                     _ => "oxy_cast_int",

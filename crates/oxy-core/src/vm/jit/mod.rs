@@ -134,6 +134,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ),
         ("oxy_try_pop", &[types::I64], None),
         ("oxy_cast_int", &[types::I64], None),
+        ("oxy_cast_byte", &[types::I64], None),
         ("oxy_cast_float", &[types::I64], None),
         ("oxy_cast_to_char", &[types::I64], None),
         ("oxy_bind_ident", &[types::I64, types::I64], None),
@@ -384,10 +385,8 @@ impl JitVm {
                 if ctx.error_len == 1 && ctx.error_msg[0] == 0 {
                     VmResult::Value(ctx.result.clone())
                 } else {
-                    let msg = String::from_utf8_lossy(
-                        &ctx.error_msg[..ctx.error_len.min(1024)],
-                    )
-                    .into_owned();
+                    let msg = String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)])
+                        .into_owned();
                     VmResult::Error(msg)
                 }
             }

@@ -2062,20 +2062,22 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
     let val = unsafe { pop(ctx) };
     match &val {
         Value::EnumVariant {
-            enum_name,
-            variant,
-            ..
+            enum_name, variant, ..
         } if enum_name == "Result" && variant == "Err" => {
             ctx.result = val;
             set_error(ctx, String::new());
-            unsafe { push(ctx, Value::Unit); }
+            unsafe {
+                push(ctx, Value::Unit);
+            }
         }
         Value::EnumVariant {
             enum_name, variant, ..
         } if enum_name == "Option" && variant == "None" => {
             ctx.result = val;
             set_error(ctx, String::new());
-            unsafe { push(ctx, Value::Unit); }
+            unsafe {
+                push(ctx, Value::Unit);
+            }
         }
         _ => {
             // Unwrap: for Some/Ok, push inner data. For other types, pass through.
@@ -2095,6 +2097,15 @@ extern "C" fn oxy_cast_int(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
     let result = crate::vm::arith::cast_to_int(&val, crate::types::IntegerWidth::I64);
+    unsafe {
+        push(ctx, result);
+    }
+}
+
+extern "C" fn oxy_cast_byte(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let val = unsafe { pop(ctx) };
+    let result = crate::vm::arith::cast_to_int(&val, crate::types::IntegerWidth::U8);
     unsafe {
         push(ctx, result);
     }
@@ -2803,6 +2814,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_method_call", oxy_method_call as _),
         ("oxy_try_pop", oxy_try_pop as _),
         ("oxy_cast_int", oxy_cast_int as _),
+        ("oxy_cast_byte", oxy_cast_byte as _),
         ("oxy_cast_float", oxy_cast_float as _),
         ("oxy_cast_to_char", oxy_cast_to_char as _),
         ("oxy_bind_ident", oxy_bind_ident as _),
