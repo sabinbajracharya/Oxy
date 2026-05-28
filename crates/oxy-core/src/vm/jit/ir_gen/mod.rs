@@ -859,7 +859,10 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(merge_id));
         }
 
@@ -873,7 +876,10 @@ impl IrGen {
                 r
             }
         };
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(merge_id));
         }
 
@@ -910,7 +916,10 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(merge_id));
         }
 
@@ -920,7 +929,10 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(merge_id));
         }
 
@@ -970,7 +982,10 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(merge_id));
         }
 
@@ -991,12 +1006,16 @@ impl IrGen {
 
     fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
         let val = self.gen_expr(expr);
-        let final_merge = self.alloc_block();
 
-        // Pre-allocate all check blocks and body blocks
+        // Pre-allocate all check blocks and body blocks.
+        // IMPORTANT: final_merge must be allocated AFTER body blocks so its block ID
+        // is greater. Codegen processes blocks in ID order and the regs/reg_slot
+        // maps are populated as blocks are visited. If final_merge were processed
+        // before a body block, Return would see neither regs nor reg_slot.
         let n = arms.len();
         let check_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
         let body_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
+        let final_merge = self.alloc_block();
         let mut result_regs: Vec<Reg> = Vec::new();
 
         // First check uses current block, subsequent checks use check_blocks[i]
@@ -1087,7 +1106,8 @@ impl IrGen {
                 // Patch prev block's terminator to jump to cascade_merge
                 self.current.block_mut(prev_block).terminator = Terminator::Jump(cascade_merge);
                 // Body block jumps to cascade_merge
-                self.current.block_mut(body_blocks[idx]).terminator = Terminator::Jump(cascade_merge);
+                self.current.block_mut(body_blocks[idx]).terminator =
+                    Terminator::Jump(cascade_merge);
                 self.start_block(cascade_merge);
                 let phi_r = self.alloc_reg();
                 self.emit(IrOp::Phi(phi_r, prev_reg, result_regs[idx]));
@@ -1278,7 +1298,10 @@ impl IrGen {
         self.start_block(body_id);
         self.gen_block_stmts(body);
         // Don't overwrite Return/Panic/Halt from return/break inside body.
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1325,7 +1348,10 @@ impl IrGen {
         self.start_block(body_id);
         self.gen_pattern_bind(pattern, val);
         self.gen_block_stmts(body);
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1360,7 +1386,10 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(body_id));
         }
 
@@ -1440,7 +1469,10 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1513,7 +1545,10 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if self.current.blocks[self.current_block].terminator.is_default() {
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1899,7 +1934,7 @@ mod tests {
     fn test_literal_int() {
         let ir = gen("fn main() -> int { 42 }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 1, "should have at least one block");
+        assert!(!f.blocks.is_empty(), "should have at least one block");
         let ops = &f.blocks[f.entry].ops;
         assert!(
             ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
@@ -1972,7 +2007,7 @@ mod tests {
     fn test_literal_unit() {
         let ir = gen("fn main() { }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 1);
+        assert!(!f.blocks.is_empty());
         // Should have terminator Return or Halt
     }
 
@@ -2514,7 +2549,7 @@ mod tests {
     #[test]
     fn test_closure_capture() {
         let ir = gen("fn main() -> int { let x = 10; let f = || -> int { x }; f() }");
-        let f = find_fn(&ir, "main");
+        let _f = find_fn(&ir, "main");
         let closure = ir.functions.iter().find(|f| f.name.contains("closure"));
         assert!(closure.is_some(), "should have a closure function");
         if let Some(c) = closure {
@@ -2545,9 +2580,9 @@ mod tests {
     #[test]
     fn test_multiple_functions() {
         let ir = gen("fn a() -> int { 1 } fn b() -> int { 2 } fn main() -> int { a() + b() }");
-        assert!(find_fn(&ir, "a").blocks.len() >= 1);
-        assert!(find_fn(&ir, "b").blocks.len() >= 1);
-        assert!(find_fn(&ir, "main").blocks.len() >= 1);
+        assert!(!find_fn(&ir, "a").blocks.is_empty());
+        assert!(!find_fn(&ir, "b").blocks.is_empty());
+        assert!(!find_fn(&ir, "main").blocks.is_empty());
     }
 
     // ── Assignment ─────────────────────────────────────────────────────
@@ -2595,7 +2630,7 @@ mod tests {
     fn test_empty_function() {
         let ir = gen("fn main() { }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 1);
+        assert!(!f.blocks.is_empty());
     }
 
     #[test]
@@ -2620,7 +2655,7 @@ mod tests {
         // Code after return should be handled gracefully
         let ir = gen("fn main() -> int { return 42; let x = 1; x }");
         let f = find_fn(&ir, "main");
-        assert!(f.blocks.len() >= 1);
+        assert!(!f.blocks.is_empty());
     }
 
     // ── Gaps from audit: MacroCall, Grouped, Repeat, AsyncBlock, Await ──
@@ -2721,13 +2756,13 @@ mod tests {
     #[test]
     fn test_closure_inside_match() {
         let ir = gen("fn main() -> int { let x = 10; let f = match 1 { 1 => || -> int { x }, _ => || -> int { 0 } }; f() }");
-        let f = find_fn(&ir, "main");
+        let _f = find_fn(&ir, "main");
         let closures: Vec<_> = ir
             .functions
             .iter()
             .filter(|f| f.name.contains("closure"))
             .collect();
-        assert!(closures.len() >= 1, "should have closure inside match");
+        assert!(!closures.is_empty(), "should have closure inside match");
     }
 
     #[test]

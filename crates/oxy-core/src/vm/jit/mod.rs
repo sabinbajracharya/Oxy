@@ -43,7 +43,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_pop", &[types::I64], None),
         ("oxy_dup", &[types::I64], None),
         ("oxy_load_local", &[types::I64, types::I64], None),
-        ("oxy_read_local_i64", &[types::I64, types::I64], Some(types::I64)),
+        (
+            "oxy_read_local_i64",
+            &[types::I64, types::I64],
+            Some(types::I64),
+        ),
         ("oxy_store_local", &[types::I64, types::I64], None),
         ("oxy_make_cell", &[types::I64, types::I64], None),
         ("oxy_print_val", &[types::I64], None),
@@ -145,7 +149,14 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ),
         (
             "oxy_struct_init",
-            &[types::I64, types::I64, types::I64, types::I64, types::I64, types::I64],
+            &[
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+                types::I64,
+            ],
             None,
         ),
         (

@@ -685,8 +685,12 @@ fn compile_op(
         }
         IrOp::ConstString(r, s) => {
             if let Some(push) = ffi_refs.get("oxy_push_string") {
-                let ptr = builder.ins().iconst(types::I64, s.as_ptr() as i64);
-                let len = builder.ins().iconst(types::I64, s.len() as i64);
+                // Leak the string data so the pointer stays valid at runtime.
+                // Cranelift embeds the immediate pointer value in machine code,
+                // but the original String's buffer is freed when the IrFunction is dropped.
+                let bytes: &'static [u8] = Box::leak(s.clone().into_bytes().into_boxed_slice());
+                let ptr = builder.ins().iconst(types::I64, bytes.as_ptr() as i64);
+                let len = builder.ins().iconst(types::I64, bytes.len() as i64);
                 builder.ins().call(*push, &[ctx, ptr, len]);
             }
             spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -719,14 +723,17 @@ fn compile_op(
             // Register args go on the operand stack, not as ABI params.
             let mut abi_args: Vec<cranelift_codegen::ir::Value> = vec![ctx];
             for s in strings {
-                abi_args.push(builder.ins().iconst(types::I64, s.as_ptr() as i64));
-                abi_args.push(builder.ins().iconst(types::I64, s.len() as i64));
+                // Leak the string data so the pointer stays valid at runtime.
+                let bytes: &'static [u8] = Box::leak(s.clone().into_bytes().into_boxed_slice());
+                abi_args.push(builder.ins().iconst(types::I64, bytes.as_ptr() as i64));
+                abi_args.push(builder.ins().iconst(types::I64, bytes.len() as i64));
             }
             for imm in immediates {
                 abi_args.push(builder.ins().iconst(types::I64, *imm as i64));
             }
-            // Push register arguments onto the operand stack.
-            for arg in args.iter().rev() {
+            // Push register arguments onto the operand stack in order.
+            // FFI functions pop from the top, so first-arg ends up at the bottom.
+            for arg in args {
                 push_reg(builder, ctx, ffi_refs, *arg, regs, reg_slot);
             }
             if let Some(f) = ffi_refs.get(*func) {
@@ -933,13 +940,10 @@ mod tests {
 
     #[test]
     fn test_e2e_struct_init_and_field() {
-        // Known bug: returning a spilled CallBuiltin result (field access) with
-        // int return type returns Unit. The oxy_field_access + oxy_load_local +
-        // oxy_return chain seems to lose the value.
         let src = "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 10, y: 20 }; p.x }";
         let result = run_compiled_jit(src);
-        // FIXME: should be I64(10)
         assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(10));
     }
 
     #[test]
@@ -982,11 +986,10 @@ mod tests {
 
     #[test]
     fn test_e2e_string_len() {
-        // FIXME: returning spilled CallBuiltin result as int returns Unit.
         let src = "fn main() -> int { let s = \"hello\"; s.len() }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
-        // assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
     }
 
     #[test]
@@ -1005,6 +1008,71 @@ mod tests {
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
+    }
+
+    // ── Locals + FFI interactions ──────────────────────────────────────
+
+    /// ConstInt in local, return via LoadLocal (no FFI call).
+    #[test]
+    fn test_e2e_constint_in_local() {
+        let src = "fn main() -> int { let x = 42; x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
+    }
+
+    /// String literal only, no method call, return constant.
+    #[test]
+    fn test_e2e_string_no_method() {
+        let src = "fn main() -> int { let s = \"hello\"; 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(0));
+    }
+
+    /// String literal + method call, return constant.
+    #[test]
+    fn test_e2e_string_method_ret_const() {
+        let src = "fn main() -> int { let s = \"hello\"; let _n = s.len(); 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(0));
+    }
+
+    /// Method call without any locals, return result directly.
+    #[test]
+    fn test_e2e_no_locals_method_call() {
+        let src = "fn main() -> int { \"hello\".len() }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    /// Simple add via FFI without locals, return result.
+    #[test]
+    fn test_e2e_no_locals_arith() {
+        let src = "fn main() -> int { 2 + 3 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    /// Add via FFI with locals, return via local.
+    #[test]
+    fn test_e2e_arith_in_local() {
+        let src = "fn main() -> int { let x = 2 + 3; x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    /// ConstInt stored and loaded through multiple locals.
+    #[test]
+    fn test_e2e_multi_local_chain() {
+        let src = "fn main() -> int { let a = 42; let b = a; b }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
     }
 
     // ── Type cast ─────────────────────────────────────────────────────
