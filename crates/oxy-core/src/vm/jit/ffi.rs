@@ -2182,6 +2182,22 @@ extern "C" fn oxy_path_call_builtin(
         }
     }
 
+    // Try enum variant construction: 2-segment paths like EnumName::VariantName
+    // that don't match any builtin or module are user-defined enum constructors.
+    if let [enum_name, variant] = seg_refs.as_slice() {
+        unsafe {
+            push(
+                ctx,
+                Value::EnumVariant {
+                    enum_name: enum_name.to_string(),
+                    variant: variant.to_string(),
+                    data: args,
+                },
+            );
+        }
+        return;
+    }
+
     set_error(
         ctx,
         format!("unknown built-in path: {}", seg_refs.join("::")),
