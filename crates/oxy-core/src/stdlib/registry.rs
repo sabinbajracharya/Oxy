@@ -204,6 +204,22 @@ static ITEMS: &[Item] = &[
         path: &["std", "regex", "Regex", "new"],
         handler: regex_new,
     },
+    Item {
+        path: &["assert_eq"],
+        handler: assert_eq_handler,
+    },
+    Item {
+        path: &["assert_ne"],
+        handler: assert_ne_handler,
+    },
+    Item {
+        path: &["assert"],
+        handler: assert_handler,
+    },
+    Item {
+        path: &["panic"],
+        handler: panic_handler,
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -319,4 +335,43 @@ fn regex_new(args: &[Value]) -> Result<Value, String> {
         name: "Regex".to_string(),
         fields,
     })
+}
+
+fn assert_eq_handler(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(format!("assert_eq! takes 2 arguments, got {}", args.len()));
+    }
+    if args[0] != args[1] {
+        return Err(format!(
+            "assertion failed: `(left == right)`\n  left: `{:?}`\n right: `{:?}`",
+            args[0], args[1]
+        ));
+    }
+    Ok(Value::Unit)
+}
+
+fn assert_ne_handler(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(format!("assert_ne! takes 2 arguments, got {}", args.len()));
+    }
+    if args[0] == args[1] {
+        return Err(format!(
+            "assertion failed: `(left != right)`\n  left: `{:?}`\n right: `{:?}`",
+            args[0], args[1]
+        ));
+    }
+    Ok(Value::Unit)
+}
+
+fn assert_handler(args: &[Value]) -> Result<Value, String> {
+    let cond = args.first().cloned().unwrap_or(Value::Unit);
+    if !cond.is_truthy() {
+        return Err(format!("assertion failed: `{:?}` is not truthy", cond));
+    }
+    Ok(Value::Unit)
+}
+
+fn panic_handler(args: &[Value]) -> Result<Value, String> {
+    let msg = args.first().map(|v| v.to_string()).unwrap_or_default();
+    Err(msg)
 }

@@ -880,6 +880,7 @@ impl IrGen {
                     "print" => ("oxy_print_val", vec![], vec![args.len()]),
                     "format" => ("oxy_format", vec![], vec![args.len()]),
                     "vec" => ("oxy_make_array", vec![], vec![args.len()]),
+                    "panic" => ("oxy_panic", vec![], vec![]),
                     _ => (
                         "oxy_path_call_builtin",
                         vec![name.clone()],
