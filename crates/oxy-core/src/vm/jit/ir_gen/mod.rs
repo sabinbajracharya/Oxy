@@ -493,9 +493,13 @@ impl IrGen {
                 name, fields, base, ..
             } => {
                 let mut arg_regs = Vec::new();
-                for (_, val) in fields {
+                let mut field_names = Vec::new();
+                for (fname, val) in fields {
                     arg_regs.push(self.gen_expr(val));
+                    field_names.push(fname.clone());
                 }
+                // Join field names with \0 for the FFI to parse.
+                let names_joined = field_names.join("\0");
                 if let Some(base_expr) = base {
                     // Struct update: Point { x: 1, ..base }
                     let base_reg = self.gen_expr(base_expr);
@@ -506,7 +510,7 @@ impl IrGen {
                         func: "oxy_struct_update",
                         args: arg_regs,
                         immediates: vec![fields.len()],
-                        strings: vec![name.clone()],
+                        strings: vec![names_joined],
                     });
                     r
                 } else {
@@ -516,7 +520,7 @@ impl IrGen {
                         func: "oxy_struct_init",
                         args: arg_regs,
                         immediates: vec![fields.len()],
-                        strings: vec![name.clone()],
+                        strings: vec![name.clone(), names_joined],
                     });
                     r
                 }

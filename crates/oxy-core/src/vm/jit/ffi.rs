@@ -1330,25 +1330,28 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
 
 // ── Structs ───────────────────────────────────────────────────────────
 
-extern "C" fn oxy_struct_init(ctx: *mut JitContext, meta_idx: usize) {
+extern "C" fn oxy_struct_init(
+    ctx: *mut JitContext,
+    name_ptr: *const u8,
+    name_len: usize,
+    field_names_ptr: *const u8,
+    field_names_len: usize,
+    field_count: usize,
+) {
     let ctx = unsafe { &mut *ctx };
-    let meta = {
-        let lock = struct_init_meta_lock();
-        lock.get(meta_idx).map(|m| StructInitMeta {
-            name: m.name.clone(),
-            field_names: m.field_names.clone(),
-            field_count: m.field_count,
-        })
-    };
-    let (name, field_names, field_count) = meta
-        .map(|m| (m.name, m.field_names, m.field_count))
-        .unwrap_or_default();
+    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
+    let name = String::from_utf8_lossy(name_bytes).into_owned();
+    let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
+    let field_names: Vec<&str> = fn_bytes
+        .split(|b| *b == 0)
+        .map(|s| std::str::from_utf8(s).unwrap_or(""))
+        .collect();
     let mut fields = HashMap::new();
     for i in (0..field_count).rev() {
         let val = unsafe { pop(ctx) };
         let fname = field_names
             .get(i)
-            .cloned()
+            .map(|s| s.to_string())
             .unwrap_or_else(|| format!("_f{i}"));
         fields.insert(fname, val);
     }
@@ -1357,20 +1360,19 @@ extern "C" fn oxy_struct_init(ctx: *mut JitContext, meta_idx: usize) {
     }
 }
 
-extern "C" fn oxy_struct_update(ctx: *mut JitContext, meta_idx: usize) {
+extern "C" fn oxy_struct_update(
+    ctx: *mut JitContext,
+    field_names_ptr: *const u8,
+    field_names_len: usize,
+    field_count: usize,
+) {
     let ctx = unsafe { &mut *ctx };
     let base = unsafe { pop(ctx) };
-    let meta = {
-        let lock = struct_init_meta_lock();
-        lock.get(meta_idx).map(|m| StructInitMeta {
-            name: m.name.clone(),
-            field_names: m.field_names.clone(),
-            field_count: m.field_count,
-        })
-    };
-    let (field_names, field_count) = meta
-        .map(|m| (m.field_names, m.field_count))
-        .unwrap_or_default();
+    let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
+    let field_names: Vec<&str> = fn_bytes
+        .split(|b| *b == 0)
+        .map(|s| std::str::from_utf8(s).unwrap_or(""))
+        .collect();
     let mut overrides = Vec::with_capacity(field_count);
     for _ in 0..field_count {
         overrides.push(unsafe { pop(ctx) });
@@ -1382,7 +1384,7 @@ extern "C" fn oxy_struct_update(ctx: *mut JitContext, meta_idx: usize) {
             for (i, val) in overrides.into_iter().enumerate() {
                 let fname = field_names
                     .get(i)
-                    .cloned()
+                    .map(|s| s.to_string())
                     .unwrap_or_else(|| format!("_f{i}"));
                 new_fields.insert(fname, val);
             }
