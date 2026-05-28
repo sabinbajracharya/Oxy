@@ -172,13 +172,6 @@ pub(crate) enum Terminator {
         then_block: BlockId,
         else_block: BlockId,
     },
-    /// Call another function. Returns to `return_block` with the result in ctx.result.
-    Call {
-        fn_name: String,
-        args: Vec<Reg>,
-        result: Reg,
-        return_block: BlockId,
-    },
     /// Halt execution (end of program).
     Halt,
     /// Panic: push error message, go to error path.

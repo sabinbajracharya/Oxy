@@ -355,10 +355,6 @@ impl<'a> Codegen<'a> {
                     let disc = builder.ins().iconst(types::I64, 2);
                     builder.ins().return_(&[disc]);
                 }
-                Terminator::Call { .. } => {
-                    let disc = builder.ins().iconst(types::I64, 0);
-                    builder.ins().return_(&[disc]);
-                }
             }
         }
 
