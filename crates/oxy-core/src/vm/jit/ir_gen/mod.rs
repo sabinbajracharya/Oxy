@@ -1852,6 +1852,8 @@ impl IrGen {
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_count = self.local_count;
         let saved_current_block = self.current_block;
+        let saved_next_reg = self.next_reg;
+        let saved_next_block = self.next_block;
         self.local_count = 0;
         self.next_reg = 0;
         self.next_block = 0;
@@ -1901,6 +1903,8 @@ impl IrGen {
         self.locals = saved_locals;
         self.local_count = saved_local_count;
         self.current_block = saved_current_block;
+        self.next_reg = saved_next_reg;
+        self.next_block = saved_next_block;
 
         // Return a register referencing the closure.
         // The closure body is compiled as a separate IrFunction in self.functions.
