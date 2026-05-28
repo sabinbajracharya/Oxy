@@ -204,6 +204,8 @@ pub(crate) struct JitEngine {
     entry_name: String,
     /// Local slot count for the entry function (must match codegen's spill slot base).
     pub(crate) local_count: usize,
+    /// Per-function local slot counts (name → local_count).
+    fn_local_counts: HashMap<String, usize>,
 }
 
 /// Serialize compilation so parallel tests don't race on global fn tables.
@@ -276,6 +278,19 @@ impl JitEngine {
 
         // 5. Build engine
         let entry_name = "main".to_string();
+
+        // Build per-function local count map (name → local_count)
+        let fn_local_counts: HashMap<String, usize> = cg
+            .fn_names
+            .iter()
+            .map(|(name, idx)| {
+                (
+                    name.clone(),
+                    cg.fn_local_counts.get(idx).copied().unwrap_or(8),
+                )
+            })
+            .collect();
+
         Ok(Self {
             functions: std::mem::take(&mut cg.fn_names)
                 .into_iter()
@@ -283,6 +298,7 @@ impl JitEngine {
                 .collect(),
             entry_name,
             local_count: main_local_count,
+            fn_local_counts,
         })
     }
 
@@ -328,21 +344,27 @@ impl JitVm {
     }
 
     pub fn run(&mut self) -> VmResult {
+        let local_count = self.engine.local_count;
         match self.engine.entry_fn_ptr() {
-            Some(ptr) => self.call_fn(ptr),
+            Some(ptr) => self.call_fn(ptr, local_count),
             None => VmResult::Error("no entry point".to_string()),
         }
     }
 
     pub fn run_function(&mut self, name: &str) -> VmResult {
+        let local_count = self
+            .engine
+            .fn_local_counts
+            .get(name)
+            .copied()
+            .unwrap_or(self.engine.local_count);
         match self.engine.get_fn_ptr(name) {
-            Some(ptr) => self.call_fn(ptr),
+            Some(ptr) => self.call_fn(ptr, local_count),
             None => VmResult::Error(format!("function not found: {name}")),
         }
     }
 
-    fn call_fn(&self, ptr: *const u8) -> VmResult {
-        let local_count = self.engine.local_count;
+    fn call_fn(&self, ptr: *const u8, local_count: usize) -> VmResult {
         let mut ctx = context::JitContext::new(local_count);
         ctx.result = crate::types::Value::Unit;
 

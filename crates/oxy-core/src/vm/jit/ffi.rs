@@ -21,6 +21,18 @@ use std::collections::HashMap;
 
 // ── Stack helpers (used by JIT and FFI internally) ──────────────────
 
+/// Move a Value from one buffer slot to another, leaving Unit behind at the source.
+///
+/// This is the **only** way to transfer ownership of a `Value` between buffer slots.
+/// `Value` contains heap-allocated types (`Rc`, `String`, `Vec`) — a bare `ptr::read`
+/// followed by a `write` on the destination creates two owners of the same allocation.
+/// Always clear the source slot with `Value::Unit` after moving so the buffer's `Drop`
+/// doesn't double-free when it cleans up.
+unsafe fn move_value(src: *mut Value, dst: *mut Value) {
+    dst.write(src.read());
+    src.write(Value::Unit);
+}
+
 unsafe fn push(ctx: &mut JitContext, val: Value) {
     let slot = ctx.push_slot();
     unsafe {
@@ -40,12 +52,10 @@ unsafe fn pop(ctx: &mut JitContext) -> Value {
         return Value::Unit;
     }
     ctx.sp -= 1;
-    let ptr = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp) };
-    let val = unsafe { ptr.read() };
-    // Zero the slot so the original Value isn't dropped later by JitContext::drop.
-    // Without this, heap-allocated fields (String, Vec) would be double-freed:
-    // once when the popped copy drops, once when JitContext::drop cleans up.
-    unsafe { ptr.write(Value::Unit) };
+    let src = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp) };
+    let val = unsafe { src.read() };
+    // Clear the source slot so the caller's buffer doesn't double-free.
+    unsafe { src.write(Value::Unit) };
     val
 }
 
@@ -702,13 +712,14 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
 
-    // Move args from the caller's operand stack to the callee's buffer
+    // Move args from the caller's operand stack to the callee's buffer.
+    // Uses move_value so source slots are cleared to Value::Unit, preventing
+    // double-free of heap-allocated data when the caller's buffer is dropped.
     let args_start = ctx.sp - arg_count;
     for i in 0..arg_count {
-        let src = unsafe { ctx.buffer.add(ctx.local_count + args_start + i).read() };
-        unsafe {
-            callee_buf.add(i).write(src);
-        }
+        let src = unsafe { ctx.buffer.add(ctx.local_count + args_start + i) };
+        let dst = unsafe { callee_buf.add(i) };
+        unsafe { move_value(src, dst) };
     }
     ctx.sp = args_start;
 
@@ -949,14 +960,23 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     };
 
     if is_async {
-        // Create Future instead of executing
-        // Pop closure + args, push Future
+        // Create Future instead of executing.
+        // Move closure + args off the stack, clearing each source slot.
         let drain_start = ctx.sp - arg_count - 1;
         let mut args = Vec::new();
         for i in 0..arg_count {
-            args.push(unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i).read() });
+            let src = unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i) };
+            let val = unsafe { src.read() };
+            unsafe { src.write(Value::Unit) };
+            args.push(val);
         }
-        ctx.sp = drain_start; // pop everything
+        // Clear the closure slot too
+        unsafe {
+            ctx.buffer
+                .add(ctx.local_count + drain_start)
+                .write(Value::Unit)
+        };
+        ctx.sp = drain_start;
 
         let fn_data = match &closure_val {
             Value::Function(f) => f.clone(),
@@ -1004,12 +1024,20 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     let captures_end = captured_names.len();
     let drain_start = ctx.sp - arg_count - 1;
 
-    // Read args
+    // Move args off the caller's stack, clearing each source slot.
     let mut args_vals = Vec::new();
     for i in 0..arg_count {
-        args_vals.push(unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i).read() });
+        let src = unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i) };
+        let val = unsafe { src.read() };
+        unsafe { src.write(Value::Unit) };
+        args_vals.push(val);
     }
-    // Pop everything
+    // Clear the closure slot too
+    unsafe {
+        ctx.buffer
+            .add(ctx.local_count + drain_start)
+            .write(Value::Unit)
+    };
     ctx.sp = drain_start;
 
     // Create a separate buffer for the callee so the caller's locals
