@@ -379,9 +379,17 @@ impl JitVm {
         match disc {
             0 => VmResult::Value(ctx.result.clone()),
             2 => {
-                let msg =
-                    String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)]).into_owned();
-                VmResult::Error(msg)
+                // set_error with empty message signals ? propagation.
+                // Return ctx.result which holds the Err/None value.
+                if ctx.error_len == 1 && ctx.error_msg[0] == 0 {
+                    VmResult::Value(ctx.result.clone())
+                } else {
+                    let msg = String::from_utf8_lossy(
+                        &ctx.error_msg[..ctx.error_len.min(1024)],
+                    )
+                    .into_owned();
+                    VmResult::Error(msg)
+                }
             }
             other => VmResult::Error(format!("unexpected discriminant {other}")),
         }

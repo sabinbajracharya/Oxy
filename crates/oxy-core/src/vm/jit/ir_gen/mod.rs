@@ -858,6 +858,22 @@ impl IrGen {
                     immediates: vec![],
                     strings: vec![],
                 });
+                // oxy_try_pop calls set_error on Err/None, so CheckError detects it.
+                let err = self.alloc_reg();
+                self.emit(IrOp::CheckError(err));
+                let continue_id = self.alloc_block();
+                let return_id = self.alloc_block();
+                self.terminate(Terminator::Branch {
+                    cond: err,
+                    then_block: return_id,
+                    else_block: continue_id,
+                });
+                // Return block: Halt. oxy_error_discriminant returns 2 (set_error
+                // was called), disc=2 with empty error_msg signals ? propagation.
+                self.start_block(return_id);
+                self.terminate(Terminator::Halt);
+                // Continue block: r holds the unwrapped value.
+                self.start_block(continue_id);
                 r
             }
             Expr::FString { parts, .. } => {

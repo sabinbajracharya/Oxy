@@ -44,7 +44,8 @@ unsafe fn push(ctx: &mut JitContext, val: Value) {
 fn set_error(ctx: &mut JitContext, msg: String) {
     let len = msg.len().min(1023);
     ctx.error_msg[..len].copy_from_slice(&msg.as_bytes()[..len]);
-    ctx.error_len = len;
+    // Ensure error_len is non-zero even for empty messages (e.g. ? propagation).
+    ctx.error_len = if len == 0 { 1 } else { len };
 }
 
 unsafe fn pop(ctx: &mut JitContext) -> Value {
@@ -2063,19 +2064,18 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
         Value::EnumVariant {
             enum_name,
             variant,
-            data,
+            ..
         } if enum_name == "Result" && variant == "Err" => {
-            // Early return: push the error and return from the function.
-            // The JIT function will see this on the stack and handle via oxy_return.
             ctx.result = val;
-            // Signal early return by setting resume_ip to a sentinel
-            ctx.resume_ip = usize::MAX;
+            set_error(ctx, String::new());
+            unsafe { push(ctx, Value::Unit); }
         }
         Value::EnumVariant {
             enum_name, variant, ..
         } if enum_name == "Option" && variant == "None" => {
             ctx.result = val;
-            ctx.resume_ip = usize::MAX;
+            set_error(ctx, String::new());
+            unsafe { push(ctx, Value::Unit); }
         }
         _ => {
             // Unwrap: for Some/Ok, push inner data. For other types, pass through.
