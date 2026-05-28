@@ -201,6 +201,8 @@ pub(crate) struct JitEngine {
     pub(crate) functions: HashMap<String, *const u8>,
     /// Entry point name.
     entry_name: String,
+    /// Local slot count for the entry function (must match codegen's spill slot base).
+    pub(crate) local_count: usize,
 }
 
 impl JitEngine {
@@ -237,7 +239,14 @@ impl JitEngine {
             cg.declare_ffi(name, params.to_vec(), ret);
         }
 
-        // 4. Compile IR → native
+        // 4. Extract main's local_count before functions is moved.
+        let main_local_count = functions
+            .iter()
+            .find(|f| f.name == "main")
+            .map(|f| f.local_count)
+            .unwrap_or(8);
+
+        // 4b. Compile IR → native
         cg.compile(functions)?;
 
         // 4a. Populate fn_table for closure/async-block dispatch.
@@ -260,6 +269,7 @@ impl JitEngine {
                 .map(|(name, idx)| (name, cg.fn_ptrs[&idx]))
                 .collect(),
             entry_name,
+            local_count: main_local_count,
         })
     }
 
@@ -319,7 +329,7 @@ impl JitVm {
     }
 
     fn call_fn(&self, ptr: *const u8) -> VmResult {
-        let local_count = 8; // default
+        let local_count = self.engine.local_count;
         let mut ctx = context::JitContext::new(local_count);
         ctx.result = crate::types::Value::Unit;
 

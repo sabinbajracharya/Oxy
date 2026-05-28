@@ -167,9 +167,22 @@ impl<'a> Codegen<'a> {
             }
         }
 
+        // Pre-allocate spill slots for all Phi results. This reserves slots
+        // before any ConstString/LoadLocal in the same block (or in predecessor
+        // blocks) can allocate, preventing operand-stack position conflicts.
+        let mut phi_slot: HashMap<Reg, usize> = HashMap::new();
+        // Spill slots start at local_count + 1 to avoid overlapping with the
+        // first operand-stack position (buffer[local_count + sp] where sp=0).
+        let mut next_spill_slot: usize = ir_fn.local_count + 1;
+        for phis in block_phis.values() {
+            for (phi_r, _) in phis {
+                phi_slot.insert(*phi_r, next_spill_slot);
+                next_spill_slot += 1;
+            }
+        }
+
         let mut regs: HashMap<Reg, cranelift_codegen::ir::Value> = HashMap::new();
         let mut reg_slot: HashMap<Reg, usize> = HashMap::new();
-        let mut next_spill_slot: usize = ir_fn.local_count;
 
         for block in &ir_fn.blocks {
             let cb = cl_blocks[&block.id];
@@ -178,11 +191,10 @@ impl<'a> Codegen<'a> {
             let params = builder.block_params(cb);
             let ctx = params[0];
 
-            // Pop phi values from operand stack (pushed by predecessor's Jump).
+            // Pop phi values from the operand stack into their pre-allocated slot.
             if let Some(phis) = block_phis.get(&block.id) {
                 for (phi_r, _sources) in phis.iter().rev() {
-                    let slot = next_spill_slot;
-                    next_spill_slot += 1;
+                    let slot = phi_slot[phi_r];
                     if let Some(store) = ffi_refs.get("oxy_store_local") {
                         let slot_val = builder.ins().iconst(types::I64, slot as i64);
                         builder.ins().call(*store, &[ctx, slot_val]);
