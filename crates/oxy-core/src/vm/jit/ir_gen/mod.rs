@@ -45,6 +45,20 @@ pub(crate) struct IrGen {
     use_aliases: std::collections::HashMap<String, String>,
     /// Local slot → closure IR function name (for calling closures by their local name).
     local_closure_names: std::collections::HashMap<usize, String>,
+    /// Variant name → parent enum name (e.g. "Some" → "Option").
+    /// Seeded from AST enum definitions so user-defined enums work without hardcoding.
+    variant_to_enum: std::collections::HashMap<String, String>,
+}
+
+impl IrGen {
+    /// Register a variant → enum mapping. For module-level enums, the prefix is
+    /// already baked into the enum name (e.g. "shapes::Color").
+    fn register_enum(&mut self, enum_def: &crate::ast::EnumDef) {
+        for variant in &enum_def.variants {
+            self.variant_to_enum
+                .insert(variant.name.clone(), enum_def.name.clone());
+        }
+    }
 }
 
 impl IrGen {
@@ -65,7 +79,18 @@ impl IrGen {
             global_consts: std::collections::HashMap::new(),
             use_aliases: std::collections::HashMap::new(),
             local_closure_names: std::collections::HashMap::new(),
+            variant_to_enum: Self::builtin_variants(),
         }
+    }
+
+    /// Built-in enum variants that don't come from user AST definitions.
+    fn builtin_variants() -> std::collections::HashMap<String, String> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("Some".to_string(), "Option".to_string());
+        m.insert("None".to_string(), "Option".to_string());
+        m.insert("Ok".to_string(), "Result".to_string());
+        m.insert("Err".to_string(), "Result".to_string());
+        m
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -154,7 +179,8 @@ impl IrGen {
                         crate::ast::UseTree::Glob => {}
                     }
                 }
-                // Struct/enum/type items don't generate IR directly
+                Item::Enum(e) => self.register_enum(e),
+                // Struct/type items don't generate IR directly
                 _ => {}
             }
         }
@@ -165,6 +191,14 @@ impl IrGen {
         for item in items {
             match item {
                 Item::Function(f) => self.gen_fn(f, Some(prefix)),
+                Item::Enum(e) => {
+                    // Register enum with its fully-qualified module prefix.
+                    let full_name = format!("{prefix}::{}", e.name);
+                    for variant in &e.variants {
+                        self.variant_to_enum
+                            .insert(variant.name.clone(), full_name.clone());
+                    }
+                }
                 Item::Module(m) => {
                     let nested = format!("{prefix}::{}", m.name);
                     if let Some(ref items) = m.body {
@@ -455,14 +489,14 @@ impl IrGen {
                 } else if let Some(const_val) = self.global_consts.get(name).cloned() {
                     // Inline const value at use site
                     self.gen_expr(&const_val)
-                } else if *name == "None" {
+                } else if let Some(enum_name) = self.variant_to_enum.get(name).cloned() {
                     let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: "oxy_const_enum_variant",
                         args: vec![],
                         immediates: vec![],
-                        strings: vec!["Option".to_string(), "None".to_string()],
+                        strings: vec![enum_name, name.clone()],
                     });
                     r
                 } else {
@@ -560,13 +594,27 @@ impl IrGen {
                 }
                 let r = self.alloc_reg();
 
-                // Route enum variant constructors (Some, Ok, Err) to their FFI.
-                // Handles both short names and fully-qualified paths (after use alias resolution).
-                let enum_ctor = match fname.as_str() {
-                    "Some" | "Option::Some" => Some(("Option", "Some")),
-                    "Ok" | "Result::Ok" => Some(("Result", "Ok")),
-                    "Err" | "Result::Err" => Some(("Result", "Err")),
-                    _ => None,
+                // Route enum variant constructors to oxy_make_enum_variant.
+                // Resolves short names (Some) and qualified paths (Option::Some)
+                // via the variant_to_enum map built from AST enum definitions.
+                let enum_ctor = 'ctor: {
+                    // Try short name first
+                    if let Some(enum_name) = self.variant_to_enum.get(&fname) {
+                        break 'ctor Some((enum_name.clone(), fname.clone()));
+                    }
+                    // Try qualified path like "EnumName::Variant" or
+                    // "module::Enum::Variant" — split on the LAST :: to
+                    // get (enum_path, variant_name).
+                    if let Some((enum_name, variant)) = fname.rsplit_once("::") {
+                        if self
+                            .variant_to_enum
+                            .get(variant)
+                            .map_or(false, |e| e == enum_name)
+                        {
+                            break 'ctor Some((enum_name.to_string(), variant.to_string()));
+                        }
+                    }
+                    None
                 };
                 if let Some((enum_name, variant)) = enum_ctor {
                     self.emit(IrOp::CallBuiltin {
@@ -576,14 +624,12 @@ impl IrGen {
                         immediates: vec![args.len()],
                         strings: vec![enum_name.to_string(), variant.to_string()],
                     });
-                } else if let Some((ffi_func, immediates)) =
-                    match fname.as_str() {
-                        "spawn" => Some(("oxy_spawn_ffi", vec![])),
-                        "sleep" => Some(("oxy_sleep_ffi", vec![])),
-                        "select" => Some(("oxy_select_ffi", vec![args.len()])),
-                        _ => None,
-                    }
-                {
+                } else if let Some((ffi_func, immediates)) = match fname.as_str() {
+                    "spawn" => Some(("oxy_spawn_ffi", vec![])),
+                    "sleep" => Some(("oxy_sleep_ffi", vec![])),
+                    "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                    _ => None,
+                } {
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: ffi_func,
@@ -913,11 +959,11 @@ impl IrGen {
                 let enum_name = if segments.len() > 1 {
                     segments[..segments.len() - 1].join("::")
                 } else {
-                    // Resolve known single-segment enum variants.
-                    match variant.as_str() {
-                        "None" => "Option".to_string(),
-                        _ => String::new(),
-                    }
+                    // Resolve single-segment variants via the enum map.
+                    self.variant_to_enum
+                        .get(&variant)
+                        .cloned()
+                        .unwrap_or_default()
                 };
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
