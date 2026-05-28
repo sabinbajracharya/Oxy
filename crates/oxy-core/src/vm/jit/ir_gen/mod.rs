@@ -43,6 +43,8 @@ pub(crate) struct IrGen {
     global_consts: std::collections::HashMap<String, crate::ast::Expr>,
     /// Use aliases: local_name → qualified_name (from `use path::to::item;`).
     use_aliases: std::collections::HashMap<String, String>,
+    /// Local slot → closure IR function name (for calling closures by their local name).
+    local_closure_names: std::collections::HashMap<usize, String>,
 }
 
 impl IrGen {
@@ -62,6 +64,7 @@ impl IrGen {
             labeled_targets: std::collections::HashMap::new(),
             global_consts: std::collections::HashMap::new(),
             use_aliases: std::collections::HashMap::new(),
+            local_closure_names: std::collections::HashMap::new(),
         }
     }
 
@@ -291,6 +294,12 @@ impl IrGen {
             Stmt::Let { name, value, .. } => {
                 let slot = self.alloc_local(name);
                 if let Some(val) = value {
+                    // If the value is a closure, record the mapping from local
+                    // slot to closure function name so Call can use oxy_call.
+                    if matches!(val, crate::ast::Expr::Closure { .. }) {
+                        let closure_name = format!("closure_{}", self.closure_meta.len());
+                        self.local_closure_names.insert(slot, closure_name);
+                    }
                     let reg = self.gen_expr(val);
                     self.emit(IrOp::StoreLocal(slot, reg));
                 }
@@ -512,6 +521,35 @@ impl IrGen {
                     Expr::Path { segments, .. } => segments.join("::"),
                     _ => String::from("<anon>"),
                 };
+                // If the callee is a local variable that holds a closure, use the
+                // closure's registered function name so oxy_call can dispatch it.
+                if let Expr::Ident(name, _) = callee.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        if let Some(closure_name) = self.local_closure_names.get(&slot) {
+                            // Locally-defined closure: use the registered function name.
+                            fname = closure_name.clone();
+                        } else {
+                            // Parameter or dynamically-assigned closure: call via FFI.
+                            let mut arg_regs = Vec::new();
+                            for a in args {
+                                arg_regs.push(self.gen_expr(a));
+                            }
+                            let closure_reg = self.alloc_reg();
+                            self.emit(IrOp::LoadLocalRaw(closure_reg, slot));
+                            let mut all_regs = vec![closure_reg];
+                            all_regs.extend(arg_regs);
+                            let r = self.alloc_reg();
+                            self.emit(IrOp::CallBuiltin {
+                                result: r,
+                                func: "oxy_call_closure",
+                                args: all_regs,
+                                immediates: vec![args.len()],
+                                strings: vec![],
+                            });
+                            return r;
+                        }
+                    }
+                }
                 // Resolve use aliases: `use calc::triple; triple(7)` → call "calc::triple"
                 if let Some(resolved) = self.use_aliases.get(&fname) {
                     fname = resolved.clone();

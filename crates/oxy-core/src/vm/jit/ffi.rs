@@ -1042,8 +1042,12 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
 
     // Create a separate buffer for the callee so the caller's locals
     // (at buffer[0..saved_local_count]) are never touched.
-    let total_frame = captures_end + arg_count;
-    let callee_cap = total_frame + 256; // small buffer for callee
+    // Use the callee's actual local_count, not just captures+args, so the
+    // callee's codegen spills don't collide with the operand stack.
+    let fn_local_count = lookup_fn_local_count(target_ip);
+    let total_frame = fn_local_count.max(captures_end + arg_count);
+    const STACK_CAP: usize = 2048;
+    let callee_cap = total_frame + STACK_CAP;
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
 
