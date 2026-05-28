@@ -1744,43 +1744,57 @@ extern "C" fn oxy_method_call(
             table.get(&target_ip).copied()
         };
         if let Some(fp) = fn_ptr {
-            // Build callee frame: locals = [receiver, args...]
-            let frame_size = 1 + arg_count;
-            while ctx.local_count + frame_size > ctx.capacity {
-                let new_cap = (ctx.local_count + frame_size) * 2;
-                let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
-                let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
-                unsafe {
-                    std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
-                }
-                unsafe {
-                    std::alloc::dealloc(
-                        ctx.buffer as *mut u8,
-                        std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
-                    );
-                }
-                ctx.buffer = new_buf;
-                ctx.capacity = new_cap;
-            }
-            let saved_local_count = ctx.local_count;
-            let saved_sp = ctx.sp;
-            ctx.local_count = frame_size;
-            ctx.sp = 0;
+            // Run the method in its own buffer so callee locals don't corrupt
+            // the caller's buffer. Same pattern as invoke_jit_fn.
+            let fn_local_count = lookup_fn_local_count(target_ip);
+            let total_frame = fn_local_count.max(1 + arg_count);
+            const STACK_CAP: usize = 2048;
+            let callee_cap = total_frame + STACK_CAP;
+            let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+            let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
+
             unsafe {
-                ctx.buffer.add(0).write(receiver);
+                callee_buf.add(0).write(receiver);
             }
             for (i, arg) in args.into_iter().enumerate() {
                 unsafe {
-                    ctx.buffer.add(1 + i).write(arg);
+                    callee_buf.add(1 + i).write(arg);
                 }
             }
+
+            let saved_buffer = ctx.buffer;
+            let saved_capacity = ctx.capacity;
+            let saved_local_count = ctx.local_count;
+            let saved_sp = ctx.sp;
+            ctx.buffer = callee_buf;
+            ctx.capacity = callee_cap;
+            ctx.local_count = total_frame;
+            ctx.sp = 0;
+
             let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
                 unsafe { std::mem::transmute(fp as *const ()) };
             let _disc = fn_ptr(ctx);
+
+            // Clean up callee's locals and stack, then free the buffer.
+            for i in 0..ctx.local_count {
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(i));
+                }
+            }
+            for i in 0..ctx.sp {
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
+                }
+            }
+            unsafe {
+                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
+            }
+
             let result = std::mem::replace(&mut ctx.result, Value::Unit);
+            ctx.buffer = saved_buffer;
+            ctx.capacity = saved_capacity;
             ctx.local_count = saved_local_count;
             ctx.sp = saved_sp;
-            // disc == 0 (done), disc == 2 (error, already in ctx.error_msg)
             unsafe {
                 push(ctx, result);
             }
@@ -1797,39 +1811,53 @@ extern "C" fn oxy_method_call(
             let table = fn_table_lock();
             table.get(&fn_index).copied()
         } {
-            let frame_size = 1 + arg_count;
-            while ctx.local_count + frame_size > ctx.capacity {
-                let new_cap = (ctx.local_count + frame_size) * 2;
-                let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
-                let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
-                unsafe {
-                    std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
-                }
-                unsafe {
-                    std::alloc::dealloc(
-                        ctx.buffer as *mut u8,
-                        std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
-                    );
-                }
-                ctx.buffer = new_buf;
-                ctx.capacity = new_cap;
-            }
-            let saved_local_count = ctx.local_count;
-            let saved_sp = ctx.sp;
-            ctx.local_count = frame_size;
-            ctx.sp = 0;
+            // Run in dedicated callee buffer. Same pattern as above.
+            let fn_local_count = lookup_fn_local_count(fn_index);
+            let total_frame = fn_local_count.max(1 + arg_count);
+            const STACK_CAP2: usize = 2048;
+            let callee_cap = total_frame + STACK_CAP2;
+            let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+            let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
+
             unsafe {
-                ctx.buffer.add(0).write(receiver);
+                callee_buf.add(0).write(receiver);
             }
             for (i, arg) in args.into_iter().enumerate() {
                 unsafe {
-                    ctx.buffer.add(1 + i).write(arg);
+                    callee_buf.add(1 + i).write(arg);
                 }
             }
+
+            let saved_buffer = ctx.buffer;
+            let saved_capacity = ctx.capacity;
+            let saved_local_count = ctx.local_count;
+            let saved_sp = ctx.sp;
+            ctx.buffer = callee_buf;
+            ctx.capacity = callee_cap;
+            ctx.local_count = total_frame;
+            ctx.sp = 0;
+
             let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
                 unsafe { std::mem::transmute(fp as *const ()) };
             let _disc = fn_ptr(ctx);
+
+            for i in 0..ctx.local_count {
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(i));
+                }
+            }
+            for i in 0..ctx.sp {
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
+                }
+            }
+            unsafe {
+                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
+            }
+
             let result = std::mem::replace(&mut ctx.result, Value::Unit);
+            ctx.buffer = saved_buffer;
+            ctx.capacity = saved_capacity;
             ctx.local_count = saved_local_count;
             ctx.sp = saved_sp;
             unsafe {
@@ -2467,10 +2495,14 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
                     .get(name)
                     .ok()
                     .unwrap_or(Value::Unit);
-                unsafe { callee_buf.add(i).write(v); }
+                unsafe {
+                    callee_buf.add(i).write(v);
+                }
             }
             for (i, arg) in fut.args.iter().enumerate() {
-                unsafe { callee_buf.add(captures_end + i).write(arg.clone()); }
+                unsafe {
+                    callee_buf.add(captures_end + i).write(arg.clone());
+                }
             }
 
             // Swap to the callee's buffer.
@@ -2489,12 +2521,18 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
 
             // Clean up callee's locals and stack, then free the buffer.
             for i in 0..ctx.local_count {
-                unsafe { std::ptr::drop_in_place(ctx.buffer.add(i)); }
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(i));
+                }
             }
             for i in 0..ctx.sp {
-                unsafe { std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i)); }
+                unsafe {
+                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
+                }
             }
-            unsafe { std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout); }
+            unsafe {
+                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
+            }
 
             // Restore caller's buffer and push result.
             let result = std::mem::replace(&mut ctx.result, Value::Unit);

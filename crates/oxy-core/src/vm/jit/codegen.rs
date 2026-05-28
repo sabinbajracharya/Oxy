@@ -12,6 +12,8 @@ pub(crate) struct Codegen<'a> {
     module: &'a mut JITModule,
     fn_builder_ctx: &'a mut FunctionBuilderContext,
     ffi_ids: HashMap<String, FuncId>,
+    /// FFI function name → expected ABI parameter count (including the ctx pointer).
+    ffi_param_counts: HashMap<String, usize>,
     pub(crate) fn_ptrs: HashMap<usize, *const u8>,
     pub(crate) fn_names: HashMap<String, usize>,
     pub(crate) fn_local_counts: HashMap<usize, usize>,
@@ -24,6 +26,7 @@ impl<'a> Codegen<'a> {
             module,
             fn_builder_ctx,
             ffi_ids: HashMap::new(),
+            ffi_param_counts: HashMap::new(),
             fn_ptrs: HashMap::new(),
             fn_names: HashMap::new(),
             fn_local_counts: HashMap::new(),
@@ -44,6 +47,8 @@ impl<'a> Codegen<'a> {
             .declare_function(name, Linkage::Import, &sig)
             .unwrap_or_else(|e| panic!("declare FFI {name}: {e}"));
         self.ffi_ids.insert(name.to_string(), fid);
+        // Store param count for compile-time validation of CallBuiltin args.
+        self.ffi_param_counts.insert(name.to_string(), params.len());
     }
 
     pub fn compile(&mut self, functions: Vec<IrFunction>) -> Result<(), String> {
@@ -188,6 +193,35 @@ impl<'a> Codegen<'a> {
         let mut regs: HashMap<Reg, cranelift_codegen::ir::Value> = HashMap::new();
         let mut reg_slot: HashMap<Reg, usize> = HashMap::new();
 
+        // Pre-scan: validate CallBuiltin argument counts against FFI declarations.
+        // Each string becomes 2 ABI args (ptr, len), each immediate becomes 1,
+        // and ctx is always the first arg. This catches mismatches before Cranelift's
+        // verifier, giving a clear error message with the offending function and FFI call.
+        for block in &ir_fn.blocks {
+            for op in &block.ops {
+                if let IrOp::CallBuiltin {
+                    func,
+                    strings,
+                    immediates,
+                    ..
+                } = op
+                {
+                    let abi_count = 1 + strings.len() * 2 + immediates.len();
+                    if let Some(expected) = self.ffi_param_counts.get(*func) {
+                        if abi_count != *expected {
+                            return Err(format!(
+                                "define {}: CallBuiltin {func} — FFI expects {expected} ABI args, \
+                                 got {abi_count} (1 ctx + {} strings×2 + {} immediates×1)",
+                                ir_fn.name,
+                                strings.len(),
+                                immediates.len(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         for block in &ir_fn.blocks {
             let cb = cl_blocks[&block.id];
             builder.switch_to_block(cb);
@@ -326,6 +360,18 @@ impl<'a> Codegen<'a> {
 
         builder.seal_all_blocks();
         builder.finalize();
+
+        // Verify CLIF IR before defining, capturing detailed error messages.
+        {
+            let isa = self.module.isa();
+            if let Err(verifier_err) = cranelift_codegen::verify_function(&fn_ctx.func, isa) {
+                return Err(format!(
+                    "define {}: Verifier errors:\n{verifier_err}",
+                    ir_fn.name
+                ));
+            }
+        }
+
         self.module
             .define_function(fid, &mut fn_ctx)
             .map_err(|e| format!("define {}: {e}", ir_fn.name))?;

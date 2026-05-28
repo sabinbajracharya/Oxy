@@ -844,14 +844,21 @@ impl IrGen {
                 ..
             } => self.gen_closure(params, body, *is_async),
             Expr::Path { segments, .. } => {
-                // Unit enum variant: Color::Red
+                // Unit enum variant: Color::Red, or module::Color::Red.
+                // Join all but the last segment as the enum name (e.g. "module::Color").
+                let variant = segments.last().cloned().unwrap_or_default();
+                let enum_name = if segments.len() > 1 {
+                    segments[..segments.len() - 1].join("::")
+                } else {
+                    String::new()
+                };
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func: "oxy_const_enum_variant",
                     args: vec![],
                     immediates: vec![],
-                    strings: segments.clone(),
+                    strings: vec![enum_name, variant],
                 });
                 r
             }
@@ -1367,13 +1374,13 @@ impl IrGen {
             Pattern::Struct { fields, .. } => {
                 // Check each named field recursively
                 self.emit(IrOp::ConstBool(r, true));
-                for (i, (_fname, p)) in fields.iter().enumerate() {
+                for (_fname, p) in fields.iter() {
                     let field_val = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: field_val,
                         func: "oxy_field_access",
                         args: vec![val_reg],
-                        immediates: vec![i],
+                        immediates: vec![],
                         strings: vec![_fname.clone()],
                     });
                     let field_match = self.gen_pattern_check(p, field_val);
@@ -1751,13 +1758,13 @@ impl IrGen {
                 }
             }
             Pattern::Struct { fields, .. } => {
-                for (i, (_fname, p)) in fields.iter().enumerate() {
+                for (_fname, p) in fields.iter() {
                     let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
                         func: "oxy_field_access",
                         args: vec![val_reg],
-                        immediates: vec![i],
+                        immediates: vec![],
                         strings: vec![_fname.clone()],
                     });
                     self.gen_pattern_bind(p, r);
