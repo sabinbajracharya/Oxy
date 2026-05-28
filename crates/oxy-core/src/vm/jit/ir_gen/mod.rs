@@ -848,7 +848,9 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        self.terminate(Terminator::Jump(merge_id));
+        if self.current.blocks[self.current_block].terminator.is_default() {
+            self.terminate(Terminator::Jump(merge_id));
+        }
 
         // Else block
         self.start_block(else_id);
@@ -860,7 +862,9 @@ impl IrGen {
                 r
             }
         };
-        self.terminate(Terminator::Jump(merge_id));
+        if self.current.blocks[self.current_block].terminator.is_default() {
+            self.terminate(Terminator::Jump(merge_id));
+        }
 
         // Merge block with phi
         self.start_block(merge_id);
@@ -950,7 +954,9 @@ impl IrGen {
             self.emit(IrOp::ConstUnit(r));
             r
         });
-        self.terminate(Terminator::Jump(merge_id));
+        if self.current.blocks[self.current_block].terminator.is_default() {
+            self.terminate(Terminator::Jump(merge_id));
+        }
 
         // Else
         self.start_block(else_id);
@@ -1226,7 +1232,7 @@ impl IrGen {
         self.start_block(body_id);
         self.gen_block_stmts(body);
         // Don't overwrite Return/Panic/Halt from return/break inside body.
-        if !self.current.blocks[self.current_block].terminator.is_exit() {
+        if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1272,7 +1278,7 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if !self.current.blocks[self.current_block].terminator.is_exit() {
+        if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1307,7 +1313,7 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if !self.current.blocks[self.current_block].terminator.is_exit() {
+        if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(body_id));
         }
 
@@ -1387,7 +1393,7 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if !self.current.blocks[self.current_block].terminator.is_exit() {
+        if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(header_id));
         }
 
@@ -1460,7 +1466,7 @@ impl IrGen {
 
         self.start_block(body_id);
         self.gen_block_stmts(body);
-        if !self.current.blocks[self.current_block].terminator.is_exit() {
+        if self.current.blocks[self.current_block].terminator.is_default() {
             self.terminate(Terminator::Jump(header_id));
         }
 

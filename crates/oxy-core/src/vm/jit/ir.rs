@@ -186,10 +186,11 @@ pub(crate) enum Terminator {
 }
 
 impl Terminator {
-    /// True if this terminator intentionally exits the function. Halt is the default
-    /// for a newly created block and does NOT indicate intentional exit.
-    pub(crate) fn is_exit(&self) -> bool {
-        matches!(self, Terminator::Return(_) | Terminator::Panic(_))
+    /// True if this is the default terminator of a newly created block (Halt).
+    /// If the body set a different terminator (return, break, continue), we must
+    /// not overwrite it with a loop-back Jump.
+    pub(crate) fn is_default(&self) -> bool {
+        matches!(self, Terminator::Halt)
     }
 }
 
