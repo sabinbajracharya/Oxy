@@ -48,6 +48,8 @@ pub(crate) struct IrGen {
     /// Variant name → parent enum name (e.g. "Some" → "Option").
     /// Seeded from AST enum definitions so user-defined enums work without hardcoding.
     variant_to_enum: std::collections::HashMap<String, String>,
+    /// Local slot → type annotation name (for width coercion on compound assignment).
+    local_types: std::collections::HashMap<usize, String>,
 }
 
 impl IrGen {
@@ -80,6 +82,7 @@ impl IrGen {
             use_aliases: std::collections::HashMap::new(),
             local_closure_names: std::collections::HashMap::new(),
             variant_to_enum: Self::builtin_variants(),
+            local_types: std::collections::HashMap::new(),
         }
     }
 
@@ -303,6 +306,7 @@ impl IrGen {
         let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0));
         self.current.return_type = ret_ty;
         let saved_locals = std::mem::take(&mut self.locals);
+        let saved_local_types = std::mem::take(&mut self.local_types);
         let saved_local_count = self.local_count;
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -345,6 +349,7 @@ impl IrGen {
 
         // Restore state
         self.locals = saved_locals;
+        self.local_types = saved_local_types;
         self.local_count = saved_local_count;
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -379,6 +384,9 @@ impl IrGen {
                     }
                     let reg = self.gen_expr(val);
                     let reg = if let Some(ta) = type_ann {
+                        if let TypeAnnotation::Named { name, .. } = ta {
+                            self.local_types.insert(slot, name.clone());
+                        }
                         self.coerce_reg(reg, ta)
                     } else {
                         reg
@@ -1005,7 +1013,20 @@ impl IrGen {
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
-                        self.emit(IrOp::StoreLocal(slot, r));
+                        let coerced = if self.local_types.get(&slot).map_or(false, |t| t == "byte") {
+                            let cr = self.alloc_reg();
+                            self.emit(IrOp::CallBuiltin {
+                                result: cr,
+                                func: "oxy_cast_byte",
+                                args: vec![r],
+                                immediates: vec![],
+                                strings: vec![],
+                            });
+                            cr
+                        } else {
+                            r
+                        };
+                        self.emit(IrOp::StoreLocal(slot, coerced));
                     }
                 }
                 r
