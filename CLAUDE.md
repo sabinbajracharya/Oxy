@@ -4,9 +4,7 @@
 
 Oxy is a compiled programming language written in Rust. Rust-like syntax without borrow checker/ownership. File extension: `.ox`.
 
-**Pipeline:** `parse → type_check → compile → bytecode → VM`
-
-There is no interpreter. One execution path: compiler to VM.
+**Pipeline:** `parse → type_check → ir_gen (AST → Register IR + CFG) → codegen (IR → Cranelift CLIF) → native`
 
 ## Language Identity: Dynamic Rust
 
@@ -95,15 +93,6 @@ crates/oxy-core/src/
 │   ├── stmt.rs                  #   Statement parsing (let, use, if, while, for, return)
 │   ├── pattern.rs               #   Pattern parsing (match arms, let destructure)
 │   └── ty.rs                    #   Type annotation parsing
-├── compiler/
-│   ├── mod.rs                   #   Prescan, compile items, module handling, post-pass
-│   ├── expr.rs                  #   Expression compilation + PathCall/StructInit
-│   ├── pattern.rs               #   Pattern compilation (match, if-let, while-let)
-│   ├── helpers.rs               #   Shared compiler helpers
-│   ├── path_resolution.rs       #   Path name resolution
-│   ├── visibility.rs            #   Visibility checks (is_visible, check_path_visible)
-│   ├── loop_context.rs          #   Loop break/continue tracking
-│   └── sym_table.rs             #   Symbol table
 ├── type_checker/
 │   ├── mod.rs                   #   TypeChecker struct, check_program, TypeInfo
 │   ├── check_expr.rs            #   Expression type inference
@@ -113,11 +102,13 @@ crates/oxy-core/src/
 │   ├── resolve.rs               #   Name resolution
 │   └── tests.rs                 #   Rust unit tests for type checker
 ├── vm/
-│   ├── mod.rs                   #   Stack-based VM: dispatch, builtin_method, run_tests()
+│   ├── mod.rs                   #   VmResult type, public API re-exports
+│   ├── api.rs                   #   Public entry points (run_compiled, run_tests)
+│   ├── scheduler.rs             #   Async task scheduler
 │   ├── builtins/                #   Per-type method implementations
 │   │   ├── mod.rs               #     Re-exports
-│   │   ├── numeric.rs           #     int/byte/float methods (signum, etc.)
-│   │   ├── string.rs            #     String methods (find, lines, split_whitespace, etc.)
+│   │   ├── numeric.rs           #     int/byte/float methods
+│   │   ├── string.rs            #     String methods
 │   │   ├── vec.rs               #     Vec methods
 │   │   ├── hashmap.rs           #     HashMap methods
 │   │   ├── hashset.rs           #     HashSet methods
@@ -128,11 +119,15 @@ crates/oxy-core/src/
 │   │   ├── result.rs            #     Result methods
 │   │   ├── binary_heap.rs       #     BinaryHeap methods
 │   │   └── vec_deque.rs         #     VecDeque methods
-│   ├── arith.rs                 #   Arithmetic operations
-│   ├── call.rs                  #   Function call dispatch
-│   ├── format.rs                #   String formatting (println!, format!)
-│   ├── api.rs                   #   Public VM API
-│   └── tests.rs                 #   Rust unit tests for VM
+│   └── tests.rs                 #   Rust unit tests (compile via JIT)
+├── vm/jit/
+│   ├── mod.rs                   #   JitEngine, JitVm
+│   ├── context.rs               #   JitContext (buffer, locals, error state)
+│   ├── ir.rs                    #   Register IR types (IrOp, Terminator, IrFunction)
+│   ├── ir_gen/mod.rs            #   AST → Register IR + CFG
+│   ├── codegen.rs               #   IR → Cranelift CLIF
+│   ├── ffi.rs                   #   FFI bridge (oxy_* functions)
+│   └── runtime.rs               #   Arithmetic/cast helpers called by FFI
 ├── stdlib/
 │   ├── mod.rs                   #   Stdlib registration + table-driven registry
 │   ├── args.rs                  #   std::args::parse()
@@ -183,7 +178,7 @@ crates/oxy-tug/                  #   Package manager (tug)
 | Rust unit tests | `#[test]` in `#[cfg(test)]` modules | `crates/oxy-core/tests/vm_tests.rs` |
 | Integration test | `feature_examples.rs` globs all `.ox` | `crates/oxy-core/tests/feature_examples.rs` |
 | Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
-| Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/VM | `crates/oxy-core/tests/symbol_consistency.rs` |
+| Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/JIT | `crates/oxy-core/tests/symbol_consistency.rs` |
 | Extern modules | `#[test]` for `--extern` dependency loading | `crates/oxy-core/tests/extern_modules.rs` |
 
 ### `run_tests()` flow (`vm/mod.rs`)
@@ -192,7 +187,7 @@ crates/oxy-tug/                  #   Package manager (tug)
 1. parse(source) → Program
 2. Split: normal_items (no #[compile_error]) vs compile_error_fns
 3. type_check(normal_items) + compile(normal_items) — must succeed
-4. Run each #[test] fn via VM → TestResult { passed, error }
+4. Run each #[test] fn via JIT → TestResult { passed, error }
 5. For each #[compile_error] fn:
    a. Build program: normal_items + this fn
    b. Try type_check + compile
@@ -200,7 +195,7 @@ crates/oxy-tug/                  #   Package manager (tug)
 6. Return combined results
 ```
 
-A `#[compile_error]` test passes if EITHER the type checker OR the compiler rejects it.
+A `#[compile_error]` test passes if EITHER the type checker OR ir_gen/codegen rejects it.
 
 ### Rust-side test helpers
 
@@ -222,7 +217,7 @@ This is the ONLY acceptable process for adding features:
    ```bash
    docker compose run --rm dev bash -c "cargo test -p oxy-core -- feature_examples"
    ```
-4. **Fix the compiler/type checker** — NEVER change the test to pass when the compiler should catch it
+4. **Fix the ir_gen/codegen** — NEVER change the test to pass when the type checker should catch it
 5. **Iterate** until all tests pass
 6. **Update downstream systems as needed:**
    - **LSP** (`crates/oxy-lsp/src/main.rs`) — new AST nodes, keywords, built-in types, or methods may need completion/hover/diagnostic updates
@@ -242,83 +237,38 @@ This is the ONLY acceptable process for adding features:
 - Error cases via `#[compile_error]` (visibility, type mismatch, missing fields, etc.)
 - Interaction with other features (modules + generics, visibility + impl blocks, etc.)
 
-## Compiler Internals
+## IR Gen Internals (`jit/ir_gen/mod.rs`)
 
-### Compilation pipeline (`compiler/mod.rs`)
+### Compilation pipeline
 
 ```
-1. prescan_items() — register all fn/struct/enum names + pub_vis (so forward refs resolve)
-2. preresolve_uses() — process use statements against prescanned data
-3. compile items — function bodies, struct/enum definitions, modules, impls
-4. Post-pass — patch forward calls, deferred globs
+1. gen_program() — iterate top-level items, dispatch to gen_fn / gen_module_items
+2. gen_fn() — create IrFunction, allocate locals for params, generate body IR
+3. gen_stmt() / gen_expr() — walk AST, emit IrOp + Terminator into basic blocks
+4. gen_module_items() — recurse into modules with cumulative "parent::child" prefix
 ```
 
-### Prescan phase (critical for forward references)
-
-The prescan registers items BEFORE any function body is compiled. This allows `fn a()` to call `fn b()` even if `b` is defined after `a`.
-
-**Must register in prescan:**
-- `self.functions` — name → `usize::MAX` (placeholder IP)
-- `self.fn_meta` — params + body + return type
-- `self.struct_defs` — qualified name → StructDef
-- `self.enum_defs` — qualified name → EnumDef
-- `self.pub_vis` — qualified name → Visibility (if pub)
-
-If `pub_vis` is NOT populated during prescan, `is_visible()` will return false for forward-referenced functions, breaking valid calls.
+Forward references work naturally: all functions are generated as named `IrFunction` entries regardless of definition order. The JIT resolves them by name at call time.
 
 ### Module compilation
 
-Two code paths in `compiler/mod.rs`:
-- **`compile_module()`**: top-level `mod foo { ... }` — prefix = `module.name`
-- **`compile_module_items()` Item::Module**: nested modules — prefix = `"parent::child"` (cumulative)
+- **`gen_module_items()`**: recurses with cumulative prefix `"parent::child"`
+- Items in nested modules get fully qualified names: `"parent::child::fn_name"`
+- Use aliases are resolved in `gen_program()` and stored in `self.use_aliases`
 
-Items in nested modules get fully qualified names: `"parent::child::fn_name"`.
+### Function call resolution (`Expr::Call`)
 
-### Visibility system
+1. Check if callee is a local holding a closure → route to `oxy_call_closure`
+2. Resolve use aliases (`use calc::triple` → `"calc::triple"`)
+3. Check if name is an enum variant constructor → route to `oxy_make_enum_variant`
+4. Check for built-in FFI functions (spawn, sleep, select)
+5. Otherwise → `CallBuiltin("oxy_call", ...)` with the qualified name
 
-- **`pub_vis: HashMap<String, Visibility>`** — tracks pub items. Populated in prescan AND during compilation.
-- **`module_names: HashSet<String>`** — tracks known module qualified names. Populated during `compile_module` and `compile_module_items`.
+### StructInit compilation (Expr::StructInit)
 
-#### `is_visible(qualified) → bool`
-
-1. If name not in functions/structs/enums/modules → `true` (untracked, e.g. builtins)
-2. If in `pub_vis`:
-   - `Pub` / `PubCrate` → `true`
-   - `PubSuper` → check parent module ancestry
-   - `Private` → `true` only if parent is NOT a module (top-level or struct-scoped)
-3. If NOT in `pub_vis` (private):
-   - `true` only if parent is empty or parent is NOT a known module
-   - `false` otherwise (item inside a module, not pub)
-
-**Key rule:** Top-level items and items scoped to structs (methods) are always accessible. Only items inside modules are subject to visibility restrictions.
-
-#### `check_path_visible(path, span) → Result<(), Error>`
-
-Called in PathCall and StructInit compilation. Checks:
-1. Each intermediate path segment that's a module — must be visible
-2. The leaf item (function/struct/enum) — must be visible
-
-Module visibility: a private module is accessible only from its parent module or descendants.
-
-### PathCall compilation
-
-Resolution order for 2-segment paths like `Foo::bar()`:
-1. Check if path[0] is an enum variant constructor
-2. Try `self.functions.get("Foo::bar")` — direct match
-3. Try type alias + use-aliased prefix
-4. Try use_aliases on the full qualified name
-5. Try module-qualified (current module prefix + path)
-6. Try builtin path
-
-**Must call `check_path_visible(path, span)?` before emitting Call.**
-
-### StructInit compilation
-
-1. Resolve name: `Self` → `current_impl_type`, then type_aliases, then use_aliases
-2. Check enum variant constructor (if name contains `::`)
-3. **Check `is_visible(resolved_name)`** — reject private structs
-4. Check field visibility for each field via `check_field_visibility()`
-5. Emit StructInit opcode
+1. Check enum variant constructor via `variant_to_enum` map → route to `oxy_make_enum_variant`
+2. If `base` is present → route to `oxy_struct_update`
+3. Otherwise → `CallBuiltin("oxy_struct_init", ...)`
 
 ## Type Checker Internals
 
@@ -376,8 +326,8 @@ Compares struct's defining module against current `module_stack`. Private fields
 
 ## Anti-Patterns (NEVER DO THESE)
 
-- **Quick workaround or hack** instead of proper compiler/type-checker implementation
-- **Change `.ox` test to pass** when the compiler should reject/fail/error
+- **Quick workaround or hack** instead of proper type-checker/ir_gen implementation
+- **Change `.ox` test to pass** when the type checker should reject/fail/error
 - **Skip visibility checks** in PathCall, StructInit, or field access paths
 - **Use `contains("::")`** for top-level detection — check `module_names.contains(parent)` instead
 - **Forget to register `pub_vis` in prescan** — forward references will break
@@ -388,11 +338,11 @@ Compares struct's defining module against current `module_stack`. Private fields
 - **Use raw string literals in builtins dispatch match arms** — use `symbols::<type>_m::CONSTANT` instead. If you add a method without adding its constant to `symbols.rs`, it won't compile
 - **Add a built-in method only to builtins or only to symbols** — must update both: the dispatch match arm (using the constant) AND the `MethodInfo` list in `symbols.rs`. Consistency tests + compile-time constants enforce this
 - **Wire up only some Value variants** for a built-in dispatch — all integer/float widths must go through `numeric::dispatch`, all collection types must be handled. `dispatched_type_names()` + consistency tests catch gaps
-- **Inline-match on type name strings** in the type checker or compiler — use `TypeInfo::from_name()` instead. A partial match with `_ => Unknown` silently accepts any type because `TypeInfo::accepts()` returns `true` when either side is `Unknown`. The `from_name` function in `type_checker/mod.rs` is the single source of truth for type name → TypeInfo conversion.
+- **Inline-match on type name strings** in the type checker or ir_gen — use `TypeInfo::from_name()` instead. A partial match with `_ => Unknown` silently accepts any type because `TypeInfo::accepts()` returns `true` when either side is `Unknown`. The `from_name` function in `type_checker/mod.rs` is the single source of truth for type name → TypeInfo conversion.
 
 ## Symbol Definitions (`symbols.rs`)
 
-`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both the compiler/VM and the LSP import from it. Never hardcode keyword/type/method names in the LSP.
+`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both ir_gen/codegen and the LSP import from it. Never hardcode keyword/type/method names in the LSP.
 
 ### Adding a new built-in method
 
@@ -443,23 +393,8 @@ Compares struct's defining module against current `module_stack`. Private fields
 
 ## Debug Tools
 
-### `--dump-bytecode <file>` (CLI)
-```bash
-docker compose run --rm dev bash -c "cargo run --bin oxy -- --dump-bytecode examples/foo.ox"
-```
-Prints compiled bytecode: opcodes with IPs, slot names, function/closure entry points.
-
 ### `OXY_VM_TRACE=1` (env var)
-```bash
-OXY_VM_TRACE=1 docker compose run --rm dev bash -c "cargo test -p oxy-core --test feature_examples"
-```
-Per-opcode execution tracing to stderr: IP, stack state, frame info, compact values. Use when debugging a specific test failure.
-
-### `disassemble_chunk(&Chunk) → String`
-Programmatic bytecode disassembly in `oxy_core::vm::disassemble_chunk`.
-
-### `disassemble_source(path, source) → Result<String>`
-Parse + type-check + compile + disassemble in one call: `oxy_core::vm::disassemble_source`.
+Not yet wired for the JIT path. Currently a no-op.
 
 ## Context-Mode MCP Tools
 
@@ -508,4 +443,4 @@ When debugging a JIT feature test failure, the ONLY valid investigation path is:
 3. **Trace `codegen` for those IR ops** — what CLIF/FFI calls result?
 4. **If the FFI function looks wrong, read it in `ffi.rs` or `jit/runtime.rs`**
 
-**NEVER** grep through `vm/` to find how the old bytecode compiler handled a feature. The bytecode compiler is deleted. Its design decisions do not apply to the register IR pipeline. The `vm/` directory now contains only the public API entry points (`api.rs`), async scheduler (`scheduler.rs`), built-in method implementations (`builtins/`), and the shared `VmResult` type. There is no `arith.rs` — arithmetic helpers live in `jit/runtime.rs`.
+The `vm/` directory contains only public API entry points (`api.rs`), the async scheduler (`scheduler.rs`), built-in method implementations (`builtins/`), and the shared `VmResult` type. Arithmetic helpers live in `jit/runtime.rs`. There is no other execution engine.
