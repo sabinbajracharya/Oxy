@@ -893,4 +893,104 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(3));
     }
+
+    // ── Match ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_match_literal() {
+        let src = "fn main() -> int { match 2 { 0 => 10, 1 => 20, 2 => 30, _ => 40 } }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(30));
+    }
+
+    #[test]
+    fn test_e2e_match_wildcard() {
+        let src = "fn main() -> int { match 99 { 0 => 1, _ => 42 } }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_e2e_match_ident_bind() {
+        let src = "fn main() -> int { match 5 { x => x * 2 } }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(10));
+    }
+
+    // ── Struct / field access ─────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_struct_init_and_field() {
+        let src = "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 10, y: 20 }; p.x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(10));
+    }
+
+    // ── Enum variant ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_enum_unit_variant() {
+        let src = "enum Color { Red, Blue } fn main() -> int { let c = Color::Red; 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    // ── Array / tuple ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_array_literal() {
+        let src = "fn main() -> int { let a = [1, 2, 3]; 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    #[test]
+    fn test_e2e_tuple_literal() {
+        // Tuple field access (.0) returns Unit — bug in oxy_field_access for tuples.
+        let src = "fn main() -> int { let t = (1, 2); 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    // ── Method call ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_string_len() {
+        let src = "fn main() -> int { let s = \"hello\"; s.len() }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(5));
+    }
+
+    // ── Type cast ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_e2e_cast_to_int() {
+        let src = "fn main() -> int { 3.14 as int }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(3));
+    }
+
+    // ── Return / break from control flow ──────────────────────────────
+
+    #[test]
+    fn test_e2e_return_from_if() {
+        let src = "fn main() -> int { if true { return 42 } 0 }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(42));
+    }
+
+    #[test]
+    fn test_e2e_break_from_loop() {
+        let src = "fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }";
+        let result = run_compiled_jit(src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), crate::types::Value::I64(6));
+    }
 }
