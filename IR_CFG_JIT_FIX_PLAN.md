@@ -6,6 +6,7 @@
 
 **Progress:**
 - ✅ **Cluster 1 done** (commit `26d33f5`): bool/unit register tagging. `feature_examples` 129 → **94**; `vm_tests` 113 → **107**; no regressions; clippy clean.
+- ✅ **Cluster 2 done** (commit `60881ae`): **NOT** cross-function corruption — that hypothesis was stale (the `CalleeFrame` architecture already sizes every frame from the callee's own `local_count`, and the collections tests fail *standalone*, not only in-suite). Real root cause: stdlib **item path canonicalization**. Type-associated fns are registered by short path (`["HashMap","new"]`), but `use std::collections::HashMap` rewrites `HashMap::new` → `std::collections::HashMap::new`, which `lookup_item`'s exact match missed → constructors silently returned `Unit`, poisoning every downstream method call. Fixed by flattening segments on `::` and retrying the trailing `Type::method` pair; removed the per-type `Regex` band-aid that subsumed. `feature_examples` 87 → **76**; vm_tests unchanged (107); no regressions. Cleared: `collections`, `btreemap`, `hashmap`, `recursive_types` (ListNode/TreeNode), and others.
 - ✅ **Cluster 3 done** (commit `a1f8832`): generic-impl method **name resolution** — methods in `impl<T> Cell<T>` / `impl Pair<int>` were registered under `Cell<T>::make` but resolved by base name `Cell::make`. Fixed via `base_type_name()` in IR + type checker. `feature_examples` 94 → **87**; no regressions.
   - Investigation revealed the rest of the original "Cluster 3" list is **two distinct root causes**, now split out below as Clusters 9 & 10:
     - **Tuple structs broken** (Cluster 9): `Num(int)` constructor calls aren't lowered to struct construction, so `.0` access returns `Unit`. Blocks `trait_def::test_multiple_trait_methods`, `operator_overloading::test_div_operator`/`test_rem_operator`, `traits::test_generic_struct_method` (partly), etc.
@@ -60,20 +61,15 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 2 — Cross-function buffer / `local_count` corruption *(HIGH impact, MED-HIGH risk)*
+### ✅ Cluster 2 — stdlib item path canonicalization — DONE (commit `60881ae`)
 
-**Symptom:** A function (e.g. a HashMap/HashSet test) **passes alone** but returns `Unit`/wrong values when compiled **alongside other functions** in the same file. Confirmed by extracting `test_hashmap_insert_get` to its own file (passes) vs running full `examples/features/stress/collections.ox` (fails).
+**Original (wrong) hypothesis:** cross-function buffer / `local_count` corruption — "passes alone, fails in-suite." **Disproven:** the collections tests fail *standalone* too (`cargo run -- test examples/features/stress/collections.ox` → 10 failed), and the runtime already allocates each `CalleeFrame` from the **callee's own** `local_count` via `tables.local_count(fn_index)` (see `ffi.rs` `invoke_jit_fn`, `invoke_binary_op_method`, `oxy_call_closure`). The CLAUDE.md corruption lesson was already-fixed history, not a live bug.
 
-**Suspected root cause:** The shared per-call execution buffer and the spill-slot layout are sized/offset inconsistently across functions. `codegen.rs` computes `capacity = ir_fn.local_count + STACK_CAP` (STACK_CAP=2048) and grows **spill slots downward from `capacity-1`** while the **operand stack grows upward from `local_count`**. CLAUDE.md documents the exact failure class: *"call_fn used engine.local_count (main's) for every function's buffer, but codegen computed spill offsets from each function's own local_count → silent heap corruption when a function had more locals than main."*
+**Actual root cause:** `oxy_path_call_builtin` (`ffi.rs`) resolves a path call by, first, `registry::lookup_item`. The registry indexes type-associated fns by **short path** (`["HashMap","new"]`), but `use std::collections::HashMap; HashMap::new()` is rewritten by use-alias resolution to the canonical `std::collections::HashMap::new` (one segment `"std::collections::HashMap"` + `"new"`). `lookup_item` did an **exact** match only → miss → fell through to the enum-variant / "unknown built-in path" branch and pushed `Value::Unit`. Every collection constructor (`HashMap`/`HashSet`/`BTreeMap`/`BTreeSet`/`BinaryHeap`/`VecDeque`/`ListNode`/`TreeNode`) returned `Unit`, so all downstream `.insert`/`.len`/etc. operated on `Unit`. The smell that confirmed it: `Regex::new` was registered **twice** — `["Regex","new"]` *and* `["std","regex","Regex","new"]` — a per-type band-aid for this exact mismatch.
 
-**Action before fixing — pin it precisely:**
-1. Find where the runtime buffer is allocated per call (`jit/context.rs`, `jit/mod.rs`, `jit/ffi.rs`: `invoke_jit_fn`, `call_fn`, `CalleeFrame::new`, `with_capacity`, `local_count`).
-2. Confirm whether each call's buffer is sized from **that function's own** `IrFunction.local_count` or from a single global (main's / engine-wide) value.
-3. Confirm spill-slot offsets in codegen use the same `local_count` the runtime buffer was sized with.
+**Fix:** `lookup_item` now flattens each segment on `::` and, on exact-match miss, retries against the trailing `Type::method` pair — canonicalizing every collection constructor at once. Removed the redundant `Regex` 4-segment registration (subsumed). Safe because registered 2-segment items are all reserved CamelCase builtin type names a user cannot redefine.
 
-**Fix direction (architectural, per CLAUDE.md guidance — no magic offsets):** ensure a *single source of truth* for each function's `local_count`, used consistently by (a) runtime buffer allocation and (b) codegen spill-slot computation. Likely: store per-function `local_count` in the JIT tables and have the runtime allocate each frame from *that* value (it already keeps `fn_local_counts` — verify every allocation path consults it rather than a cached main value).
-
-**Verification:** `collections` (hashmap/hashset), `btreemap`, `hashmap`, `recursive_types` (tree), and any "passes alone / fails in-suite" Unit returns.
+**Verification (done):** `collections` 18→28 pass; `btreemap`, `hashmap`, `recursive_types` cleared; regex construction still works (regex_oop's remaining failures are separate method-dispatch bugs).
 
 ---
 
