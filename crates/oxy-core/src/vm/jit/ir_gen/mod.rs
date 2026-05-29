@@ -1056,6 +1056,13 @@ impl IrGen {
             Expr::BinaryOp {
                 left, op, right, ..
             } => {
+                // `&&` / `||` must short-circuit: the right operand is only
+                // evaluated when the left doesn't already decide the result.
+                // Lower with branching rather than an eager And/Or op so side
+                // effects in the right operand are skipped.
+                if matches!(op, BinOp::And | BinOp::Or) {
+                    return self.gen_short_circuit(*op, left, right);
+                }
                 let lhs = self.gen_expr(left);
                 let rhs = self.gen_expr(right);
                 let r = self.alloc_reg();
@@ -1723,6 +1730,65 @@ impl IrGen {
     }
 
     // ── Control flow helpers ───────────────────────────────────────────
+
+    /// Short-circuiting `&&` / `||`. Equivalent to `if a { b } else { false }`
+    /// for `&&` and `if a { true } else { b }` for `||`, so the right operand
+    /// `b` is evaluated only in the branch that needs it. Uses the same
+    /// Phi-isolation continuation trick as `gen_if` so the result reg is defined
+    /// in a fresh block and nested control flow in `b` is handled correctly.
+    fn gen_short_circuit(&mut self, op: BinOp, left: &Expr, right: &Expr) -> Reg {
+        let lhs = self.gen_expr(left);
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+        self.terminate(Terminator::Branch {
+            cond: lhs,
+            then_block: then_id,
+            else_block: else_id,
+        });
+
+        self.start_block(then_id);
+        let then_reg = if matches!(op, BinOp::And) {
+            self.gen_expr(right)
+        } else {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstBool(r, true));
+            r
+        };
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(else_id);
+        let else_reg = if matches!(op, BinOp::And) {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstBool(r, false));
+            r
+        } else {
+            self.gen_expr(right)
+        };
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(merge_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::Phi(r, then_reg, else_reg));
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
+    }
 
     fn gen_if(&mut self, condition: &Expr, then_block: &Block, else_block: Option<&Expr>) -> Reg {
         let cond = self.gen_expr(condition);
@@ -3149,18 +3215,48 @@ mod tests {
 
     #[test]
     fn test_and() {
+        // `&&` lowers to short-circuiting control flow (a Branch on the left
+        // operand merging via Phi), not an eager `And` op that would evaluate
+        // the right operand unconditionally.
         let ir = gen("fn main() -> bool { true && false }");
         let f = find_fn(&ir, "main");
-        let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::And(_, _, _))));
+        let has_branch = f
+            .blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Branch { .. }));
+        let has_phi = f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Phi(_, _, _)));
+        let no_eager_and = !f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::And(_, _, _)));
+        assert!(has_branch && has_phi && no_eager_and);
     }
 
     #[test]
     fn test_or() {
+        // `||` short-circuits the same way `&&` does.
         let ir = gen("fn main() -> bool { true || false }");
         let f = find_fn(&ir, "main");
-        let ops = &f.blocks[f.entry].ops;
-        assert!(ops.iter().any(|op| matches!(op, IrOp::Or(_, _, _))));
+        let has_branch = f
+            .blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Branch { .. }));
+        let has_phi = f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Phi(_, _, _)));
+        let no_eager_or = !f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Or(_, _, _)));
+        assert!(has_branch && has_phi && no_eager_or);
     }
 
     // ── Unary ──────────────────────────────────────────────────────────
