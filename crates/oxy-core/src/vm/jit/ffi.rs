@@ -1776,6 +1776,68 @@ extern "C" fn oxy_method_call(
 }
 
 /// Reimplementation of Vm::builtin_method, minus the Vm dependency.
+/// Dispatch an OOP-style `Regex` method (`re.is_match(text)`, `re.find(text)`,
+/// …) by delegating to the canonical `std::regex` module implementation. The
+/// pattern is pulled from the Regex struct's `pattern` field and prepended to
+/// the arguments, matching the module functions' `(pattern, …)` shape — so the
+/// regex logic lives in exactly one place.
+///
+/// Two OOP methods intentionally take the "do the obvious thing" semantics and
+/// differ from their module counterparts:
+/// - `find_all` yields the matched substrings (`Vec<String>`), whereas
+///   `std::regex::find_all` yields rich `Match` structs — we project each
+///   `Match` to its `text` field.
+/// - `replace` replaces *every* match (mapped to module `replace_all`); the
+///   module `replace` is first-match-only.
+fn regex_method(receiver: &Value, method_name: &str, args: &[Value]) -> Result<Value, String> {
+    let pattern = match receiver {
+        Value::Struct { fields, .. } => fields
+            .get("pattern")
+            .cloned()
+            .unwrap_or_else(|| Value::String(String::new())),
+        _ => Value::String(String::new()),
+    };
+    let mut full_args = Vec::with_capacity(args.len() + 1);
+    full_args.push(pattern);
+    full_args.extend(args.iter().cloned());
+
+    // OOP `replace` means replace-all; the module's `replace` is first-only.
+    let module_fn = match method_name {
+        "replace" => "replace_all",
+        other => other,
+    };
+
+    let span = crate::lexer::Span {
+        start: 0,
+        end: 0,
+        line: 0,
+        column: 0,
+    };
+    let mut cb = |_: &Value, _: &[Value]| Err("regex methods do not take closures".to_string());
+    let result = crate::stdlib::regex::call(module_fn, &full_args, &span, &mut cb)
+        .map_err(|e| e.to_string())?;
+
+    if method_name == "find_all" {
+        if let Value::Vec(items) = &result {
+            let strings: Vec<Value> = items
+                .borrow()
+                .iter()
+                .map(|m| match m {
+                    Value::Struct { fields, .. } => fields
+                        .get("text")
+                        .cloned()
+                        .unwrap_or_else(|| Value::String(String::new())),
+                    other => other.clone(),
+                })
+                .collect();
+            return Ok(Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                strings,
+            ))));
+        }
+    }
+    Ok(result)
+}
+
 fn dispatch_builtin_method(
     tables: &JitTables,
     receiver: Value,
@@ -1877,13 +1939,9 @@ fn dispatch_builtin_method(
                     Ok(Value::Unit)
                 }
             }
-            "is_match" => {
-                // Stubbed for now
-                Ok(Value::Bool(false))
+            "is_match" | "find" | "find_all" | "captures" | "replace" | "replace_all" | "split" => {
+                regex_method(&receiver, method_name, &args)
             }
-            "find" | "find_all" | "replace" => Err(format!(
-                "regex method '{method_name}' not yet supported in JIT"
-            )),
             _ => Err(format!("no method '{method_name}' on type Regex")),
         },
         Value::Struct { .. } => match method_name {
