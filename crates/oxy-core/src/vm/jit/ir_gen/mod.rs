@@ -238,7 +238,9 @@ impl IrGen {
             match item {
                 Item::Function(f) => self.gen_fn(f, None),
                 Item::Impl(imp) => {
-                    let prefix = imp.type_name.clone();
+                    // Dispatch key is the base type name (generics stripped):
+                    // runtime resolves methods by a value's base struct name.
+                    let prefix = imp.base_type_name().to_string();
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&prefix));
                     }
@@ -247,7 +249,7 @@ impl IrGen {
                     self.trait_defs.insert(t.name.clone(), t.clone());
                 }
                 Item::ImplTrait(imp) => {
-                    let prefix = imp.type_name.clone();
+                    let prefix = imp.base_type_name().to_string();
                     // Compile provided methods
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&prefix));
@@ -326,7 +328,7 @@ impl IrGen {
                     }
                 }
                 Item::Impl(imp) => {
-                    let qualified_type = format!("{prefix}::{}", imp.type_name);
+                    let qualified_type = format!("{prefix}::{}", imp.base_type_name());
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&qualified_type));
                     }
@@ -336,7 +338,7 @@ impl IrGen {
                     self.trait_defs.insert(full_name, t.clone());
                 }
                 Item::ImplTrait(imp) => {
-                    let qualified_type = format!("{prefix}::{}", imp.type_name);
+                    let qualified_type = format!("{prefix}::{}", imp.base_type_name());
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&qualified_type));
                     }

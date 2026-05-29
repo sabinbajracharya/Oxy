@@ -149,15 +149,19 @@ impl TypeChecker {
                     }
                 }
                 Item::Impl(i) => {
+                    // Dispatch keys use the base type name (generics stripped),
+                    // matching how methods are registered in IR and resolved at
+                    // runtime. The impl's generics are already on each method.
+                    let base = i.base_type_name();
                     let type_prefix = if prefix.is_empty() {
-                        i.type_name.clone()
+                        base.to_string()
                     } else {
-                        format!("{}::{}", prefix, i.type_name)
+                        format!("{}::{}", prefix, base)
                     };
                     let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", i.type_name, method.name);
+                        let unqualified = format!("{}::{}", base, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {
@@ -202,15 +206,16 @@ impl TypeChecker {
                     }
                 }
                 Item::ImplTrait(i) => {
+                    let base = i.base_type_name();
                     let type_prefix = if prefix.is_empty() {
-                        i.type_name.clone()
+                        base.to_string()
                     } else {
-                        format!("{}::{}", prefix, i.type_name)
+                        format!("{}::{}", prefix, base)
                     };
                     let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", i.type_name, method.name);
+                        let unqualified = format!("{}::{}", base, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {

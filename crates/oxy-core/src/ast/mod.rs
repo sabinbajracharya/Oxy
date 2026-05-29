@@ -199,12 +199,36 @@ pub enum EnumVariantKind {
     Struct(Vec<StructField>),
 }
 
+/// The base type name a `type_name` string refers to, with any generic-argument
+/// suffix stripped (`Cell<T>` → `Cell`, `TwoBox<A, B>` → `TwoBox`).
+///
+/// Method dispatch keys use the base name *everywhere*: at runtime the method
+/// resolver builds `Type::method` from a value's base struct name (which never
+/// carries type args) and `oxy_path_call_builtin` builds it from `::`-joined
+/// path segments. Registering an impl's methods under a generic-laden name like
+/// `Cell<T>::make` therefore makes them unreachable. The impl's own generic
+/// params are already merged into each method's `generic_params` by the parser,
+/// so the `<…>` in `type_name` is redundant for dispatch.
+pub(crate) fn base_type_name(type_name: &str) -> &str {
+    match type_name.find('<') {
+        Some(i) => &type_name[..i],
+        None => type_name,
+    }
+}
+
 /// An impl block: `impl Name { fn ... }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplBlock {
     pub type_name: String,
     pub methods: Vec<FnDef>,
     pub span: Span,
+}
+
+impl ImplBlock {
+    /// The base type these methods attach to (dispatch key), generics stripped.
+    pub(crate) fn base_type_name(&self) -> &str {
+        base_type_name(&self.type_name)
+    }
 }
 
 /// A trait definition: `trait Name { fn method(&self) -> Type; }`
@@ -233,6 +257,13 @@ pub struct ImplTraitBlock {
     pub type_name: String,
     pub methods: Vec<FnDef>,
     pub span: Span,
+}
+
+impl ImplTraitBlock {
+    /// The base type these methods attach to (dispatch key), generics stripped.
+    pub(crate) fn base_type_name(&self) -> &str {
+        base_type_name(&self.type_name)
+    }
 }
 
 /// A generic type parameter, e.g., `T` or `T: Display + Clone`
