@@ -330,6 +330,8 @@ fn vm_lt(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a < b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a < b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a < b),
+        (Value::String(a), Value::String(b)) => Value::Bool(a < b),
+        (Value::Char(a), Value::Char(b)) => Value::Bool(a < b),
         _ => Value::Bool(false),
     }
 }
@@ -338,6 +340,8 @@ fn vm_gt(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a > b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a > b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a > b),
+        (Value::String(a), Value::String(b)) => Value::Bool(a > b),
+        (Value::Char(a), Value::Char(b)) => Value::Bool(a > b),
         _ => Value::Bool(false),
     }
 }
@@ -346,6 +350,8 @@ fn vm_le(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a <= b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a <= b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a <= b),
+        (Value::String(a), Value::String(b)) => Value::Bool(a <= b),
+        (Value::Char(a), Value::Char(b)) => Value::Bool(a <= b),
         _ => Value::Bool(false),
     }
 }
@@ -354,6 +360,8 @@ fn vm_ge(lhs: Value, rhs: Value) -> Value {
         (Value::I64(a), Value::I64(b)) => Value::Bool(a >= b),
         (Value::F64(a), Value::F64(b)) => Value::Bool(a >= b),
         (Value::U8(a), Value::U8(b)) => Value::Bool(a >= b),
+        (Value::String(a), Value::String(b)) => Value::Bool(a >= b),
+        (Value::Char(a), Value::Char(b)) => Value::Bool(a >= b),
         _ => Value::Bool(false),
     }
 }
@@ -1117,6 +1125,54 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let index_val = unsafe { pop(ctx) };
     let collection = unsafe { pop(ctx) };
+
+    // Handle range slicing.
+    if let Value::Range(start, end) = &index_val {
+        let result = match collection {
+            Value::String(ref s) => {
+                let len = s.chars().count() as i64;
+                let s_start = *start;
+                let s_end = if *end == i64::MAX { len } else { *end };
+                let clamped_start = s_start.max(0).min(len) as usize;
+                let clamped_end = s_end.max(0).min(len) as usize;
+                if clamped_end <= clamped_start {
+                    Value::String(String::new())
+                } else {
+                    Value::String(
+                        s.chars().skip(clamped_start).take(clamped_end - clamped_start).collect(),
+                    )
+                }
+            }
+            Value::Vec(rc) => {
+                let v = rc.borrow();
+                let len = v.len() as i64;
+                let s_start = *start;
+                let s_end = if *end == i64::MAX { len } else { *end };
+                let clamped_start = s_start.max(0).min(len) as usize;
+                let clamped_end = s_end.max(0).min(len) as usize;
+                Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
+                    v[clamped_start..clamped_end].to_vec(),
+                )))
+            }
+            Value::Array(ref a) => {
+                let len = a.len() as i64;
+                let s_start = *start;
+                let s_end = if *end == i64::MAX { len } else { *end };
+                let clamped_start = s_start.max(0).min(len) as usize;
+                let clamped_end = s_end.max(0).min(len) as usize;
+                Value::Array(a[clamped_start..clamped_end].to_vec())
+            }
+            _ => {
+                set_error(ctx, format!("cannot slice {collection:?}"));
+                Value::Unit
+            }
+        };
+        unsafe {
+            push(ctx, result);
+        }
+        return;
+    }
+
     let idx = super::runtime::value_to_i64(&index_val) as usize;
     let result = match collection {
         Value::Vec(rc) => rc.borrow().get(idx).cloned().unwrap_or(Value::Unit),
