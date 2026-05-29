@@ -133,7 +133,7 @@ impl<'a> Codegen<'a> {
         let mut reg_def_block: HashMap<Reg, BlockId> = HashMap::new();
         for block in &ir_fn.blocks {
             for op in &block.ops {
-                if matches!(op, IrOp::StoreLocal(..)) {
+                if matches!(op, IrOp::StoreLocal(..) | IrOp::MakeCell(..)) {
                     continue;
                 }
                 let r = op.result_reg();
@@ -737,6 +737,12 @@ fn compile_op(
             if let Some(store) = ffi_refs.get("oxy_store_local") {
                 let slot_val = builder.ins().iconst(types::I64, *slot as i64);
                 builder.ins().call(*store, &[ctx, slot_val]);
+            }
+        }
+        IrOp::MakeCell(slot) => {
+            if let Some(make_cell) = ffi_refs.get("oxy_make_cell") {
+                let slot_val = builder.ins().iconst(types::I64, *slot as i64);
+                builder.ins().call(*make_cell, &[ctx, slot_val]);
             }
         }
 

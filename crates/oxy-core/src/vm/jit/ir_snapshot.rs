@@ -174,6 +174,7 @@ fn serialize_op(op: &IrOp, reg_names: &HashMap<Reg, usize>) -> String {
         IrOp::LoadLocal(dst, slot) => format!("{} = load.local ${}", r(dst), slot),
         IrOp::LoadLocalRaw(dst, slot) => format!("{} = load.local.raw ${}", r(dst), slot),
         IrOp::StoreLocal(slot, src) => format!("store.local ${}, {}", slot, r(src)),
+        IrOp::MakeCell(slot) => format!("make.cell ${}", slot),
 
         IrOp::Add(dst, a, bv) => format!("{} = add {}, {}", r(dst), r(a), r(bv)),
         IrOp::Sub(dst, a, bv) => format!("{} = sub {}, {}", r(dst), r(a), r(bv)),
@@ -390,6 +391,7 @@ fn op_defined_reg(op: &IrOp) -> Option<Reg> {
     match op {
         // Explicit non-defs (§6.1 overrides)
         IrOp::StoreLocal(_, _) => None,
+        IrOp::MakeCell(_) => None,
         IrOp::WriteResult(_) => None,
         IrOp::SetError(_) => None,
         // Everything else that carries a result register

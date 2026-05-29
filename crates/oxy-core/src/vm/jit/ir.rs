@@ -58,6 +58,11 @@ pub(crate) enum IrOp {
     LoadLocalRaw(Reg, usize),
     /// Store register value into local slot `index`.
     StoreLocal(usize, Reg),
+    /// Promote local slot `index` to a `Value::Cell` (shared mutable box) so a
+    /// closure capturing it observes the same storage. Emitted for a `let mut`
+    /// binding that is captured by a closure; subsequent loads/stores transparently
+    /// go through the cell, and the captured closure shares the same `Rc<RefCell>`.
+    MakeCell(usize),
 
     // ── Binary arithmetic (inlined in CLIF) ────────────────────────────
     Add(Reg, Reg, Reg),
@@ -159,7 +164,7 @@ impl IrOp {
             | IrOp::WriteResult(r)
             | IrOp::SetError(r)
             | IrOp::CheckError(r) => *r,
-            IrOp::StoreLocal(_, _) => 0,
+            IrOp::StoreLocal(_, _) | IrOp::MakeCell(_) => 0,
         }
     }
 }
@@ -260,6 +265,7 @@ impl std::fmt::Display for IrOp {
             IrOp::LoadLocal(r, s) => write!(f, "r{r} = LoadLocal({s})"),
             IrOp::LoadLocalRaw(r, s) => write!(f, "r{r} = LoadLocalRaw({s})"),
             IrOp::StoreLocal(s, r) => write!(f, "StoreLocal({s}, r{r})"),
+            IrOp::MakeCell(s) => write!(f, "MakeCell({s})"),
             IrOp::Add(r, a, b) => write!(f, "r{r} = Add(r{a}, r{b})"),
             IrOp::Sub(r, a, b) => write!(f, "r{r} = Sub(r{a}, r{b})"),
             IrOp::Mul(r, a, b) => write!(f, "r{r} = Mul(r{a}, r{b})"),

@@ -60,6 +60,13 @@ pub(crate) struct IrGen {
     /// A call `WrappedInt(17)` is lowered to struct construction with positional
     /// field names "0", "1", … — matching what `oxy_field_access` expects for `.0`.
     tuple_structs: std::collections::HashMap<String, usize>,
+    /// Slots of `let mut` bindings in the current function — the candidates for
+    /// Cell promotion when captured by a closure (see `MakeCell`).
+    mut_slots: std::collections::HashSet<usize>,
+    /// Slots already promoted to a `Value::Cell` via `MakeCell` in the current
+    /// function. Guards against double-wrapping when several closures capture the
+    /// same mutable variable.
+    celled_slots: std::collections::HashSet<usize>,
 }
 
 impl IrGen {
@@ -96,6 +103,8 @@ impl IrGen {
             fn_aliases: std::collections::HashMap::new(),
             trait_defs: std::collections::HashMap::new(),
             tuple_structs: std::collections::HashMap::new(),
+            mut_slots: std::collections::HashSet::new(),
+            celled_slots: std::collections::HashSet::new(),
         }
     }
 
@@ -514,6 +523,8 @@ impl IrGen {
         self.current.is_async = f.is_async;
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_types = std::mem::take(&mut self.local_types);
+        let saved_mut_slots = std::mem::take(&mut self.mut_slots);
+        let saved_celled_slots = std::mem::take(&mut self.celled_slots);
         let saved_local_count = self.local_count;
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -563,6 +574,8 @@ impl IrGen {
         // Restore state
         self.locals = saved_locals;
         self.local_types = saved_local_types;
+        self.mut_slots = saved_mut_slots;
+        self.celled_slots = saved_celled_slots;
         self.local_count = saved_local_count;
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -583,11 +596,18 @@ impl IrGen {
         match stmt {
             Stmt::Let {
                 name,
+                mutable,
                 value,
                 type_ann,
                 ..
             } => {
                 let slot = self.alloc_local(name);
+                if *mutable {
+                    // Track mutable bindings: a `let mut` captured by a closure
+                    // gets promoted to a shared `Value::Cell` at closure creation
+                    // so writes propagate across the capture boundary.
+                    self.mut_slots.insert(slot);
+                }
                 if let Some(val) = value {
                     let reg = self.gen_expr(val);
                     let reg = if let Some(ta) = type_ann {
@@ -2535,6 +2555,10 @@ impl IrGen {
             IrFunction::new(closure_name.clone(), 0, 0, usize::MAX),
         );
         let saved_locals = std::mem::take(&mut self.locals);
+        // The closure body has its own mutable-slot bookkeeping; the outer sets
+        // (which the capture analysis below consults) are restored afterward.
+        let saved_mut_slots = std::mem::take(&mut self.mut_slots);
+        let saved_celled_slots = std::mem::take(&mut self.celled_slots);
         let saved_local_count = self.local_count;
         let saved_current_block = self.current_block;
         let saved_next_reg = self.next_reg;
@@ -2562,7 +2586,7 @@ impl IrGen {
             .current
             .captures
             .iter()
-            .map(|(name, slot)| (name.clone(), *slot, false))
+            .map(|(name, slot)| (name.clone(), *slot, saved_mut_slots.contains(slot)))
             .collect();
         self.closure_meta
             .push((param_names_for_meta, captures_with_mut, is_async));
@@ -2621,14 +2645,28 @@ impl IrGen {
         self.current.local_count = self.local_count;
         self.current.is_async = is_async;
         self.current.fn_index = self.functions.len();
+        // Snapshot (name, outer_slot) captures before swapping the closure out.
+        let captures_snapshot = self.current.captures.clone();
         self.functions
             .push(std::mem::replace(&mut self.current, saved));
 
         self.locals = saved_locals;
+        self.mut_slots = saved_mut_slots;
+        self.celled_slots = saved_celled_slots;
         self.local_count = saved_local_count;
         self.current_block = saved_current_block;
         self.next_reg = saved_next_reg;
         self.next_block = saved_next_block;
+
+        // Promote any captured mutable outer binding to a shared `Value::Cell`
+        // before the closure is constructed, so the closure and the outer scope
+        // observe the same storage. `oxy_make_cell` is idempotent per slot via
+        // `celled_slots` (multiple closures may capture the same variable).
+        for (_, outer_slot) in &captures_snapshot {
+            if self.mut_slots.contains(outer_slot) && self.celled_slots.insert(*outer_slot) {
+                self.emit(IrOp::MakeCell(*outer_slot));
+            }
+        }
 
         // Return a register referencing the closure.
         // The closure body is compiled as a separate IrFunction in self.functions.
