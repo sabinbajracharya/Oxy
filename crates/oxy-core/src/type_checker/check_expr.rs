@@ -477,16 +477,25 @@ impl TypeChecker {
                     let resolved_key = if self.fn_param_types.contains_key(name) {
                         Some(name.clone())
                     } else if !name.contains("::") {
-                        let module_prefix = self.module_stack.join("::");
-                        if !module_prefix.is_empty() {
-                            let qualified = format!("{}::{}", module_prefix, name);
-                            if self.fn_param_types.contains_key(&qualified) {
-                                Some(qualified)
+                        // Try use_aliases first (handles `use foo::bar` + `bar()`).
+                        if let Some(aliased) = self.use_aliases.get(name) {
+                            if self.fn_param_types.contains_key(aliased) {
+                                Some(aliased.clone())
                             } else {
                                 None
                             }
                         } else {
-                            None
+                            let module_prefix = self.module_stack.join("::");
+                            if !module_prefix.is_empty() {
+                                let qualified = format!("{}::{}", module_prefix, name);
+                                if self.fn_param_types.contains_key(&qualified) {
+                                    Some(qualified)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
                         }
                     } else {
                         None

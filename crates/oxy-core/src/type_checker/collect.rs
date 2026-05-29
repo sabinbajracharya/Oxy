@@ -256,4 +256,123 @@ impl TypeChecker {
         }
         self.module_stack = saved_stack;
     }
+
+    /// After `collect_fn_types`, resolve `pub use` re-exports inside modules.
+    /// For each `pub use` item, register the re-exported name under the
+    /// module-qualified key so external callers can find it.
+    pub(super) fn resolve_reexports(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Use(use_def) => {
+                    if !matches!(use_def.visibility, Visibility::Pub) {
+                        continue;
+                    }
+                    if prefix.is_empty() {
+                        continue;
+                    }
+                    match &use_def.tree {
+                        UseTree::Simple(alias) => {
+                            let source_path = use_def.path.join("::");
+                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
+                                use_def.path.last().cloned().unwrap_or_default()
+                            });
+                            let reexport_key = format!("{prefix}::{local_name}");
+                            self.register_reexport(&reexport_key, &source_path);
+                        }
+                        UseTree::Group(items) => {
+                            for (name, alias) in items {
+                                let source_path = format!("{}::{}", use_def.path.join("::"), name);
+                                let local_name = alias.as_ref().unwrap_or(name);
+                                let reexport_key = format!("{prefix}::{local_name}");
+                                self.register_reexport(&reexport_key, &source_path);
+                            }
+                        }
+                        UseTree::Glob => {
+                            let source_mod = use_def.path.join("::");
+                            self.register_glob_reexports(prefix, &source_mod);
+                        }
+                    }
+                }
+                Item::Module(m) => {
+                    let nested_prefix = if prefix.is_empty() {
+                        m.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, m.name)
+                    };
+                    if let Some(body) = &m.body {
+                        self.resolve_reexports(body, &nested_prefix);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Register a single re-export: `reexport_key` (e.g. "public_api::secret")
+    /// points to `source_path` (e.g. "inner::secret").
+    fn register_reexport(&mut self, reexport_key: &str, source_path: &str) {
+        // Clone fn type info if the source is a known function.
+        if let Some(ret_ty) = self.fn_return_types.get(source_path).cloned() {
+            self.fn_return_types
+                .insert(reexport_key.to_string(), ret_ty);
+        }
+        if let Some(param_tys) = self.fn_param_types.get(source_path).cloned() {
+            self.fn_param_types
+                .insert(reexport_key.to_string(), param_tys);
+        }
+        if let Some(fn_def) = self.fn_defs.get(source_path).cloned() {
+            self.fn_defs.insert(reexport_key.to_string(), fn_def);
+        }
+        if let Some(gen_info) = self.fn_generic_info.get(source_path).cloned() {
+            self.fn_generic_info
+                .insert(reexport_key.to_string(), gen_info);
+        }
+        // Clone struct defs if the source is a known struct.
+        if let Some(sd) = self.struct_defs.get(source_path).cloned() {
+            self.struct_defs.insert(reexport_key.to_string(), sd);
+        }
+        // Record the chain so path visibility checks can follow it.
+        self.reexports
+            .insert(reexport_key.to_string(), source_path.to_string());
+    }
+
+    /// Resolve a glob re-export: scan all known items whose qualified name
+    /// starts with `source_mod::` and register them under `prefix::item_name`.
+    fn register_glob_reexports(&mut self, prefix: &str, source_mod: &str) {
+        let source_prefix = format!("{source_mod}::");
+        // Collect keys first to avoid borrow issues.
+        let fn_keys: Vec<String> = self
+            .fn_return_types
+            .keys()
+            .filter(|k| k.starts_with(&source_prefix))
+            .cloned()
+            .collect();
+        for key in &fn_keys {
+            if let Some(item_name) = key.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                self.register_reexport(&reexport_key, key);
+            }
+        }
+        let struct_keys: Vec<String> = self
+            .struct_defs
+            .keys()
+            .filter(|k| k.starts_with(&source_prefix))
+            .cloned()
+            .collect();
+        for key in &struct_keys {
+            if let Some(item_name) = key.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                if let Some(sd) = self.struct_defs.get(key).cloned() {
+                    self.struct_defs.insert(reexport_key.clone(), sd);
+                }
+                self.reexports.insert(reexport_key, key.clone());
+            }
+        }
+    }
 }

@@ -431,6 +431,8 @@ pub struct TypeChecker {
     fn_defs: HashMap<String, FnDef>,
     /// Qualified module path → visibility (for module visibility checking).
     module_vis: HashMap<String, Visibility>,
+    /// Re-export aliases: module::local_name → source_path (from `pub use` inside modules).
+    reexports: HashMap<String, String>,
 }
 
 impl TypeChecker {
@@ -451,6 +453,7 @@ impl TypeChecker {
             loop_depth: 0,
             fn_defs: HashMap::new(),
             module_vis: HashMap::new(),
+            reexports: HashMap::new(),
         }
     }
 }
@@ -469,7 +472,11 @@ impl TypeChecker {
         // Second pass: register function return types
         self.collect_fn_types(&program.items, "");
 
-        // Third pass: check each item
+        // Third pass: resolve pub use re-exports so external callers can
+        // find re-exported names under the module's qualified path.
+        self.resolve_reexports(&program.items, "");
+
+        // Fourth pass: check each item
         for item in &program.items {
             self.check_item(item)?;
         }

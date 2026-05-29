@@ -50,6 +50,9 @@ pub(crate) struct IrGen {
     local_types: std::collections::HashMap<usize, String>,
     /// Current module path prefix for resolving self/super/crate in ir_gen.
     current_module_prefix: String,
+    /// Re-exported function aliases: module::local_name → original_qualified_name.
+    /// Populated from `pub use` inside modules so call resolution can redirect.
+    fn_aliases: std::collections::HashMap<String, String>,
 }
 
 impl IrGen {
@@ -83,6 +86,7 @@ impl IrGen {
             variant_to_enum: Self::builtin_variants(),
             local_types: std::collections::HashMap::new(),
             current_module_prefix: String::new(),
+            fn_aliases: std::collections::HashMap::new(),
         }
     }
 
@@ -310,21 +314,36 @@ impl IrGen {
                 }
                 Item::Use(use_def) => {
                     let base_path = use_def.path.join("::");
+                    let is_pub = matches!(use_def.visibility, crate::ast::Visibility::Pub);
                     match &use_def.tree {
                         crate::ast::UseTree::Simple(alias) => {
                             let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
                                 use_def.path.last().cloned().unwrap_or_default()
                             });
-                            self.use_aliases.insert(local_name, base_path.clone());
+                            self.use_aliases
+                                .insert(local_name.clone(), base_path.clone());
+                            if is_pub {
+                                let reexport_key = format!("{prefix}::{local_name}");
+                                self.fn_aliases.insert(reexport_key, base_path);
+                            }
                         }
                         crate::ast::UseTree::Group(items) => {
                             for (name, alias) in items {
                                 let local_name = alias.as_ref().unwrap_or(name);
                                 let qualified = format!("{}::{}", base_path, name);
-                                self.use_aliases.insert(local_name.clone(), qualified);
+                                self.use_aliases
+                                    .insert(local_name.clone(), qualified.clone());
+                                if is_pub {
+                                    let reexport_key = format!("{prefix}::{local_name}");
+                                    self.fn_aliases.insert(reexport_key, qualified);
+                                }
                             }
                         }
-                        crate::ast::UseTree::Glob => {}
+                        crate::ast::UseTree::Glob => {
+                            if is_pub {
+                                self.register_glob_fn_aliases(prefix, &base_path);
+                            }
+                        }
                     }
                 }
                 Item::Const { name, value, .. } => {
@@ -334,6 +353,37 @@ impl IrGen {
             }
         }
         self.current_module_prefix = saved_prefix;
+    }
+
+    /// Register glob re-exports: for every function whose name starts with
+    /// `source_mod::`, register it under `prefix::item_name`.
+    fn register_glob_fn_aliases(&mut self, prefix: &str, source_mod: &str) {
+        let source_prefix = format!("{source_mod}::");
+        let known_names: Vec<String> = self
+            .functions
+            .iter()
+            .map(|f| f.name.clone())
+            .filter(|n| n.starts_with(&source_prefix))
+            .collect();
+        for full_name in &known_names {
+            if let Some(item_name) = full_name.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                self.fn_aliases.insert(reexport_key, full_name.clone());
+            }
+        }
+    }
+
+    /// Resolve a function name through the re-export alias chain.
+    fn resolve_fn_alias(&self, name: &str) -> String {
+        let mut current = name.to_string();
+        // Follow chains like layer3::value → layer2::value → layer1::value.
+        while let Some(target) = self.fn_aliases.get(&current) {
+            current = target.clone();
+        }
+        current
     }
 
     /// Convert a type annotation to TypeInfo (simple types only; complex types map to Unknown).
@@ -696,11 +746,12 @@ impl IrGen {
                 // named function, closure, or parameter.
                 let fname = match callee.as_ref() {
                     Expr::Ident(name, ..) => {
-                        self.use_aliases.get(name).cloned().unwrap_or(name.clone())
+                        let resolved = self.use_aliases.get(name).cloned().unwrap_or(name.clone());
+                        self.resolve_fn_alias(&resolved)
                     }
                     Expr::Path { segments, .. } => {
                         let resolved = self.resolve_module_path(segments);
-                        resolved.join("::")
+                        self.resolve_fn_alias(&resolved.join("::"))
                     }
                     _ => String::new(),
                 };
