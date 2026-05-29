@@ -67,6 +67,16 @@ pub(crate) struct IrGen {
     /// function. Guards against double-wrapping when several closures capture the
     /// same mutable variable.
     celled_slots: std::collections::HashSet<usize>,
+    /// Generic free/module function templates by qualified name → (def, module
+    /// prefix active at definition). Used to emit monomorphized copies for each
+    /// turbofish instantiation (e.g. `make_zero::<int>()`).
+    generic_fns: std::collections::HashMap<String, (crate::ast::FnDef, String)>,
+    /// Active type-parameter → concrete-type substitution while lowering a
+    /// monomorphized instance (e.g. `{T: "int"}`), so `T::zero()` resolves to
+    /// `int::zero()`. Empty when lowering a non-generic function.
+    type_subst: std::collections::HashMap<String, String>,
+    /// Monomorphized instance names already emitted, for deduplication.
+    mono_emitted: std::collections::HashSet<String>,
 }
 
 impl IrGen {
@@ -105,6 +115,9 @@ impl IrGen {
             tuple_structs: std::collections::HashMap::new(),
             mut_slots: std::collections::HashSet::new(),
             celled_slots: std::collections::HashSet::new(),
+            generic_fns: std::collections::HashMap::new(),
+            type_subst: std::collections::HashMap::new(),
+            mono_emitted: std::collections::HashSet::new(),
         }
     }
 
@@ -248,6 +261,9 @@ impl IrGen {
 
     /// Generate IR for an entire program.
     pub fn gen_program(&mut self, program: &Program) {
+        // Pre-pass: register generic function templates so call sites with
+        // turbofish can monomorphize regardless of definition order.
+        self.register_generic_fns(&program.items, "");
         for item in &program.items {
             match item {
                 Item::Function(f) => self.gen_fn(f, None),
@@ -537,16 +553,90 @@ impl IrGen {
     }
 
     /// Generate IR for one function.
+    /// Walk items (recursing into modules) and record every generic free /
+    /// module function under its qualified name, paired with the module prefix
+    /// active where it's defined. Impl methods are not monomorphized here.
+    fn register_generic_fns(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Function(f) if !f.generic_params.is_empty() => {
+                    let qualified = if prefix.is_empty() {
+                        f.name.clone()
+                    } else {
+                        format!("{prefix}::{}", f.name)
+                    };
+                    self.generic_fns
+                        .insert(qualified, (f.clone(), prefix.to_string()));
+                }
+                Item::Module(m) => {
+                    if let Some(ref body) = m.body {
+                        let nested = if prefix.is_empty() {
+                            m.name.clone()
+                        } else {
+                            format!("{prefix}::{}", m.name)
+                        };
+                        self.register_generic_fns(body, &nested);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// If `fname` names a generic function and `turbofish` supplies concrete
+    /// types for all its parameters, emit a monomorphized copy (once) and return
+    /// its mangled name. Otherwise return `fname` unchanged so the caller falls
+    /// back to the generic template (used by argument-inferred calls).
+    fn monomorphize_if_generic(&mut self, fname: &str, turbofish: &[TypeAnnotation]) -> String {
+        let Some((fdef, mod_prefix)) = self.generic_fns.get(fname).cloned() else {
+            return fname.to_string();
+        };
+        if turbofish.len() != fdef.generic_params.len() || turbofish.is_empty() {
+            return fname.to_string();
+        }
+        let concretes: Vec<String> = turbofish.iter().map(|t| t.name().to_string()).collect();
+        let mono_name = format!("{fname}${}", concretes.join("$"));
+        if self.mono_emitted.insert(mono_name.clone()) {
+            let subst: std::collections::HashMap<String, String> = fdef
+                .generic_params
+                .iter()
+                .map(|gp| gp.name.clone())
+                .zip(concretes.iter().cloned())
+                .collect();
+            self.gen_fn_named(&fdef, mono_name.clone(), mod_prefix, subst);
+        }
+        mono_name
+    }
+
     fn gen_fn(&mut self, f: &FnDef, struct_prefix: Option<&str>) {
+        let name = match struct_prefix {
+            Some(prefix) => format!("{prefix}::{}", f.name),
+            None => f.name.clone(),
+        };
+        self.gen_fn_named(
+            f,
+            name,
+            self.current_module_prefix.clone(),
+            Default::default(),
+        );
+    }
+
+    /// Lower a function body under an explicit final name, module prefix, and
+    /// (possibly empty) type-parameter substitution. The substitution is what
+    /// makes monomorphization work: `T::zero()` resolves to `int::zero()` while
+    /// it's active. Reentrant — saves and restores all per-function state.
+    fn gen_fn_named(
+        &mut self,
+        f: &FnDef,
+        name: String,
+        module_prefix: String,
+        subst: std::collections::HashMap<String, String>,
+    ) {
         let ret_ty = f
             .return_type
             .as_ref()
             .map(Self::type_ann_to_type_info)
             .unwrap_or(TypeInfo::Unit);
-        let name = match struct_prefix {
-            Some(prefix) => format!("{prefix}::{}", f.name),
-            None => f.name.clone(),
-        };
         // Save current state. fn_index set at push time after body generation.
         let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0, usize::MAX));
         self.current.return_type = ret_ty;
@@ -555,6 +645,8 @@ impl IrGen {
         let saved_local_types = std::mem::take(&mut self.local_types);
         let saved_mut_slots = std::mem::take(&mut self.mut_slots);
         let saved_celled_slots = std::mem::take(&mut self.celled_slots);
+        let saved_subst = std::mem::replace(&mut self.type_subst, subst);
+        let saved_module_prefix = std::mem::replace(&mut self.current_module_prefix, module_prefix);
         let saved_local_count = self.local_count;
         let saved_break = self.break_target;
         let saved_continue = self.continue_target;
@@ -606,6 +698,8 @@ impl IrGen {
         self.local_types = saved_local_types;
         self.mut_slots = saved_mut_slots;
         self.celled_slots = saved_celled_slots;
+        self.type_subst = saved_subst;
+        self.current_module_prefix = saved_module_prefix;
         self.local_count = saved_local_count;
         self.break_target = saved_break;
         self.continue_target = saved_continue;
@@ -940,7 +1034,12 @@ impl IrGen {
                 }
                 r
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call {
+                callee,
+                args,
+                turbofish,
+                ..
+            } => {
                 // Build fname for special-form detection (enum constructors,
                 // spawn/sleep/select). Regular calls go through the unified
                 // oxy_call_closure path regardless of whether the callee is a
@@ -955,6 +1054,13 @@ impl IrGen {
                         self.resolve_fn_alias(&resolved.join("::"))
                     }
                     _ => String::new(),
+                };
+                // A turbofish on a generic function selects a monomorphized
+                // copy (emitted on demand) whose body has the type parameters
+                // substituted, so `T::method()` resolves to the concrete impl.
+                let fname = match turbofish {
+                    Some(tf) => self.monomorphize_if_generic(&fname, tf),
+                    None => fname,
                 };
 
                 // Evaluate arguments first — the callee register depends on
@@ -1234,7 +1340,17 @@ impl IrGen {
                 args,
                 ..
             } => {
-                let resolved_path = self.resolve_module_path(path);
+                // Inside a monomorphized body, a leading type parameter resolves
+                // to its concrete type so `T::zero()` → `int::zero()`.
+                let path: Vec<String> = match path.split_first() {
+                    Some((first, rest)) if self.type_subst.contains_key(first) => {
+                        let mut p = vec![self.type_subst[first].clone()];
+                        p.extend(rest.iter().cloned());
+                        p
+                    }
+                    _ => path.clone(),
+                };
+                let resolved_path = self.resolve_module_path(&path);
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
