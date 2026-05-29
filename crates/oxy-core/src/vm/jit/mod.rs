@@ -207,7 +207,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
 ///
 /// Recursively resolves modules inside loaded files.
 pub(crate) fn resolve_modules(
-    items: &mut Vec<crate::ast::Item>,
+    items: &mut [crate::ast::Item],
     source_dir: Option<&str>,
     externs: &HashMap<String, PathBuf>,
 ) -> Result<(), String> {

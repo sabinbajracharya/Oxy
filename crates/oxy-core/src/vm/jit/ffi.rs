@@ -1017,7 +1017,7 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     }
 
     unsafe {
-        frame.execute(ctx, fn_ptr as *const u8, saved_local_count, ctx.sp);
+        frame.execute(ctx, fn_ptr, saved_local_count, ctx.sp);
     }
 }
 
@@ -2419,7 +2419,7 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
 
             let saved_sp = ctx.sp;
             unsafe {
-                frame.execute(ctx, fn_ptr as *const u8, ctx.local_count, saved_sp);
+                frame.execute(ctx, fn_ptr, ctx.local_count, saved_sp);
             }
         }
         Value::JoinHandle { task_id } => {

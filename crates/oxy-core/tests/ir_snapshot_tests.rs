@@ -67,6 +67,9 @@ fn assert_ir_snapshot_raw(name: &str, source: &str) {
 
 /// Minimal unified-diff-style comparison: shows ` ` (same), `-` (expected only),
 /// `+` (actual only) with 2-line context around each changed hunk.
+// Index-based loops are clearer here: line 92 writes a ±2 sub-range into a
+// parallel bool mask, and line 99 walks indices in lockstep across three slices.
+#[allow(clippy::needless_range_loop)]
 fn line_diff(expected: &str, actual: &str) -> String {
     let exp: Vec<&str> = expected.lines().collect();
     let act: Vec<&str> = actual.lines().collect();
