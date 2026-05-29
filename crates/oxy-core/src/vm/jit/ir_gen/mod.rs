@@ -1848,28 +1848,48 @@ impl IrGen {
             self.emit(IrOp::LoadLocal(r2, phi_temp));
             r2
         } else {
-            // If without else: the false branch falls through to the continue block.
-            let continue_id = self.alloc_block();
+            // If without else, used as an expression, yields the then-branch
+            // value when the condition holds and unit otherwise (Oxy permits
+            // `let x = if c { v };`). The else path produces unit; both merge
+            // via Phi, mirroring the if-else case so the value propagates.
+            let else_id = self.alloc_block();
+            let merge_id = self.alloc_block();
 
             self.terminate(Terminator::Branch {
                 cond,
                 then_block: then_id,
-                else_block: continue_id,
+                else_block: else_id,
             });
 
             self.start_block(then_id);
-            self.gen_block_stmts(then_block);
+            let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            });
             if self.current.blocks[self.current_block]
                 .terminator
                 .is_default()
             {
-                self.terminate(Terminator::Jump(continue_id));
+                self.terminate(Terminator::Jump(merge_id));
             }
 
-            self.start_block(continue_id);
+            self.start_block(else_id);
+            let else_reg = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(else_reg));
+            self.terminate(Terminator::Jump(merge_id));
+
+            self.start_block(merge_id);
             let r = self.alloc_reg();
-            self.emit(IrOp::ConstUnit(r));
-            r
+            self.emit(IrOp::Phi(r, then_reg, else_reg));
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            r2
         }
     }
 
