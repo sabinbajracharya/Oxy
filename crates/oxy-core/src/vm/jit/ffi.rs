@@ -1331,6 +1331,33 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
         return;
     }
 
+    // Map indexing (`m[key]`) keys by the index value itself, not a position.
+    match &collection {
+        Value::HashMap(rc) => {
+            let result = match rc.borrow().get(&index_val) {
+                Some(v) => v.clone(),
+                None => {
+                    set_error(ctx, format!("key not found: {index_val:?}"));
+                    Value::Unit
+                }
+            };
+            unsafe { push(ctx, result) };
+            return;
+        }
+        Value::BTreeMap(rc) => {
+            let result = match rc.borrow().get(&index_val) {
+                Some(v) => v.clone(),
+                None => {
+                    set_error(ctx, format!("key not found: {index_val:?}"));
+                    Value::Unit
+                }
+            };
+            unsafe { push(ctx, result) };
+            return;
+        }
+        _ => {}
+    }
+
     let idx = super::runtime::value_to_i64(&index_val) as usize;
     let result = match collection {
         Value::Vec(rc) => rc.borrow().get(idx).cloned().unwrap_or(Value::Unit),
