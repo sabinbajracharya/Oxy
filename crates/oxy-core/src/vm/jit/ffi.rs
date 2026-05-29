@@ -195,6 +195,43 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 
 // ── Output ───────────────────────────────────────────────────────────
 
+/// Substitute positional placeholders in a format template with `args`, using
+/// Oxy's Display representation. `{}` and any `{:...}` spec (e.g. `{:?}`) format
+/// the next positional argument identically — Oxy has a single value
+/// representation, so Debug and Display coincide. `{{` and `}}` are literal
+/// braces. Shared by `format!`, `print!`, and `println!`.
+fn format_template(template: &str, args: &[Value]) -> String {
+    let mut result = String::new();
+    let mut arg_idx = 0;
+    let mut chars = template.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '{' if chars.peek() == Some(&'{') => {
+                chars.next();
+                result.push('{');
+            }
+            '{' => {
+                // Skip the placeholder body / format spec up to `}`.
+                for cc in chars.by_ref() {
+                    if cc == '}' {
+                        break;
+                    }
+                }
+                if let Some(v) = args.get(arg_idx) {
+                    result.push_str(&v.to_string());
+                }
+                arg_idx += 1;
+            }
+            '}' if chars.peek() == Some(&'}') => {
+                chars.next();
+                result.push('}');
+            }
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
 extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };
     let mut vals = Vec::with_capacity(count);
@@ -210,20 +247,7 @@ extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
         print!("{template}");
         return;
     }
-    let mut result = String::new();
-    let mut arg_idx = 1;
-    let mut chars = template.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '{' && chars.peek() == Some(&'}') {
-            chars.next();
-            if arg_idx < vals.len() {
-                result.push_str(&vals[arg_idx].to_string());
-            }
-            arg_idx += 1;
-        } else {
-            result.push(c);
-        }
-    }
+    let result = format_template(&template, &vals[1..]);
     print!("{result}");
 }
 
@@ -240,21 +264,7 @@ extern "C" fn oxy_println_val(ctx: *mut JitContext, count: usize) {
         vals[0].to_string()
     } else {
         let template = vals[0].to_string();
-        let mut result = String::new();
-        let mut arg_idx = 1;
-        let mut chars = template.chars().peekable();
-        while let Some(c) = chars.next() {
-            if c == '{' && chars.peek() == Some(&'}') {
-                chars.next();
-                if arg_idx < vals.len() {
-                    result.push_str(&vals[arg_idx].to_string());
-                }
-                arg_idx += 1;
-            } else {
-                result.push(c);
-            }
-        }
-        result
+        format_template(&template, &vals[1..])
     };
     if !ctx.output.is_null() {
         let output = unsafe { &*ctx.output };
@@ -1491,20 +1501,7 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
         }
         return;
     }
-    let mut result = String::new();
-    let mut arg_idx = 1;
-    let mut chars = template.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '{' && chars.peek() == Some(&'}') {
-            chars.next();
-            if arg_idx < vals.len() {
-                result.push_str(&vals[arg_idx].to_string());
-            }
-            arg_idx += 1;
-        } else {
-            result.push(c);
-        }
-    }
+    let result = format_template(&template, &vals[1..]);
     unsafe {
         push(ctx, Value::String(result));
     }
