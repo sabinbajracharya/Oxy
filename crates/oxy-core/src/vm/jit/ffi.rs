@@ -2400,6 +2400,14 @@ pub(super) fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::sche
         .unwrap()
 }
 
+thread_local! {
+    /// Accumulates `sleep` durations (ms) for the task body currently running
+    /// eagerly. Saved/restored around each eager spawn so nested spawns don't
+    /// pollute one another's count; the total becomes the task's virtual
+    /// completion time for `select` ordering.
+    static SLEEP_ACCUM: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// Build a JitTaskState from the current JitContext.
 pub(super) fn jit_state_from_ctx(
     ctx: &mut JitContext,
@@ -2544,6 +2552,11 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
             // are native code that runs start-to-finish — they can't be
             // paused mid-execution and resumed. By running the task now,
             // the result is immediately available when await is called.
+            //
+            // Save/restore the sleep accumulator around the run so this task's
+            // `sleep`s are counted independently of an enclosing task's (spawn
+            // can be nested inside a spawned closure).
+            let saved_accum = SLEEP_ACCUM.with(|a| a.replace(0));
             let task_result = if let Some(fn_ptr) = tables.fn_ptr(target_ip) {
                 let mut task_ctx = JitContext::new(local_count);
                 task_ctx.tables = tables as *const JitTables;
@@ -2565,6 +2578,7 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
             } else {
                 Value::Unit
             };
+            let task_sleep = SLEEP_ACCUM.with(|a| a.replace(saved_accum));
 
             let mut sched = scheduler_lock();
             let task_id = sched.create_task();
@@ -2578,6 +2592,7 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 },
             );
             // Mark the task as done with the eagerly-computed result.
+            sched.set_virtual_time(task_id, task_sleep);
             let _awoken = sched.complete(task_id, task_result);
             drop(sched);
             unsafe {
@@ -2601,15 +2616,13 @@ extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) {
         Value::U8(n) => n as u64,
         _ => 0,
     };
-    // sleep(0) is a no-op — used in tests to force async task scheduling.
-    // Non-zero sleep requires yield/resume which needs the full event loop.
+    // JIT tasks run eagerly start-to-finish, so we can't actually suspend on a
+    // timer. Instead we accumulate the requested delay into the running task's
+    // virtual clock; `select` uses that to decide which task would finish
+    // first. The accumulator is per-eager-run (see oxy_spawn_ffi).
+    SLEEP_ACCUM.with(|a| a.set(a.get().saturating_add(ms)));
     unsafe {
         push(ctx, Value::Unit);
-    }
-    if ms > 0 {
-        // For non-zero sleep, we'd need to yield and let the scheduler
-        // resume us after the delay. Not yet implemented for JIT.
-        let _ = ms;
     }
 }
 
@@ -2622,18 +2635,21 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
             task_ids.push(task_id);
         }
     }
-    // Tasks run eagerly, so all should be done. Pick the first one.
+    // Operands are popped in reverse, so restore the original argument order.
+    // `select` returns whichever task would complete first. Tasks ran eagerly,
+    // so we use each task's recorded virtual time (sum of its `sleep`s) as its
+    // completion time and pick the minimum; ties resolve to the earliest
+    // argument for deterministic results.
+    task_ids.reverse();
     let sched = scheduler_lock();
-    for &tid in &task_ids {
-        if let Some(v) = sched.task_result(tid) {
-            unsafe {
-                push(ctx, v);
-            }
-            return;
-        }
-    }
+    let winner = task_ids
+        .iter()
+        .filter(|&&tid| sched.task_result(tid).is_some())
+        .min_by_key(|&&tid| sched.task_virtual_time(tid))
+        .copied();
+    let result = winner.and_then(|tid| sched.task_result(tid));
     unsafe {
-        push(ctx, Value::Unit);
+        push(ctx, result.unwrap_or(Value::Unit));
     }
 }
 

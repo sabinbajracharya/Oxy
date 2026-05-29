@@ -126,6 +126,11 @@ pub struct Task {
     pub id: TaskId,
     pub snapshot: Option<TaskSnapshot>,
     pub status: TaskStatus,
+    /// Total simulated time (sum of `sleep` durations, in ms) the task's body
+    /// spent before completing. JIT tasks run eagerly to completion, so real
+    /// wall-clock ordering can't be observed — this virtual duration lets
+    /// `select` pick the task that *would* finish first.
+    pub virtual_time: u64,
 }
 
 impl Task {
@@ -134,6 +139,7 @@ impl Task {
             id,
             snapshot: None,
             status: TaskStatus::Ready,
+            virtual_time: 0,
         }
     }
 }
@@ -369,6 +375,18 @@ impl Scheduler {
             TaskStatus::Done(v) => Some(v.clone()),
             _ => None,
         })
+    }
+
+    /// Record the simulated time a task's body spent (sum of its `sleep`s).
+    pub fn set_virtual_time(&mut self, id: TaskId, ms: u64) {
+        if let Some(task) = self.tasks.get_mut(&id) {
+            task.virtual_time = ms;
+        }
+    }
+
+    /// The simulated completion time recorded for a task (0 if unknown).
+    pub fn task_virtual_time(&self, id: TaskId) -> u64 {
+        self.tasks.get(&id).map_or(0, |t| t.virtual_time)
     }
 
     /// Get the snapshot for a task, removing it.
