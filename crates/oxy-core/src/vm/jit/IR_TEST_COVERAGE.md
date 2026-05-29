@@ -30,9 +30,14 @@ Legend:
 1. **Boolean `&&` / `||` are EAGER.** They lower to a single `IrOp::And` / `IrOp::Or` register
    op (`ir_gen/mod.rs:776-777`), with **no short-circuit CFG branch** — both operands always
    evaluate. Category 13b locks and surfaces this.
-2. **Assignment is an expression** that yields its assigned value (`ir_gen/mod.rs:1202`), and
-   `CompoundAssign` evaluates the **value before the target** (`ir_gen/mod.rs:1207-1208`).
-   Category 7 locks both.
+2. **Assignment is statement-based and has type `()`.** Both `Expr::Assign` and
+   `Expr::CompoundAssign` type-check to `TypeInfo::Unit` (`type_checker/check_expr.rs:806`
+   and `:1550`) — they do **not** yield the assigned value. Consequently **chained
+   assignment (`a = b = c`) is invalid**: the inner `b = c` produces `()`, so the outer
+   assignment would try to store `()` into `a`. `CompoundAssign` still evaluates the
+   **value before the target** (`ir_gen/mod.rs:1207-1208`) — an evaluation-order fact
+   independent of the result type. Category 7 locks the unit-result targets and the
+   eval-order, not a value-returning chain.
 
 ---
 
@@ -137,19 +142,25 @@ Goal: lock `LoadLocal` / `StoreLocal` / slot allocation / shadowing.
 
 No overlap: reassignment lives here (single target); *chains* are category 7.
 
-### 7. Assignment chains — assignment-as-expression semantics  ·  **entirely 🆕**
-Goal: expose that `Assign` returns a value and the three target lowering paths.
+### 7. Assignment statements — unit-result targets & eval order  ·  **entirely 🆕**
+Goal: expose the three target lowering paths and the compound eval-order. Assignment is a
+**statement-typed expression with type `()`** (see verified fact #2), so there is *no*
+value-returning chain to test — `a = b = c` is invalid and is deliberately excluded.
 
 | Test | Source idea | Locks |
 |---|---|---|
-| 🆕 `assignment/assign_chained` | `a = b = c` | nested `Assign`, two `StoreLocal`, shared value reg |
+| 🆕 `assignment/assign_local` | `x = 1` (already-bound local) | plain `=` lowers to `StoreLocal`; expression result is unit |
 | 🆕 `assignment/assign_field` | `p.x = 1` | `oxy_field_store` (not `StoreLocal`) |
 | 🆕 `assignment/assign_index` | `v[0] = 1` | `oxy_vec_index_store` |
 | 🆕 `assignment/compound_assign_add` | `x += 1` | `Add` then `StoreLocal`; byte target adds `oxy_cast_byte` |
 | 🆕 `assignment/compound_assign_eval_order` | `x += f()` | value reg materialized **before** target load (mod.rs:1207-1208) |
 
-No overlap: category 6 is single plain `=` to a local; this category is chains / non-local
-targets / compound / eval-order. New snapshot subdir: `tests/snapshots/ir/assignment/`.
+> **Note:** chained assignment (`a = b = c`) is **not** valid Oxy — `Expr::Assign` is typed
+> `()` (`check_expr.rs:806`), so the inner assign yields `()` and the chain cannot thread a
+> value. No `assign_chained` snapshot exists; do not add one.
+
+No overlap: category 6 is the plain-`=`-to-a-local *binding/reassign* slot story; this category
+is non-local targets / compound / eval-order. New snapshot subdir: `tests/snapshots/ir/assignment/`.
 
 ### 8. Control flow (if / else)
 Goal: branch terminators, phi / `__phi_tmp` continuation, empty-else unit.
@@ -265,7 +276,7 @@ Goal: make the no-short-circuit behavior explicit and reviewable.
 | 4 Unary | 2 | 2 | `BitNot` uncovered |
 | 5 Comparison/bitwise | 5 | 2 | `Gt/Le/Ge`, `BitXor/Shl/Shr` uncovered |
 | 6 Variables | 6 | 2 | `LoadLocalRaw` isolation |
-| 7 Assignment chains | 0 | 5 | **entirely uncovered** |
+| 7 Assignment statements | 0 | 5 | **entirely uncovered**; assignment is `()`-typed, no chaining |
 | 8 If/else | 4 | 1 | if-as-expression |
 | 9 Loops | 3 | 3 | continue, nested, iterator-for |
 | 10 Fn defs | 6 | 3 | captures, async, unit-return |
@@ -275,7 +286,7 @@ Goal: make the no-short-circuit behavior explicit and reviewable.
 | 13b Boolean short-circuit | 0 | 4 | **entirely uncovered**; locks eager eval |
 | **Total** | **~41** | **42** | ~83 golden files at full coverage |
 
-Highest-value gaps (whole categories missing): **assignment chains (7)**, **edge cases (13)**,
+Highest-value gaps (whole categories missing): **assignment statements (7)**, **edge cases (13)**,
 **boolean short-circuit (13b)**. Highest-value single ops uncovered: `ConstChar`, `BitNot`,
 `BitXor/Shl/Shr`, `Gt/Le/Ge`, `LoadLocalRaw`, `is_async` header, non-empty `captures` header.
 
@@ -283,7 +294,8 @@ Highest-value gaps (whole categories missing): **assignment chains (7)**, **edge
 
 Each IrOp variant and each lowering branch is "owned" by exactly one category:
 - single-op tests own **op shape** (categories 1, 2, 4, 5),
-- multi-op trees own **evaluation / precedence order** (categories 3, 7, 13),
+- multi-op trees own **evaluation / precedence order** (categories 3, 13),
+- assignment statements own **target lowering paths & compound eval-order** (category 7),
 - CFG-shape tests own **terminators / blocks** (categories 8, 9, 12).
 
 When a test would need two features, it goes in category 13/13b and the constituent features keep
