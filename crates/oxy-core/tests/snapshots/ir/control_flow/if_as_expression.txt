@@ -16,12 +16,12 @@ fn main() -> () {
 
   bb3(preds: bb1, bb2):
     v4 = phi v3, v2
-    store.local $2, v4
+    store.local $1, v4
     jump bb4
 
   bb4(preds: bb3):
-    v5 = load.local $2
-    store.local $1, v5
+    v5 = load.local $1
+    store.local $2, v5
     v6 = const.unit
     ret v6
 }

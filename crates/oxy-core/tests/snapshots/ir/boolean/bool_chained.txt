@@ -1,5 +1,5 @@
 fn main() -> () {
-  locals: 4
+  locals: 6
   bb0(entry):
     v0 = const.bool true
     store.local $0, v0
@@ -8,11 +8,41 @@ fn main() -> () {
     v2 = const.bool true
     store.local $2, v2
     v3 = load.local $0
-    v4 = load.local $1
-    v5 = and v3, v4
-    v6 = load.local $2
-    v7 = or v5, v6
-    store.local $3, v7
-    v8 = const.unit
-    ret v8
+    branch v3 -> bb2, bb1
+
+  bb1(preds: bb0):
+    v4 = const.bool false
+    jump bb3
+
+  bb2(preds: bb0):
+    v5 = load.local $1
+    jump bb3
+
+  bb3(preds: bb1, bb2):
+    v6 = phi v5, v4
+    store.local $3, v6
+    jump bb4
+
+  bb4(preds: bb3):
+    v7 = load.local $3
+    branch v7 -> bb6, bb5
+
+  bb5(preds: bb4):
+    v8 = load.local $2
+    jump bb7
+
+  bb6(preds: bb4):
+    v9 = const.bool true
+    jump bb7
+
+  bb7(preds: bb5, bb6):
+    v10 = phi v9, v8
+    store.local $4, v10
+    jump bb8
+
+  bb8(preds: bb7):
+    v11 = load.local $4
+    store.local $5, v11
+    v12 = const.unit
+    ret v12
 }

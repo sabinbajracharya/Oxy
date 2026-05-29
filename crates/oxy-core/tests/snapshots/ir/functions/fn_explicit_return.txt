@@ -1,20 +1,30 @@
 fn abs(x: int) -> int {
-  locals: 1
+  locals: 2
   bb0(entry):
     v0 = load.local $0
     v1 = const.int 0
     v2 = lt v0, v1
-    branch v2 -> bb2, bb1
+    branch v2 -> bb4, bb1
 
   bb1(preds: bb0):
     v3 = const.unit
-    v4 = load.local $0
-    ret v4
+    jump bb2
 
-  bb2(preds: bb0):
-    v5 = load.local $0
-    v6 = neg v5
+  bb2(preds: bb1):
+    v4 = phi v9, v3
+    store.local $1, v4
+    jump bb3
+
+  bb3(preds: bb2):
+    v5 = load.local $1
+    v6 = load.local $0
     ret v6
+
+  bb4(preds: bb0):
+    v7 = load.local $0
+    v8 = neg v7
+    v9 = const.unit
+    ret v8
 }
 
 fn main() -> () {

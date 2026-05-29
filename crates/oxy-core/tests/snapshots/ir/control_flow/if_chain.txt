@@ -24,11 +24,11 @@ fn main() -> () {
 
   bb4(preds: bb2, bb3):
     v9 = phi v8, v7
-    store.local $2, v9
+    store.local $1, v9
     jump bb5
 
   bb5(preds: bb4):
-    v10 = load.local $2
+    v10 = load.local $1
     jump bb7
 
   bb6(preds: bb0):
@@ -37,12 +37,12 @@ fn main() -> () {
 
   bb7(preds: bb5, bb6):
     v12 = phi v11, v10
-    store.local $3, v12
+    store.local $2, v12
     jump bb8
 
   bb8(preds: bb7):
-    v13 = load.local $3
-    store.local $1, v13
+    v13 = load.local $2
+    store.local $3, v13
     v14 = const.unit
     ret v14
 }

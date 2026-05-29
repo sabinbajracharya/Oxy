@@ -5,12 +5,12 @@ fn main() -> () {
 
   bb1(preds: bb0):
     v0 = const.int 42
-    store.local $1, v0
+    store.local $0, v0
     jump bb2
 
   bb2(preds: bb1):
-    v1 = load.local $1
-    store.local $0, v1
+    v1 = load.local $0
+    store.local $1, v1
     v2 = const.unit
     ret v2
 }

@@ -8,6 +8,7 @@ fn main() -> () {
     v3 = const.int 10
     v4 = load.local $0
     v5 = call @oxy_field_store(v4, v3) str["x"]
+    store.local $0, v5
     v6 = const.unit
     ret v6
 }
