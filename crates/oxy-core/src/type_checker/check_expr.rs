@@ -723,13 +723,21 @@ impl TypeChecker {
             Expr::Repeat { value, count, .. } => {
                 let val_ty = self.infer_expr(value)?;
                 let _ = self.infer_expr(count)?;
-                // Repeat literals are constant-length arrays. If the count is
-                // an integer literal we propagate it; otherwise the compiler
-                // will already have rejected non-constant counts.
-                let n = if let Expr::IntLiteral(n, _, _) = count.as_ref() {
-                    *n as usize
-                } else {
-                    0
+                // The repeat count is the array's length, which must be known at
+                // compile time. Only an integer literal qualifies; a variable or
+                // other runtime expression is rejected (matching `[T; N]`).
+                let n = match count.as_ref() {
+                    Expr::IntLiteral(n, _, _) => *n as usize,
+                    _ => {
+                        let span = count.span();
+                        return Err(FerriError::TypeError {
+                            message:
+                                "array repeat count must be a constant integer literal, e.g. `[0; 5]`"
+                                    .to_string(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
                 };
                 Ok(TypeInfo::Array(Box::new(val_ty), n))
             }
