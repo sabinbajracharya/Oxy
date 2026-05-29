@@ -464,6 +464,36 @@ impl IrGen {
         current
     }
 
+    /// Resolve an enum-variant reference written in a pattern (e.g. `Color::Red`,
+    /// parsed with `enum_name = "Color"`) to the fully-qualified enum identity
+    /// the value was constructed with (e.g. `"colors::Color"`). Equality in
+    /// `oxy_enum_variant_equal` compares the full enum name, so a pattern arm
+    /// inside module `colors` — or one referring to the enum through a `use`
+    /// alias — must canonicalize the same way construction sites do.
+    fn resolve_pattern_enum_name(&self, enum_name: &str, variant: &str) -> String {
+        // The variant→enum map holds the canonical (module-qualified) name that
+        // construction also produces. Adopt it only when it agrees with what was
+        // written (exact, or as a `::`-qualified suffix) so two distinct enums
+        // sharing a variant name aren't conflated.
+        if let Some(canonical) = self.variant_to_enum.get(variant) {
+            if canonical == enum_name
+                || canonical.rsplit("::").next() == Some(enum_name)
+                || canonical.ends_with(&format!("::{enum_name}"))
+            {
+                return canonical.clone();
+            }
+        }
+        // Fall back to module-path resolution, mirroring Expr::Path construction.
+        let mut segments: Vec<String> = enum_name.split("::").map(|s| s.to_string()).collect();
+        segments.push(variant.to_string());
+        let resolved = self.resolve_module_path(&segments);
+        if resolved.len() > 1 {
+            resolved[..resolved.len() - 1].join("::")
+        } else {
+            enum_name.to_string()
+        }
+    }
+
     /// Convert a type annotation to TypeInfo (simple types only; complex types map to Unknown).
     fn type_ann_to_type_info(ann: &TypeAnnotation) -> TypeInfo {
         match ann {
@@ -1912,13 +1942,16 @@ impl IrGen {
                 fields,
                 ..
             } => {
-                // Check variant discriminant, then recursively check inner field patterns
+                // Check variant discriminant, then recursively check inner field
+                // patterns. Canonicalize the enum name so the arm matches the
+                // value's constructed identity across module / use-alias bounds.
+                let resolved_enum = self.resolve_pattern_enum_name(enum_name, variant);
                 self.emit(IrOp::CallBuiltin {
                     result: r,
                     func: "oxy_enum_variant_equal",
                     args: vec![val_reg],
                     immediates: vec![],
-                    strings: vec![enum_name.clone(), variant.clone()],
+                    strings: vec![resolved_enum, variant.clone()],
                 });
                 // If there are inner patterns, also check them
                 for (i, inner) in fields.iter().enumerate() {
