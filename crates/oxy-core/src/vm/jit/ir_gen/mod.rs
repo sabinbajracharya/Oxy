@@ -847,9 +847,23 @@ impl IrGen {
                     });
                     r
                 } else {
-                    // Global function or builtin — reference for Call handling
+                    // A bare identifier in value position that is neither a
+                    // local, a const, nor an enum variant is a reference to a
+                    // named function (e.g. `apply(square, 5)` or `vec![square,
+                    // neg]`). The type checker has already validated the name,
+                    // so resolve it the same way the Call path does and build a
+                    // `Value::Function` via `oxy_push_named_fn` so it can be
+                    // invoked through the unified `oxy_call_closure` path.
+                    let resolved = self.use_aliases.get(name).cloned().unwrap_or(name.clone());
+                    let resolved = self.resolve_fn_alias(&resolved);
                     let r = self.alloc_reg();
-                    self.emit(IrOp::ConstUnit(r));
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_push_named_fn",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![resolved],
+                    });
                     r
                 }
             }
