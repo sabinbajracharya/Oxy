@@ -241,6 +241,18 @@ impl IrGen {
                         self.gen_module_items(items, &nested);
                     }
                 }
+                Item::Impl(imp) => {
+                    let qualified_type = format!("{prefix}::{}", imp.type_name);
+                    for method in &imp.methods {
+                        self.gen_fn(method, Some(&qualified_type));
+                    }
+                }
+                Item::ImplTrait(imp) => {
+                    let qualified_type = format!("{prefix}::{}", imp.type_name);
+                    for method in &imp.methods {
+                        self.gen_fn(method, Some(&qualified_type));
+                    }
+                }
                 _ => {}
             }
         }
@@ -2368,7 +2380,11 @@ impl IrGen {
         let r = self.alloc_reg();
         self.emit(IrOp::CallBuiltin {
             result: r,
-            func: if emit_as_future { "oxy_push_async_block" } else { "oxy_push_closure" },
+            func: if emit_as_future {
+                "oxy_push_async_block"
+            } else {
+                "oxy_push_closure"
+            },
             args: vec![],
             immediates: vec![meta_idx],
             strings: vec![closure_name],

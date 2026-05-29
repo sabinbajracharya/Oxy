@@ -267,6 +267,105 @@ fn load_module_file(
     ))
 }
 
+// ── Derive macro expansion ──────────────────────────────────────────────
+
+/// Expand `#[derive(Default)]` into synthetic `impl` blocks with a
+/// `default()` constructor. Call this **before** type checking so both
+/// the type checker and ir_gen see the generated functions.
+///
+/// Skips structs that already have a manual `impl Default for T` block
+/// (explicit override takes precedence).
+pub(crate) fn expand_derives(program: &mut crate::ast::Program) {
+    // Collect names of types that have a manual Default impl.
+    let manual_defaults: std::collections::HashSet<String> = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            crate::ast::Item::ImplTrait(imp) if imp.trait_name == "Default" => {
+                Some(imp.type_name.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    let mut new_impls: Vec<crate::ast::Item> = Vec::new();
+    for item in &program.items {
+        if let crate::ast::Item::Struct(s) = item {
+            if has_derive(&s.attributes, "Default") && !manual_defaults.contains(&s.name) {
+                if let Some(imp) = make_default_impl(s) {
+                    new_impls.push(crate::ast::Item::Impl(imp));
+                }
+            }
+        }
+    }
+    program.items.extend(new_impls);
+}
+
+fn has_derive(attrs: &[crate::ast::Attribute], name: &str) -> bool {
+    attrs
+        .iter()
+        .any(|a| a.name == "derive" && a.args.iter().any(|arg| arg == name))
+}
+
+/// Build a synthetic `impl S { fn default() -> Self { … } }` block for a struct.
+fn make_default_impl(s: &crate::ast::StructDef) -> Option<crate::ast::ImplBlock> {
+    let fields = match &s.kind {
+        crate::ast::StructKind::Named(fields) => fields,
+        _ => return None, // tuple / unit structs: skip
+    };
+    let span = s.span;
+    let mut field_inits: Vec<(String, crate::ast::Expr)> = Vec::new();
+    for field in fields {
+        let default_val = default_value_for_type(field.type_ann.name(), span);
+        field_inits.push((field.name.clone(), default_val));
+    }
+    let body = crate::ast::Block {
+        stmts: vec![crate::ast::Stmt::Expr {
+            expr: crate::ast::Expr::StructInit {
+                name: s.name.clone(),
+                fields: field_inits,
+                base: None,
+                span,
+            },
+            has_semicolon: false,
+        }],
+        span,
+    };
+    let fn_def = crate::ast::FnDef {
+        name: "default".to_string(),
+        is_async: false,
+        generic_params: vec![],
+        params: vec![],
+        return_type: Some(crate::ast::TypeAnnotation::Named {
+            name: "Self".to_string(),
+            generic_args: vec![],
+            span,
+        }),
+        body,
+        attributes: vec![],
+        visibility: crate::ast::Visibility::Private,
+        span,
+    };
+    Some(crate::ast::ImplBlock {
+        type_name: s.name.clone(),
+        methods: vec![fn_def],
+        span,
+    })
+}
+
+/// Pick a zero-like default expression for a type name.
+fn default_value_for_type(type_name: &str, span: crate::lexer::Span) -> crate::ast::Expr {
+    match type_name {
+        "int" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
+        "float" => crate::ast::Expr::FloatLiteral(0.0, crate::lexer::FloatSuffix::None, span),
+        "byte" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
+        "bool" => crate::ast::Expr::BoolLiteral(false, span),
+        "char" => crate::ast::Expr::CharLiteral('\0', span),
+        "String" => crate::ast::Expr::StringLiteral(String::new(), span),
+        _ => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
+    }
+}
+
 // ── JitEngine ────────────────────────────────────────────────────────────
 
 pub(crate) struct JitEngine {
@@ -299,11 +398,13 @@ impl JitEngine {
         let closure_meta: Vec<context::ClosureRuntimeMeta> = ir
             .closure_meta
             .drain(..)
-            .map(|(param_names, captured, is_async)| context::ClosureRuntimeMeta {
-                param_names,
-                captured,
-                is_async,
-            })
+            .map(
+                |(param_names, captured, is_async)| context::ClosureRuntimeMeta {
+                    param_names,
+                    captured,
+                    is_async,
+                },
+            )
             .collect();
 
         // 2. Detect ISA, build JIT module
@@ -346,11 +447,7 @@ impl JitEngine {
 
         // 4a. Build JitTables from codegen output (replaces global OnceLock tables).
         let tables = context::JitTables {
-            fn_table: cg
-                .fn_ptrs
-                .iter()
-                .map(|(k, v)| (*k, *v as usize))
-                .collect(),
+            fn_table: cg.fn_ptrs.iter().map(|(k, v)| (*k, *v as usize)).collect(),
             fn_local_counts: cg.fn_local_counts.clone(),
             name_to_index: cg.fn_names.clone(),
             closure_meta,
@@ -416,9 +513,9 @@ impl JitVm {
                 .parent()
                 .and_then(|parent| parent.to_str())
         });
-        let mut program =
-            crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
+        let mut program = crate::parser::parse(source).map_err(|e| format!("parse: {e}"))?;
         resolve_modules(&mut program.items, source_dir, &externs)?;
+        expand_derives(&mut program);
         crate::type_checker::TypeChecker::new()
             .check_program(&program)
             .map_err(|e| format!("type check: {e}"))?;

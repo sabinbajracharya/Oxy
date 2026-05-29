@@ -485,7 +485,12 @@ impl CalleeFrame {
         let capacity = min_locals + STACK_CAP;
         let layout = std::alloc::Layout::array::<Value>(capacity).unwrap();
         let buf = unsafe { std::alloc::alloc_zeroed(layout) as *mut Value };
-        Self { buf, layout, capacity, local_count: min_locals }
+        Self {
+            buf,
+            layout,
+            capacity,
+            local_count: min_locals,
+        }
     }
 
     fn buf_mut(&mut self) -> *mut Value {
@@ -499,8 +504,11 @@ impl CalleeFrame {
     /// `result_sp` is the caller's sp value after consuming args (where the
     ///   callee's result should be pushed).
     unsafe fn execute(
-        self, ctx: &mut JitContext, fn_ptr: *const u8,
-        saved_local_count: usize, result_sp: usize,
+        self,
+        ctx: &mut JitContext,
+        fn_ptr: *const u8,
+        saved_local_count: usize,
+        result_sp: usize,
     ) {
         let saved_buf = ctx.buffer;
         let saved_cap = ctx.capacity;
@@ -561,7 +569,9 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
     let result_sp = args_start;
 
     let saved_local_count = ctx.local_count;
-    unsafe { frame.execute(ctx, fn_ptr, saved_local_count, result_sp); }
+    unsafe {
+        frame.execute(ctx, fn_ptr, saved_local_count, result_sp);
+    }
 }
 
 // ── Closures ─────────────────────────────────────────────────────────
@@ -658,12 +668,20 @@ extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: i64, name_len: i
             return;
         }
     };
-    let placeholder_span = crate::lexer::Span { start: 0, end: 0, line: 0, column: 0 };
+    let placeholder_span = crate::lexer::Span {
+        start: 0,
+        end: 0,
+        line: 0,
+        column: 0,
+    };
     let fn_data = crate::types::FunctionData {
         name,
         params: vec![],
         return_type: None,
-        body: crate::ast::Block { stmts: vec![], span: placeholder_span },
+        body: crate::ast::Block {
+            stmts: vec![],
+            span: placeholder_span,
+        },
         closure_env: crate::env::Environment::new(),
         target_ip: Some(fn_index),
         captured_names: vec![],
@@ -846,13 +864,19 @@ extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
     let mut frame = CalleeFrame::new(total_frame);
     for (i, name) in captured_names.iter().enumerate() {
         let val = closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
-        unsafe { frame.buf_mut().add(i).write(val); }
+        unsafe {
+            frame.buf_mut().add(i).write(val);
+        }
     }
     for (i, arg) in args_vals.into_iter().enumerate() {
-        unsafe { frame.buf_mut().add(captures_end + i).write(arg); }
+        unsafe {
+            frame.buf_mut().add(captures_end + i).write(arg);
+        }
     }
 
-    unsafe { frame.execute(ctx, fn_ptr as *const u8, saved_local_count, ctx.sp); }
+    unsafe {
+        frame.execute(ctx, fn_ptr as *const u8, saved_local_count, ctx.sp);
+    }
 }
 
 // ── Return / panic ──────────────────────────────────────────────────
@@ -1139,7 +1163,10 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
                     Value::String(String::new())
                 } else {
                     Value::String(
-                        s.chars().skip(clamped_start).take(clamped_end - clamped_start).collect(),
+                        s.chars()
+                            .skip(clamped_start)
+                            .take(clamped_end - clamped_start)
+                            .collect(),
                     )
                 }
             }
@@ -1458,11 +1485,7 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
 
 /// JIT-compatible closure invoker callback. Matches the signature
 /// `Fn(&Value, &[Value]) -> Result<Value, String>` used by builtins.
-fn jit_closure_invoker(
-    tables: &JitTables,
-    func: &Value,
-    args: &[Value],
-) -> Result<Value, String> {
+fn jit_closure_invoker(tables: &JitTables, func: &Value, args: &[Value]) -> Result<Value, String> {
     let ft = match func {
         Value::Function(f) => f.clone(),
         _ => return Err("not a callable function".into()),
@@ -2236,15 +2259,26 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
             let total_frame = fn_local_count.max(captures_end + fut.args.len());
             let mut frame = CalleeFrame::new(total_frame);
             for (i, name) in fut.captured_names.iter().enumerate() {
-                let v = fut.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
-                unsafe { frame.buf_mut().add(i).write(v); }
+                let v = fut
+                    .closure_env
+                    .borrow()
+                    .get(name)
+                    .ok()
+                    .unwrap_or(Value::Unit);
+                unsafe {
+                    frame.buf_mut().add(i).write(v);
+                }
             }
             for (i, arg) in fut.args.iter().enumerate() {
-                unsafe { frame.buf_mut().add(captures_end + i).write(arg.clone()); }
+                unsafe {
+                    frame.buf_mut().add(captures_end + i).write(arg.clone());
+                }
             }
 
             let saved_sp = ctx.sp;
-            unsafe { frame.execute(ctx, fn_ptr as *const u8, ctx.local_count, saved_sp); }
+            unsafe {
+                frame.execute(ctx, fn_ptr as *const u8, ctx.local_count, saved_sp);
+            }
         }
         Value::JoinHandle { task_id } => {
             // Tasks run eagerly in oxy_spawn_ffi, so the result is always ready.
@@ -2366,7 +2400,6 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
         push(ctx, Value::Unit);
     }
 }
-
 
 // ── Symbol registry ──────────────────────────────────────────────────
 

@@ -22,13 +22,11 @@ pub fn run_compiled_jit_with_options(
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
 ) -> Result<Value, crate::errors::FerriError> {
-    let mut jit_vm =
-        super::jit::JitVm::compile_with_options(source, source_path, externs).map_err(|e| {
-            crate::errors::FerriError::Runtime {
-                message: e,
-                line: 0,
-                column: 0,
-            }
+    let mut jit_vm = super::jit::JitVm::compile_with_options(source, source_path, externs)
+        .map_err(|e| crate::errors::FerriError::Runtime {
+            message: e,
+            line: 0,
+            column: 0,
         })?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
@@ -81,15 +79,14 @@ pub fn run_tests_jit_with_options(
     externs: HashMap<String, PathBuf>,
 ) -> Result<Vec<TestResult>, crate::errors::FerriError> {
     let mut program = crate::parser::parse(source)?;
-    let source_dir = std::path::Path::new(path)
-        .parent()
-        .and_then(|p| p.to_str());
-    super::jit::resolve_modules(&mut program.items, source_dir, &externs)
-        .map_err(|e| crate::errors::FerriError::Runtime {
+    let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
+    super::jit::resolve_modules(&mut program.items, source_dir, &externs).map_err(|e| {
+        crate::errors::FerriError::Runtime {
             message: e,
             line: 0,
             column: 0,
-        })?;
+        }
+    })?;
 
     let mut normal_items: Vec<crate::ast::Item> = Vec::new();
     let mut compile_error_fns: Vec<crate::ast::FnDef> = Vec::new();
@@ -104,10 +101,11 @@ pub fn run_tests_jit_with_options(
         normal_items.push(item);
     }
 
-    let normal_program = crate::ast::Program {
+    let mut normal_program = crate::ast::Program {
         items: normal_items,
         span: program.span,
     };
+    super::jit::expand_derives(&mut normal_program);
 
     crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
 
