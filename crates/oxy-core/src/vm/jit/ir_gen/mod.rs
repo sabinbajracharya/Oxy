@@ -117,8 +117,8 @@ impl IrGen {
         slot
     }
 
-    /// Resolve `self`, `super`, and `crate` path prefixes against the
-    /// current module context, producing an absolute path segment list.
+    /// Resolve `self`, `super`, `crate` path prefixes and `use_aliases` against
+    /// the current module context, producing an absolute path segment list.
     fn resolve_module_path(&self, path: &[String]) -> Vec<String> {
         let mut module_parts: Vec<&str> = self
             .current_module_prefix
@@ -145,8 +145,24 @@ impl IrGen {
                 _ => break,
             }
         }
-        // Output remaining module context, then remaining path segments.
-        resolved.extend(module_parts.iter().map(|s| s.to_string()));
+
+        // Resolve the first remaining segment through use_aliases.
+        // If found, the alias provides a fully-qualified path so we skip
+        // prepending current_module_prefix. Otherwise fall back to the
+        // module prefix for relative resolution.
+        if let Some(first) = iter.next() {
+            if let Some(resolved_first) = self.use_aliases.get(first) {
+                resolved.push(resolved_first.clone());
+            } else {
+                resolved.extend(module_parts.iter().map(|s| s.to_string()));
+                resolved.push(first.clone());
+            }
+        } else {
+            // Entire path was self/super/crate — emit the module context.
+            resolved.extend(module_parts.iter().map(|s| s.to_string()));
+        }
+
+        // Output remaining path segments.
         resolved.extend(iter.cloned());
         resolved
     }
@@ -862,6 +878,10 @@ impl IrGen {
                 }
                 // Join field names with \0 for the FFI to parse.
                 let names_joined = field_names.join("\0");
+                // Resolve the struct name through use_aliases and module
+                // context so that module-level types get their full path
+                // (e.g. "counter::Counter" instead of just "Counter").
+                let resolved_name = self.resolve_module_path(&[name.clone()]).join("::");
                 if let Some(base_expr) = base {
                     // Struct update: Point { x: 1, ..base }
                     let base_reg = self.gen_expr(base_expr);
@@ -881,7 +901,7 @@ impl IrGen {
                     // oxy_make_enum_variant to produce Value::EnumVariant instead
                     // of Value::Struct.
                     let enum_ctor: Option<(String, String)> = 'ctor: {
-                        if let Some((enum_name, variant)) = name.rsplit_once("::") {
+                        if let Some((enum_name, variant)) = resolved_name.rsplit_once("::") {
                             if self
                                 .variant_to_enum
                                 .get(variant)
@@ -907,7 +927,7 @@ impl IrGen {
                             func: "oxy_struct_init",
                             args: arg_regs,
                             immediates: vec![fields.len()],
-                            strings: vec![name.clone(), names_joined],
+                            strings: vec![resolved_name, names_joined],
                         });
                     }
                     r
