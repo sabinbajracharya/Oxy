@@ -56,6 +56,10 @@ pub(crate) struct IrGen {
     /// Trait definitions collected from Item::Trait during gen_program.
     /// Used to compile default method bodies for impl Trait blocks that don't override them.
     trait_defs: std::collections::HashMap<String, crate::ast::TraitDef>,
+    /// Tuple-struct names → field arity (e.g. "WrappedInt" → 1, "shapes::Pair" → 2).
+    /// A call `WrappedInt(17)` is lowered to struct construction with positional
+    /// field names "0", "1", … — matching what `oxy_field_access` expects for `.0`.
+    tuple_structs: std::collections::HashMap<String, usize>,
 }
 
 impl IrGen {
@@ -91,6 +95,7 @@ impl IrGen {
             current_module_prefix: String::new(),
             fn_aliases: std::collections::HashMap::new(),
             trait_defs: std::collections::HashMap::new(),
+            tuple_structs: std::collections::HashMap::new(),
         }
     }
 
@@ -300,7 +305,12 @@ impl IrGen {
                     }
                 }
                 Item::Enum(e) => self.register_enum(e),
-                // Struct/type items don't generate IR directly
+                Item::Struct(s) => {
+                    if let crate::ast::StructKind::Tuple(types) = &s.kind {
+                        self.tuple_structs.insert(s.name.clone(), types.len());
+                    }
+                }
+                // Other type items don't generate IR directly
                 _ => {}
             }
         }
@@ -399,6 +409,14 @@ impl IrGen {
                 }
                 Item::Const { name, value, .. } => {
                     self.global_consts.insert(name.clone(), value.clone());
+                }
+                Item::Struct(s) => {
+                    if let crate::ast::StructKind::Tuple(types) = &s.kind {
+                        // Qualified key matches the name produced by
+                        // resolve_module_path at in-module call sites.
+                        let full_name = format!("{prefix}::{}", s.name);
+                        self.tuple_structs.insert(full_name, types.len());
+                    }
                 }
                 _ => {}
             }
@@ -844,6 +862,37 @@ impl IrGen {
                         args: arg_regs,
                         immediates: vec![args.len()],
                         strings: vec![enum_name, variant],
+                    });
+                    return r;
+                }
+
+                // Route tuple-struct constructors: `WrappedInt(17)` builds a
+                // `Value::Struct` with positional field names "0", "1", … so
+                // that `.0` access (oxy_field_access reads fields["0"]) works.
+                // Named-field structs use Expr::StructInit instead; tuple
+                // structs reach us here because they are called like functions.
+                let tuple_ctor: Option<String> = if self.tuple_structs.contains_key(&fname) {
+                    Some(fname.clone())
+                } else if let Expr::Ident(name, ..) = callee.as_ref() {
+                    let resolved = self.resolve_module_path(&[name.clone()]).join("::");
+                    self.tuple_structs
+                        .contains_key(&resolved)
+                        .then_some(resolved)
+                } else {
+                    None
+                };
+                if let Some(struct_name) = tuple_ctor {
+                    let names_joined = (0..args.len())
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\0");
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_init",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![struct_name, names_joined],
                     });
                     return r;
                 }
