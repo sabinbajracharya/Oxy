@@ -48,6 +48,8 @@ pub(crate) struct IrGen {
     variant_to_enum: std::collections::HashMap<String, String>,
     /// Local slot → type annotation name (for width coercion on compound assignment).
     local_types: std::collections::HashMap<usize, String>,
+    /// Current module path prefix for resolving self/super/crate in ir_gen.
+    current_module_prefix: String,
 }
 
 impl IrGen {
@@ -80,6 +82,7 @@ impl IrGen {
             use_aliases: std::collections::HashMap::new(),
             variant_to_enum: Self::builtin_variants(),
             local_types: std::collections::HashMap::new(),
+            current_module_prefix: String::new(),
         }
     }
 
@@ -112,6 +115,40 @@ impl IrGen {
         self.locals.insert(name.to_string(), slot);
         self.local_count += 1;
         slot
+    }
+
+    /// Resolve `self`, `super`, and `crate` path prefixes against the
+    /// current module context, producing an absolute path segment list.
+    fn resolve_module_path(&self, path: &[String]) -> Vec<String> {
+        let mut module_parts: Vec<&str> = self
+            .current_module_prefix
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut iter = path.iter().peekable();
+        let mut resolved: Vec<String> = Vec::new();
+
+        // Consume leading self / super / crate prefixes.
+        while let Some(seg) = iter.peek() {
+            match seg.as_str() {
+                "self" => {
+                    iter.next();
+                }
+                "super" => {
+                    module_parts.pop();
+                    iter.next();
+                }
+                "crate" => {
+                    module_parts.clear();
+                    iter.next();
+                }
+                _ => break,
+            }
+        }
+        // Output remaining module context, then remaining path segments.
+        resolved.extend(module_parts.iter().map(|s| s.to_string()));
+        resolved.extend(iter.cloned());
+        resolved
     }
 
     fn lookup_local(&self, name: &str) -> Option<usize> {
@@ -224,6 +261,8 @@ impl IrGen {
 
     /// Recursively compile items inside a module with the given qualified prefix.
     fn gen_module_items(&mut self, items: &[Item], prefix: &str) {
+        let saved_prefix = self.current_module_prefix.clone();
+        self.current_module_prefix = prefix.to_string();
         for item in items {
             match item {
                 Item::Function(f) => self.gen_fn(f, Some(prefix)),
@@ -253,9 +292,32 @@ impl IrGen {
                         self.gen_fn(method, Some(&qualified_type));
                     }
                 }
+                Item::Use(use_def) => {
+                    let base_path = use_def.path.join("::");
+                    match &use_def.tree {
+                        crate::ast::UseTree::Simple(alias) => {
+                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
+                                use_def.path.last().cloned().unwrap_or_default()
+                            });
+                            self.use_aliases.insert(local_name, base_path.clone());
+                        }
+                        crate::ast::UseTree::Group(items) => {
+                            for (name, alias) in items {
+                                let local_name = alias.as_ref().unwrap_or(name);
+                                let qualified = format!("{}::{}", base_path, name);
+                                self.use_aliases.insert(local_name.clone(), qualified);
+                            }
+                        }
+                        crate::ast::UseTree::Glob => {}
+                    }
+                }
+                Item::Const { name, value, .. } => {
+                    self.global_consts.insert(name.clone(), value.clone());
+                }
                 _ => {}
             }
         }
+        self.current_module_prefix = saved_prefix;
     }
 
     /// Convert a type annotation to TypeInfo (simple types only; complex types map to Unknown).
@@ -620,7 +682,10 @@ impl IrGen {
                     Expr::Ident(name, ..) => {
                         self.use_aliases.get(name).cloned().unwrap_or(name.clone())
                     }
-                    Expr::Path { segments, .. } => segments.join("::"),
+                    Expr::Path { segments, .. } => {
+                        let resolved = self.resolve_module_path(segments);
+                        resolved.join("::")
+                    }
                     _ => String::new(),
                 };
 
@@ -866,6 +931,7 @@ impl IrGen {
                 args,
                 ..
             } => {
+                let resolved_path = self.resolve_module_path(path);
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
@@ -876,7 +942,7 @@ impl IrGen {
                     func: "oxy_path_call_builtin",
                     args: arg_regs,
                     immediates: vec![args.len()],
-                    strings: vec![path.join("\0")],
+                    strings: vec![resolved_path.join("\0")],
                 });
                 r
             }
@@ -1088,10 +1154,12 @@ impl IrGen {
             } => self.gen_closure(params, body, *is_async, false),
             Expr::Path { segments, .. } => {
                 // Unit enum variant: Color::Red, or module::Color::Red.
-                // Join all but the last segment as the enum name.
-                let variant = segments.last().cloned().unwrap_or_default();
-                let enum_name = if segments.len() > 1 {
-                    segments[..segments.len() - 1].join("::")
+                // Resolve self/super/crate, then join all but the last segment
+                // as the enum name.
+                let resolved = self.resolve_module_path(segments);
+                let variant = resolved.last().cloned().unwrap_or_default();
+                let enum_name = if resolved.len() > 1 {
+                    resolved[..resolved.len() - 1].join("::")
                 } else {
                     // Resolve single-segment variants via the enum map.
                     self.variant_to_enum

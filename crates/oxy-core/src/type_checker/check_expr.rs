@@ -492,6 +492,7 @@ impl TypeChecker {
                         None
                     };
                     if let Some(key) = resolved_key {
+                        self.check_path_visible(&key, *span)?;
                         let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                         self.check_args_against_params(
                             &params,
@@ -860,6 +861,7 @@ impl TypeChecker {
                     }
                 });
                 if let Some(key) = resolved_key {
+                    self.check_path_visible(&key, *span)?;
                     let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                     self.check_args_against_params(
                         &params,
@@ -1229,6 +1231,7 @@ impl TypeChecker {
                 ..
             } => {
                 let resolved = self.resolve_struct_name(name);
+                self.check_path_visible(&resolved, *span)?;
                 // Pre-collect declared field types AND each field's raw
                 // annotation, so we can infer concrete generic-arg types
                 // from the supplied values (`Box { value: 5 }` → T = i64).

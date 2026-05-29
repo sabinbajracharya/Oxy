@@ -427,6 +427,10 @@ pub struct TypeChecker {
     /// Tracks nesting depth of loop constructs (while, for, loop) for
     /// detecting break/continue used outside any loop.
     loop_depth: usize,
+    /// Qualified function name → FnDef (for visibility checking).
+    fn_defs: HashMap<String, FnDef>,
+    /// Qualified module path → visibility (for module visibility checking).
+    module_vis: HashMap<String, Visibility>,
 }
 
 impl TypeChecker {
@@ -445,6 +449,8 @@ impl TypeChecker {
             current_fn_return: TypeInfo::Unit,
             fn_generic_info: HashMap::new(),
             loop_depth: 0,
+            fn_defs: HashMap::new(),
+            module_vis: HashMap::new(),
         }
     }
 }

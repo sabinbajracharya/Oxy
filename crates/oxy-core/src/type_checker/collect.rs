@@ -35,6 +35,8 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, m.name)
                     };
+                    self.module_vis
+                        .insert(nested_prefix.clone(), m.visibility.clone());
                     if let Some(body) = &m.body {
                         self.collect_defs(body, &nested_prefix);
                     }
@@ -133,7 +135,8 @@ impl TypeChecker {
                     };
                     let param_tys = self.resolve_param_types(f, &[]);
                     self.fn_return_types.insert(qualified.clone(), ret_ty);
-                    self.fn_param_types.insert(qualified, param_tys);
+                    self.fn_param_types.insert(qualified.clone(), param_tys);
+                    self.fn_defs.insert(qualified, f.clone());
                 }
                 Item::Module(m) => {
                     let nested_prefix = if prefix.is_empty() {
@@ -194,7 +197,8 @@ impl TypeChecker {
                             .insert(unqualified.clone(), ret_ty.clone());
                         self.fn_return_types.insert(qualified.clone(), ret_ty);
                         self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified, param_tys);
+                        self.fn_param_types.insert(qualified.clone(), param_tys);
+                        self.fn_defs.insert(qualified, method.clone());
                     }
                 }
                 Item::ImplTrait(i) => {
@@ -243,7 +247,8 @@ impl TypeChecker {
                             .insert(unqualified.clone(), ret_ty.clone());
                         self.fn_return_types.insert(qualified.clone(), ret_ty);
                         self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified, param_tys);
+                        self.fn_param_types.insert(qualified.clone(), param_tys);
+                        self.fn_defs.insert(qualified, method.clone());
                     }
                 }
                 _ => {}

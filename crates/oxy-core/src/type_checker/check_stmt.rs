@@ -216,6 +216,7 @@ impl TypeChecker {
             Stmt::Item(_) => Ok(()),
             Stmt::Use(use_def) => {
                 let base_path = use_def.path.join("::");
+                self.check_path_visible(&base_path, use_def.span)?;
                 match &use_def.tree {
                     UseTree::Simple(alias) => {
                         let local_name = alias
@@ -228,6 +229,7 @@ impl TypeChecker {
                         for (name, alias) in items {
                             let local_name = alias.as_ref().unwrap_or(name);
                             let qualified = format!("{}::{}", base_path, name);
+                            self.check_path_visible(&qualified, use_def.span)?;
                             self.use_aliases.insert(local_name.clone(), qualified);
                         }
                     }
