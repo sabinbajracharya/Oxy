@@ -145,7 +145,11 @@ Each gets a proper root-cause trace (read failing `.ox` → trace ir_gen → tra
 
 ---
 
-### Cluster 9 — Tuple structs (constructor + field access) *(NEW — diagnosed)*
+### ~~Cluster 9 — Tuple structs (constructor + field access)~~ — DONE (`05e7d53`)
+
+**Fix:** ir_gen now collects tuple-struct names + arity (top-level by short name, module items by `prefix::Name`, mirroring `variant_to_enum`) and lowers a matching `Expr::Call` to `oxy_struct_init` with positional field names `"0".."n-1"`. Named-field structs unchanged. Cleared `operator_overloading::test_div_operator`/`test_rem_operator`, `trait_def::test_multiple_trait_methods`. feature_examples 76→73, vm_tests unchanged (107), no regressions. The remaining `struct_basics::test_struct_field_mutation` / `struct_field_types::test_struct_field_mut_assign_ok` failures are a separate field-mutation bug, not tuple structs.
+
+#### Original diagnosis (kept for reference)
 
 **Symptom:** `Num(int)` / `WrappedInt(int)` tuple structs: constructing `Num(10)` then accessing `a.0` returns `Unit` — reproduces at top level, in one minimal function (not cross-function).
 
