@@ -6,6 +6,10 @@
 
 **Progress:**
 - ✅ **Cluster 1 done** (commit `26d33f5`): bool/unit register tagging. `feature_examples` 129 → **94**; `vm_tests` 113 → **107**; no regressions; clippy clean.
+- ✅ **Cluster 3 done** (commit `a1f8832`): generic-impl method **name resolution** — methods in `impl<T> Cell<T>` / `impl Pair<int>` were registered under `Cell<T>::make` but resolved by base name `Cell::make`. Fixed via `base_type_name()` in IR + type checker. `feature_examples` 94 → **87**; no regressions.
+  - Investigation revealed the rest of the original "Cluster 3" list is **two distinct root causes**, now split out below as Clusters 9 & 10:
+    - **Tuple structs broken** (Cluster 9): `Num(int)` constructor calls aren't lowered to struct construction, so `.0` access returns `Unit`. Blocks `trait_def::test_multiple_trait_methods`, `operator_overloading::test_div_operator`/`test_rem_operator`, `traits::test_generic_struct_method` (partly), etc.
+    - **Generic-fn monomorphization** (Cluster 10): `T::zero()` inside `fn make_zero<T>()` is mis-lowered as an enum-variant constructor `T::zero` instead of resolving `T` to the turbofish concrete type. Blocks all `monomorphization::*` and `trait_bounds_static::test_trait_static_method_bound`.
 
 > Note: there are also pre-existing failures outside `feature_examples` to drive to green for full end-to-end: `vm_tests` (107) and `leetcode_solutions` (1). These share the same root-cause clusters below.
 
@@ -73,7 +77,7 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 3 — Generic / trait method name resolution *(HIGH impact, diagnosed)*
+### ✅ Cluster 3 — Generic / trait method name resolution — DONE (commit `a1f8832`)
 
 **Symptom:** concrete inherent methods work (`Point::sum` → 7), but generic-impl / trait methods return `Unit`.
 
@@ -85,11 +89,9 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 4 — Operator overloading `div` / `rem` dispatch *(LOW count)*
+### ~~Cluster 4 — Operator overloading `div` / `rem`~~ — RESOLVED AS Cluster 9
 
-**Symptom:** `operator_overloading::test_div_operator`, `test_rem_operator` return `Unit` (other operators were wired in commit `08686a1`).
-
-**Action:** confirm whether this is the same base-name lookup miss as Cluster 3 (likely fixed by Cluster 3 if the struct is generic) **or** a genuine gap where `oxy_div`/`oxy_mod` don't dispatch to a user-defined `Div::div`/`Rem::rem` impl the way `oxy_add`/`oxy_mul` do. If the latter: wire `div`/`rem` through `lookup_op_method` in `ffi.rs` exactly like the already-working operators. Re-check after Cluster 3.
+**Finding:** not an operator-wiring gap. `operator_overloading` uses tuple structs (`WrappedInt(int)`); the `Unit` comes from broken tuple-struct construction / `.0` access (Cluster 9), not from `div`/`rem` dispatch. The `binary_op!` macro already routes `div`→`"div"`/`rem`→`"rem"` to `lookup_op_method`. Will clear once Cluster 9 lands.
 
 ---
 
@@ -146,6 +148,26 @@ Re-run the suite; the remaining set will be much smaller. Expected residual cand
 Each gets a proper root-cause trace (read failing `.ox` → trace ir_gen → trace codegen → check FFI), no per-test hacks.
 
 ---
+
+### Cluster 9 — Tuple structs (constructor + field access) *(NEW — diagnosed)*
+
+**Symptom:** `Num(int)` / `WrappedInt(int)` tuple structs: constructing `Num(10)` then accessing `a.0` returns `Unit` — reproduces at top level, in one minimal function (not cross-function).
+
+**Root cause (diagnosed):** ir_gen `Expr::Call` (`ir_gen/mod.rs` ~L799–915) recognizes enum-variant constructors and `spawn`/`sleep`/`select`, then falls through to the named-function call path (`oxy_push_named_fn` → `oxy_call_closure`). A tuple-struct constructor call `Num(10)` is **not** recognized, so no `Value::Struct` is built; `a` ends up `Unit` and `a.0` (via `oxy_field_access`, which reads `fields.get("0")`) returns `Unit`. Named-field structs work because they use `Expr::StructInit` → `oxy_struct_init`.
+
+**Fix direction:** teach ir_gen to recognize a call whose callee is a known tuple-struct name and lower it to a struct construction (build `Value::Struct{ name, fields: {"0":…, "1":…} }`, matching what `oxy_field_access`/`oxy_field_store` expect). ir_gen needs the set of tuple-struct names+arity (collected from struct defs, like `variant_to_enum` is for enum variants). Verify the type checker already accepts `Name(args)` for tuple structs (it must, since these reach runtime).
+
+**Verification:** `trait_def::test_multiple_trait_methods`, `operator_overloading::test_div_operator`/`test_rem_operator`, `traits::test_generic_struct_method`, and any other tuple-struct (`Name(T)`) usage.
+
+### Cluster 10 — Generic-function monomorphization (`T::method()`) *(NEW — diagnosed)*
+
+**Symptom:** `monomorphization::*` and `trait_bounds_static::test_trait_static_method_bound` return `EnumVariant { enum_name: "T", variant: "zero" }` where a value (e.g. `I64(0)`) is expected.
+
+**Root cause (diagnosed):** inside `fn make_zero<T: Zero>() { T::zero() }`, the path call `T::zero()` is lowered as an **enum-variant constructor** `T::zero` rather than resolving the type parameter `T` to the turbofish-supplied concrete type (`make_zero::<int>()` → `int::zero()`). Needs turbofish-driven type substitution at generic-function call sites so `T::method` dispatches to `Concrete::method`.
+
+**Fix direction:** propagate turbofish/inferred type args into the generic function body's `T::…` path resolution (monomorphize, or pass a type-binding so `T::zero` resolves to `int::zero` at the call). Larger than Clusters 1/3 — likely its own focused effort.
+
+**Verification:** `monomorphization::*`, `trait_bounds_static::test_trait_static_method_bound`.
 
 ## Closeout
 
