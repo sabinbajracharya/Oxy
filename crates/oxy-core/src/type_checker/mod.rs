@@ -433,6 +433,10 @@ pub struct TypeChecker {
     module_vis: HashMap<String, Visibility>,
     /// Re-export aliases: module::local_name → source_path (from `pub use` inside modules).
     reexports: HashMap<String, String>,
+    /// Modules brought into scope via `use module::*`. A bare call that resolves
+    /// to `module::name` through a glob is visibility-checked like any other
+    /// path, so a glob can't smuggle in a private item.
+    glob_imports: Vec<String>,
 }
 
 impl TypeChecker {
@@ -454,6 +458,7 @@ impl TypeChecker {
             fn_defs: HashMap::new(),
             module_vis: HashMap::new(),
             reexports: HashMap::new(),
+            glob_imports: Vec::new(),
         }
     }
 }

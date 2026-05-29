@@ -127,15 +127,25 @@ impl TypeChecker {
         } else {
             ret_ty.clone()
         };
+        // Register the function's type under the same key `collect_fn_types`
+        // uses. A free function inside a module must be keyed by its qualified
+        // name (`secret::hidden`), NOT its bare name — otherwise a private
+        // module function leaks into the global bare-name namespace and a call
+        // site resolves it without a visibility check. Methods (current_impl_type
+        // set) keep the bare name, matching collect's unqualified registration.
+        let fn_key = if self.current_impl_type.is_none() && !self.module_stack.is_empty() {
+            format!("{}::{}", self.module_stack.join("::"), f.name)
+        } else {
+            f.name.clone()
+        };
         self.fn_return_types
-            .insert(f.name.clone(), stored_ret_ty.clone());
+            .insert(fn_key.clone(), stored_ret_ty.clone());
         let param_tys = self.resolve_param_types(f, &impl_generics);
         // Validate every declared param type for unknown names.
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
             self.validate_type_known(p_ty, param.span)?;
         }
-        self.fn_param_types
-            .insert(f.name.clone(), param_tys.clone());
+        self.fn_param_types.insert(fn_key, param_tys.clone());
 
         let fn_env = TypeEnv::child(&self.env);
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {

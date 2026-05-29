@@ -234,7 +234,10 @@ impl TypeChecker {
                         }
                     }
                     UseTree::Glob => {
-                        // Glob entries are resolved by the compiler
+                        // Record the module so bare calls resolving through the
+                        // glob get a visibility check (a glob must not import
+                        // private items).
+                        self.glob_imports.push(base_path.clone());
                     }
                 }
                 Ok(())

@@ -500,6 +500,19 @@ impl TypeChecker {
                     } else {
                         None
                     };
+                    // Fall back to glob imports: a bare `name` may have come from
+                    // a `use module::*`. Resolve it to `module::name` so the
+                    // visibility check below rejects a private glob item.
+                    let resolved_key = resolved_key.or_else(|| {
+                        if name.contains("::") {
+                            return None;
+                        }
+                        self.glob_imports.iter().rev().find_map(|m| {
+                            let q = format!("{m}::{name}");
+                            (self.fn_defs.contains_key(&q) || self.fn_return_types.contains_key(&q))
+                                .then_some(q)
+                        })
+                    });
                     if let Some(key) = resolved_key {
                         self.check_path_visible(&key, *span)?;
                         let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
