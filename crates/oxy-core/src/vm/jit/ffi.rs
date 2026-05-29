@@ -2228,6 +2228,29 @@ extern "C" fn oxy_const_enum_variant(
     }
 }
 
+/// Resolve a module-level constant path (e.g. `math::PI`, `std::math::PI`) to
+/// its value. Errors if the path doesn't name a known module constant.
+extern "C" fn oxy_module_const(ctx: *mut JitContext, path_ptr: *const u8, path_len: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let path = unsafe {
+        let slice = std::slice::from_raw_parts(path_ptr, path_len);
+        String::from_utf8_lossy(slice).into_owned()
+    };
+    let segments: Vec<&str> = path.split("::").collect();
+    let lookup = match segments.as_slice() {
+        [module, name] => crate::stdlib::registry::lookup_constant(module, name),
+        ["std", module, name] => crate::stdlib::registry::lookup_constant(module, name),
+        _ => None,
+    };
+    match lookup {
+        Some(val) => unsafe { push(ctx, val) },
+        None => {
+            set_error(ctx, format!("unknown constant: {path}"));
+            unsafe { push(ctx, Value::Unit) };
+        }
+    }
+}
+
 // ── PathCall builtins ─────────────────────────────────────────────────
 
 extern "C" fn oxy_path_call_builtin(
@@ -2693,6 +2716,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_enum_variant_equal", oxy_enum_variant_equal as _),
         ("oxy_make_enum_variant", oxy_make_enum_variant as _),
         ("oxy_const_enum_variant", oxy_const_enum_variant as _),
+        ("oxy_module_const", oxy_module_const as _),
         ("oxy_path_call_builtin", oxy_path_call_builtin as _),
         ("oxy_display_arg", oxy_display_arg as _),
         ("oxy_await_ffi", oxy_await_ffi as _),

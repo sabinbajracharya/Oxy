@@ -59,6 +59,15 @@ pub fn lookup_module(name: &str) -> Option<ModuleCall> {
     MODULES.iter().find(|m| m.name == name).map(|m| m.call)
 }
 
+/// Look up a module-level constant such as `math::PI`. Returns the value if the
+/// named module exposes a constant of that name.
+pub fn lookup_constant(module: &str, name: &str) -> Option<Value> {
+    match module {
+        "math" => crate::stdlib::math::constant(name),
+        _ => None,
+    }
+}
+
 /// Look up an item by path.
 ///
 /// Tries an exact match first. On a miss, retries against the trailing

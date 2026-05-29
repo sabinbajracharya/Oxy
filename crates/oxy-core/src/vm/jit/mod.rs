@@ -182,6 +182,11 @@ fn ffi_decls() -> Vec<FfiDecl> {
             None,
         ),
         (
+            "oxy_module_const",
+            &[types::I64, types::I64, types::I64],
+            None,
+        ),
+        (
             "oxy_struct_update",
             &[types::I64, types::I64, types::I64, types::I64],
             None,

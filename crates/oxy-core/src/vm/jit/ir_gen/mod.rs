@@ -1607,28 +1607,52 @@ impl IrGen {
                 ..
             } => self.gen_closure(params, body, *is_async, false),
             Expr::Path { segments, .. } => {
-                // Unit enum variant: Color::Red, or module::Color::Red.
-                // Resolve self/super/crate, then join all but the last segment
-                // as the enum name.
+                // A multi-segment path is a unit enum variant (Color::Red,
+                // module::Color::Red) only when its last segment is a known
+                // variant of the named enum. Otherwise it's a module-level
+                // constant such as `math::PI` — route those to oxy_module_const
+                // rather than fabricating a bogus enum variant.
                 let resolved = self.resolve_module_path(segments);
                 let variant = resolved.last().cloned().unwrap_or_default();
-                let enum_name = if resolved.len() > 1 {
-                    resolved[..resolved.len() - 1].join("::")
+                let r = self.alloc_reg();
+                if resolved.len() > 1 {
+                    let enum_name = resolved[..resolved.len() - 1].join("::");
+                    let is_enum_variant = self
+                        .variant_to_enum
+                        .get(&variant)
+                        .map_or(false, |e| e == &enum_name);
+                    if is_enum_variant {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_const_enum_variant",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![enum_name, variant],
+                        });
+                    } else {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_module_const",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![resolved.join("::")],
+                        });
+                    }
                 } else {
-                    // Resolve single-segment variants via the enum map.
-                    self.variant_to_enum
+                    // Single-segment variant resolved via the enum map.
+                    let enum_name = self
+                        .variant_to_enum
                         .get(&variant)
                         .cloned()
-                        .unwrap_or_default()
-                };
-                let r = self.alloc_reg();
-                self.emit(IrOp::CallBuiltin {
-                    result: r,
-                    func: "oxy_const_enum_variant",
-                    args: vec![],
-                    immediates: vec![],
-                    strings: vec![enum_name, variant],
-                });
+                        .unwrap_or_default();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_const_enum_variant",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![enum_name, variant],
+                    });
+                }
                 r
             }
             Expr::SelfRef(..) => {
