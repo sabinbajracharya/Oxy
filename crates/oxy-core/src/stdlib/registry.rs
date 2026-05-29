@@ -59,9 +59,31 @@ pub fn lookup_module(name: &str) -> Option<ModuleCall> {
     MODULES.iter().find(|m| m.name == name).map(|m| m.call)
 }
 
-/// Look up an item by exact path.
+/// Look up an item by path.
+///
+/// Tries an exact match first. On a miss, retries against the trailing
+/// `Type::method` segments: a `use`-resolved path such as
+/// `std::collections::HashMap::new` canonicalizes to the registered short form
+/// `HashMap::new`. The std-module prefix is just the import path — the
+/// `[TypeName, method]` tail is what identifies the associated function.
+///
+/// The fallback only fires for paths longer than two segments, so it never
+/// shadows a bare item, and the registered 2-segment items are all reserved
+/// CamelCase builtin type names (`HashMap`, `String`, `Regex`, …) that a user
+/// cannot redefine — so the tail match can't collide with a user module.
 pub fn lookup_item(path: &[&str]) -> Option<ItemHandler> {
-    ITEMS.iter().find(|i| i.path == path).map(|i| i.handler)
+    if let Some(handler) = ITEMS.iter().find(|i| i.path == path).map(|i| i.handler) {
+        return Some(handler);
+    }
+    // Flatten each segment on `::` — a `use`-resolved segment can itself be a
+    // qualified name (e.g. `"std::collections::HashMap"`) — then retry against
+    // the trailing `Type::method` pair.
+    let flat: Vec<&str> = path.iter().flat_map(|s| s.split("::")).collect();
+    if flat.len() > 2 {
+        let tail = &flat[flat.len() - 2..];
+        return ITEMS.iter().find(|i| i.path == tail).map(|i| i.handler);
+    }
+    None
 }
 
 /// True iff `path` is a built-in: either `[module, _]` / `[std, module, _]`
@@ -198,10 +220,6 @@ static ITEMS: &[Item] = &[
     },
     Item {
         path: &["Regex", "new"],
-        handler: regex_new,
-    },
-    Item {
-        path: &["std", "regex", "Regex", "new"],
         handler: regex_new,
     },
     Item {
