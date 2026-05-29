@@ -667,6 +667,18 @@ impl CalleeFrame {
 
         // Push result onto caller's operand stack
         let result = std::mem::replace(&mut ctx.result, Value::Unit);
+        // The error flag is intra-function plumbing for `?`: set by oxy_try_pop,
+        // consumed by the very next CheckError in the SAME function. A `?`
+        // short-circuit signals via set_error with an EMPTY message; once we've
+        // materialized the Err/None onto the caller's stack as an ordinary
+        // Result/Option value, that signal has done its job and must be cleared
+        // — otherwise the caller's next CheckError fires spuriously (a leaked
+        // flag from one call would short-circuit the following call). A real
+        // runtime error carries a non-empty message and is left set so it
+        // bubbles up to the top-level call_fn.
+        if ctx.error_len == 1 && ctx.error_msg[0] == 0 {
+            ctx.error_len = 0;
+        }
         ctx.local_count = saved_local_count;
         ctx.sp = result_sp;
         push(ctx, result);
