@@ -81,6 +81,10 @@ pub(crate) struct IrGen {
     /// one (e.g. `let t = Thing;`) constructs an empty `Value::Struct` rather
     /// than a function reference.
     unit_structs: std::collections::HashSet<String>,
+    /// Qualified names of all free / module functions, collected before body
+    /// lowering. Lets a call site qualify a bare callee with the current module
+    /// prefix (sibling call) only when such a function actually exists.
+    fn_names: std::collections::HashSet<String>,
 }
 
 impl IrGen {
@@ -123,6 +127,7 @@ impl IrGen {
             type_subst: std::collections::HashMap::new(),
             mono_emitted: std::collections::HashSet::new(),
             unit_structs: std::collections::HashSet::new(),
+            fn_names: std::collections::HashSet::new(),
         }
     }
 
@@ -495,6 +500,24 @@ impl IrGen {
         current
     }
 
+    /// Resolve a bare identifier naming a function (callee or value reference) to
+    /// the function's compiled name. Precedence: explicit `use` alias, then a
+    /// sibling function in the current module (`prefix::name`) when one exists,
+    /// then the bare name — each finally run through the re-export alias chain.
+    /// The module-qualification step is what makes an unqualified sibling call
+    /// inside a module (`private_fn()` within `mod api`) reach `api::private_fn`
+    /// without breaking calls to top-level functions from inside a module.
+    fn resolve_callable_name(&self, name: &str) -> String {
+        if let Some(alias) = self.use_aliases.get(name) {
+            return self.resolve_fn_alias(alias);
+        }
+        let qualified = self.resolve_module_path(&[name.to_string()]).join("::");
+        if qualified != name && self.fn_names.contains(&qualified) {
+            return self.resolve_fn_alias(&qualified);
+        }
+        self.resolve_fn_alias(name)
+    }
+
     /// Resolve an enum-variant reference written in a pattern (e.g. `Color::Red`,
     /// parsed with `enum_name = "Color"`) to the fully-qualified enum identity
     /// the value was constructed with (e.g. `"colors::Color"`). Equality in
@@ -574,14 +597,17 @@ impl IrGen {
     fn register_generic_fns(&mut self, items: &[Item], prefix: &str) {
         for item in items {
             match item {
-                Item::Function(f) if !f.generic_params.is_empty() => {
+                Item::Function(f) => {
                     let qualified = if prefix.is_empty() {
                         f.name.clone()
                     } else {
                         format!("{prefix}::{}", f.name)
                     };
-                    self.generic_fns
-                        .insert(qualified, (f.clone(), prefix.to_string()));
+                    self.fn_names.insert(qualified.clone());
+                    if !f.generic_params.is_empty() {
+                        self.generic_fns
+                            .insert(qualified, (f.clone(), prefix.to_string()));
+                    }
                 }
                 Item::Module(m) => {
                     if let Some(ref body) = m.body {
@@ -1010,8 +1036,7 @@ impl IrGen {
                     // so resolve it the same way the Call path does and build a
                     // `Value::Function` via `oxy_push_named_fn` so it can be
                     // invoked through the unified `oxy_call_closure` path.
-                    let resolved = self.use_aliases.get(name).cloned().unwrap_or(name.clone());
-                    let resolved = self.resolve_fn_alias(&resolved);
+                    let resolved = self.resolve_callable_name(name);
                     let r = self.alloc_reg();
                     self.emit(IrOp::CallBuiltin {
                         result: r,
@@ -1077,10 +1102,7 @@ impl IrGen {
                 // oxy_call_closure path regardless of whether the callee is a
                 // named function, closure, or parameter.
                 let fname = match callee.as_ref() {
-                    Expr::Ident(name, ..) => {
-                        let resolved = self.use_aliases.get(name).cloned().unwrap_or(name.clone());
-                        self.resolve_fn_alias(&resolved)
-                    }
+                    Expr::Ident(name, ..) => self.resolve_callable_name(name),
                     Expr::Path { segments, .. } => {
                         let resolved = self.resolve_module_path(segments);
                         self.resolve_fn_alias(&resolved.join("::"))
