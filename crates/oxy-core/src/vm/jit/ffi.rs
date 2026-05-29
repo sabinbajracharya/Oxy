@@ -2265,7 +2265,12 @@ extern "C" fn oxy_path_call_builtin(
     if let Some(fn_idx) = tables.name_to_index(&fn_name) {
         if let Some(fn_ptr) = tables.fn_ptr(fn_idx) {
             let local_count = tables.local_count(fn_idx);
-            for a in args.into_iter().rev() {
+            // Re-push args in their original order. `invoke_jit_fn` maps the
+            // operand stack to callee locals as frame[i] = stack[bottom + i],
+            // so arg0 must be pushed first (ending up at the bottom of the
+            // arg window). Reversing here swaps the parameters — invisible for
+            // commutative ops and single-arg calls, wrong for everything else.
+            for a in args {
                 unsafe {
                     push(ctx, a);
                 }

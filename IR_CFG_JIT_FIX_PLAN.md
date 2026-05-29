@@ -123,11 +123,15 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 7 — Modules / visibility *(NEEDS INVESTIGATION)*
+### Cluster 7 — Modules / visibility *(major root cause FIXED — arg reversal)*
 
 **Tests:** `modules::*` (incl. `test_module_pub_fn` showing a **sign bug** `left: I64(-6), right: I64(6)`, `test_pub_crate`, `test_enum_in_module`, `test_enum_via_use`, `test_field_visibility_pub`, `test_module_pub_fn`), `visibility::*`, `file_modules::*`, `field_visibility::*`, `private_use_call::test_private_fn_via_glob`, `pub_modifiers::test_pub_crate_from_sibling_module`, `basic::test_enum_in_module`, `basic::test_struct_via_qualified_path`.
 
-**Action:** investigate after Clusters 1–3 (some may already flip). Likely sub-causes: qualified-path call resolution in ir_gen (the `-6` vs `6` sign bug suggests a wrong-function or wrong-arg dispatch), `use`-alias resolution, and `pub(crate)`/field-visibility enforcement paths. Trace `Expr::PathCall`/`Expr::Path` lowering and `check_path_visible`/`is_visible`.
+**✅ Root cause (the big one):** `oxy_path_call_builtin`'s user-function branch (`ffi.rs`) re-pushed the call args onto the operand stack with `.rev()` before `invoke_jit_fn`. `invoke_jit_fn` maps the operand stack to callee locals as `frame[i] = stack[bottom + i]`, so args must be pushed in **forward** order; the `.rev()` swapped every parameter. This corrupted *every* qualified-path call into a user module function (`mod::fn(a, b, …)`). It hid in plain sight because the only passing qualified-path call was `calculator::add` (commutative: `4+3 == 3+4`) and single-arg calls. The `-6` vs `6` sign bug was the giveaway — a module fn computing `a - b` received `(b, a)`. Fixed by re-pushing in original order.
+
+**Result:** feature_examples 59→51 (−8), vm_tests 107→104 (−3), no regressions. Cleared `field_visibility::*` entirely, plus several `modules`/`file_modules`/`visibility`/`basic` cases.
+
+**Still open (separate roots):** `basic::test_enum_in_module` / `modules::test_enum_in_module` / `test_enum_via_use` (enum-in-module variant identity — a constructed `Color::Red` vs a module-qualified match pattern), `private_use_call::test_private_fn_via_glob` and `pub_modifiers` / `visibility` (visibility enforcement, `check_path_visible`/`is_visible`). Investigate these next.
 
 ---
 
