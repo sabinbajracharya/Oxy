@@ -407,6 +407,30 @@ fn spill_result(
     reg_slot.insert(reg, slot);
 }
 
+/// Materialize an I8 boolean CLIF value as a tagged `Value::Bool` in a slot.
+///
+/// Registers in `regs` hold raw, untyped i64; `push_reg` blindly tags those as
+/// `Value::I64`. Booleans must instead round-trip through the operand stack as a
+/// tagged `Value::Bool` and be spilled into a slot — mirroring how `ConstFloat`/
+/// `ConstChar`/`ConstString` materialize their tagged values. This keeps bool
+/// identity intact when the register is later loaded (for `to_string`, `assert_eq`,
+/// stored locals, fn args, etc.). Branch terminators read such slots via
+/// `oxy_read_local_i64`, which already maps `Value::Bool` to its truthiness.
+fn spill_bool(
+    builder: &mut FunctionBuilder,
+    ctx: cranelift_codegen::ir::Value,
+    ffi_refs: &HashMap<String, cranelift_codegen::ir::FuncRef>,
+    bool_i8: cranelift_codegen::ir::Value,
+    reg: Reg,
+    reg_slot: &mut HashMap<Reg, usize>,
+    next_spill_slot: &mut usize,
+) {
+    if let Some(push) = ffi_refs.get("oxy_push_bool") {
+        builder.ins().call(*push, &[ctx, bool_i8]);
+    }
+    spill_result(builder, ctx, ffi_refs, reg, reg_slot, next_spill_slot);
+}
+
 fn push_reg(
     builder: &mut FunctionBuilder,
     ctx: cranelift_codegen::ir::Value,
@@ -519,10 +543,17 @@ fn compile_op(
             regs.insert(*r, builder.ins().iconst(types::I64, *n));
         }
         IrOp::ConstBool(r, b) => {
-            regs.insert(*r, builder.ins().iconst(types::I64, *b as i64));
+            if let Some(push) = ffi_refs.get("oxy_push_bool") {
+                let v = builder.ins().iconst(types::I8, *b as i64);
+                builder.ins().call(*push, &[ctx, v]);
+            }
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::ConstUnit(r) => {
-            regs.insert(*r, builder.ins().iconst(types::I64, 0));
+            if let Some(push) = ffi_refs.get("oxy_push_unit") {
+                builder.ins().call(*push, &[ctx]);
+            }
+            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
         IrOp::Add(r, a, b) => {
             call_ffi_binary(builder, ctx, ffi_refs, "oxy_add", *a, *b, regs, reg_slot);
@@ -547,7 +578,7 @@ fn compile_op(
         IrOp::Eq(r, a, b) => {
             if regs.contains_key(a) && regs.contains_key(b) {
                 let c = builder.ins().icmp(IntCC::Equal, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_eq", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -556,7 +587,7 @@ fn compile_op(
         IrOp::Neq(r, a, b) => {
             if regs.contains_key(a) && regs.contains_key(b) {
                 let c = builder.ins().icmp(IntCC::NotEqual, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_neq", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -565,7 +596,7 @@ fn compile_op(
         IrOp::Lt(r, a, b) => {
             if regs.contains_key(a) && regs.contains_key(b) {
                 let c = builder.ins().icmp(IntCC::SignedLessThan, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_lt", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -576,7 +607,7 @@ fn compile_op(
                 let c = builder
                     .ins()
                     .icmp(IntCC::SignedGreaterThan, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_gt", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -587,7 +618,7 @@ fn compile_op(
                 let c = builder
                     .ins()
                     .icmp(IntCC::SignedLessThanOrEqual, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_le", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
@@ -598,14 +629,21 @@ fn compile_op(
                 let c = builder
                     .ins()
                     .icmp(IntCC::SignedGreaterThanOrEqual, regs[a], regs[b]);
-                regs.insert(*r, builder.ins().uextend(types::I64, c));
+                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
             } else {
                 call_ffi_binary(builder, ctx, ffi_refs, "oxy_ge", *a, *b, regs, reg_slot);
                 spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
             }
         }
         IrOp::Copy(r, a) => {
-            regs.insert(*r, regs[a]);
+            // The source may be a raw-i64 register (ConstInt) or a spilled,
+            // tagged value (ConstBool/ConstUnit/comparison result now live in a
+            // slot). Copy whichever representation the source actually uses.
+            if let Some(v) = regs.get(a).copied() {
+                regs.insert(*r, v);
+            } else if let Some(slot) = reg_slot.get(a).copied() {
+                reg_slot.insert(*r, slot);
+            }
         }
         IrOp::Phi(r, a, _) => {
             regs.insert(*r, regs[a]);
