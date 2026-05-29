@@ -1412,6 +1412,18 @@ impl IrGen {
                     _ => path.clone(),
                 };
                 let resolved_path = self.resolve_module_path(&path);
+                // A path call from inside a module to a *sibling* top-level
+                // module (e.g. `crate_lib::get_value()` from within `other_mod`)
+                // must not get the current module prefix prepended. If
+                // module-prefixing produced an unknown function but the path as
+                // written names a known one, use the written path instead.
+                let final_segments = if self.fn_names.contains(&resolved_path.join("::")) {
+                    resolved_path
+                } else if self.fn_names.contains(&path.join("::")) {
+                    path.clone()
+                } else {
+                    resolved_path
+                };
                 let mut arg_regs = Vec::new();
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
@@ -1422,7 +1434,7 @@ impl IrGen {
                     func: "oxy_path_call_builtin",
                     args: arg_regs,
                     immediates: vec![args.len()],
-                    strings: vec![resolved_path.join("\0")],
+                    strings: vec![final_segments.join("\0")],
                 });
                 r
             }
