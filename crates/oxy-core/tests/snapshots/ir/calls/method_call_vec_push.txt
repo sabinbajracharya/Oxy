@@ -1,0 +1,14 @@
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = call @oxy_path_call_builtin() imm[0] str["Vec\0new"]
+    store.local $0, v0
+    v1 = load.local.raw $0
+    v2 = const.int 1
+    v3 = call @oxy_method_call(v1, v2) imm[1] str["push"]
+    v4 = load.local.raw $0
+    v5 = const.int 2
+    v6 = call @oxy_method_call(v4, v5) imm[1] str["push"]
+    v7 = const.unit
+    ret v7
+}

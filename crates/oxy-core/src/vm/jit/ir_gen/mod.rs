@@ -507,10 +507,15 @@ impl IrGen {
         self.current.entry = entry;
         self.start_block(entry);
 
-        // Allocate locals for params
+        // Allocate locals for params and record explicit metadata on IrFunction.
         for param in &f.params {
             self.alloc_local(&param.name);
         }
+        self.current.params = f
+            .params
+            .iter()
+            .map(|p| (p.name.clone(), Self::type_ann_to_type_info(&p.type_ann)))
+            .collect();
 
         // Generate body
         let result_reg = self.gen_block_stmts(&f.body);
@@ -2522,10 +2527,21 @@ impl IrGen {
         for name in &capture_names {
             self.alloc_local(name);
         }
-        // Allocate locals for params
+        // Allocate locals for params and record explicit metadata on IrFunction.
         for p in params {
             self.alloc_local(&p.name);
         }
+        self.current.params = params
+            .iter()
+            .map(|p| {
+                let ty = p
+                    .type_ann
+                    .as_ref()
+                    .map(Self::type_ann_to_type_info)
+                    .unwrap_or(TypeInfo::Unknown);
+                (p.name.clone(), ty)
+            })
+            .collect();
 
         let result_reg = self.gen_expr(body);
         if !matches!(

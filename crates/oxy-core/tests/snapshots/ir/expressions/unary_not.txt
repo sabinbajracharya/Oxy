@@ -1,0 +1,9 @@
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.bool true
+    v1 = not v0
+    store.local $0, v1
+    v2 = const.unit
+    ret v2
+}

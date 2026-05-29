@@ -1,0 +1,27 @@
+fn main() -> () {
+  locals: 3
+  bb0(entry):
+    v0 = const.int 0
+    store.local $0, v0
+    v1 = const.int 0
+    v2 = const.int 5
+    v3 = call @oxy_make_range(v1, v2) imm[0]
+    v4 = call @oxy_make_iter(v3)
+    store.local $2, v4
+    jump bb1
+
+  bb1(preds: bb0, bb3):
+    v5 = call @oxy_iter_next() imm[2, 1]
+    branch v5 -> bb3, bb2
+
+  bb2(preds: bb1):
+    v6 = const.unit
+    ret v6
+
+  bb3(preds: bb1):
+    v7 = load.local $0
+    v8 = load.local $1
+    v9 = add v7, v8
+    store.local $0, v9
+    jump bb1
+}

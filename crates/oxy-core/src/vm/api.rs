@@ -272,6 +272,26 @@ pub fn run_tests_with_options(
     run_tests_jit_with_options(path, source, externs)
 }
 
+/// Compile `source` through parse → type-check → ir_gen and return the
+/// canonical serialized IR snapshot string. Does NOT run codegen or the JIT.
+///
+/// Useful for golden/snapshot tests that verify IR shape before
+/// any Cranelift lowering happens.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gen_ir_snapshot(source: &str) -> Result<String, String> {
+    let mut program = crate::parser::parse(source).map_err(|e| e.to_string())?;
+    super::jit::expand_derives(&mut program);
+    crate::type_checker::TypeChecker::new()
+        .check_program(&program)
+        .map_err(|e| e.to_string())?;
+
+    let mut ir = super::jit::ir_gen::IrGen::new();
+    ir.gen_program(&program);
+    let functions = std::mem::take(&mut ir.functions);
+
+    Ok(super::jit::ir_snapshot::serialize_program(&functions))
+}
+
 /// Return all type names that have built-in method dispatch.
 /// Used by symbol consistency tests to ensure `symbols.rs` stays in sync.
 /// **Must** be updated when a new `Value` variant receives a dispatch arm in

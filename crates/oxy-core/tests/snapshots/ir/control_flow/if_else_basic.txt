@@ -1,0 +1,25 @@
+fn main() -> () {
+  locals: 2
+  bb0(entry):
+    v0 = const.bool true
+    branch v0 -> bb2, bb1
+
+  bb1(preds: bb0):
+    v1 = const.int 2
+    jump bb3
+
+  bb2(preds: bb0):
+    v2 = const.int 1
+    jump bb3
+
+  bb3(preds: bb1, bb2):
+    v3 = phi v2, v1
+    store.local $1, v3
+    jump bb4
+
+  bb4(preds: bb3):
+    v4 = load.local $1
+    store.local $0, v4
+    v5 = const.unit
+    ret v5
+}
