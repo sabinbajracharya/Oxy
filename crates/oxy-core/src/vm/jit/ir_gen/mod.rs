@@ -77,6 +77,10 @@ pub(crate) struct IrGen {
     type_subst: std::collections::HashMap<String, String>,
     /// Monomorphized instance names already emitted, for deduplication.
     mono_emitted: std::collections::HashSet<String>,
+    /// Qualified names of unit structs (`struct Thing;`). A bare reference to
+    /// one (e.g. `let t = Thing;`) constructs an empty `Value::Struct` rather
+    /// than a function reference.
+    unit_structs: std::collections::HashSet<String>,
 }
 
 impl IrGen {
@@ -118,6 +122,7 @@ impl IrGen {
             generic_fns: std::collections::HashMap::new(),
             type_subst: std::collections::HashMap::new(),
             mono_emitted: std::collections::HashSet::new(),
+            unit_structs: std::collections::HashSet::new(),
         }
     }
 
@@ -330,11 +335,15 @@ impl IrGen {
                     }
                 }
                 Item::Enum(e) => self.register_enum(e),
-                Item::Struct(s) => {
-                    if let crate::ast::StructKind::Tuple(types) = &s.kind {
+                Item::Struct(s) => match &s.kind {
+                    crate::ast::StructKind::Tuple(types) => {
                         self.tuple_structs.insert(s.name.clone(), types.len());
                     }
-                }
+                    crate::ast::StructKind::Unit => {
+                        self.unit_structs.insert(s.name.clone());
+                    }
+                    crate::ast::StructKind::Named(_) => {}
+                },
                 // Other type items don't generate IR directly
                 _ => {}
             }
@@ -436,11 +445,17 @@ impl IrGen {
                     self.global_consts.insert(name.clone(), value.clone());
                 }
                 Item::Struct(s) => {
-                    if let crate::ast::StructKind::Tuple(types) = &s.kind {
-                        // Qualified key matches the name produced by
-                        // resolve_module_path at in-module call sites.
-                        let full_name = format!("{prefix}::{}", s.name);
-                        self.tuple_structs.insert(full_name, types.len());
+                    // Qualified key matches the name produced by
+                    // resolve_module_path at in-module reference sites.
+                    let full_name = format!("{prefix}::{}", s.name);
+                    match &s.kind {
+                        crate::ast::StructKind::Tuple(types) => {
+                            self.tuple_structs.insert(full_name, types.len());
+                        }
+                        crate::ast::StructKind::Unit => {
+                            self.unit_structs.insert(full_name);
+                        }
+                        crate::ast::StructKind::Named(_) => {}
                     }
                 }
                 _ => {}
@@ -968,6 +983,23 @@ impl IrGen {
                         args: vec![],
                         immediates: vec![],
                         strings: vec![enum_name, name.clone()],
+                    });
+                    r
+                } else if self
+                    .unit_structs
+                    .contains(&self.resolve_module_path(&[name.clone()]).join("::"))
+                {
+                    // A bare reference to a unit struct (`struct Thing;` then
+                    // `let t = Thing;`) constructs an empty struct value so
+                    // method dispatch (`t.method()`) resolves against `Thing`.
+                    let resolved = self.resolve_module_path(&[name.clone()]).join("::");
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_init",
+                        args: vec![],
+                        immediates: vec![0],
+                        strings: vec![resolved, String::new()],
                     });
                     r
                 } else {
