@@ -4,6 +4,11 @@
 
 **Baseline (2026-05-29):** `129 failed` in the `feature_examples` integration test.
 
+**Progress:**
+- ✅ **Cluster 1 done** (commit `26d33f5`): bool/unit register tagging. `feature_examples` 129 → **94**; `vm_tests` 113 → **107**; no regressions; clippy clean.
+
+> Note: there are also pre-existing failures outside `feature_examples` to drive to green for full end-to-end: `vm_tests` (107) and `leetcode_solutions` (1). These share the same root-cause clusters below.
+
 **Pipeline reminder:** `parse → type_check → ir_gen (AST → Register IR + CFG) → codegen (IR → Cranelift CLIF) → native`.
 
 ---
@@ -34,7 +39,7 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 1 — Bool / Unit value tagging *(HIGH impact, LOW risk, fully diagnosed)*
+### ✅ Cluster 1 — Bool / Unit value tagging — DONE (commit `26d33f5`)
 
 **Symptom:** `true`→`1`, `false`→`0`, `false.to_string()`→`"0"`; asserts fail with `left: Bool(true), right: I64(1)` or `I64(0) is not truthy`.
 
