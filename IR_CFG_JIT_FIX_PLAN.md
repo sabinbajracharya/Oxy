@@ -141,7 +141,7 @@ Re-run the suite; the remaining set will be much smaller. Expected residual cand
 - `if_else::test_if_expression_no_else` (`I64(0)` vs `42`) — value of an `if` without `else` used as expression.
 - `math_stdlib::test_pi_constant` — PI constant value / comparison.
 - `struct_basics::test_struct_field_mutation`, `struct_field_types::test_struct_field_mut_assign_ok` — field assignment / mutation path.
-- `closures`/`capture` (`test_mutable_capture`, `test_closure_modifies_capture`, `test_multiple_closures_same_capture`, `test_capture_with_param_and_mut`) — mutable capture semantics.
+- ~~`closures`/`capture` (`test_mutable_capture`, `test_closure_modifies_capture`, `test_multiple_closures_same_capture`, `test_capture_with_param_and_mut`) — mutable capture semantics~~ DONE (`16da97f`): the Cell runtime (shared `Rc<RefCell>` on capture, load/store through Cell) was all present but `oxy_make_cell` was never emitted — captured mutables were snapshotted by value. ir_gen now tracks `let mut` slots and emits a new `MakeCell` IR op for each captured mutable outer slot at closure creation (idempotent per slot). Cleared the 4 capture tests + `consumers::test_for_each_side_effect`, `vec_iterators::test_for_each`, `type_checking::test_closure_empty_body`. feature_examples 51→43.
 - `complex_patterns::test_deeply_nested_match`, `match_exhaustive::test_match_nested`.
 - `btreemap::test_bracket_get`, `hashmap::test_bracket_get` — `m[k]` indexing.
 - `generics::test_turbofish_on_path_call`, `test_option_of_vec_int`, `test_hashmap_string_int`.
