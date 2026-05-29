@@ -21,18 +21,6 @@ use std::collections::HashMap;
 
 // ── Stack helpers (used by JIT and FFI internally) ──────────────────
 
-/// Move a Value from one buffer slot to another, leaving Unit behind at the source.
-///
-/// This is the **only** way to transfer ownership of a `Value` between buffer slots.
-/// `Value` contains heap-allocated types (`Rc`, `String`, `Vec`) — a bare `ptr::read`
-/// followed by a `write` on the destination creates two owners of the same allocation.
-/// Always clear the source slot with `Value::Unit` after moving so the buffer's `Drop`
-/// doesn't double-free when it cleans up.
-unsafe fn move_value(src: *mut Value, dst: *mut Value) {
-    dst.write(src.read());
-    src.write(Value::Unit);
-}
-
 unsafe fn push(ctx: &mut JitContext, val: Value) {
     let slot = ctx.push_slot();
     unsafe {
@@ -688,7 +676,12 @@ impl CalleeFrame {
 /// Call a JIT-compiled function identified by fn_ptr with args already on
 /// the caller's operand stack. This is the shared call path used by both
 /// oxy_call (simple calls) and oxy_path_call_builtin (module-qualified calls).
-fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, arg_count: usize) {
+/// Invoke a JIT-compiled function with `args` already owned (drained off the
+/// caller's operand stack by the caller). `args[i]` becomes callee local `i`,
+/// so order is preserved by construction — there is no operand-stack round-trip
+/// to get backwards. Mirrors how `oxy_call_closure` builds its callee frame
+/// directly from a Vec.
+fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, args: Vec<Value>) {
     // Save caller state on the call stack
     {
         let mut call_stack = call_stack_lock();
@@ -698,17 +691,13 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
         });
     }
 
-    // Move args from the caller's operand stack to the callee's buffer.
-    // Uses move_value so source slots are cleared to Value::Unit, preventing
-    // double-free of heap-allocated data when the caller's buffer is dropped.
-    let args_start = ctx.sp - arg_count;
+    // The caller already popped the args, so the operand stack top is where the
+    // call's result will land.
+    let result_sp = ctx.sp;
     let mut frame = CalleeFrame::new(local_count);
-    for i in 0..arg_count {
-        let src = unsafe { ctx.buffer.add(ctx.local_count + args_start + i) };
-        let dst = unsafe { frame.buf_mut().add(i) };
-        unsafe { move_value(src, dst) };
+    for (i, arg) in args.into_iter().enumerate() {
+        unsafe { frame.buf_mut().add(i).write(arg) };
     }
-    let result_sp = args_start;
 
     let saved_local_count = ctx.local_count;
     unsafe {
@@ -2265,17 +2254,9 @@ extern "C" fn oxy_path_call_builtin(
     if let Some(fn_idx) = tables.name_to_index(&fn_name) {
         if let Some(fn_ptr) = tables.fn_ptr(fn_idx) {
             let local_count = tables.local_count(fn_idx);
-            // Re-push args in their original order. `invoke_jit_fn` maps the
-            // operand stack to callee locals as frame[i] = stack[bottom + i],
-            // so arg0 must be pushed first (ending up at the bottom of the
-            // arg window). Reversing here swaps the parameters — invisible for
-            // commutative ops and single-arg calls, wrong for everything else.
-            for a in args {
-                unsafe {
-                    push(ctx, a);
-                }
-            }
-            invoke_jit_fn(ctx, fn_ptr, local_count, arg_count);
+            // `args` is already in original order ([arg0, arg1, …]); hand it
+            // straight to invoke_jit_fn, which writes arg i to callee local i.
+            invoke_jit_fn(ctx, fn_ptr, local_count, args);
             return;
         }
     }
