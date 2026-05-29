@@ -517,10 +517,10 @@ fn main() {}"#,
 
     #[test]
     fn fn_async() {
-        // An `async { }` block compiles as a closure with is_async = true,
-        // producing ` async` in the IrFunction header. Top-level `async fn`
-        // does not propagate the flag through gen_fn (only gen_closure sets it).
-        assert_ir_snapshot("functions/fn_async", "let fut = async { 42 };");
+        assert_ir_snapshot_raw(
+            "functions/fn_async",
+            "async fn delay() -> int { 42 }\nfn main() {}",
+        );
     }
 
     #[test]

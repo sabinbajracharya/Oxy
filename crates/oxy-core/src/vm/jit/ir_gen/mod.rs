@@ -491,6 +491,7 @@ impl IrGen {
         // Save current state. fn_index set at push time after body generation.
         let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0, usize::MAX));
         self.current.return_type = ret_ty;
+        self.current.is_async = f.is_async;
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_local_types = std::mem::take(&mut self.local_types);
         let saved_local_count = self.local_count;

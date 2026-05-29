@@ -1,4 +1,4 @@
-fn closure_0() -> ? async {
+fn delay() -> int async {
   locals: 0
   bb0(entry):
     v0 = const.int 42
@@ -6,10 +6,8 @@ fn closure_0() -> ? async {
 }
 
 fn main() -> () {
-  locals: 1
+  locals: 0
   bb0(entry):
-    v0 = call @oxy_push_async_block() imm[0] str["closure_0"]
-    store.local $0, v0
-    v1 = const.unit
-    ret v1
+    v0 = const.unit
+    ret v0
 }

@@ -20,7 +20,7 @@ impl TypeChecker {
                 let inferred = if let Some(expr) = value {
                     self.infer_expr(expr)?
                 } else {
-                    TypeInfo::Unit
+                    TypeInfo::Unknown
                 };
                 if !declared.accepts(&inferred) {
                     return Err(FerriError::TypeError {
