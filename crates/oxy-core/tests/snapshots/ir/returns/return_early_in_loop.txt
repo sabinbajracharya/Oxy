@@ -1,0 +1,43 @@
+fn find(n: int) -> int {
+  locals: 2
+  bb0(entry):
+    v0 = const.int 0
+    store.local $1, v0
+    jump bb1
+
+  bb1(preds: bb0, bb4):
+    v1 = load.local $1
+    v2 = load.local $0
+    v3 = lt v1, v2
+    branch v3 -> bb3, bb2
+
+  bb2(preds: bb1):
+    v4 = const.int 1
+    v5 = neg v4
+    ret v5
+
+  bb3(preds: bb1):
+    v6 = load.local $1
+    v7 = const.int 3
+    v8 = eq v6, v7
+    branch v8 -> bb5, bb4
+
+  bb4(preds: bb3):
+    v9 = const.unit
+    v10 = load.local $1
+    v11 = const.int 1
+    v12 = add v10, v11
+    store.local $1, v12
+    jump bb1
+
+  bb5(preds: bb3):
+    v13 = load.local $1
+    ret v13
+}
+
+fn main() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.unit
+    ret v0
+}

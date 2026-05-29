@@ -1,0 +1,18 @@
+fn main() -> () {
+  locals: 4
+  bb0(entry):
+    v0 = const.bool true
+    store.local $0, v0
+    v1 = const.bool false
+    store.local $1, v1
+    v2 = const.bool true
+    store.local $2, v2
+    v3 = load.local $0
+    v4 = load.local $1
+    v5 = and v3, v4
+    v6 = load.local $2
+    v7 = or v5, v6
+    store.local $3, v7
+    v8 = const.unit
+    ret v8
+}

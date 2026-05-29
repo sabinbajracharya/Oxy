@@ -1,0 +1,20 @@
+fn f() -> bool {
+  locals: 0
+  bb0(entry):
+    v0 = const.bool true
+    ret v0
+}
+
+fn main() -> () {
+  locals: 2
+  bb0(entry):
+    v0 = const.bool true
+    store.local $0, v0
+    v1 = load.local $0
+    v2 = call @oxy_push_named_fn() str["f"]
+    v3 = call @oxy_call_closure(v2) imm[0]
+    v4 = and v1, v3
+    store.local $1, v4
+    v5 = const.unit
+    ret v5
+}

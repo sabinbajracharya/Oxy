@@ -1,0 +1,13 @@
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.int 1
+    v1 = const.int 2
+    v2 = call @oxy_struct_init(v0, v1) imm[2] str["Point", "x\0y"]
+    store.local $0, v2
+    v3 = const.int 10
+    v4 = load.local $0
+    v5 = call @oxy_field_store(v4, v3) str["x"]
+    v6 = const.unit
+    ret v6
+}

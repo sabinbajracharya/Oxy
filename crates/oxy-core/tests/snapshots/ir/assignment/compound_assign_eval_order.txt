@@ -1,0 +1,20 @@
+fn get() -> int {
+  locals: 0
+  bb0(entry):
+    v0 = const.int 42
+    ret v0
+}
+
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.int 0
+    store.local $0, v0
+    v1 = call @oxy_push_named_fn() str["get"]
+    v2 = call @oxy_call_closure(v1) imm[0]
+    v3 = load.local $0
+    v4 = add v3, v2
+    store.local $0, v4
+    v5 = const.unit
+    ret v5
+}

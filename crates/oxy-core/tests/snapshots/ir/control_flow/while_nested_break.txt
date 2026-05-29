@@ -1,0 +1,53 @@
+fn main() -> () {
+  locals: 2
+  bb0(entry):
+    v0 = const.int 0
+    store.local $0, v0
+    jump bb1
+
+  bb1(preds: bb0, bb8):
+    v1 = load.local $0
+    v2 = const.int 3
+    v3 = lt v1, v2
+    branch v3 -> bb3, bb2
+
+  bb2(preds: bb1):
+    v4 = const.unit
+    ret v4
+
+  bb3(preds: bb1):
+    v5 = const.int 0
+    store.local $1, v5
+    jump bb4
+
+  bb4(preds: bb3, bb6):
+    v6 = load.local $1
+    v7 = const.int 3
+    v8 = lt v6, v7
+    branch v8 -> bb5, bb8
+
+  bb5(preds: bb4):
+    v9 = load.local $1
+    v10 = const.int 1
+    v11 = eq v9, v10
+    branch v11 -> bb7, bb6
+
+  bb6(preds: bb5):
+    v12 = const.unit
+    v13 = load.local $1
+    v14 = const.int 1
+    v15 = add v13, v14
+    store.local $1, v15
+    jump bb4
+
+  bb7(preds: bb5):
+    v16 = const.unit
+    jump bb8
+
+  bb8(preds: bb4, bb7):
+    v17 = load.local $0
+    v18 = const.int 1
+    v19 = add v17, v18
+    store.local $0, v19
+    jump bb1
+}

@@ -1,0 +1,8 @@
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.str "hi\nthere"
+    store.local $0, v0
+    v1 = const.unit
+    ret v1
+}
