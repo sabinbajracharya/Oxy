@@ -703,8 +703,23 @@ impl IrGen {
         self.start_block(entry);
 
         // Allocate locals for params and record explicit metadata on IrFunction.
+        // A `byte` parameter must wrap its incoming value to 0..=255 at entry,
+        // mirroring the boundary coercion applied to `byte` return values and
+        // typed `let` bindings — otherwise a value like `300` would flow through
+        // the body as `int(300)`, silently erasing the declared width. Recording
+        // the param type in `local_types` also makes reassignment to a `mut byte`
+        // param re-wrap, consistent with `let mut x: byte`.
         for param in &f.params {
-            self.alloc_local(&param.name);
+            let slot = self.alloc_local(&param.name);
+            if let TypeAnnotation::Named { name, .. } = &param.type_ann {
+                self.local_types.insert(slot, name.clone());
+                if name == "byte" {
+                    let loaded = self.alloc_reg();
+                    self.emit(IrOp::LoadLocal(loaded, slot));
+                    let coerced = self.coerce_reg(loaded, &param.type_ann);
+                    self.emit(IrOp::StoreLocal(slot, coerced));
+                }
+            }
         }
         self.current.params = f
             .params

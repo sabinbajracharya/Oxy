@@ -438,51 +438,62 @@ binary_op!(oxy_mul, super::runtime::vm_mul, "mul");
 binary_op!(oxy_div, super::runtime::vm_div, "div");
 binary_op!(oxy_mod, super::runtime::vm_rem, "rem");
 
+/// Total/partial ordering of two operands for comparison operators.
+///
+/// Mirrors the cross-width promotion that the arithmetic ops apply via
+/// `promote_ints`: a `byte` and an `int` are both integers, so they compare on
+/// their `i64` value rather than on their `Value` discriminant. Without this,
+/// `U8(2) <= I64(1)` would fall through to a "not comparable" result — which is
+/// exactly how a `byte` parameter (now correctly wrapped to `U8` at entry) broke
+/// `n <= 1` loop/recursion guards. Mixed integer/float compares as `f64`.
+/// Returns `None` only for genuinely incomparable operands (e.g. struct vs int).
+fn value_ordering(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
+    let numeric = |v: &Value| matches!(v, Value::I64(_) | Value::U8(_) | Value::F64(_));
+    if numeric(a) && numeric(b) {
+        if a.is_float() || b.is_float() {
+            return a.to_f64().partial_cmp(&b.to_f64());
+        }
+        return Some(a.as_i64().cmp(&b.as_i64()));
+    }
+    match (a, b) {
+        (Value::String(x), Value::String(y)) => Some(x.cmp(y)),
+        (Value::Char(x), Value::Char(y)) => Some(x.cmp(y)),
+        _ => None,
+    }
+}
+
 fn vm_eq(lhs: Value, rhs: Value) -> Value {
+    // Cross-width integers (and int/float) must compare by value, not by
+    // discriminant: `U8(2) == I64(2)` is true. Non-numeric values fall back to
+    // structural `PartialEq` (structs, enums, bool, unit, collections).
+    if let Some(ord) = value_ordering(&lhs, &rhs) {
+        return Value::Bool(ord == std::cmp::Ordering::Equal);
+    }
     Value::Bool(lhs == rhs)
 }
 fn vm_neq(lhs: Value, rhs: Value) -> Value {
+    if let Some(ord) = value_ordering(&lhs, &rhs) {
+        return Value::Bool(ord != std::cmp::Ordering::Equal);
+    }
     Value::Bool(lhs != rhs)
 }
 fn vm_lt(lhs: Value, rhs: Value) -> Value {
-    match (&lhs, &rhs) {
-        (Value::I64(a), Value::I64(b)) => Value::Bool(a < b),
-        (Value::F64(a), Value::F64(b)) => Value::Bool(a < b),
-        (Value::U8(a), Value::U8(b)) => Value::Bool(a < b),
-        (Value::String(a), Value::String(b)) => Value::Bool(a < b),
-        (Value::Char(a), Value::Char(b)) => Value::Bool(a < b),
-        _ => Value::Bool(false),
-    }
+    Value::Bool(value_ordering(&lhs, &rhs) == Some(std::cmp::Ordering::Less))
 }
 fn vm_gt(lhs: Value, rhs: Value) -> Value {
-    match (&lhs, &rhs) {
-        (Value::I64(a), Value::I64(b)) => Value::Bool(a > b),
-        (Value::F64(a), Value::F64(b)) => Value::Bool(a > b),
-        (Value::U8(a), Value::U8(b)) => Value::Bool(a > b),
-        (Value::String(a), Value::String(b)) => Value::Bool(a > b),
-        (Value::Char(a), Value::Char(b)) => Value::Bool(a > b),
-        _ => Value::Bool(false),
-    }
+    Value::Bool(value_ordering(&lhs, &rhs) == Some(std::cmp::Ordering::Greater))
 }
 fn vm_le(lhs: Value, rhs: Value) -> Value {
-    match (&lhs, &rhs) {
-        (Value::I64(a), Value::I64(b)) => Value::Bool(a <= b),
-        (Value::F64(a), Value::F64(b)) => Value::Bool(a <= b),
-        (Value::U8(a), Value::U8(b)) => Value::Bool(a <= b),
-        (Value::String(a), Value::String(b)) => Value::Bool(a <= b),
-        (Value::Char(a), Value::Char(b)) => Value::Bool(a <= b),
-        _ => Value::Bool(false),
-    }
+    Value::Bool(matches!(
+        value_ordering(&lhs, &rhs),
+        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+    ))
 }
 fn vm_ge(lhs: Value, rhs: Value) -> Value {
-    match (&lhs, &rhs) {
-        (Value::I64(a), Value::I64(b)) => Value::Bool(a >= b),
-        (Value::F64(a), Value::F64(b)) => Value::Bool(a >= b),
-        (Value::U8(a), Value::U8(b)) => Value::Bool(a >= b),
-        (Value::String(a), Value::String(b)) => Value::Bool(a >= b),
-        (Value::Char(a), Value::Char(b)) => Value::Bool(a >= b),
-        _ => Value::Bool(false),
-    }
+    Value::Bool(matches!(
+        value_ordering(&lhs, &rhs),
+        Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
+    ))
 }
 fn vm_and(lhs: Value, rhs: Value) -> Value {
     Value::Bool(lhs.is_truthy() && rhs.is_truthy())
