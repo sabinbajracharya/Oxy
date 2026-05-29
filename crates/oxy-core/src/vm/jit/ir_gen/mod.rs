@@ -1966,16 +1966,19 @@ impl IrGen {
             }
         }
 
-        // Generate arm body blocks
+        // Generate arm body blocks. An arm body may contain control flow
+        // (for/while/if/nested match), so after lowering it the "current" block
+        // is the body's *exit* block — not body_blocks[i]. Record that exit
+        // block: all merge wiring below must jump from there, otherwise it would
+        // overwrite the branch into the loop (bypassing it) and read a result
+        // register defined in an unreachable block.
+        let mut body_end_blocks: Vec<BlockId> = Vec::new();
         for (i, arm) in arms.iter().enumerate() {
             self.start_block(body_blocks[i]);
             self.gen_pattern_bind(&arm.pattern, val);
             let reg = self.gen_expr(&arm.body);
             result_regs.push(reg);
-            if n <= 2 {
-                self.terminate(Terminator::Jump(final_merge));
-            }
-            // For 3+ arms, jump targets set below
+            body_end_blocks.push(self.current_block);
         }
 
         if result_regs.is_empty() {
@@ -1987,16 +1990,15 @@ impl IrGen {
 
         if n == 1 {
             // Single arm — no Phi needed, return the result directly.
+            self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(final_merge);
             self.start_block(final_merge);
             return result_regs[0];
         }
 
         if n == 2 {
-            self.start_block(body_blocks[0]);
             let merge_01 = self.alloc_block();
-            self.terminate(Terminator::Jump(merge_01));
-            self.start_block(body_blocks[1]);
-            self.terminate(Terminator::Jump(merge_01));
+            self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(merge_01);
+            self.current.block_mut(body_end_blocks[1]).terminator = Terminator::Jump(merge_01);
             self.start_block(merge_01);
             let r = self.alloc_reg();
             self.emit(IrOp::Phi(r, result_regs[0], result_regs[1]));
@@ -2019,24 +2021,15 @@ impl IrGen {
         let mut idx = 0;
         while idx < n {
             if idx == 0 {
-                // First pair: body_0, body_1
-                self.start_block(body_blocks[0]);
-                if n > 1 {
-                    let merge_01 = self.alloc_block();
-                    self.terminate(Terminator::Jump(merge_01));
-                    self.start_block(body_blocks[1]);
-                    self.terminate(Terminator::Jump(merge_01));
-                    self.start_block(merge_01);
-                    let phi_r = self.alloc_reg();
-                    self.emit(IrOp::Phi(phi_r, result_regs[0], result_regs[1]));
-                    prev_merge = Some((merge_01, phi_r));
-                    idx = 2;
-                } else {
-                    // Only one arm — jump directly to final_merge
-                    self.terminate(Terminator::Jump(final_merge));
-                    self.start_block(final_merge);
-                    return result_regs[0];
-                }
+                // First pair: body_0, body_1 — wire from their exit blocks.
+                let merge_01 = self.alloc_block();
+                self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(merge_01);
+                self.current.block_mut(body_end_blocks[1]).terminator = Terminator::Jump(merge_01);
+                self.start_block(merge_01);
+                let phi_r = self.alloc_reg();
+                self.emit(IrOp::Phi(phi_r, result_regs[0], result_regs[1]));
+                prev_merge = Some((merge_01, phi_r));
+                idx = 2;
             } else {
                 // Cascade: prev_merge + body_{idx}
                 let (prev_block, prev_reg) = prev_merge.unwrap();
@@ -2047,8 +2040,8 @@ impl IrGen {
                 };
                 // Patch prev block's terminator to jump to cascade_merge
                 self.current.block_mut(prev_block).terminator = Terminator::Jump(cascade_merge);
-                // Body block jumps to cascade_merge
-                self.current.block_mut(body_blocks[idx]).terminator =
+                // Arm's exit block jumps to cascade_merge.
+                self.current.block_mut(body_end_blocks[idx]).terminator =
                     Terminator::Jump(cascade_merge);
                 self.start_block(cascade_merge);
                 let phi_r = self.alloc_reg();
