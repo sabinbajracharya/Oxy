@@ -137,7 +137,7 @@ Re-run the suite; the remaining set will be much smaller. Expected residual cand
 - `complex_patterns::test_deeply_nested_match`, `match_exhaustive::test_match_nested`.
 - `btreemap::test_bracket_get`, `hashmap::test_bracket_get` — `m[k]` indexing.
 - `generics::test_turbofish_on_path_call`, `test_option_of_vec_int`, `test_hashmap_string_int`.
-- `regex_oop::*`, `rand_regex_stdlib::regex_*` — regex method dispatch (may be Cluster 2/3).
+- ~~`regex_oop::*` — regex method dispatch~~ DONE (`3cf6671`): OOP Regex methods were stubbed in JIT dispatch (is_match→false, find/find_all/replace→error). Now delegate to `std::regex` module impl (pattern pulled from struct, prepended to args); `find_all`→`Vec<String>`, `replace`→replace-all bridged. Cleared all 7. feature_examples 73→66.
 - `select::*` async-logic ones not covered by Cluster 1.
 - `type_checking::test_closure_empty_body`, `consumers::test_for_each_side_effect`, `vec_iterators::test_for_each`, `operators::test_builder_pattern`, `operators::test_mut_self_in_method`, `error_handling::test_question_double_chain_short_circuits`.
 
