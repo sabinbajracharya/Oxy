@@ -601,6 +601,12 @@ impl IrGen {
                 type_ann,
                 ..
             } => {
+                // Evaluate the initializer BEFORE bringing the new binding into
+                // scope, so a shadowing `let x = <expr using old x>` resolves `x`
+                // in the initializer to the *previous* binding, not the new
+                // (uninitialized) slot. Allocating the slot first made the RHS
+                // read the slot it was about to define.
+                let init = value.as_ref().map(|val| self.gen_expr(val));
                 let slot = self.alloc_local(name);
                 if *mutable {
                     // Track mutable bindings: a `let mut` captured by a closure
@@ -608,8 +614,7 @@ impl IrGen {
                     // so writes propagate across the capture boundary.
                     self.mut_slots.insert(slot);
                 }
-                if let Some(val) = value {
-                    let reg = self.gen_expr(val);
+                if let Some(reg) = init {
                     let reg = if let Some(ta) = type_ann {
                         if let TypeAnnotation::Named { name, .. } = ta {
                             self.local_types.insert(slot, name.clone());
@@ -738,6 +743,63 @@ impl IrGen {
     }
 
     // ── Expressions ────────────────────────────────────────────────────
+
+    /// Lower an assignment `target = <val_reg>`, propagating the result back
+    /// through the lvalue chain.
+    ///
+    /// Structs are value types (fields are cloned on copy), so `oxy_field_store`
+    /// produces a *new* struct rather than mutating in place — that new struct
+    /// must be written back into the binding (or the enclosing field/index) or
+    /// the mutation is lost. We recurse so `a.b.c = v` rebuilds each level:
+    /// `a = store(a, "b", store(a.b, "c", v))`.
+    ///
+    /// `Vec` (and the other collections) are `Rc<RefCell<>>`-shared, so an
+    /// index store mutates the backing storage in place — its enclosing binding
+    /// already observes the change, so no further write-back is needed there.
+    fn gen_store_lvalue(&mut self, target: &Expr, val_reg: Reg) {
+        match target {
+            Expr::Ident(name, ..) => {
+                if let Some(slot) = self.lookup_local(name) {
+                    self.emit(IrOp::StoreLocal(slot, val_reg));
+                }
+            }
+            // `self` is always local slot 0 (mirrors the read path in gen_expr).
+            // Required so `self.field = v` in a `mut self` method writes the
+            // updated struct back, not just the discarded field-store result.
+            Expr::SelfRef(..) => {
+                self.emit(IrOp::StoreLocal(0, val_reg));
+            }
+            Expr::Grouped(inner, ..) => self.gen_store_lvalue(inner, val_reg),
+            Expr::FieldAccess { object, field, .. } => {
+                let obj_reg = self.gen_expr(object);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_field_store",
+                    args: vec![obj_reg, val_reg],
+                    immediates: vec![],
+                    strings: vec![field.clone()],
+                });
+                // Write the updated (value-typed) struct back into its container.
+                self.gen_store_lvalue(object, r);
+            }
+            Expr::Index { object, index, .. } => {
+                let obj_reg = self.gen_expr(object);
+                let idx_reg = self.gen_expr(index);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_vec_index_store",
+                    args: vec![obj_reg, idx_reg, val_reg],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                // Collection storage is Rc-shared and mutated in place above, so
+                // the enclosing binding already sees the change — no write-back.
+            }
+            _ => {}
+        }
+    }
 
     fn gen_expr(&mut self, expr: &Expr) -> Reg {
         match expr {
@@ -1240,37 +1302,7 @@ impl IrGen {
             }
             Expr::Assign { target, value, .. } => {
                 let val_reg = self.gen_expr(value);
-                match target.as_ref() {
-                    Expr::Ident(name, ..) => {
-                        if let Some(slot) = self.lookup_local(name) {
-                            self.emit(IrOp::StoreLocal(slot, val_reg));
-                        }
-                    }
-                    Expr::FieldAccess { object, field, .. } => {
-                        let obj_reg = self.gen_expr(object);
-                        let r = self.alloc_reg();
-                        self.emit(IrOp::CallBuiltin {
-                            result: r,
-                            func: "oxy_field_store",
-                            args: vec![obj_reg, val_reg],
-                            immediates: vec![],
-                            strings: vec![field.clone()],
-                        });
-                    }
-                    Expr::Index { object, index, .. } => {
-                        let obj_reg = self.gen_expr(object);
-                        let idx_reg = self.gen_expr(index);
-                        let r = self.alloc_reg();
-                        self.emit(IrOp::CallBuiltin {
-                            result: r,
-                            func: "oxy_vec_index_store",
-                            args: vec![obj_reg, idx_reg, val_reg],
-                            immediates: vec![],
-                            strings: vec![],
-                        });
-                    }
-                    _ => {}
-                }
+                self.gen_store_lvalue(target, val_reg);
                 val_reg
             }
             Expr::CompoundAssign {
@@ -1312,6 +1344,10 @@ impl IrGen {
                         };
                         self.emit(IrOp::StoreLocal(slot, coerced));
                     }
+                } else {
+                    // Field / index targets: write the recomputed value back
+                    // through the lvalue chain (same root as plain assignment).
+                    self.gen_store_lvalue(target, r);
                 }
                 r
             }
