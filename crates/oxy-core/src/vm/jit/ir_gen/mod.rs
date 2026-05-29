@@ -53,6 +53,9 @@ pub(crate) struct IrGen {
     /// Re-exported function aliases: module::local_name → original_qualified_name.
     /// Populated from `pub use` inside modules so call resolution can redirect.
     fn_aliases: std::collections::HashMap<String, String>,
+    /// Trait definitions collected from Item::Trait during gen_program.
+    /// Used to compile default method bodies for impl Trait blocks that don't override them.
+    trait_defs: std::collections::HashMap<String, crate::ast::TraitDef>,
 }
 
 impl IrGen {
@@ -87,6 +90,7 @@ impl IrGen {
             local_types: std::collections::HashMap::new(),
             current_module_prefix: String::new(),
             fn_aliases: std::collections::HashMap::new(),
+            trait_defs: std::collections::HashMap::new(),
         }
     }
 
@@ -239,10 +243,31 @@ impl IrGen {
                         self.gen_fn(method, Some(&prefix));
                     }
                 }
+                Item::Trait(t) => {
+                    self.trait_defs.insert(t.name.clone(), t.clone());
+                }
                 Item::ImplTrait(imp) => {
                     let prefix = imp.type_name.clone();
+                    // Compile provided methods
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&prefix));
+                    }
+                    // Compile trait default methods that weren't overridden
+                    let default_fns: Vec<crate::ast::FnDef> = self
+                        .trait_defs
+                        .get(&imp.trait_name)
+                        .map(|td| {
+                            let provided: std::collections::HashSet<&str> =
+                                imp.methods.iter().map(|m| m.name.as_str()).collect();
+                            td.default_methods
+                                .iter()
+                                .filter(|df| !provided.contains(df.name.as_str()))
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    for default_fn in &default_fns {
+                        self.gen_fn(default_fn, Some(&prefix));
                     }
                 }
                 Item::Const { name, value, .. } => {
@@ -306,10 +331,34 @@ impl IrGen {
                         self.gen_fn(method, Some(&qualified_type));
                     }
                 }
+                Item::Trait(t) => {
+                    let full_name = format!("{prefix}::{}", t.name);
+                    self.trait_defs.insert(full_name, t.clone());
+                }
                 Item::ImplTrait(imp) => {
                     let qualified_type = format!("{prefix}::{}", imp.type_name);
                     for method in &imp.methods {
                         self.gen_fn(method, Some(&qualified_type));
+                    }
+                    // Compile trait default methods that weren't overridden.
+                    let full_trait_name = format!("{prefix}::{}", imp.trait_name);
+                    let default_fns: Vec<crate::ast::FnDef> = self
+                        .trait_defs
+                        .get(&imp.trait_name)
+                        .or_else(|| self.trait_defs.get(&full_trait_name))
+                        .map(|trait_def| {
+                            let provided: std::collections::HashSet<&str> =
+                                imp.methods.iter().map(|m| m.name.as_str()).collect();
+                            trait_def
+                                .default_methods
+                                .iter()
+                                .filter(|df| !provided.contains(df.name.as_str()))
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    for default_fn in &default_fns {
+                        self.gen_fn(default_fn, Some(&qualified_type));
                     }
                 }
                 Item::Use(use_def) => {
