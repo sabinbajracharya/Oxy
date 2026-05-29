@@ -103,19 +103,23 @@ Order is by *impact × confidence × foundational-ness*. Re-run the full suite a
 
 ---
 
-### Cluster 6 — Missing compile-error enforcement (type checker) *(diagnosed)*
+### Cluster 6 — Missing compile-error enforcement (type checker) *(spawn/sleep/select DONE)*
 
 **Symptom:** `#[compile_error]` tests "compiled successfully" instead of being rejected.
 
 **Root causes & fixes (all in `type_checker/check_expr.rs`):**
-- **`sleep` arity** (`async_await::sleep_zero_args`, `sleep_two_args`): no arity check. Add a `"sleep"` case requiring exactly 1 arg.
-- **`spawn` arity + non-closure** (`spawn_zero_args/two_args/non_closure`): the `"spawn"` case (~L554) silently tolerates wrong arity / non-closure. Require exactly 1 arg **and** that it is a closure.
-- **`select` arity** (`select::select_zero_args`, `select_one_arg`): the `"select"` case (~L565) accepts any count. Require ≥ 2 JoinHandle args.
-- **array repeat non-const count** (`arrays::test_array_repeat_non_constant_count`): `Expr::Repeat` (~L680) silently falls back to `0` when `count` isn't an `IntLiteral`. Make a non-constant count a type error.
+- ✅ **`sleep` arity** (`async_await::sleep_zero_args`, `sleep_two_args`): DONE. Added a `"sleep"` arm requiring exactly 1 arg; returns `Unit`.
+- ✅ **`spawn` arity + non-closure** (`spawn_zero_args/two_args/non_closure`): DONE. The `"spawn"` arm now requires exactly 1 arg **and** that it is a `Closure` (previously it tolerated any arity and silently returned `Unknown` for non-closures, deferring to a compiler rejection that never happened).
+- ✅ **`select` arity** (`select::select_zero_args`, `select_one_arg`): DONE. The `"select"` arm now requires ≥ 2 args before computing the common JoinHandle inner type.
+- **array repeat non-const count** (`arrays::test_array_repeat_non_constant_count`): `Expr::Repeat` (~L680) silently falls back to `0` when `count` isn't an `IntLiteral`. Make a non-constant count a type error. *(still TODO)*
 
 > Per CLAUDE.md: a `#[compile_error]` test passes if **either** the type checker **or** ir_gen/codegen rejects it. Prefer the type checker.
 
-**Verification:** `async_await::*` (the `compile_error` ones), `select` arity ones, `arrays::test_array_repeat_non_constant_count`.
+**Root cause (spawn/sleep/select):** these three builtins live in the type checker's "unknown callee" branch (they aren't user functions). The `spawn` arm's own comment said "let the compiler reject it; type-check leniently here" — but ir_gen lowers `spawn`/`sleep`/`select` straight to their FFI ops with no arity guard, so nothing ever rejected the malformed calls. Validating at the type-check layer (where the signatures are known and a clear diagnostic can be produced) is the proper home, not adding guards in codegen.
+
+**Result:** feature_examples 66→59 (−7: all 7 spawn/sleep/select `compile_error` tests). vm_tests unchanged (107). clippy clean. The remaining `select`/`spawn` failures (`test_select_with_sleep_faster`, `test_select_three_handles`, `test_select_timeout_pattern`, `test_select_inside_spawn`, `test_spawn_handles_many_lines`) are runtime async-scheduler `assert_eq` failures — a separate cluster, not arity.
+
+**Verification:** `async_await::*` and `select::*` `compile_error` arity tests (done); `arrays::test_array_repeat_non_constant_count` (TODO).
 
 ---
 

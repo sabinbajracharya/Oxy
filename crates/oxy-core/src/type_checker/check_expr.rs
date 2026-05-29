@@ -552,19 +552,62 @@ impl TypeChecker {
                                 ));
                             }
                             "spawn" => {
-                                // spawn(|| expr) → JoinHandle<expr_type>
-                                let inner = if let Some(Expr::Closure { body, .. }) = args.first() {
+                                // spawn(|| expr) → JoinHandle<expr_type>. Exactly one
+                                // argument, and it must be a closure.
+                                if args.len() != 1 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "spawn expects exactly 1 argument (a closure), found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                let inner = if let Expr::Closure { body, .. } = &args[0] {
                                     self.infer_expr(body)?
                                 } else {
-                                    // spawn with a non-closure — let the compiler
-                                    // reject it; type-check leniently here.
-                                    TypeInfo::Unknown
+                                    return Err(FerriError::TypeError {
+                                        message: "spawn expects a closure argument, e.g. \
+                                                  spawn(|| expr)"
+                                            .to_string(),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
                                 };
                                 return Ok(TypeInfo::JoinHandle(Box::new(inner)));
+                            }
+                            "sleep" => {
+                                // sleep(duration) → Unit. Exactly one argument.
+                                if args.len() != 1 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "sleep expects exactly 1 argument (a duration), \
+                                             found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                self.infer_expr(&args[0])?;
+                                return Ok(TypeInfo::Unit);
                             }
                             "select" => {
                                 // select(h1, h2, ...) → common inner type of all
                                 // JoinHandle args, or Unknown if they differ.
+                                // Requires at least two handles to choose between.
+                                if args.len() < 2 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "select expects at least 2 arguments (handles to \
+                                             choose between), found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
                                 let mut inner: Option<TypeInfo> = None;
                                 for t in &arg_types {
                                     let unwrapped = match t {
