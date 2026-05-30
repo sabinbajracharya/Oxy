@@ -23,8 +23,6 @@
 
 /// Abstract syntax tree node definitions.
 pub mod ast;
-/// Bytecode compiler: AST → stack-based VM opcodes.
-pub mod compiler;
 /// Environment and lexical scope management.
 pub mod env;
 /// Error types used throughout the interpreter.

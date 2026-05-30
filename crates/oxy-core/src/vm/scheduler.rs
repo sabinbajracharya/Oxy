@@ -11,11 +11,11 @@ pub type TaskId = usize;
 
 /// Snapshot of a task's execution state when it yields.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TaskSnapshot {
     pub ip: usize,
     pub stack: Vec<crate::types::Value>,
-    pub call_stack: Vec<super::Frame>,
-    /// JIT execution state (used instead of stack/call_stack when running under Cranelift).
+    /// JIT execution state (used instead of stack when running under Cranelift).
     #[allow(dead_code)]
     pub jit_state: Option<JitTaskState>,
 }
@@ -40,6 +40,7 @@ pub struct JitTaskState {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 mod clock {
     use std::time::Instant;
 
@@ -98,7 +99,7 @@ mod clock {
     }
 }
 
-pub use clock::{delay_from_now, TimeMark};
+pub use clock::TimeMark;
 
 /// What a task is currently doing (or waiting for).
 #[derive(Debug, Clone)]
@@ -125,6 +126,11 @@ pub struct Task {
     pub id: TaskId,
     pub snapshot: Option<TaskSnapshot>,
     pub status: TaskStatus,
+    /// Total simulated time (sum of `sleep` durations, in ms) the task's body
+    /// spent before completing. JIT tasks run eagerly to completion, so real
+    /// wall-clock ordering can't be observed — this virtual duration lets
+    /// `select` pick the task that *would* finish first.
+    pub virtual_time: u64,
 }
 
 impl Task {
@@ -133,6 +139,7 @@ impl Task {
             id,
             snapshot: None,
             status: TaskStatus::Ready,
+            virtual_time: 0,
         }
     }
 }
@@ -172,6 +179,7 @@ pub struct Scheduler {
     current: Option<TaskId>,
 }
 
+#[allow(dead_code)]
 impl Scheduler {
     pub fn new() -> Self {
         Self {
@@ -244,7 +252,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -271,6 +278,7 @@ impl Scheduler {
     }
 
     /// Yield the current task with JIT state and a timer.
+    #[allow(dead_code)]
     pub fn yield_jit_for_timer(&mut self, jit_state: JitTaskState, wake: TimeMark) {
         if let Some(id) = self.current.take() {
             self.timers.push(TimerEntry(wake, id));
@@ -279,7 +287,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -296,6 +303,7 @@ impl Scheduler {
     }
 
     /// Yield the current JIT task waiting on another task.
+    #[allow(dead_code)]
     pub fn yield_jit_for_task(&mut self, waited: TaskId, jit_state: JitTaskState) {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {
@@ -303,7 +311,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -321,6 +328,7 @@ impl Scheduler {
     }
 
     /// Yield the current JIT task waiting on multiple tasks.
+    #[allow(dead_code)]
     pub fn yield_jit_for_multiple(&mut self, task_ids: Vec<TaskId>, jit_state: JitTaskState) {
         if let Some(id) = self.current.take() {
             if let Some(task) = self.tasks.get_mut(&id) {
@@ -328,7 +336,6 @@ impl Scheduler {
                 task.snapshot = Some(TaskSnapshot {
                     ip: jit_state.resume_ip,
                     stack: vec![],
-                    call_stack: vec![],
                     jit_state: Some(jit_state),
                 });
             }
@@ -368,6 +375,18 @@ impl Scheduler {
             TaskStatus::Done(v) => Some(v.clone()),
             _ => None,
         })
+    }
+
+    /// Record the simulated time a task's body spent (sum of its `sleep`s).
+    pub fn set_virtual_time(&mut self, id: TaskId, ms: u64) {
+        if let Some(task) = self.tasks.get_mut(&id) {
+            task.virtual_time = ms;
+        }
+    }
+
+    /// The simulated completion time recorded for a task (0 if unknown).
+    pub fn task_virtual_time(&self, id: TaskId) -> u64 {
+        self.tasks.get(&id).map_or(0, |t| t.virtual_time)
     }
 
     /// Get the snapshot for a task, removing it.
@@ -417,4 +436,3 @@ unsafe impl Send for Scheduler {}
 unsafe impl Send for TaskSnapshot {}
 unsafe impl Send for JitTaskState {}
 unsafe impl Send for Task {}
-unsafe impl Send for super::Frame {}

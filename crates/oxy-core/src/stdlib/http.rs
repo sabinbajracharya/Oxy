@@ -40,6 +40,7 @@ fn build_http_response(
 }
 
 /// Build a Value::Struct HttpResponse from raw HttpResultData.
+#[allow(dead_code)]
 pub(crate) fn build_response_from_raw(data: crate::types::HttpResultData) -> Value {
     use std::cell::RefCell;
     use std::collections::HashMap;

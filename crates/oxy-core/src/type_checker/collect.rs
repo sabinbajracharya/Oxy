@@ -19,7 +19,27 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, e.name)
                     };
+                    let variant_names: Vec<String> =
+                        e.variants.iter().map(|v| v.name.clone()).collect();
+                    for v in &variant_names {
+                        self.enum_variant_names.insert(v.clone());
+                    }
+                    // Keyed under both the qualified and bare enum name so
+                    // exhaustiveness lookups work regardless of how the matched
+                    // value's type name was resolved.
+                    self.enum_variants
+                        .insert(e.name.clone(), variant_names.clone());
+                    self.enum_variants.insert(qualified.clone(), variant_names);
                     self.enum_defs.insert(qualified);
+                }
+                Item::Const { name, .. } => {
+                    let qualified = if prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}::{}", prefix, name)
+                    };
+                    self.const_names.insert(name.clone());
+                    self.const_names.insert(qualified);
                 }
                 Item::TypeAlias { name, target, .. } => {
                     let qualified = if prefix.is_empty() {
@@ -35,6 +55,8 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, m.name)
                     };
+                    self.module_vis
+                        .insert(nested_prefix.clone(), m.visibility.clone());
                     if let Some(body) = &m.body {
                         self.collect_defs(body, &nested_prefix);
                     }
@@ -133,7 +155,8 @@ impl TypeChecker {
                     };
                     let param_tys = self.resolve_param_types(f, &[]);
                     self.fn_return_types.insert(qualified.clone(), ret_ty);
-                    self.fn_param_types.insert(qualified, param_tys);
+                    self.fn_param_types.insert(qualified.clone(), param_tys);
+                    self.fn_defs.insert(qualified, f.clone());
                 }
                 Item::Module(m) => {
                     let nested_prefix = if prefix.is_empty() {
@@ -146,15 +169,19 @@ impl TypeChecker {
                     }
                 }
                 Item::Impl(i) => {
+                    // Dispatch keys use the base type name (generics stripped),
+                    // matching how methods are registered in IR and resolved at
+                    // runtime. The impl's generics are already on each method.
+                    let base = i.base_type_name();
                     let type_prefix = if prefix.is_empty() {
-                        i.type_name.clone()
+                        base.to_string()
                     } else {
-                        format!("{}::{}", prefix, i.type_name)
+                        format!("{}::{}", prefix, base)
                     };
                     let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", i.type_name, method.name);
+                        let unqualified = format!("{}::{}", base, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {
@@ -194,19 +221,21 @@ impl TypeChecker {
                             .insert(unqualified.clone(), ret_ty.clone());
                         self.fn_return_types.insert(qualified.clone(), ret_ty);
                         self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified, param_tys);
+                        self.fn_param_types.insert(qualified.clone(), param_tys);
+                        self.fn_defs.insert(qualified, method.clone());
                     }
                 }
                 Item::ImplTrait(i) => {
+                    let base = i.base_type_name();
                     let type_prefix = if prefix.is_empty() {
-                        i.type_name.clone()
+                        base.to_string()
                     } else {
-                        format!("{}::{}", prefix, i.type_name)
+                        format!("{}::{}", prefix, base)
                     };
                     let impl_generics = self.struct_generic_names(&type_prefix);
                     for method in &i.methods {
                         let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", i.type_name, method.name);
+                        let unqualified = format!("{}::{}", base, method.name);
                         let ret_ty = if let Some(ref ann) = method.return_type {
                             self.resolve_annotation(ann)
                         } else {
@@ -243,12 +272,132 @@ impl TypeChecker {
                             .insert(unqualified.clone(), ret_ty.clone());
                         self.fn_return_types.insert(qualified.clone(), ret_ty);
                         self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified, param_tys);
+                        self.fn_param_types.insert(qualified.clone(), param_tys);
+                        self.fn_defs.insert(qualified, method.clone());
                     }
                 }
                 _ => {}
             }
         }
         self.module_stack = saved_stack;
+    }
+
+    /// After `collect_fn_types`, resolve `pub use` re-exports inside modules.
+    /// For each `pub use` item, register the re-exported name under the
+    /// module-qualified key so external callers can find it.
+    pub(super) fn resolve_reexports(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Use(use_def) => {
+                    if !matches!(use_def.visibility, Visibility::Pub) {
+                        continue;
+                    }
+                    if prefix.is_empty() {
+                        continue;
+                    }
+                    match &use_def.tree {
+                        UseTree::Simple(alias) => {
+                            let source_path = use_def.path.join("::");
+                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
+                                use_def.path.last().cloned().unwrap_or_default()
+                            });
+                            let reexport_key = format!("{prefix}::{local_name}");
+                            self.register_reexport(&reexport_key, &source_path);
+                        }
+                        UseTree::Group(items) => {
+                            for (name, alias) in items {
+                                let source_path = format!("{}::{}", use_def.path.join("::"), name);
+                                let local_name = alias.as_ref().unwrap_or(name);
+                                let reexport_key = format!("{prefix}::{local_name}");
+                                self.register_reexport(&reexport_key, &source_path);
+                            }
+                        }
+                        UseTree::Glob => {
+                            let source_mod = use_def.path.join("::");
+                            self.register_glob_reexports(prefix, &source_mod);
+                        }
+                    }
+                }
+                Item::Module(m) => {
+                    let nested_prefix = if prefix.is_empty() {
+                        m.name.clone()
+                    } else {
+                        format!("{}::{}", prefix, m.name)
+                    };
+                    if let Some(body) = &m.body {
+                        self.resolve_reexports(body, &nested_prefix);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Register a single re-export: `reexport_key` (e.g. "public_api::secret")
+    /// points to `source_path` (e.g. "inner::secret").
+    fn register_reexport(&mut self, reexport_key: &str, source_path: &str) {
+        // Clone fn type info if the source is a known function.
+        if let Some(ret_ty) = self.fn_return_types.get(source_path).cloned() {
+            self.fn_return_types
+                .insert(reexport_key.to_string(), ret_ty);
+        }
+        if let Some(param_tys) = self.fn_param_types.get(source_path).cloned() {
+            self.fn_param_types
+                .insert(reexport_key.to_string(), param_tys);
+        }
+        if let Some(fn_def) = self.fn_defs.get(source_path).cloned() {
+            self.fn_defs.insert(reexport_key.to_string(), fn_def);
+        }
+        if let Some(gen_info) = self.fn_generic_info.get(source_path).cloned() {
+            self.fn_generic_info
+                .insert(reexport_key.to_string(), gen_info);
+        }
+        // Clone struct defs if the source is a known struct.
+        if let Some(sd) = self.struct_defs.get(source_path).cloned() {
+            self.struct_defs.insert(reexport_key.to_string(), sd);
+        }
+        // Record the chain so path visibility checks can follow it.
+        self.reexports
+            .insert(reexport_key.to_string(), source_path.to_string());
+    }
+
+    /// Resolve a glob re-export: scan all known items whose qualified name
+    /// starts with `source_mod::` and register them under `prefix::item_name`.
+    fn register_glob_reexports(&mut self, prefix: &str, source_mod: &str) {
+        let source_prefix = format!("{source_mod}::");
+        // Collect keys first to avoid borrow issues.
+        let fn_keys: Vec<String> = self
+            .fn_return_types
+            .keys()
+            .filter(|k| k.starts_with(&source_prefix))
+            .cloned()
+            .collect();
+        for key in &fn_keys {
+            if let Some(item_name) = key.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                self.register_reexport(&reexport_key, key);
+            }
+        }
+        let struct_keys: Vec<String> = self
+            .struct_defs
+            .keys()
+            .filter(|k| k.starts_with(&source_prefix))
+            .cloned()
+            .collect();
+        for key in &struct_keys {
+            if let Some(item_name) = key.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                if let Some(sd) = self.struct_defs.get(key).cloned() {
+                    self.struct_defs.insert(reexport_key.clone(), sd);
+                }
+                self.reexports.insert(reexport_key, key.clone());
+            }
+        }
     }
 }

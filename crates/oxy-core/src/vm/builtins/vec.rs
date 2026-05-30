@@ -202,7 +202,8 @@ where
                         Ok(Value::I64(n)) if n > 0 => {
                             v.swap(j, j + 1);
                         }
-                        _ => {}
+                        Ok(_) => {}
+                        Err(e) => return Err(format!("sort_by call_closure failed: {e}")),
                     }
                 }
             }

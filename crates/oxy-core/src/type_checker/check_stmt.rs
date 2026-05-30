@@ -5,10 +5,10 @@ impl TypeChecker {
         match stmt {
             Stmt::Let {
                 name,
+                mutable,
                 type_ann,
                 value,
                 span,
-                ..
             } => {
                 let declared = if let Some(ann) = type_ann {
                     let ty = self.resolve_annotation(ann);
@@ -20,7 +20,7 @@ impl TypeChecker {
                 let inferred = if let Some(expr) = value {
                     self.infer_expr(expr)?
                 } else {
-                    TypeInfo::Unit
+                    TypeInfo::Unknown
                 };
                 if !declared.accepts(&inferred) {
                     return Err(FerriError::TypeError {
@@ -37,7 +37,7 @@ impl TypeChecker {
                 } else {
                     inferred
                 };
-                self.env.borrow_mut().define(name, stored_ty);
+                self.env.borrow_mut().define_mut(name, stored_ty, *mutable);
                 Ok(())
             }
             Stmt::Expr {
@@ -81,6 +81,7 @@ impl TypeChecker {
                         self.infer_expr(else_expr)?;
                     }
                 } else if let Expr::IfLet {
+                    pattern,
                     expr: inner,
                     guard,
                     then_block,
@@ -89,12 +90,13 @@ impl TypeChecker {
                 } = expr
                 {
                     let _ = self.infer_expr(inner)?;
-                    if let Some(g) = guard {
-                        let _ = self.infer_expr(g)?;
-                    }
                     let block_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
                     self.env = block_env;
+                    self.bind_pattern(pattern, false);
+                    if let Some(g) = guard {
+                        let _ = self.infer_expr(g)?;
+                    }
                     for s in &then_block.stmts {
                         self.check_stmt(s, fn_ret)?;
                     }
@@ -129,11 +131,15 @@ impl TypeChecker {
                 condition, body, ..
             } => {
                 self.infer_expr(condition)?;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 Ok(())
             }
             Stmt::Loop { body, .. } => {
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 Ok(())
             }
             Stmt::For {
@@ -147,16 +153,33 @@ impl TypeChecker {
                 body_env.borrow_mut().define(name, TypeInfo::Unknown);
                 let saved = self.env.clone();
                 self.env = body_env;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 self.env = saved;
                 Ok(())
             }
             Stmt::WhileLet {
-                expr: inner, body, ..
+                pattern,
+                expr: inner,
+                body,
+                ..
             } => {
                 let _ = self.infer_expr(inner)?;
-                self.check_block(body, fn_ret)?;
-                Ok(())
+                let body_env = TypeEnv::child(&self.env);
+                let saved = self.env.clone();
+                self.env = body_env;
+                self.bind_pattern(pattern, false);
+                self.loop_depth += 1;
+                let result = (|| -> Result<(), FerriError> {
+                    for s in &body.stmts {
+                        self.check_stmt(s, fn_ret)?;
+                    }
+                    Ok(())
+                })();
+                self.loop_depth -= 1;
+                self.env = saved;
+                result
             }
             Stmt::ForDestructure {
                 names,
@@ -171,15 +194,42 @@ impl TypeChecker {
                 }
                 let saved = self.env.clone();
                 self.env = body_env;
+                self.loop_depth += 1;
                 self.check_block(body, fn_ret)?;
+                self.loop_depth -= 1;
                 self.env = saved;
                 Ok(())
             }
-            Stmt::LetPattern { value, .. } => {
+            Stmt::LetPattern {
+                pattern,
+                mutable,
+                value,
+                ..
+            } => {
                 self.infer_expr(value)?;
+                self.bind_pattern(pattern, *mutable);
                 Ok(())
             }
-            Stmt::Break { .. } | Stmt::Continue { .. } => Ok(()),
+            Stmt::Break { span, .. } => {
+                if self.loop_depth == 0 {
+                    return Err(FerriError::TypeError {
+                        message: "break outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(())
+            }
+            Stmt::Continue { span, .. } => {
+                if self.loop_depth == 0 {
+                    return Err(FerriError::TypeError {
+                        message: "continue outside of loop".into(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                Ok(())
+            }
             // Nested items are hoisted to top-level by the parser when they
             // appear inside a fn body; a Stmt::Item only survives in unusual
             // call paths (e.g. tests that invoke parse_stmt directly). Skip
@@ -187,6 +237,7 @@ impl TypeChecker {
             Stmt::Item(_) => Ok(()),
             Stmt::Use(use_def) => {
                 let base_path = use_def.path.join("::");
+                self.check_path_visible(&base_path, use_def.span)?;
                 match &use_def.tree {
                     UseTree::Simple(alias) => {
                         let local_name = alias
@@ -199,15 +250,52 @@ impl TypeChecker {
                         for (name, alias) in items {
                             let local_name = alias.as_ref().unwrap_or(name);
                             let qualified = format!("{}::{}", base_path, name);
+                            self.check_path_visible(&qualified, use_def.span)?;
                             self.use_aliases.insert(local_name.clone(), qualified);
                         }
                     }
                     UseTree::Glob => {
-                        // Glob entries are resolved by the compiler
+                        // Record the module so bare calls resolving through the
+                        // glob get a visibility check (a glob must not import
+                        // private items).
+                        self.glob_imports.push(base_path.clone());
                     }
                 }
                 Ok(())
             }
+        }
+    }
+
+    /// Define every variable a pattern introduces into the current scope.
+    /// Types are left `Unknown` (pattern-level type inference is not modelled);
+    /// the point is that these names resolve rather than tripping the
+    /// undefined-variable check. `mutable` propagates from `let mut (a, b)`.
+    pub(super) fn bind_pattern(&self, pattern: &Pattern, mutable: bool) {
+        match pattern {
+            Pattern::Ident(name, _) => {
+                self.env
+                    .borrow_mut()
+                    .define_mut(name, TypeInfo::Unknown, mutable);
+            }
+            Pattern::Tuple(pats, _) | Pattern::Slice(pats, _) | Pattern::Or(pats, _) => {
+                for p in pats {
+                    self.bind_pattern(p, mutable);
+                }
+            }
+            Pattern::EnumVariant { fields, .. } => {
+                for p in fields {
+                    self.bind_pattern(p, mutable);
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                for (_, p) in fields {
+                    self.bind_pattern(p, mutable);
+                }
+            }
+            Pattern::Literal(_)
+            | Pattern::Wildcard(_)
+            | Pattern::Rest(_)
+            | Pattern::Range { .. } => {}
         }
     }
 

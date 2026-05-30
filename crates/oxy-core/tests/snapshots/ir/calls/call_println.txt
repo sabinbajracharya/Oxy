@@ -1,0 +1,9 @@
+fn main() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.str "hello"
+    v1 = call @oxy_push_named_fn() str["println"]
+    v2 = call @oxy_call_closure(v1, v0) imm[1]
+    v3 = const.unit
+    ret v3
+}

@@ -291,7 +291,32 @@ impl TypeChecker {
                 if self.struct_defs.contains_key(&resolved) {
                     return Ok(TypeInfo::user_struct(resolved));
                 }
-                Ok(TypeInfo::Unknown)
+                // A name that matches any known symbol — a function (possibly
+                // reached via `use`/glob/`super`/re-export, so matched by short
+                // name), struct, enum, enum variant, or `const` — is a value
+                // reference, not an undefined variable. Function/path resolution
+                // for callees happens in `Expr::Call`; this guard only prevents
+                // the value-position fallback from flagging a legitimate name.
+                if self.name_matches_known_symbol(name) {
+                    return Ok(TypeInfo::Unknown);
+                }
+                // Nothing resolved — this is a genuine undefined variable.
+                // Offer a "did you mean" hint from names in scope plus
+                // top-level functions, mirroring the old interpreter's DX.
+                let mut candidates: Vec<String> = Vec::new();
+                self.env.borrow().collect_names(&mut candidates);
+                candidates.extend(self.fn_return_types.keys().cloned());
+                let suggestion =
+                    crate::errors::suggest_name(name, candidates.iter().map(|s| s.as_str()));
+                let message = match suggestion {
+                    Some(s) => format!("undefined variable '{name}'; did you mean '{s}'?"),
+                    None => format!("undefined variable '{name}'"),
+                };
+                Err(FerriError::TypeError {
+                    message,
+                    line: _span.line,
+                    column: _span.column,
+                })
             }
 
             Expr::BinaryOp {
@@ -477,21 +502,44 @@ impl TypeChecker {
                     let resolved_key = if self.fn_param_types.contains_key(name) {
                         Some(name.clone())
                     } else if !name.contains("::") {
-                        let module_prefix = self.module_stack.join("::");
-                        if !module_prefix.is_empty() {
-                            let qualified = format!("{}::{}", module_prefix, name);
-                            if self.fn_param_types.contains_key(&qualified) {
-                                Some(qualified)
+                        // Try use_aliases first (handles `use foo::bar` + `bar()`).
+                        if let Some(aliased) = self.use_aliases.get(name) {
+                            if self.fn_param_types.contains_key(aliased) {
+                                Some(aliased.clone())
                             } else {
                                 None
                             }
                         } else {
-                            None
+                            let module_prefix = self.module_stack.join("::");
+                            if !module_prefix.is_empty() {
+                                let qualified = format!("{}::{}", module_prefix, name);
+                                if self.fn_param_types.contains_key(&qualified) {
+                                    Some(qualified)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
                         }
                     } else {
                         None
                     };
+                    // Fall back to glob imports: a bare `name` may have come from
+                    // a `use module::*`. Resolve it to `module::name` so the
+                    // visibility check below rejects a private glob item.
+                    let resolved_key = resolved_key.or_else(|| {
+                        if name.contains("::") {
+                            return None;
+                        }
+                        self.glob_imports.iter().rev().find_map(|m| {
+                            let q = format!("{m}::{name}");
+                            (self.fn_defs.contains_key(&q) || self.fn_return_types.contains_key(&q))
+                                .then_some(q)
+                        })
+                    });
                     if let Some(key) = resolved_key {
+                        self.check_path_visible(&key, *span)?;
                         let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                         self.check_args_against_params(
                             &params,
@@ -542,19 +590,62 @@ impl TypeChecker {
                                 ));
                             }
                             "spawn" => {
-                                // spawn(|| expr) → JoinHandle<expr_type>
-                                let inner = if let Some(Expr::Closure { body, .. }) = args.first() {
+                                // spawn(|| expr) → JoinHandle<expr_type>. Exactly one
+                                // argument, and it must be a closure.
+                                if args.len() != 1 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "spawn expects exactly 1 argument (a closure), found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                let inner = if let Expr::Closure { body, .. } = &args[0] {
                                     self.infer_expr(body)?
                                 } else {
-                                    // spawn with a non-closure — let the compiler
-                                    // reject it; type-check leniently here.
-                                    TypeInfo::Unknown
+                                    return Err(FerriError::TypeError {
+                                        message: "spawn expects a closure argument, e.g. \
+                                                  spawn(|| expr)"
+                                            .to_string(),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
                                 };
                                 return Ok(TypeInfo::JoinHandle(Box::new(inner)));
+                            }
+                            "sleep" => {
+                                // sleep(duration) → Unit. Exactly one argument.
+                                if args.len() != 1 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "sleep expects exactly 1 argument (a duration), \
+                                             found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
+                                self.infer_expr(&args[0])?;
+                                return Ok(TypeInfo::Unit);
                             }
                             "select" => {
                                 // select(h1, h2, ...) → common inner type of all
                                 // JoinHandle args, or Unknown if they differ.
+                                // Requires at least two handles to choose between.
+                                if args.len() < 2 {
+                                    return Err(FerriError::TypeError {
+                                        message: format!(
+                                            "select expects at least 2 arguments (handles to \
+                                             choose between), found {}",
+                                            args.len()
+                                        ),
+                                        line: span.line,
+                                        column: span.column,
+                                    });
+                                }
                                 let mut inner: Option<TypeInfo> = None;
                                 for t in &arg_types {
                                     let unwrapped = match t {
@@ -586,6 +677,16 @@ impl TypeChecker {
                     }
                 }
                 // Fallback: check if callee is a function-typed value (closure, async closure).
+                // A bare-ident callee that isn't a local binding may be a builtin
+                // or global function resolved at codegen (e.g. `println(..)`); it
+                // is not an undefined *variable*, so don't infer it as a value
+                // (which would trip the undefined-variable check). Undefined value
+                // references in argument position were already checked above.
+                if let Expr::Ident(cname, _) = callee.as_ref() {
+                    if self.env.borrow().get(cname).is_none() {
+                        return Ok(TypeInfo::Unknown);
+                    }
+                }
                 let callee_ty = self.infer_expr(callee)?;
                 if let TypeInfo::Function { params, ret } = &callee_ty {
                     // Only check arg count when params are known (non-empty).
@@ -644,18 +745,22 @@ impl TypeChecker {
             }
 
             Expr::IfLet {
+                pattern,
                 expr: inner,
                 guard,
                 then_block,
                 else_block,
                 span,
-                ..
             } => {
                 let _ = self.infer_expr(inner)?;
+                let saved = self.env.clone();
+                self.env = TypeEnv::child(&saved);
+                self.bind_pattern(pattern, false);
                 if let Some(g) = guard {
                     let _ = self.infer_expr(g)?;
                 }
                 let then_ty = self.block_tail_type(then_block)?;
+                self.env = saved;
                 let result = if let Some(else_expr) = else_block {
                     let else_ty = self.infer_expr(else_expr)?;
                     self.unify_branch_types(&then_ty, &else_ty, "if let", *span)?
@@ -670,13 +775,21 @@ impl TypeChecker {
             Expr::Repeat { value, count, .. } => {
                 let val_ty = self.infer_expr(value)?;
                 let _ = self.infer_expr(count)?;
-                // Repeat literals are constant-length arrays. If the count is
-                // an integer literal we propagate it; otherwise the compiler
-                // will already have rejected non-constant counts.
-                let n = if let Expr::IntLiteral(n, _, _) = count.as_ref() {
-                    *n as usize
-                } else {
-                    0
+                // The repeat count is the array's length, which must be known at
+                // compile time. Only an integer literal qualifies; a variable or
+                // other runtime expression is rejected (matching `[T; N]`).
+                let n = match count.as_ref() {
+                    Expr::IntLiteral(n, _, _) => *n as usize,
+                    _ => {
+                        let span = count.span();
+                        return Err(FerriError::TypeError {
+                            message:
+                                "array repeat count must be a constant integer literal, e.g. `[0; 5]`"
+                                    .to_string(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
                 };
                 Ok(TypeInfo::Array(Box::new(val_ty), n))
             }
@@ -731,6 +844,17 @@ impl TypeChecker {
                 let vt = self.infer_expr(value)?;
                 match target.as_ref() {
                     Expr::Ident(name, _) => {
+                        let existing_mut = self.env.borrow().get_mutable(name);
+                        // Reassigning a known binding requires it to be `let mut`.
+                        if existing_mut == Some(false) {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "cannot assign to immutable variable `{name}`; declare it with `let mut {name}`"
+                                ),
+                                line: target.span().line,
+                                column: target.span().column,
+                            });
+                        }
                         // Check compatibility with existing binding
                         if let Some(existing) = self.env.borrow().get(name) {
                             if !existing.accepts(&vt) {
@@ -745,13 +869,22 @@ impl TypeChecker {
                                 });
                             }
                         }
-                        self.env.borrow_mut().define(name, vt);
+                        // Refine the binding's type but preserve its mutability —
+                        // an assignment must not silently turn a `let mut` into an
+                        // immutable binding (the tail expression is inferred twice).
+                        self.env
+                            .borrow_mut()
+                            .define_mut(name, vt, existing_mut.unwrap_or(true));
                     }
                     Expr::FieldAccess {
                         object,
                         field,
                         span: fspan,
                     } => {
+                        // Mutating a field requires the owning binding to be
+                        // mutable: `let mut x` for a variable, `mut self` for a
+                        // method receiver.
+                        self.check_assign_root_mutable(object, *fspan)?;
                         let obj_ty = self.infer_expr(object)?;
                         if let TypeInfo::UserStruct {
                             name: struct_name, ..
@@ -801,12 +934,24 @@ impl TypeChecker {
                 arms,
                 span,
             } => {
-                let _ = self.infer_expr(matched)?;
+                let matched_ty = self.infer_expr(matched)?;
+                if !self.match_is_exhaustive(&matched_ty, arms) {
+                    return Err(FerriError::TypeError {
+                        message: "non-exhaustive match: add a `_ =>` arm or cover all cases"
+                            .to_string(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
                 let mut arm_types: Vec<TypeInfo> = Vec::with_capacity(arms.len());
                 for arm in arms {
                     let arm_env = TypeEnv::child(&self.env);
                     let saved = self.env.clone();
                     self.env = arm_env;
+                    self.bind_pattern(&arm.pattern, false);
+                    if let Some(g) = &arm.guard {
+                        let _ = self.infer_expr(g)?;
+                    }
                     let arm_ty = self.infer_expr(&arm.body)?;
                     self.env = saved;
                     arm_types.push(arm_ty);
@@ -860,6 +1005,7 @@ impl TypeChecker {
                     }
                 });
                 if let Some(key) = resolved_key {
+                    self.check_path_visible(&key, *span)?;
                     let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                     self.check_args_against_params(
                         &params,
@@ -1229,6 +1375,7 @@ impl TypeChecker {
                 ..
             } => {
                 let resolved = self.resolve_struct_name(name);
+                self.check_path_visible(&resolved, *span)?;
                 // Pre-collect declared field types AND each field's raw
                 // annotation, so we can infer concrete generic-arg types
                 // from the supplied values (`Box { value: 5 }` → T = i64).
@@ -1461,6 +1608,10 @@ impl TypeChecker {
                     }
                     return Ok(TypeInfo::Vec(Box::new(leader)));
                 }
+                if name == "dbg" && arg_types.len() == 1 {
+                    // dbg!(expr) returns its argument unchanged.
+                    return Ok(arg_types.into_iter().next().unwrap());
+                }
                 Ok(TypeInfo::Unknown)
             }
             Expr::Path { segments, .. } => {
@@ -1537,6 +1688,157 @@ impl TypeChecker {
                 }
                 Ok(TypeInfo::Unit)
             }
+        }
+    }
+
+    /// Whether `name` (a bare identifier) corresponds to any program-level
+    /// symbol: a function, struct, enum, enum variant, `const`, or re-export.
+    /// Functions/types may be reached through `use`/glob/`super`/re-export, so
+    /// they are matched by short name (the last `::` segment) — being permissive
+    /// here only risks *not* flagging a typo that happens to collide with a real
+    /// symbol name, never a false "undefined" on legitimate code.
+    fn name_matches_known_symbol(&self, name: &str) -> bool {
+        if self.enum_variant_names.contains(name) || self.const_names.contains(name) {
+            return true;
+        }
+        let suffix = format!("::{name}");
+        let short_match = |k: &String| k == name || k.ends_with(&suffix);
+        self.fn_return_types.keys().any(short_match)
+            || self.struct_defs.keys().any(short_match)
+            || self.enum_defs.iter().any(short_match)
+            || self.reexports.keys().any(short_match)
+    }
+
+    /// Walk to the root of an assignment target's object chain and ensure the
+    /// owning binding is mutable. `x.f = …` needs `let mut x`; `self.f = …`
+    /// needs `mut self`. Roots without a binding name (indexing a temporary,
+    /// etc.) are left unchecked.
+    fn check_assign_root_mutable(&self, object: &Expr, span: Span) -> Result<(), FerriError> {
+        let mut cur = object;
+        loop {
+            match cur {
+                Expr::FieldAccess { object, .. } | Expr::Index { object, .. } => {
+                    cur = object;
+                }
+                Expr::Grouped(inner, _) => {
+                    cur = inner;
+                }
+                Expr::Ident(name, _) => {
+                    if let Some(false) = self.env.borrow().get_mutable(name) {
+                        return Err(FerriError::TypeError {
+                            message: format!(
+                                "cannot assign to a field of immutable variable `{name}`; declare it with `let mut {name}`"
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    return Ok(());
+                }
+                Expr::SelfRef { .. } => {
+                    if let Some(false) = self.env.borrow().get_mutable("self") {
+                        return Err(FerriError::TypeError {
+                            message:
+                                "cannot assign to a field through immutable `self`; declare the method with `mut self`"
+                                    .to_string(),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                    return Ok(());
+                }
+                _ => return Ok(()),
+            }
+        }
+    }
+
+    /// Decide whether a `match` covers every possible value of `matched_ty`.
+    /// Conservative: only reports non-exhaustive when confident (a closed
+    /// domain — scalar, bool, or known enum — with no catch-all). Unknown or
+    /// open types are assumed exhaustive to avoid false positives.
+    fn match_is_exhaustive(&self, matched_ty: &TypeInfo, arms: &[MatchArm]) -> bool {
+        // A guardless irrefutable arm covers everything that remains.
+        if arms
+            .iter()
+            .any(|a| a.guard.is_none() && Self::pattern_is_irrefutable(&a.pattern))
+        {
+            return true;
+        }
+        // Bool: exhaustive iff both `true` and `false` are matched literally.
+        if *matched_ty == TypeInfo::Bool {
+            let (mut seen_true, mut seen_false) = (false, false);
+            for arm in arms {
+                if arm.guard.is_some() {
+                    continue;
+                }
+                Self::collect_bool_literals(&arm.pattern, &mut seen_true, &mut seen_false);
+            }
+            return seen_true && seen_false;
+        }
+        // Known enum: exhaustive iff every variant appears in a guardless arm.
+        if let TypeInfo::UserStruct { name, .. } = matched_ty {
+            if let Some(variants) = self.enum_variants.get(name) {
+                let mut covered = std::collections::HashSet::new();
+                for arm in arms {
+                    if arm.guard.is_some() {
+                        continue;
+                    }
+                    Self::collect_covered_variants(&arm.pattern, &mut covered);
+                }
+                return variants.iter().all(|v| covered.contains(v.as_str()));
+            }
+        }
+        // Scalar domains (int/byte/float/string/char) are effectively
+        // unbounded — without a catch-all they cannot be exhaustive.
+        if matched_ty.is_integer()
+            || matched_ty.is_float()
+            || *matched_ty == TypeInfo::String
+            || *matched_ty == TypeInfo::Char
+        {
+            return false;
+        }
+        // Open / unknown types: assume exhaustive (conservative).
+        true
+    }
+
+    /// A pattern that matches any value of its type (binds or discards), so an
+    /// arm using it is a catch-all.
+    fn pattern_is_irrefutable(pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Wildcard(_) | Pattern::Ident(_, _) | Pattern::Rest(_) => true,
+            Pattern::Or(pats, _) => pats.iter().any(Self::pattern_is_irrefutable),
+            Pattern::Tuple(pats, _) => pats.iter().all(Self::pattern_is_irrefutable),
+            _ => false,
+        }
+    }
+
+    fn collect_bool_literals(pattern: &Pattern, seen_true: &mut bool, seen_false: &mut bool) {
+        match pattern {
+            Pattern::Literal(Expr::BoolLiteral(true, _)) => *seen_true = true,
+            Pattern::Literal(Expr::BoolLiteral(false, _)) => *seen_false = true,
+            Pattern::Or(pats, _) => {
+                for p in pats {
+                    Self::collect_bool_literals(p, seen_true, seen_false);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_covered_variants<'a>(
+        pattern: &'a Pattern,
+        covered: &mut std::collections::HashSet<&'a str>,
+    ) {
+        match pattern {
+            Pattern::EnumVariant { variant, .. } => {
+                covered.insert(variant.as_str());
+            }
+            Pattern::Or(pats, _) => {
+                for p in pats {
+                    Self::collect_covered_variants(p, covered);
+                }
+            }
+            _ => {}
         }
     }
 }

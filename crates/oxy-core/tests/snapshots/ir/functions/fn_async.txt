@@ -1,0 +1,13 @@
+fn delay() -> int async {
+  locals: 0
+  bb0(entry):
+    v0 = const.int 42
+    ret v0
+}
+
+fn main() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.unit
+    ret v0
+}

@@ -1,0 +1,12 @@
+fn main() -> () {
+  locals: 2
+  bb0(entry):
+    v0 = const.int 5
+    store.local $0, v0
+    v1 = load.local $0
+    v2 = neg v1
+    v3 = neg v2
+    store.local $1, v3
+    v4 = const.unit
+    ret v4
+}

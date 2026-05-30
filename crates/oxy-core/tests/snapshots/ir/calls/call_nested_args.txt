@@ -1,0 +1,33 @@
+fn add(a: int, b: int) -> int {
+  locals: 2
+  bb0(entry):
+    v0 = load.local $0
+    v1 = load.local $1
+    v2 = add v0, v1
+    ret v2
+}
+
+fn double(x: int) -> int {
+  locals: 1
+  bb0(entry):
+    v0 = load.local $0
+    v1 = const.int 2
+    v2 = mul v0, v1
+    ret v2
+}
+
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.int 1
+    v1 = call @oxy_push_named_fn() str["double"]
+    v2 = call @oxy_call_closure(v1, v0) imm[1]
+    v3 = const.int 2
+    v4 = call @oxy_push_named_fn() str["double"]
+    v5 = call @oxy_call_closure(v4, v3) imm[1]
+    v6 = call @oxy_push_named_fn() str["add"]
+    v7 = call @oxy_call_closure(v6, v2, v5) imm[2]
+    store.local $0, v7
+    v8 = const.unit
+    ret v8
+}

@@ -466,6 +466,59 @@ impl TypeChecker {
         Ok(())
     }
 
+    /// Check that the item at `qualified_name` (function, struct, or intermediate
+    /// module) is visible from the current module context.
+    pub(super) fn check_path_visible(
+        &self,
+        qualified_name: &str,
+        span: Span,
+    ) -> Result<(), FerriError> {
+        let current_module = self.module_stack.join("::");
+
+        // 1. Check function visibility.
+        if let Some(fn_def) = self.fn_defs.get(qualified_name) {
+            if !is_visible_from(
+                &fn_def.visibility,
+                qualified_name,
+                &current_module,
+                &self.module_vis,
+            ) {
+                return Err(FerriError::TypeError {
+                    message: format!("function `{qualified_name}` is private"),
+                    line: span.line,
+                    column: span.column,
+                });
+            }
+            // Even if the function is public, the module(s) containing it
+            // might be private — check those too.
+            check_module_path_visible(qualified_name, &current_module, &self.module_vis, span)?;
+            return Ok(());
+        }
+
+        // 2. Check struct visibility.
+        if let Some(sd) = self.struct_defs.get(qualified_name) {
+            if !is_visible_from(
+                &sd.visibility,
+                qualified_name,
+                &current_module,
+                &self.module_vis,
+            ) {
+                return Err(FerriError::TypeError {
+                    message: format!("struct `{qualified_name}` is private"),
+                    line: span.line,
+                    column: span.column,
+                });
+            }
+            check_module_path_visible(qualified_name, &current_module, &self.module_vis, span)?;
+            return Ok(());
+        }
+
+        // 3. Not found in fn_defs or struct_defs — still check module visibility.
+        check_module_path_visible(qualified_name, &current_module, &self.module_vis, span)?;
+
+        Ok(())
+    }
+
     /// Resolve a struct name through use_aliases (for `use foo::Bar` → `Bar` unqualified).
     pub(super) fn resolve_struct_name(&self, name: &str) -> String {
         // `Self` resolves to the current impl type
@@ -491,5 +544,111 @@ impl TypeChecker {
             }
         }
         name.to_string()
+    }
+}
+
+/// Walk intermediate path segments and verify module visibility.
+fn check_module_path_visible(
+    qualified_name: &str,
+    current_module: &str,
+    module_vis: &HashMap<String, Visibility>,
+    span: Span,
+) -> Result<(), FerriError> {
+    let segments: Vec<&str> = qualified_name.split("::").collect();
+    if segments.len() >= 2 {
+        for i in 1..segments.len() {
+            let module_path = segments[..i].join("::");
+            if let Some(vis) = module_vis.get(&module_path) {
+                if !is_visible_from(vis, &module_path, current_module, module_vis) {
+                    return Err(FerriError::TypeError {
+                        message: format!(
+                            "module `{module_path}` is private and cannot be accessed \
+                             from outside"
+                        ),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Find the nearest enclosing module for an item at `name` by walking
+/// ancestor segments and checking `module_vis`. Returns the empty string
+/// for top‑level items.
+fn enclosing_module(name: &str, module_vis: &HashMap<String, Visibility>) -> String {
+    let segments: Vec<&str> = name.split("::").collect();
+    // Walk from right to left (item → parent → grandparent).
+    // The name itself might be a module (single-segment), so include
+    // the last segment in the scan.
+    for i in (0..segments.len()).rev() {
+        let candidate = segments[..=i].join("::");
+        if module_vis.contains_key(&candidate) {
+            return candidate;
+        }
+    }
+    String::new()
+}
+
+/// Parent module: the module one level above the item's enclosing module.
+fn parent_module(name: &str, module_vis: &HashMap<String, Visibility>) -> String {
+    let enc = enclosing_module(name, module_vis);
+    if enc.is_empty() {
+        return String::new();
+    }
+    enc.rsplit_once("::")
+        .map(|(p, _)| p.to_string())
+        .unwrap_or_default()
+}
+
+/// Core visibility check: can `current_module` access an item with the given
+/// `visibility` that lives at `item_path` (a qualified name like `"api::secret"`)?
+fn is_visible_from(
+    visibility: &Visibility,
+    item_path: &str,
+    current_module: &str,
+    module_vis: &HashMap<String, Visibility>,
+) -> bool {
+    match visibility {
+        Visibility::Pub => true,
+        Visibility::PubCrate => true,
+        Visibility::PubSuper => {
+            let parent = parent_module(item_path, module_vis);
+            current_module.is_empty()
+                || current_module == parent
+                || current_module.starts_with(&format!("{parent}::"))
+        }
+        Visibility::Private => {
+            // For modules: accessible from parent and siblings.
+            // For functions/structs: accessible only from same module
+            // and siblings (NOT from parent).
+            // We distinguish by checking if `item_path` IS a known module.
+            let item_module = enclosing_module(item_path, module_vis);
+            if item_module == current_module {
+                return true;
+            }
+            let item_parent = item_module.rsplit_once("::").map(|(p, _)| p).unwrap_or("");
+            let cur_parent = current_module
+                .rsplit_once("::")
+                .map(|(p, _)| p)
+                .unwrap_or("");
+            let item_is_module = module_vis.contains_key(item_path);
+
+            if item_is_module {
+                // Private module: accessible from parent and siblings.
+                current_module == item_parent  // parent
+                    || (item_parent == cur_parent  // sibling
+                        && cur_parent != current_module)
+                    || (item_parent.is_empty()
+                        && current_module.is_empty()
+                        && item_module == item_path) // file-level
+            } else {
+                // Private function/struct: accessible from siblings only
+                // (same module already handled above).
+                item_parent == cur_parent && cur_parent != current_module
+            }
+        }
     }
 }

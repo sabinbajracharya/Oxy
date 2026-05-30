@@ -1,0 +1,26 @@
+fn f() -> int {
+  locals: 0
+  bb0(entry):
+    v0 = const.int 1
+    ret v0
+}
+
+fn g() -> int {
+  locals: 0
+  bb0(entry):
+    v0 = const.int 2
+    ret v0
+}
+
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = call @oxy_push_named_fn() str["f"]
+    v1 = call @oxy_call_closure(v0) imm[0]
+    v2 = call @oxy_push_named_fn() str["g"]
+    v3 = call @oxy_call_closure(v2) imm[0]
+    v4 = add v1, v3
+    store.local $0, v4
+    v5 = const.unit
+    ret v5
+}

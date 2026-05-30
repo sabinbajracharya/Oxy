@@ -1,0 +1,15 @@
+fn main() -> () {
+  locals: 1
+  bb0(entry):
+    v0 = const.int 1
+    v1 = const.int 2
+    v2 = const.int 3
+    v3 = call @oxy_make_array(v0, v1, v2) imm[3]
+    store.local $0, v3
+    v4 = const.int 99
+    v5 = load.local $0
+    v6 = const.int 0
+    v7 = call @oxy_vec_index_store(v5, v6, v4)
+    v8 = const.unit
+    ret v8
+}

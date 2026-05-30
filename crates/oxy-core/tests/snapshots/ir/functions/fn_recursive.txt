@@ -1,0 +1,40 @@
+fn fact(n: int) -> int {
+  locals: 2
+  bb0(entry):
+    v0 = load.local $0
+    v1 = const.int 1
+    v2 = le v0, v1
+    branch v2 -> bb4, bb1
+
+  bb1(preds: bb0):
+    v3 = const.unit
+    jump bb2
+
+  bb2(preds: bb1):
+    v4 = phi v14, v3
+    store.local $1, v4
+    jump bb3
+
+  bb3(preds: bb2):
+    v5 = load.local $1
+    v6 = load.local $0
+    v7 = load.local $0
+    v8 = const.int 1
+    v9 = sub v7, v8
+    v10 = call @oxy_push_named_fn() str["fact"]
+    v11 = call @oxy_call_closure(v10, v9) imm[1]
+    v12 = mul v6, v11
+    ret v12
+
+  bb4(preds: bb0):
+    v13 = const.int 1
+    v14 = const.unit
+    ret v13
+}
+
+fn main() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.unit
+    ret v0
+}

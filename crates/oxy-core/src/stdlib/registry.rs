@@ -59,9 +59,40 @@ pub fn lookup_module(name: &str) -> Option<ModuleCall> {
     MODULES.iter().find(|m| m.name == name).map(|m| m.call)
 }
 
-/// Look up an item by exact path.
+/// Look up a module-level constant such as `math::PI`. Returns the value if the
+/// named module exposes a constant of that name.
+pub fn lookup_constant(module: &str, name: &str) -> Option<Value> {
+    match module {
+        "math" => crate::stdlib::math::constant(name),
+        _ => None,
+    }
+}
+
+/// Look up an item by path.
+///
+/// Tries an exact match first. On a miss, retries against the trailing
+/// `Type::method` segments: a `use`-resolved path such as
+/// `std::collections::HashMap::new` canonicalizes to the registered short form
+/// `HashMap::new`. The std-module prefix is just the import path — the
+/// `[TypeName, method]` tail is what identifies the associated function.
+///
+/// The fallback only fires for paths longer than two segments, so it never
+/// shadows a bare item, and the registered 2-segment items are all reserved
+/// CamelCase builtin type names (`HashMap`, `String`, `Regex`, …) that a user
+/// cannot redefine — so the tail match can't collide with a user module.
 pub fn lookup_item(path: &[&str]) -> Option<ItemHandler> {
-    ITEMS.iter().find(|i| i.path == path).map(|i| i.handler)
+    if let Some(handler) = ITEMS.iter().find(|i| i.path == path).map(|i| i.handler) {
+        return Some(handler);
+    }
+    // Flatten each segment on `::` — a `use`-resolved segment can itself be a
+    // qualified name (e.g. `"std::collections::HashMap"`) — then retry against
+    // the trailing `Type::method` pair.
+    let flat: Vec<&str> = path.iter().flat_map(|s| s.split("::")).collect();
+    if flat.len() > 2 {
+        let tail = &flat[flat.len() - 2..];
+        return ITEMS.iter().find(|i| i.path == tail).map(|i| i.handler);
+    }
+    None
 }
 
 /// True iff `path` is a built-in: either `[module, _]` / `[std, module, _]`
@@ -201,8 +232,20 @@ static ITEMS: &[Item] = &[
         handler: regex_new,
     },
     Item {
-        path: &["std", "regex", "Regex", "new"],
-        handler: regex_new,
+        path: &["assert_eq"],
+        handler: assert_eq_handler,
+    },
+    Item {
+        path: &["assert_ne"],
+        handler: assert_ne_handler,
+    },
+    Item {
+        path: &["assert"],
+        handler: assert_handler,
+    },
+    Item {
+        path: &["panic"],
+        handler: panic_handler,
     },
 ];
 
@@ -319,4 +362,50 @@ fn regex_new(args: &[Value]) -> Result<Value, String> {
         name: "Regex".to_string(),
         fields,
     })
+}
+
+fn assert_eq_handler(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(format!("assert_eq! takes 2 arguments, got {}", args.len()));
+    }
+    if args[0] != args[1] {
+        return Err(format!(
+            "assertion failed: `(left == right)`\n  left: `{:?}`\n right: `{:?}`",
+            args[0], args[1]
+        ));
+    }
+    Ok(Value::Unit)
+}
+
+fn assert_ne_handler(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(format!("assert_ne! takes 2 arguments, got {}", args.len()));
+    }
+    if args[0] == args[1] {
+        return Err(format!(
+            "assertion failed: `(left != right)`\n  left: `{:?}`\n right: `{:?}`",
+            args[0], args[1]
+        ));
+    }
+    Ok(Value::Unit)
+}
+
+fn assert_handler(args: &[Value]) -> Result<Value, String> {
+    let cond = args.first().cloned().unwrap_or(Value::Unit);
+    if !cond.is_truthy() {
+        // `assert!(cond, "msg", fmt_args...)` — the optional message is a
+        // format template (matching Rust). Reuse the same template engine as
+        // `format!`/`println!` so `{}`/`{:?}` behave identically.
+        if args.len() >= 2 {
+            let template = args[1].to_string();
+            return Err(crate::types::format_template(&template, &args[2..]));
+        }
+        return Err(format!("assertion failed: `{:?}` is not truthy", cond));
+    }
+    Ok(Value::Unit)
+}
+
+fn panic_handler(args: &[Value]) -> Result<Value, String> {
+    let msg = args.first().map(|v| v.to_string()).unwrap_or_default();
+    Err(msg)
 }

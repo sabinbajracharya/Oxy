@@ -1,0 +1,13 @@
+fn main() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.unit
+    ret v0
+}
+
+fn noop() -> () {
+  locals: 0
+  bb0(entry):
+    v0 = const.unit
+    ret v0
+}

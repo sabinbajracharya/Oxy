@@ -1,0 +1,4156 @@
+//! AST → Register IR + CFG code generator.
+//!
+//! Walks typed AST items and emits register-based IR with basic blocks.
+//! Replaces the old bytecode compiler (`compiler/`).
+//!
+//! # Pipeline
+//! 1. Parse source → AST
+//! 2. Type-check AST
+//! 3. `IrGen::gen_program()` → `Vec<IrFunction>` (register IR + CFG)
+//! 4. `codegen.rs` → Cranelift CLIF
+
+use super::ir::*;
+use crate::ast::*;
+use crate::type_checker::TypeInfo;
+
+/// IR code generator. Walks a typed AST and produces register IR.
+pub(crate) struct IrGen {
+    /// All generated functions (including closures, async blocks).
+    pub(crate) functions: Vec<IrFunction>,
+    /// Closure metadata indexed by meta_idx (param_names, captures, is_async).
+    pub(crate) closure_meta: Vec<(Vec<String>, Vec<(String, usize, bool)>, bool)>,
+    /// Current function being generated.
+    current: IrFunction,
+    /// Current basic block being built.
+    current_block: BlockId,
+    /// Next available virtual register.
+    next_reg: Reg,
+    /// Next available block ID.
+    next_block: BlockId,
+    /// Local variable name → slot index.
+    locals: std::collections::HashMap<String, usize>,
+    /// Number of local slots allocated.
+    local_count: usize,
+    /// Current break target (loop exit block).
+    break_target: Option<BlockId>,
+    /// Current continue target (loop header block).
+    continue_target: Option<BlockId>,
+    /// Slot to store break value for `loop { break expr; }` result propagation.
+    break_value_slot: Option<usize>,
+    /// Labeled loop targets: label → (break_block, continue_block).
+    labeled_targets: std::collections::HashMap<String, (BlockId, BlockId)>,
+    /// Global const values: name → value expression (from `const NAME = expr;`).
+    global_consts: std::collections::HashMap<String, crate::ast::Expr>,
+    /// Use aliases: local_name → qualified_name (from `use path::to::item;`).
+    use_aliases: std::collections::HashMap<String, String>,
+    /// Source modules brought into scope by glob imports (`use path::to::*;`),
+    /// already resolved to absolute paths. A bare callee that matches no alias
+    /// or sibling is resolved against these by trying `glob_mod::name`.
+    glob_mods: Vec<String>,
+    /// Variant name → parent enum name (e.g. "Some" → "Option").
+    /// Seeded from AST enum definitions so user-defined enums work without hardcoding.
+    variant_to_enum: std::collections::HashMap<String, String>,
+    /// Local slot → type annotation name (for width coercion on compound assignment).
+    local_types: std::collections::HashMap<usize, String>,
+    /// Current module path prefix for resolving self/super/crate in ir_gen.
+    current_module_prefix: String,
+    /// Re-exported function aliases: module::local_name → original_qualified_name.
+    /// Populated from `pub use` inside modules so call resolution can redirect.
+    fn_aliases: std::collections::HashMap<String, String>,
+    /// Trait definitions collected from Item::Trait during gen_program.
+    /// Used to compile default method bodies for impl Trait blocks that don't override them.
+    trait_defs: std::collections::HashMap<String, crate::ast::TraitDef>,
+    /// Tuple-struct names → field arity (e.g. "WrappedInt" → 1, "shapes::Pair" → 2).
+    /// A call `WrappedInt(17)` is lowered to struct construction with positional
+    /// field names "0", "1", … — matching what `oxy_field_access` expects for `.0`.
+    tuple_structs: std::collections::HashMap<String, usize>,
+    /// Slots of `let mut` bindings in the current function — the candidates for
+    /// Cell promotion when captured by a closure (see `MakeCell`).
+    mut_slots: std::collections::HashSet<usize>,
+    /// Slots already promoted to a `Value::Cell` via `MakeCell` in the current
+    /// function. Guards against double-wrapping when several closures capture the
+    /// same mutable variable.
+    celled_slots: std::collections::HashSet<usize>,
+    /// Generic free/module function templates by qualified name → (def, module
+    /// prefix active at definition). Used to emit monomorphized copies for each
+    /// turbofish instantiation (e.g. `make_zero::<int>()`).
+    generic_fns: std::collections::HashMap<String, (crate::ast::FnDef, String)>,
+    /// Active type-parameter → concrete-type substitution while lowering a
+    /// monomorphized instance (e.g. `{T: "int"}`), so `T::zero()` resolves to
+    /// `int::zero()`. Empty when lowering a non-generic function.
+    type_subst: std::collections::HashMap<String, String>,
+    /// Monomorphized instance names already emitted, for deduplication.
+    mono_emitted: std::collections::HashSet<String>,
+    /// Qualified names of unit structs (`struct Thing;`). A bare reference to
+    /// one (e.g. `let t = Thing;`) constructs an empty `Value::Struct` rather
+    /// than a function reference.
+    unit_structs: std::collections::HashSet<String>,
+    /// Qualified names of all free / module functions, collected before body
+    /// lowering. Lets a call site qualify a bare callee with the current module
+    /// prefix (sibling call) only when such a function actually exists.
+    fn_names: std::collections::HashSet<String>,
+    /// Type name of the impl block currently being lowered (e.g. "Counter" or
+    /// "shapes::Point"). `Self` in a method body — both `Self { .. }` struct
+    /// literals and `Self::assoc()` paths — resolves to this name so the value
+    /// carries its concrete struct name for method dispatch. `None` outside a
+    /// method body.
+    current_self_type: Option<String>,
+    /// Type aliases: qualified alias name → qualified target type name (from
+    /// `type Alias = Target;`). Lets `Alias::Variant` and `Alias::assoc()`
+    /// resolve to the underlying enum/struct. Collected in the pre-pass so
+    /// forward references work regardless of definition order.
+    type_aliases: std::collections::HashMap<String, String>,
+}
+
+impl IrGen {
+    /// Register a variant → enum mapping. For module-level enums, the prefix is
+    /// already baked into the enum name (e.g. "shapes::Color").
+    fn register_enum(&mut self, enum_def: &crate::ast::EnumDef) {
+        for variant in &enum_def.variants {
+            self.variant_to_enum
+                .insert(variant.name.clone(), enum_def.name.clone());
+        }
+    }
+}
+
+impl IrGen {
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+            closure_meta: Vec::new(),
+            current: IrFunction::new(String::new(), 0, 0, usize::MAX),
+            current_block: 0,
+            next_reg: 0,
+            next_block: 0,
+            locals: std::collections::HashMap::new(),
+            local_count: 0,
+            break_target: None,
+            continue_target: None,
+            break_value_slot: None,
+            labeled_targets: std::collections::HashMap::new(),
+            global_consts: std::collections::HashMap::new(),
+            use_aliases: std::collections::HashMap::new(),
+            glob_mods: Vec::new(),
+            variant_to_enum: Self::builtin_variants(),
+            local_types: std::collections::HashMap::new(),
+            current_module_prefix: String::new(),
+            fn_aliases: std::collections::HashMap::new(),
+            trait_defs: std::collections::HashMap::new(),
+            tuple_structs: std::collections::HashMap::new(),
+            mut_slots: std::collections::HashSet::new(),
+            celled_slots: std::collections::HashSet::new(),
+            generic_fns: std::collections::HashMap::new(),
+            type_subst: std::collections::HashMap::new(),
+            mono_emitted: std::collections::HashSet::new(),
+            unit_structs: std::collections::HashSet::new(),
+            fn_names: std::collections::HashSet::new(),
+            current_self_type: None,
+            type_aliases: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Built-in enum variants that don't come from user AST definitions.
+    fn builtin_variants() -> std::collections::HashMap<String, String> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("Some".to_string(), "Option".to_string());
+        m.insert("None".to_string(), "Option".to_string());
+        m.insert("Ok".to_string(), "Result".to_string());
+        m.insert("Err".to_string(), "Result".to_string());
+        m
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+
+    fn alloc_reg(&mut self) -> Reg {
+        let r = self.next_reg;
+        self.next_reg += 1;
+        r
+    }
+
+    fn alloc_block(&mut self) -> BlockId {
+        let id = self.next_block;
+        self.next_block += 1;
+        id
+    }
+
+    fn alloc_local(&mut self, name: &str) -> usize {
+        let slot = self.local_count;
+        self.locals.insert(name.to_string(), slot);
+        self.local_count += 1;
+        slot
+    }
+
+    /// Resolve `self`, `super`, `crate` path prefixes and `use_aliases` against
+    /// the current module context, producing an absolute path segment list.
+    fn resolve_module_path(&self, path: &[String]) -> Vec<String> {
+        let mut module_parts: Vec<&str> = self
+            .current_module_prefix
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut iter = path.iter().peekable();
+        let mut resolved: Vec<String> = Vec::new();
+
+        // Consume leading self / super / crate prefixes.
+        while let Some(seg) = iter.peek() {
+            match seg.as_str() {
+                "self" => {
+                    iter.next();
+                }
+                "super" => {
+                    module_parts.pop();
+                    iter.next();
+                }
+                "crate" => {
+                    module_parts.clear();
+                    iter.next();
+                }
+                _ => break,
+            }
+        }
+
+        // Resolve the first remaining segment through use_aliases.
+        // If found, the alias provides a fully-qualified path so we skip
+        // prepending current_module_prefix. Otherwise fall back to the
+        // module prefix for relative resolution. The alias target is split
+        // back into individual segments (a `use std::env` alias maps to the
+        // string "std::env") so the path stays segment-aligned — downstream
+        // FFI dispatch matches paths segment-by-segment (`["std", mod, fn]`),
+        // which a single embedded-`::` segment would silently defeat.
+        if let Some(first) = iter.next() {
+            if let Some(resolved_first) = self.use_aliases.get(first) {
+                resolved.extend(resolved_first.split("::").map(str::to_string));
+            } else {
+                resolved.extend(module_parts.iter().map(|s| s.to_string()));
+                resolved.push(first.clone());
+            }
+        } else {
+            // Entire path was self/super/crate — emit the module context.
+            resolved.extend(module_parts.iter().map(|s| s.to_string()));
+        }
+
+        // Output remaining path segments.
+        resolved.extend(iter.cloned());
+        resolved
+    }
+
+    /// Replace a leading type-alias segment with its underlying type. Given an
+    /// already module-resolved path whose first N-1 segments name a type (e.g.
+    /// `["Direction", "Up"]` or `["P", "origin"]`), rewrite that type portion
+    /// through the alias map so the call resolves to the real enum/struct
+    /// (`["Dir", "Up"]`, `["Point", "origin"]`). Non-alias paths pass through.
+    fn resolve_type_alias_in_path(&self, segments: &[String]) -> Vec<String> {
+        if segments.len() < 2 {
+            return segments.to_vec();
+        }
+        let type_part = segments[..segments.len() - 1].join("::");
+        if let Some(target) = self.type_aliases.get(&type_part) {
+            let mut out: Vec<String> = target.split("::").map(str::to_string).collect();
+            out.push(segments[segments.len() - 1].clone());
+            out
+        } else {
+            segments.to_vec()
+        }
+    }
+
+    /// Resolve a `use` declaration's path to an absolute segment list. Unlike
+    /// reference sites (handled by [`resolve_module_path`], which are relative
+    /// to the enclosing module), `use` paths are crate-absolute — `use a::b`
+    /// inside `mod m` means `a::b`, not `m::a::b`. Only a leading `self` /
+    /// `super` / `crate` prefix makes the path relative, and that prefix is
+    /// resolved against the current module context.
+    fn resolve_use_path(&self, path: &[String]) -> Vec<String> {
+        let mut module_parts: Vec<&str> = self
+            .current_module_prefix
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut iter = path.iter().peekable();
+        let mut had_prefix = false;
+        while let Some(seg) = iter.peek() {
+            match seg.as_str() {
+                "self" => {
+                    iter.next();
+                    had_prefix = true;
+                }
+                "super" => {
+                    module_parts.pop();
+                    iter.next();
+                    had_prefix = true;
+                }
+                "crate" => {
+                    module_parts.clear();
+                    iter.next();
+                    had_prefix = true;
+                }
+                _ => break,
+            }
+        }
+        let mut resolved: Vec<String> = Vec::new();
+        // A self/super/crate prefix anchors the remaining path to the resolved
+        // module context; a bare path is already crate-absolute.
+        if had_prefix {
+            resolved.extend(module_parts.iter().map(|s| s.to_string()));
+        }
+        resolved.extend(iter.cloned());
+        resolved
+    }
+
+    fn lookup_local(&self, name: &str) -> Option<usize> {
+        self.locals.get(name).copied()
+    }
+
+    fn emit(&mut self, op: IrOp) {
+        self.current.block_mut(self.current_block).push(op);
+    }
+
+    fn terminate(&mut self, term: Terminator) {
+        self.current.block_mut(self.current_block).terminate(term);
+    }
+
+    /// Emit a cast for a register value to the given type annotation.
+    /// Returns the (possibly new) register holding the coerced value.
+    fn coerce_reg(&mut self, reg: Reg, type_ann: &TypeAnnotation) -> Reg {
+        match type_ann {
+            TypeAnnotation::Named { name, .. } if name == "byte" => {
+                let result = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result,
+                    func: "oxy_cast_byte",
+                    args: vec![reg],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                result
+            }
+            _ => reg,
+        }
+    }
+
+    /// Emit a cast for a register value to the given TypeInfo.
+    fn coerce_reg_to_type_info(&mut self, reg: Reg, ty: &TypeInfo) -> Reg {
+        if *ty == TypeInfo::U8 {
+            let result = self.alloc_reg();
+            self.emit(IrOp::CallBuiltin {
+                result,
+                func: "oxy_cast_byte",
+                args: vec![reg],
+                immediates: vec![],
+                strings: vec![],
+            });
+            result
+        } else {
+            reg
+        }
+    }
+
+    fn start_block(&mut self, id: BlockId) {
+        while self.current.blocks.len() <= id {
+            self.current.add_block();
+        }
+        self.current_block = id;
+    }
+
+    // ── Top-level ──────────────────────────────────────────────────────
+
+    /// Generate IR for an entire program.
+    pub fn gen_program(&mut self, program: &Program) {
+        // Pre-pass: register generic function templates so call sites with
+        // turbofish can monomorphize regardless of definition order.
+        self.register_generic_fns(&program.items, "");
+        for item in &program.items {
+            match item {
+                Item::Function(f) => self.gen_fn(f, None),
+                Item::Impl(imp) => {
+                    // Dispatch key is the base type name (generics stripped):
+                    // runtime resolves methods by a value's base struct name.
+                    let prefix = imp.base_type_name().to_string();
+                    for method in &imp.methods {
+                        self.gen_method(method, &prefix);
+                    }
+                }
+                Item::Trait(t) => {
+                    self.trait_defs.insert(t.name.clone(), t.clone());
+                }
+                Item::ImplTrait(imp) => {
+                    let prefix = imp.base_type_name().to_string();
+                    // Compile provided methods
+                    for method in &imp.methods {
+                        self.gen_method(method, &prefix);
+                    }
+                    // Compile trait default methods that weren't overridden
+                    let default_fns: Vec<crate::ast::FnDef> = self
+                        .trait_defs
+                        .get(&imp.trait_name)
+                        .map(|td| {
+                            let provided: std::collections::HashSet<&str> =
+                                imp.methods.iter().map(|m| m.name.as_str()).collect();
+                            td.default_methods
+                                .iter()
+                                .filter(|df| !provided.contains(df.name.as_str()))
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    for default_fn in &default_fns {
+                        self.gen_method(default_fn, &prefix);
+                    }
+                }
+                Item::Const { name, value, .. } => {
+                    self.global_consts.insert(name.clone(), value.clone());
+                }
+                Item::Module(m) => {
+                    if let Some(ref items) = m.body {
+                        self.gen_module_items(items, &m.name);
+                    }
+                }
+                Item::Use(use_def) => self.register_use(use_def),
+                Item::Enum(e) => self.register_enum(e),
+                Item::Struct(s) => match &s.kind {
+                    crate::ast::StructKind::Tuple(types) => {
+                        self.tuple_structs.insert(s.name.clone(), types.len());
+                    }
+                    crate::ast::StructKind::Unit => {
+                        self.unit_structs.insert(s.name.clone());
+                    }
+                    crate::ast::StructKind::Named(_) => {}
+                },
+                // Other type items don't generate IR directly
+                _ => {}
+            }
+        }
+    }
+
+    /// Recursively compile items inside a module with the given qualified prefix.
+    fn gen_module_items(&mut self, items: &[Item], prefix: &str) {
+        let saved_prefix = self.current_module_prefix.clone();
+        self.current_module_prefix = prefix.to_string();
+        for item in items {
+            match item {
+                Item::Function(f) => self.gen_fn(f, Some(prefix)),
+                Item::Enum(e) => {
+                    // Register enum with its fully-qualified module prefix.
+                    let full_name = format!("{prefix}::{}", e.name);
+                    for variant in &e.variants {
+                        self.variant_to_enum
+                            .insert(variant.name.clone(), full_name.clone());
+                    }
+                }
+                Item::Module(m) => {
+                    let nested = format!("{prefix}::{}", m.name);
+                    if let Some(ref items) = m.body {
+                        self.gen_module_items(items, &nested);
+                    }
+                }
+                Item::Impl(imp) => {
+                    let qualified_type = format!("{prefix}::{}", imp.base_type_name());
+                    for method in &imp.methods {
+                        self.gen_method(method, &qualified_type);
+                    }
+                }
+                Item::Trait(t) => {
+                    let full_name = format!("{prefix}::{}", t.name);
+                    self.trait_defs.insert(full_name, t.clone());
+                }
+                Item::ImplTrait(imp) => {
+                    let qualified_type = format!("{prefix}::{}", imp.base_type_name());
+                    for method in &imp.methods {
+                        self.gen_method(method, &qualified_type);
+                    }
+                    // Compile trait default methods that weren't overridden.
+                    let full_trait_name = format!("{prefix}::{}", imp.trait_name);
+                    let default_fns: Vec<crate::ast::FnDef> = self
+                        .trait_defs
+                        .get(&imp.trait_name)
+                        .or_else(|| self.trait_defs.get(&full_trait_name))
+                        .map(|trait_def| {
+                            let provided: std::collections::HashSet<&str> =
+                                imp.methods.iter().map(|m| m.name.as_str()).collect();
+                            trait_def
+                                .default_methods
+                                .iter()
+                                .filter(|df| !provided.contains(df.name.as_str()))
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    for default_fn in &default_fns {
+                        self.gen_method(default_fn, &qualified_type);
+                    }
+                }
+                Item::Use(use_def) => self.register_use(use_def),
+                Item::Const { name, value, .. } => {
+                    self.global_consts.insert(name.clone(), value.clone());
+                }
+                Item::Struct(s) => {
+                    // Qualified key matches the name produced by
+                    // resolve_module_path at in-module reference sites.
+                    let full_name = format!("{prefix}::{}", s.name);
+                    match &s.kind {
+                        crate::ast::StructKind::Tuple(types) => {
+                            self.tuple_structs.insert(full_name, types.len());
+                        }
+                        crate::ast::StructKind::Unit => {
+                            self.unit_structs.insert(full_name);
+                        }
+                        crate::ast::StructKind::Named(_) => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.current_module_prefix = saved_prefix;
+    }
+
+    /// Register a `use` declaration's aliases, glob imports, and — for a
+    /// `pub use` inside a module — re-exports. Path prefixes (`self` / `super`
+    /// / `crate`) are resolved against the current module context, so this must
+    /// run with `current_module_prefix` set to the module containing the `use`.
+    /// Shared by the three sites that handle `use` (top-level items, module
+    /// items, and in-function statements) so glob handling and prefix
+    /// resolution stay identical across all of them.
+    fn register_use(&mut self, use_def: &crate::ast::UseDef) {
+        let base = self.resolve_use_path(&use_def.path).join("::");
+        let prefix = self.current_module_prefix.clone();
+        // A `pub use` inside a module re-exports the item at `prefix::local`.
+        let reexport =
+            matches!(use_def.visibility, crate::ast::Visibility::Pub) && !prefix.is_empty();
+        match &use_def.tree {
+            crate::ast::UseTree::Simple(alias) => {
+                let local = alias
+                    .clone()
+                    .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                self.use_aliases.insert(local.clone(), base.clone());
+                if reexport {
+                    self.fn_aliases.insert(format!("{prefix}::{local}"), base);
+                }
+            }
+            crate::ast::UseTree::Group(items) => {
+                for (name, alias) in items {
+                    let local = alias.as_ref().unwrap_or(name);
+                    let qualified = format!("{base}::{name}");
+                    self.use_aliases.insert(local.clone(), qualified.clone());
+                    if reexport {
+                        self.fn_aliases
+                            .insert(format!("{prefix}::{local}"), qualified);
+                    }
+                }
+            }
+            crate::ast::UseTree::Glob => {
+                self.glob_mods.push(base.clone());
+                if reexport {
+                    self.register_glob_fn_aliases(&prefix, &base);
+                }
+            }
+        }
+    }
+
+    /// Register glob re-exports: for every function whose name starts with
+    /// `source_mod::`, register it under `prefix::item_name`. Iterates
+    /// `fn_names` (fully populated by the pre-pass) rather than the
+    /// incrementally-built `functions`, so re-exports resolve regardless of
+    /// whether the source module is defined before or after the `pub use`.
+    fn register_glob_fn_aliases(&mut self, prefix: &str, source_mod: &str) {
+        let source_prefix = format!("{source_mod}::");
+        let known_names: Vec<String> = self
+            .fn_names
+            .iter()
+            .filter(|n| n.starts_with(&source_prefix))
+            .cloned()
+            .collect();
+        for full_name in &known_names {
+            if let Some(item_name) = full_name.strip_prefix(&source_prefix) {
+                if item_name.contains("::") {
+                    continue;
+                }
+                let reexport_key = format!("{prefix}::{item_name}");
+                self.fn_aliases.insert(reexport_key, full_name.clone());
+            }
+        }
+    }
+
+    /// Resolve a function name through the re-export alias chain. Follows
+    /// chains like layer3::value → layer2::value → layer1::value, stopping on
+    /// any revisited name so a self-referential alias (e.g. `pub use self::val`
+    /// registering `m::val → m::val`) or a cycle terminates instead of looping.
+    fn resolve_fn_alias(&self, name: &str) -> String {
+        let mut current = name.to_string();
+        let mut seen = std::collections::HashSet::new();
+        seen.insert(current.clone());
+        while let Some(target) = self.fn_aliases.get(&current) {
+            if !seen.insert(target.clone()) {
+                break;
+            }
+            current = target.clone();
+        }
+        current
+    }
+
+    /// Resolve a bare identifier naming a function (callee or value reference) to
+    /// the function's compiled name. Precedence: explicit `use` alias, then a
+    /// sibling function in the current module (`prefix::name`) when one exists,
+    /// then the bare name — each finally run through the re-export alias chain.
+    /// The module-qualification step is what makes an unqualified sibling call
+    /// inside a module (`private_fn()` within `mod api`) reach `api::private_fn`
+    /// without breaking calls to top-level functions from inside a module.
+    fn resolve_callable_name(&self, name: &str) -> String {
+        if let Some(alias) = self.use_aliases.get(name) {
+            return self.resolve_fn_alias(alias);
+        }
+        let qualified = self.resolve_module_path(&[name.to_string()]).join("::");
+        if qualified != name && self.fn_names.contains(&qualified) {
+            return self.resolve_fn_alias(&qualified);
+        }
+        // Glob imports (`use mod::*`): try `glob_mod::name`, following any
+        // re-export chain, and accept the first candidate that names a real
+        // function. fn_names is fully populated by the pre-pass, so this works
+        // whether the source module is defined before or after the glob.
+        for glob_mod in &self.glob_mods {
+            let candidate = format!("{glob_mod}::{name}");
+            let resolved = self.resolve_fn_alias(&candidate);
+            if self.fn_names.contains(&resolved) {
+                return resolved;
+            }
+        }
+        self.resolve_fn_alias(name)
+    }
+
+    /// Resolve an enum-variant reference written in a pattern (e.g. `Color::Red`,
+    /// parsed with `enum_name = "Color"`) to the fully-qualified enum identity
+    /// the value was constructed with (e.g. `"colors::Color"`). Equality in
+    /// `oxy_enum_variant_equal` compares the full enum name, so a pattern arm
+    /// inside module `colors` — or one referring to the enum through a `use`
+    /// alias — must canonicalize the same way construction sites do.
+    fn resolve_pattern_enum_name(&self, enum_name: &str, variant: &str) -> String {
+        // The variant→enum map holds the canonical (module-qualified) name that
+        // construction also produces. Adopt it only when it agrees with what was
+        // written (exact, or as a `::`-qualified suffix) so two distinct enums
+        // sharing a variant name aren't conflated.
+        if let Some(canonical) = self.variant_to_enum.get(variant) {
+            if canonical == enum_name
+                || canonical.rsplit("::").next() == Some(enum_name)
+                || canonical.ends_with(&format!("::{enum_name}"))
+            {
+                return canonical.clone();
+            }
+        }
+        // Fall back to module-path resolution, mirroring Expr::Path construction.
+        let mut segments: Vec<String> = enum_name.split("::").map(|s| s.to_string()).collect();
+        segments.push(variant.to_string());
+        let resolved = self.resolve_module_path(&segments);
+        if resolved.len() > 1 {
+            resolved[..resolved.len() - 1].join("::")
+        } else {
+            enum_name.to_string()
+        }
+    }
+
+    /// Convert a type annotation to TypeInfo (simple types only; complex types map to Unknown).
+    fn type_ann_to_type_info(ann: &TypeAnnotation) -> TypeInfo {
+        match ann {
+            TypeAnnotation::Named {
+                name, generic_args, ..
+            } => {
+                if generic_args.is_empty() {
+                    TypeInfo::from_name(name)
+                } else {
+                    // Parameterized types — map generics and construct
+                    let args: Vec<TypeInfo> = generic_args
+                        .iter()
+                        .map(Self::type_ann_to_type_info)
+                        .collect();
+                    match name.as_str() {
+                        "Vec" => TypeInfo::Vec(Box::new(
+                            args.first().cloned().unwrap_or(TypeInfo::Unknown),
+                        )),
+                        "HashMap" => TypeInfo::HashMap(
+                            Box::new(args.first().cloned().unwrap_or(TypeInfo::Unknown)),
+                            Box::new(args.get(1).cloned().unwrap_or(TypeInfo::Unknown)),
+                        ),
+                        "Option" => TypeInfo::Option(Box::new(
+                            args.first().cloned().unwrap_or(TypeInfo::Unknown),
+                        )),
+                        "Result" => TypeInfo::Result(
+                            Box::new(args.first().cloned().unwrap_or(TypeInfo::Unknown)),
+                            Box::new(args.get(1).cloned().unwrap_or(TypeInfo::Unknown)),
+                        ),
+                        _ => TypeInfo::UserStruct {
+                            name: name.clone(),
+                            generic_args: args,
+                        },
+                    }
+                }
+            }
+            TypeAnnotation::Array { inner, size, .. } => {
+                TypeInfo::Array(Box::new(Self::type_ann_to_type_info(inner)), *size)
+            }
+        }
+    }
+
+    /// Generate IR for one function.
+    /// Walk items (recursing into modules) and record every generic free /
+    /// module function under its qualified name, paired with the module prefix
+    /// active where it's defined. Impl methods are not monomorphized here.
+    fn register_generic_fns(&mut self, items: &[Item], prefix: &str) {
+        for item in items {
+            match item {
+                Item::Function(f) => {
+                    let qualified = if prefix.is_empty() {
+                        f.name.clone()
+                    } else {
+                        format!("{prefix}::{}", f.name)
+                    };
+                    self.fn_names.insert(qualified.clone());
+                    if !f.generic_params.is_empty() {
+                        self.generic_fns
+                            .insert(qualified, (f.clone(), prefix.to_string()));
+                    }
+                }
+                Item::Module(m) => {
+                    if let Some(ref body) = m.body {
+                        let nested = if prefix.is_empty() {
+                            m.name.clone()
+                        } else {
+                            format!("{prefix}::{}", m.name)
+                        };
+                        self.register_generic_fns(body, &nested);
+                    }
+                }
+                Item::TypeAlias { name, target, .. } => {
+                    // Only simple named targets can be used as a path prefix
+                    // (`Alias::Variant`). Compound targets (arrays, generics)
+                    // have no associated items, so they're irrelevant here.
+                    if let TypeAnnotation::Named {
+                        name: target_name, ..
+                    } = target
+                    {
+                        let alias_q = if prefix.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{prefix}::{name}")
+                        };
+                        // A bare target name resolves within the same module;
+                        // an already-qualified one is taken as written.
+                        let target_q = if prefix.is_empty() || target_name.contains("::") {
+                            target_name.clone()
+                        } else {
+                            format!("{prefix}::{target_name}")
+                        };
+                        self.type_aliases.insert(alias_q, target_q);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// If `fname` names a generic function and `turbofish` supplies concrete
+    /// types for all its parameters, emit a monomorphized copy (once) and return
+    /// its mangled name. Otherwise return `fname` unchanged so the caller falls
+    /// back to the generic template (used by argument-inferred calls).
+    fn monomorphize_if_generic(&mut self, fname: &str, turbofish: &[TypeAnnotation]) -> String {
+        let Some((fdef, mod_prefix)) = self.generic_fns.get(fname).cloned() else {
+            return fname.to_string();
+        };
+        if turbofish.len() != fdef.generic_params.len() || turbofish.is_empty() {
+            return fname.to_string();
+        }
+        let concretes: Vec<String> = turbofish.iter().map(|t| t.name().to_string()).collect();
+        let mono_name = format!("{fname}${}", concretes.join("$"));
+        if self.mono_emitted.insert(mono_name.clone()) {
+            let subst: std::collections::HashMap<String, String> = fdef
+                .generic_params
+                .iter()
+                .map(|gp| gp.name.clone())
+                .zip(concretes.iter().cloned())
+                .collect();
+            self.gen_fn_named(&fdef, mono_name.clone(), mod_prefix, subst);
+        }
+        mono_name
+    }
+
+    fn gen_fn(&mut self, f: &FnDef, struct_prefix: Option<&str>) {
+        let name = match struct_prefix {
+            Some(prefix) => format!("{prefix}::{}", f.name),
+            None => f.name.clone(),
+        };
+        self.gen_fn_named(
+            f,
+            name,
+            self.current_module_prefix.clone(),
+            Default::default(),
+        );
+    }
+
+    /// Lower an impl-block method. Identical to `gen_fn` except it records the
+    /// impl's type name as `current_self_type` for the duration of the body, so
+    /// `Self` literals/paths inside resolve to the concrete struct. `type_prefix`
+    /// is the same value used to qualify the method name (the base type name, or
+    /// its module-qualified form), so the value's struct tag matches what method
+    /// dispatch later looks up.
+    fn gen_method(&mut self, f: &FnDef, type_prefix: &str) {
+        let saved = self.current_self_type.replace(type_prefix.to_string());
+        self.gen_fn(f, Some(type_prefix));
+        self.current_self_type = saved;
+    }
+
+    /// Lower a function body under an explicit final name, module prefix, and
+    /// (possibly empty) type-parameter substitution. The substitution is what
+    /// makes monomorphization work: `T::zero()` resolves to `int::zero()` while
+    /// it's active. Reentrant — saves and restores all per-function state.
+    fn gen_fn_named(
+        &mut self,
+        f: &FnDef,
+        name: String,
+        module_prefix: String,
+        subst: std::collections::HashMap<String, String>,
+    ) {
+        let ret_ty = f
+            .return_type
+            .as_ref()
+            .map(Self::type_ann_to_type_info)
+            .unwrap_or(TypeInfo::Unit);
+        // Save current state. fn_index set at push time after body generation.
+        let saved = std::mem::replace(&mut self.current, IrFunction::new(name, 0, 0, usize::MAX));
+        self.current.return_type = ret_ty;
+        self.current.is_async = f.is_async;
+        let saved_locals = std::mem::take(&mut self.locals);
+        let saved_local_types = std::mem::take(&mut self.local_types);
+        let saved_mut_slots = std::mem::take(&mut self.mut_slots);
+        let saved_celled_slots = std::mem::take(&mut self.celled_slots);
+        let saved_subst = std::mem::replace(&mut self.type_subst, subst);
+        let saved_module_prefix = std::mem::replace(&mut self.current_module_prefix, module_prefix);
+        let saved_local_count = self.local_count;
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        self.local_count = 0;
+        self.next_reg = 0;
+        self.next_block = 0;
+        self.break_target = None;
+        self.continue_target = None;
+
+        // Create entry block
+        let entry = self.alloc_block();
+        self.current.entry = entry;
+        self.start_block(entry);
+
+        // Allocate locals for params and record explicit metadata on IrFunction.
+        // A `byte` parameter must wrap its incoming value to 0..=255 at entry,
+        // mirroring the boundary coercion applied to `byte` return values and
+        // typed `let` bindings — otherwise a value like `300` would flow through
+        // the body as `int(300)`, silently erasing the declared width. Recording
+        // the param type in `local_types` also makes reassignment to a `mut byte`
+        // param re-wrap, consistent with `let mut x: byte`.
+        for param in &f.params {
+            let slot = self.alloc_local(&param.name);
+            if let TypeAnnotation::Named { name, .. } = &param.type_ann {
+                self.local_types.insert(slot, name.clone());
+                if name == "byte" {
+                    let loaded = self.alloc_reg();
+                    self.emit(IrOp::LoadLocal(loaded, slot));
+                    let coerced = self.coerce_reg(loaded, &param.type_ann);
+                    self.emit(IrOp::StoreLocal(slot, coerced));
+                }
+            }
+        }
+        self.current.params = f
+            .params
+            .iter()
+            .map(|p| (p.name.clone(), Self::type_ann_to_type_info(&p.type_ann)))
+            .collect();
+
+        // Generate body
+        let result_reg = self.gen_block_stmts(&f.body);
+        // If no explicit return, add implicit return of tail expression
+        if !matches!(
+            self.current.blocks[self.current_block].terminator,
+            Terminator::Return(_) | Terminator::Panic(_)
+        ) {
+            let reg = result_reg.unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            });
+            let ret_ty = self.current.return_type.clone();
+            let reg = self.coerce_reg_to_type_info(reg, &ret_ty);
+            self.terminate(Terminator::Return(reg));
+        }
+
+        self.current.local_count = self.local_count;
+        self.current.fn_index = self.functions.len();
+        self.functions
+            .push(std::mem::replace(&mut self.current, saved));
+
+        // Restore state
+        self.locals = saved_locals;
+        self.local_types = saved_local_types;
+        self.mut_slots = saved_mut_slots;
+        self.celled_slots = saved_celled_slots;
+        self.type_subst = saved_subst;
+        self.current_module_prefix = saved_module_prefix;
+        self.local_count = saved_local_count;
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+    }
+
+    // ── Block / Stmt ───────────────────────────────────────────────────
+
+    /// Walk a block's statements. Returns Some(reg) for the tail expression, None if no value.
+    fn gen_block_stmts(&mut self, block: &Block) -> Option<Reg> {
+        let mut last: Option<Reg> = None;
+        for stmt in &block.stmts {
+            last = self.gen_stmt(stmt);
+        }
+        last
+    }
+
+    fn gen_stmt(&mut self, stmt: &Stmt) -> Option<Reg> {
+        match stmt {
+            Stmt::Let {
+                name,
+                mutable,
+                value,
+                type_ann,
+                ..
+            } => {
+                // Evaluate the initializer BEFORE bringing the new binding into
+                // scope, so a shadowing `let x = <expr using old x>` resolves `x`
+                // in the initializer to the *previous* binding, not the new
+                // (uninitialized) slot. Allocating the slot first made the RHS
+                // read the slot it was about to define.
+                let init = value.as_ref().map(|val| self.gen_expr(val));
+                let slot = self.alloc_local(name);
+                if *mutable {
+                    // Track mutable bindings: a `let mut` captured by a closure
+                    // gets promoted to a shared `Value::Cell` at closure creation
+                    // so writes propagate across the capture boundary.
+                    self.mut_slots.insert(slot);
+                }
+                if let Some(reg) = init {
+                    let reg = if let Some(ta) = type_ann {
+                        if let TypeAnnotation::Named { name, .. } = ta {
+                            self.local_types.insert(slot, name.clone());
+                        }
+                        self.coerce_reg(reg, ta)
+                    } else {
+                        reg
+                    };
+                    self.emit(IrOp::StoreLocal(slot, reg));
+                }
+                None
+            }
+            Stmt::LetPattern { pattern, value, .. } => {
+                let val_reg = self.gen_expr(value);
+                self.gen_pattern_bind(pattern, val_reg);
+                None
+            }
+            Stmt::Expr {
+                expr,
+                has_semicolon,
+            } => {
+                let reg = self.gen_expr(expr);
+                if *has_semicolon {
+                    None
+                } else {
+                    Some(reg)
+                }
+            }
+            Stmt::Return { value, .. } => {
+                let reg = match value {
+                    Some(v) => self.gen_expr(v),
+                    None => {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::ConstUnit(r));
+                        r
+                    }
+                };
+                let ret_ty = self.current.return_type.clone();
+                let reg = self.coerce_reg_to_type_info(reg, &ret_ty);
+                self.terminate(Terminator::Return(reg));
+                None
+            }
+            Stmt::While {
+                condition,
+                body,
+                label,
+                ..
+            } => self.gen_while(condition, body, label.as_deref()),
+            Stmt::WhileLet {
+                pattern,
+                expr,
+                body,
+                label,
+                ..
+            } => self.gen_while_let(pattern, expr, body, label.as_deref()),
+            Stmt::Loop { body, label, .. } => self.gen_loop(body, label.as_deref()),
+            Stmt::For {
+                name,
+                iterable,
+                body,
+                label,
+                ..
+            } => self.gen_for_in(name, iterable, body, label.as_deref()),
+            Stmt::ForDestructure {
+                names,
+                iterable,
+                body,
+                label,
+                ..
+            } => self.gen_for_destructure(names, iterable, body, label.as_deref()),
+            Stmt::Break { label, value, .. } => {
+                let reg = value.as_ref().map(|v| self.gen_expr(v)).unwrap_or_else(|| {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::ConstUnit(r));
+                    r
+                });
+                if let Some(break_slot) = self.break_value_slot {
+                    self.emit(IrOp::StoreLocal(break_slot, reg));
+                }
+                let target = if let Some(lbl) = label {
+                    self.labeled_targets.get(lbl).map(|(b, _)| *b)
+                } else {
+                    self.break_target
+                };
+                if let Some(target) = target {
+                    self.terminate(Terminator::Jump(target));
+                }
+                Some(reg)
+            }
+            Stmt::Continue { label, .. } => {
+                let target = if let Some(lbl) = label {
+                    self.labeled_targets.get(lbl).map(|(_, c)| *c)
+                } else {
+                    self.continue_target
+                };
+                if let Some(target) = target {
+                    self.terminate(Terminator::Jump(target));
+                }
+                None
+            }
+            Stmt::Use(use_def) => {
+                self.register_use(use_def);
+                None
+            }
+            Stmt::Item(_) => None,
+        }
+    }
+
+    // ── Expressions ────────────────────────────────────────────────────
+
+    /// Lower an assignment `target = <val_reg>`, propagating the result back
+    /// through the lvalue chain.
+    ///
+    /// Structs are value types (fields are cloned on copy), so `oxy_field_store`
+    /// produces a *new* struct rather than mutating in place — that new struct
+    /// must be written back into the binding (or the enclosing field/index) or
+    /// the mutation is lost. We recurse so `a.b.c = v` rebuilds each level:
+    /// `a = store(a, "b", store(a.b, "c", v))`.
+    ///
+    /// `Vec` (and the other collections) are `Rc<RefCell<>>`-shared, so an
+    /// index store mutates the backing storage in place — its enclosing binding
+    /// already observes the change, so no further write-back is needed there.
+    fn gen_store_lvalue(&mut self, target: &Expr, val_reg: Reg) {
+        match target {
+            Expr::Ident(name, ..) => {
+                if let Some(slot) = self.lookup_local(name) {
+                    self.emit(IrOp::StoreLocal(slot, val_reg));
+                }
+            }
+            // `self` is always local slot 0 (mirrors the read path in gen_expr).
+            // Required so `self.field = v` in a `mut self` method writes the
+            // updated struct back, not just the discarded field-store result.
+            Expr::SelfRef(..) => {
+                self.emit(IrOp::StoreLocal(0, val_reg));
+            }
+            Expr::Grouped(inner, ..) => self.gen_store_lvalue(inner, val_reg),
+            Expr::FieldAccess { object, field, .. } => {
+                let obj_reg = self.gen_expr(object);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_field_store",
+                    args: vec![obj_reg, val_reg],
+                    immediates: vec![],
+                    strings: vec![field.clone()],
+                });
+                // Write the updated (value-typed) struct back into its container.
+                self.gen_store_lvalue(object, r);
+            }
+            Expr::Index { object, index, .. } => {
+                let obj_reg = self.gen_expr(object);
+                let idx_reg = self.gen_expr(index);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_vec_index_store",
+                    args: vec![obj_reg, idx_reg, val_reg],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                // Collection storage is Rc-shared and mutated in place above, so
+                // the enclosing binding already sees the change — no write-back.
+            }
+            _ => {}
+        }
+    }
+
+    fn gen_expr(&mut self, expr: &Expr) -> Reg {
+        match expr {
+            Expr::IntLiteral(n, ..) => {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstInt(r, *n));
+                r
+            }
+            Expr::FloatLiteral(n, ..) => {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstFloat(r, *n));
+                r
+            }
+            Expr::BoolLiteral(b, ..) => {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstBool(r, *b));
+                r
+            }
+            Expr::StringLiteral(s, ..) => {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstString(r, s.clone()));
+                r
+            }
+            Expr::CharLiteral(c, ..) => {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstChar(r, *c));
+                r
+            }
+            Expr::Ident(name, ..) => {
+                if let Some(slot) = self.lookup_local(name) {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::LoadLocal(r, slot));
+                    r
+                } else if let Some(const_val) = self.global_consts.get(name).cloned() {
+                    // Inline const value at use site
+                    self.gen_expr(&const_val)
+                } else if let Some(enum_name) = self.variant_to_enum.get(name).cloned() {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_const_enum_variant",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![enum_name, name.clone()],
+                    });
+                    r
+                } else if self
+                    .unit_structs
+                    .contains(&self.resolve_module_path(&[name.clone()]).join("::"))
+                {
+                    // A bare reference to a unit struct (`struct Thing;` then
+                    // `let t = Thing;`) constructs an empty struct value so
+                    // method dispatch (`t.method()`) resolves against `Thing`.
+                    let resolved = self.resolve_module_path(&[name.clone()]).join("::");
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_init",
+                        args: vec![],
+                        immediates: vec![0],
+                        strings: vec![resolved, String::new()],
+                    });
+                    r
+                } else {
+                    // A bare identifier in value position that is neither a
+                    // local, a const, nor an enum variant is a reference to a
+                    // named function (e.g. `apply(square, 5)` or `vec![square,
+                    // neg]`). The type checker has already validated the name,
+                    // so resolve it the same way the Call path does and build a
+                    // `Value::Function` via `oxy_push_named_fn` so it can be
+                    // invoked through the unified `oxy_call_closure` path.
+                    let resolved = self.resolve_callable_name(name);
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_push_named_fn",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![resolved],
+                    });
+                    r
+                }
+            }
+            Expr::Block(block) => self.gen_block_stmts(block).unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            }),
+            Expr::BinaryOp {
+                left, op, right, ..
+            } => {
+                // `&&` / `||` must short-circuit: the right operand is only
+                // evaluated when the left doesn't already decide the result.
+                // Lower with branching rather than an eager And/Or op so side
+                // effects in the right operand are skipped.
+                if matches!(op, BinOp::And | BinOp::Or) {
+                    return self.gen_short_circuit(*op, left, right);
+                }
+                let lhs = self.gen_expr(left);
+                let rhs = self.gen_expr(right);
+                let r = self.alloc_reg();
+                match op {
+                    BinOp::Add => self.emit(IrOp::Add(r, lhs, rhs)),
+                    BinOp::Sub => self.emit(IrOp::Sub(r, lhs, rhs)),
+                    BinOp::Mul => self.emit(IrOp::Mul(r, lhs, rhs)),
+                    BinOp::Div => self.emit(IrOp::Div(r, lhs, rhs)),
+                    BinOp::Mod => self.emit(IrOp::Rem(r, lhs, rhs)),
+                    BinOp::Eq => self.emit(IrOp::Eq(r, lhs, rhs)),
+                    BinOp::NotEq => self.emit(IrOp::Neq(r, lhs, rhs)),
+                    BinOp::Lt => self.emit(IrOp::Lt(r, lhs, rhs)),
+                    BinOp::Gt => self.emit(IrOp::Gt(r, lhs, rhs)),
+                    BinOp::LtEq => self.emit(IrOp::Le(r, lhs, rhs)),
+                    BinOp::GtEq => self.emit(IrOp::Ge(r, lhs, rhs)),
+                    BinOp::And => self.emit(IrOp::And(r, lhs, rhs)),
+                    BinOp::Or => self.emit(IrOp::Or(r, lhs, rhs)),
+                    BinOp::BitAnd => self.emit(IrOp::BitAnd(r, lhs, rhs)),
+                    BinOp::BitOr => self.emit(IrOp::BitOr(r, lhs, rhs)),
+                    BinOp::BitXor => self.emit(IrOp::BitXor(r, lhs, rhs)),
+                    BinOp::Shl => self.emit(IrOp::Shl(r, lhs, rhs)),
+                    BinOp::Shr => self.emit(IrOp::Shr(r, lhs, rhs)),
+                }
+                r
+            }
+            Expr::UnaryOp { op, expr, .. } => {
+                let val = self.gen_expr(expr);
+                let r = self.alloc_reg();
+                match op {
+                    UnaryOp::Neg => self.emit(IrOp::Neg(r, val)),
+                    UnaryOp::Not => self.emit(IrOp::Not(r, val)),
+                    UnaryOp::BitNot => self.emit(IrOp::BitNot(r, val)),
+                }
+                r
+            }
+            Expr::Call {
+                callee,
+                args,
+                turbofish,
+                ..
+            } => {
+                // Build fname for special-form detection (enum constructors,
+                // spawn/sleep/select). Regular calls go through the unified
+                // oxy_call_closure path regardless of whether the callee is a
+                // named function, closure, or parameter.
+                let fname = match callee.as_ref() {
+                    Expr::Ident(name, ..) => self.resolve_callable_name(name),
+                    Expr::Path { segments, .. } => {
+                        let resolved = self.resolve_module_path(segments);
+                        self.resolve_fn_alias(&resolved.join("::"))
+                    }
+                    _ => String::new(),
+                };
+                // A turbofish on a generic function selects a monomorphized
+                // copy (emitted on demand) whose body has the type parameters
+                // substituted, so `T::method()` resolves to the concrete impl.
+                let fname = match turbofish {
+                    Some(tf) => self.monomorphize_if_generic(&fname, tf),
+                    None => fname,
+                };
+
+                // Evaluate arguments first — the callee register depends on
+                // whether it's a local or a named reference.
+                let mut arg_regs = Vec::new();
+                for a in args {
+                    arg_regs.push(self.gen_expr(a));
+                }
+
+                // Route enum variant constructors.
+                let enum_ctor = 'ctor: {
+                    if let Some(enum_name) = self.variant_to_enum.get(&fname) {
+                        break 'ctor Some((enum_name.clone(), fname.clone()));
+                    }
+                    if let Some((enum_name, variant)) = fname.rsplit_once("::") {
+                        if self
+                            .variant_to_enum
+                            .get(variant)
+                            .map_or(false, |e| e == enum_name)
+                        {
+                            break 'ctor Some((enum_name.to_string(), variant.to_string()));
+                        }
+                    }
+                    None
+                };
+                if let Some((enum_name, variant)) = enum_ctor {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_make_enum_variant",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![enum_name, variant],
+                    });
+                    return r;
+                }
+
+                // Route tuple-struct constructors: `WrappedInt(17)` builds a
+                // `Value::Struct` with positional field names "0", "1", … so
+                // that `.0` access (oxy_field_access reads fields["0"]) works.
+                // Named-field structs use Expr::StructInit instead; tuple
+                // structs reach us here because they are called like functions.
+                let tuple_ctor: Option<String> = if self.tuple_structs.contains_key(&fname) {
+                    Some(fname.clone())
+                } else if let Expr::Ident(name, ..) = callee.as_ref() {
+                    let resolved = self.resolve_module_path(&[name.clone()]).join("::");
+                    self.tuple_structs
+                        .contains_key(&resolved)
+                        .then_some(resolved)
+                } else {
+                    None
+                };
+                if let Some(struct_name) = tuple_ctor {
+                    let names_joined = (0..args.len())
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\0");
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_init",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![struct_name, names_joined],
+                    });
+                    return r;
+                }
+
+                // Route spawn / sleep / select to their FFI functions.
+                if let Some((ffi_func, immediates)) = match fname.as_str() {
+                    "spawn" => Some(("oxy_spawn_ffi", vec![])),
+                    "sleep" => Some(("oxy_sleep_ffi", vec![])),
+                    "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                    _ => None,
+                } {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: ffi_func,
+                        args: arg_regs,
+                        immediates,
+                        strings: vec![],
+                    });
+                    return r;
+                }
+
+                // Produce a register holding the callee as a Value::Function.
+                // Locals already hold a function value; named functions need
+                // oxy_push_named_fn to create one. Inline expressions (closures,
+                // parenthesized exprs) are generated directly.
+                let callee_reg = if let Expr::Ident(name, _) = callee.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::LoadLocalRaw(r, slot));
+                        r
+                    } else {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_push_named_fn",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![fname],
+                        });
+                        r
+                    }
+                } else if matches!(callee.as_ref(), Expr::Path { .. }) {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_push_named_fn",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![fname],
+                    });
+                    r
+                } else {
+                    // Inline expression (closure, parenthesized expr, etc.).
+                    // Generate it directly — it produces a Value::Function on the stack.
+                    self.gen_expr(callee)
+                };
+
+                // Unified call: everything goes through oxy_call_closure.
+                let mut all_regs = vec![callee_reg];
+                all_regs.extend(arg_regs);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_call_closure",
+                    args: all_regs,
+                    immediates: vec![args.len()],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::MethodCall {
+                object,
+                method,
+                args,
+                ..
+            } => {
+                // For local-variable receivers, use LoadLocalRaw to preserve
+                // Cell wrapping so mutations through method calls are visible.
+                //
+                // A `mut self` method mutates its receiver in place (Oxy has no
+                // ownership, so `mut self` behaves like `&mut self`). Structs are
+                // value types, so a plain copy of the receiver would discard those
+                // mutations once the method returns. Promote a mutable local
+                // receiver to a shared `Value::Cell` first (idempotent per slot via
+                // `celled_slots`, exactly like closure capture): the method then
+                // stores the updated struct back through the cell, which the caller
+                // observes. Non-`mut` receivers and non-mutating methods are
+                // unaffected — they simply never write through the shared cell.
+                let obj_reg = if let Expr::Ident(name, ..) = object.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        if self.mut_slots.contains(&slot) && self.celled_slots.insert(slot) {
+                            self.emit(IrOp::MakeCell(slot));
+                        }
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::LoadLocalRaw(r, slot));
+                        r
+                    } else {
+                        self.gen_expr(object)
+                    }
+                } else {
+                    self.gen_expr(object)
+                };
+                let mut arg_regs = vec![obj_reg];
+                for a in args {
+                    arg_regs.push(self.gen_expr(a));
+                }
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_method_call",
+                    args: arg_regs,
+                    immediates: vec![args.len()],
+                    strings: vec![method.clone()],
+                });
+                r
+            }
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => self.gen_if(condition, then_block, else_block.as_deref()),
+            Expr::IfLet {
+                pattern,
+                expr,
+                then_block,
+                else_block,
+                guard,
+                ..
+            } => {
+                if let Some(guard_expr) = guard {
+                    self.gen_if_let_guarded(
+                        pattern,
+                        expr,
+                        guard_expr,
+                        then_block,
+                        else_block.as_deref(),
+                    )
+                } else {
+                    self.gen_if_let(pattern, expr, then_block, else_block.as_deref())
+                }
+            }
+            Expr::Match { expr, arms, .. } => self.gen_match(expr, arms),
+            Expr::StructInit {
+                name, fields, base, ..
+            } => {
+                let mut arg_regs = Vec::new();
+                let mut field_names = Vec::new();
+                for (fname, val) in fields {
+                    arg_regs.push(self.gen_expr(val));
+                    field_names.push(fname.clone());
+                }
+                // Join field names with \0 for the FFI to parse.
+                let names_joined = field_names.join("\0");
+                // `Self { .. }` inside a method body builds a value of the impl's
+                // concrete type, so dispatch (`v.method()`) resolves against it.
+                // `current_self_type` is already the fully-qualified dispatch key
+                // (the same string used to name the methods), so use it directly.
+                // Otherwise resolve the struct name through use_aliases and module
+                // context so module-level types get their full path (e.g.
+                // "counter::Counter" instead of just "Counter").
+                let resolved_name = if name == "Self" {
+                    match &self.current_self_type {
+                        Some(t) => t.clone(),
+                        None => self.resolve_module_path(&[name.clone()]).join("::"),
+                    }
+                } else {
+                    self.resolve_module_path(&[name.clone()]).join("::")
+                };
+                if let Some(base_expr) = base {
+                    // Struct update: Point { x: 1, ..base }
+                    let base_reg = self.gen_expr(base_expr);
+                    arg_regs.push(base_reg);
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_struct_update",
+                        args: arg_regs,
+                        immediates: vec![fields.len()],
+                        strings: vec![names_joined],
+                    });
+                    r
+                } else {
+                    // Check if this is a struct-style enum variant constructor
+                    // (e.g. Message::Move { x: 10, y: 20 }). If so, route to
+                    // oxy_make_enum_variant to produce Value::EnumVariant instead
+                    // of Value::Struct.
+                    let enum_ctor: Option<(String, String)> = 'ctor: {
+                        if let Some((enum_name, variant)) = resolved_name.rsplit_once("::") {
+                            if self
+                                .variant_to_enum
+                                .get(variant)
+                                .map_or(false, |e| e == enum_name)
+                            {
+                                break 'ctor Some((enum_name.to_string(), variant.to_string()));
+                            }
+                        }
+                        None
+                    };
+                    let r = self.alloc_reg();
+                    if let Some((enum_name, variant)) = enum_ctor {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_make_enum_variant",
+                            args: arg_regs,
+                            immediates: vec![fields.len()],
+                            strings: vec![enum_name, variant],
+                        });
+                    } else {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_struct_init",
+                            args: arg_regs,
+                            immediates: vec![fields.len()],
+                            strings: vec![resolved_name, names_joined],
+                        });
+                    }
+                    r
+                }
+            }
+            Expr::FieldAccess { object, field, .. } => {
+                let obj = self.gen_expr(object);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_field_access",
+                    args: vec![obj],
+                    immediates: vec![],
+                    strings: vec![field.clone()],
+                });
+                r
+            }
+            Expr::PathCall {
+                path,
+                turbofish: _,
+                args,
+                ..
+            } => {
+                // Inside a monomorphized body, a leading type parameter resolves
+                // to its concrete type so `T::zero()` → `int::zero()`.
+                let path: Vec<String> = match path.split_first() {
+                    Some((first, rest)) if self.type_subst.contains_key(first) => {
+                        let mut p = vec![self.type_subst[first].clone()];
+                        p.extend(rest.iter().cloned());
+                        p
+                    }
+                    _ => path.clone(),
+                };
+                let resolved_path = self.resolve_module_path(&path);
+                let resolved_path = self.resolve_type_alias_in_path(&resolved_path);
+                // A path call from inside a module to a *sibling* top-level
+                // module (e.g. `crate_lib::get_value()` from within `other_mod`)
+                // must not get the current module prefix prepended. If
+                // module-prefixing produced an unknown function but the path as
+                // written names a known one, use the written path instead.
+                let final_segments = if self.fn_names.contains(&resolved_path.join("::")) {
+                    resolved_path
+                } else if self.fn_names.contains(&path.join("::")) {
+                    path.clone()
+                } else {
+                    resolved_path
+                };
+                let mut arg_regs = Vec::new();
+                for a in args {
+                    arg_regs.push(self.gen_expr(a));
+                }
+                // Route enum-variant constructors (e.g. `Color::Red(1)` or the
+                // module-qualified `mymath::Operation::Add(3, 4)`) to
+                // oxy_make_enum_variant with the fully-qualified enum name,
+                // mirroring the Expr::Call path. The last segment is the variant
+                // and the preceding segments are the enum's qualified name; a
+                // match against `variant_to_enum` (which stores the same
+                // qualified name the pattern side uses) confirms it's really a
+                // constructor before we commit. Without this, a multi-segment
+                // path would emit oxy_path_call_builtin, whose positional
+                // fallback only recognizes the bare 2-segment `Enum::Variant`
+                // form and silently mis-handles module-qualified variants.
+                if final_segments.len() >= 2 {
+                    let variant = final_segments[final_segments.len() - 1].clone();
+                    let enum_name = final_segments[..final_segments.len() - 1].join("::");
+                    if self
+                        .variant_to_enum
+                        .get(&variant)
+                        .map_or(false, |e| e == &enum_name)
+                    {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_make_enum_variant",
+                            args: arg_regs,
+                            immediates: vec![args.len()],
+                            strings: vec![enum_name, variant],
+                        });
+                        return r;
+                    }
+                }
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_path_call_builtin",
+                    args: arg_regs,
+                    immediates: vec![args.len()],
+                    strings: vec![final_segments.join("\0")],
+                });
+                r
+            }
+            Expr::Array { elements, .. } => {
+                let mut regs = Vec::new();
+                for e in elements {
+                    regs.push(self.gen_expr(e));
+                }
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_make_array",
+                    args: regs,
+                    immediates: vec![elements.len()],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Tuple { elements, .. } => {
+                let mut regs = Vec::new();
+                for e in elements {
+                    regs.push(self.gen_expr(e));
+                }
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_make_tuple",
+                    args: regs,
+                    immediates: vec![elements.len()],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Index { object, index, .. } => {
+                let obj = self.gen_expr(object);
+                let idx = self.gen_expr(index);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_vec_index",
+                    args: vec![obj, idx],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Try { expr, .. } => {
+                let val = self.gen_expr(expr);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_try_pop",
+                    args: vec![val],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                // oxy_try_pop calls set_error on Err/None, so CheckError detects it.
+                let err = self.alloc_reg();
+                self.emit(IrOp::CheckError(err));
+                let continue_id = self.alloc_block();
+                let return_id = self.alloc_block();
+                self.terminate(Terminator::Branch {
+                    cond: err,
+                    then_block: return_id,
+                    else_block: continue_id,
+                });
+                // Return block: Halt. oxy_error_discriminant returns 2 (set_error
+                // was called), disc=2 with empty error_msg signals ? propagation.
+                self.start_block(return_id);
+                self.terminate(Terminator::Halt);
+                // Continue block: r holds the unwrapped value.
+                self.start_block(continue_id);
+                r
+            }
+            Expr::FString { parts, .. } => {
+                let mut regs = Vec::new();
+                for part in parts {
+                    match part {
+                        crate::ast::FStringPart::Literal(s) => {
+                            let r = self.alloc_reg();
+                            self.emit(IrOp::ConstString(r, s.clone()));
+                            regs.push(r);
+                        }
+                        crate::ast::FStringPart::Expr(e) => {
+                            regs.push(self.gen_expr(e));
+                        }
+                    }
+                }
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_fstring_concat",
+                    args: regs,
+                    immediates: vec![parts.len()],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Assign { target, value, .. } => {
+                let val_reg = self.gen_expr(value);
+                self.gen_store_lvalue(target, val_reg);
+                val_reg
+            }
+            Expr::CompoundAssign {
+                target, op, value, ..
+            } => {
+                let val_reg = self.gen_expr(value);
+                let target_reg = self.gen_expr(target);
+                let r = self.alloc_reg();
+                match op {
+                    BinOp::Add => self.emit(IrOp::Add(r, target_reg, val_reg)),
+                    BinOp::Sub => self.emit(IrOp::Sub(r, target_reg, val_reg)),
+                    BinOp::Mul => self.emit(IrOp::Mul(r, target_reg, val_reg)),
+                    BinOp::Div => self.emit(IrOp::Div(r, target_reg, val_reg)),
+                    BinOp::Mod => self.emit(IrOp::Rem(r, target_reg, val_reg)),
+                    BinOp::BitAnd => self.emit(IrOp::BitAnd(r, target_reg, val_reg)),
+                    BinOp::BitOr => self.emit(IrOp::BitOr(r, target_reg, val_reg)),
+                    BinOp::BitXor => self.emit(IrOp::BitXor(r, target_reg, val_reg)),
+                    BinOp::Shl => self.emit(IrOp::Shl(r, target_reg, val_reg)),
+                    BinOp::Shr => self.emit(IrOp::Shr(r, target_reg, val_reg)),
+                    _ => {
+                        self.emit(IrOp::Copy(r, val_reg));
+                    }
+                }
+                if let Expr::Ident(name, ..) = target.as_ref() {
+                    if let Some(slot) = self.lookup_local(name) {
+                        let coerced = if self.local_types.get(&slot).map_or(false, |t| t == "byte")
+                        {
+                            let cr = self.alloc_reg();
+                            self.emit(IrOp::CallBuiltin {
+                                result: cr,
+                                func: "oxy_cast_byte",
+                                args: vec![r],
+                                immediates: vec![],
+                                strings: vec![],
+                            });
+                            cr
+                        } else {
+                            r
+                        };
+                        self.emit(IrOp::StoreLocal(slot, coerced));
+                    }
+                } else {
+                    // Field / index targets: write the recomputed value back
+                    // through the lvalue chain (same root as plain assignment).
+                    self.gen_store_lvalue(target, r);
+                }
+                r
+            }
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                let start_reg = start.as_ref().map(|s| self.gen_expr(s)).unwrap_or_else(|| {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::ConstInt(r, 0));
+                    r
+                });
+                let end_reg = end.as_ref().map(|e| self.gen_expr(e)).unwrap_or_else(|| {
+                    let r = self.alloc_reg();
+                    // i64::MAX sentinel for unbounded — avoids conflicting with
+                    // legitimate -1 as a range endpoint.
+                    self.emit(IrOp::ConstInt(r, i64::MAX));
+                    r
+                });
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_make_range",
+                    args: vec![start_reg, end_reg],
+                    immediates: vec![*inclusive as usize],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Closure {
+                params,
+                body,
+                is_async,
+                ..
+            } => self.gen_closure(params, body, *is_async, false),
+            Expr::Path { segments, .. } => {
+                // A multi-segment path is a unit enum variant (Color::Red,
+                // module::Color::Red) only when its last segment is a known
+                // variant of the named enum. Otherwise it's a module-level
+                // constant such as `math::PI` — route those to oxy_module_const
+                // rather than fabricating a bogus enum variant.
+                let resolved = self.resolve_module_path(segments);
+                let resolved = self.resolve_type_alias_in_path(&resolved);
+                let variant = resolved.last().cloned().unwrap_or_default();
+                let r = self.alloc_reg();
+                if resolved.len() > 1 {
+                    let enum_name = resolved[..resolved.len() - 1].join("::");
+                    let is_enum_variant = self
+                        .variant_to_enum
+                        .get(&variant)
+                        .map_or(false, |e| e == &enum_name);
+                    if is_enum_variant {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_const_enum_variant",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![enum_name, variant],
+                        });
+                    } else {
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_module_const",
+                            args: vec![],
+                            immediates: vec![],
+                            strings: vec![resolved.join("::")],
+                        });
+                    }
+                } else {
+                    // Single-segment variant resolved via the enum map.
+                    let enum_name = self
+                        .variant_to_enum
+                        .get(&variant)
+                        .cloned()
+                        .unwrap_or_default();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_const_enum_variant",
+                        args: vec![],
+                        immediates: vec![],
+                        strings: vec![enum_name, variant],
+                    });
+                }
+                r
+            }
+            Expr::SelfRef(..) => {
+                // self parameter — load from local slot 0
+                let r = self.alloc_reg();
+                self.emit(IrOp::LoadLocal(r, 0));
+                r
+            }
+            Expr::Grouped(inner, _) => self.gen_expr(inner),
+            Expr::MacroCall { name, args, .. } => {
+                let mut arg_regs = Vec::new();
+                for a in args {
+                    arg_regs.push(self.gen_expr(a));
+                }
+                let r = self.alloc_reg();
+                let (func, strings, extra_immediates) = match name.as_str() {
+                    "println" => ("oxy_println_val", vec![], vec![args.len()]),
+                    "print" => ("oxy_print_val", vec![], vec![args.len()]),
+                    "format" => ("oxy_format", vec![], vec![args.len()]),
+                    "vec" => ("oxy_make_array", vec![], vec![args.len()]),
+                    "dbg" => ("oxy_dbg", vec![], vec![args.len()]),
+                    "panic" => ("oxy_panic", vec![], vec![]),
+                    _ => (
+                        "oxy_path_call_builtin",
+                        vec![name.clone()],
+                        vec![args.len()],
+                    ),
+                };
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func,
+                    args: arg_regs,
+                    immediates: extra_immediates,
+                    strings,
+                });
+                r
+            }
+            Expr::Repeat { value, count, .. } => {
+                let val_reg = self.gen_expr(value);
+                let count_reg = self.gen_expr(count);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_make_repeat",
+                    args: vec![val_reg, count_reg],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::AsyncBlock { body, .. } => {
+                // Generate as a closure-like async function
+                let params: Vec<ClosureParam> = Vec::new();
+                let body_expr = Expr::Block(body.clone());
+                self.gen_closure(&params, &body_expr, true, true)
+            }
+            Expr::Await { expr, .. } => {
+                let val = self.gen_expr(expr);
+                let r = self.alloc_reg();
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_await_ffi",
+                    args: vec![val],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                r
+            }
+            Expr::Return { value, .. } => {
+                let reg = value.as_ref().map(|v| self.gen_expr(v)).unwrap_or_else(|| {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::ConstUnit(r));
+                    r
+                });
+                self.terminate(Terminator::Return(reg));
+                reg
+            }
+            Expr::As {
+                expr, type_name, ..
+            } => {
+                let val = self.gen_expr(expr);
+                let r = self.alloc_reg();
+                let func = match type_name.as_str() {
+                    "int" => "oxy_cast_int",
+                    "byte" => "oxy_cast_byte",
+                    "float" => "oxy_cast_float",
+                    "char" => "oxy_cast_to_char",
+                    _ => "oxy_cast_int",
+                };
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func,
+                    args: vec![val],
+                    immediates: vec![],
+                    strings: vec![],
+                });
+                r
+            } // Unreachable: all Expr variants are handled above.
+        }
+    }
+
+    // ── Control flow helpers ───────────────────────────────────────────
+
+    /// Short-circuiting `&&` / `||`. Equivalent to `if a { b } else { false }`
+    /// for `&&` and `if a { true } else { b }` for `||`, so the right operand
+    /// `b` is evaluated only in the branch that needs it. Uses the same
+    /// Phi-isolation continuation trick as `gen_if` so the result reg is defined
+    /// in a fresh block and nested control flow in `b` is handled correctly.
+    fn gen_short_circuit(&mut self, op: BinOp, left: &Expr, right: &Expr) -> Reg {
+        let lhs = self.gen_expr(left);
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+        self.terminate(Terminator::Branch {
+            cond: lhs,
+            then_block: then_id,
+            else_block: else_id,
+        });
+
+        self.start_block(then_id);
+        let then_reg = if matches!(op, BinOp::And) {
+            self.gen_expr(right)
+        } else {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstBool(r, true));
+            r
+        };
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(else_id);
+        let else_reg = if matches!(op, BinOp::And) {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstBool(r, false));
+            r
+        } else {
+            self.gen_expr(right)
+        };
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(merge_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::Phi(r, then_reg, else_reg));
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
+    }
+
+    fn gen_if(&mut self, condition: &Expr, then_block: &Block, else_block: Option<&Expr>) -> Reg {
+        let cond = self.gen_expr(condition);
+
+        let then_id = self.alloc_block();
+
+        if let Some(eb) = else_block {
+            // If-else: full then / else / merge with phi.
+            let else_id = self.alloc_block();
+            let merge_id = self.alloc_block();
+
+            self.terminate(Terminator::Branch {
+                cond,
+                then_block: then_id,
+                else_block: else_id,
+            });
+
+            self.start_block(then_id);
+            let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            });
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(merge_id));
+            }
+
+            self.start_block(else_id);
+            let else_reg = self.gen_expr(eb);
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(merge_id));
+            }
+
+            self.start_block(merge_id);
+            let r = self.alloc_reg();
+            self.emit(IrOp::Phi(r, then_reg, else_reg));
+            // Store the phi result into a pseudo-local slot, then jump to a
+            // continuation block. The Jump's phi_args machinery will push r
+            // via push_reg, and the StoreLocal at the continuation site
+            // will load it back. This keeps Phi stack ops isolated.
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            // Reload from temp slot into a new register so the caller sees
+            // the value as defined in the continuation block (important for
+            // nested control flow where the continuation jumps to an outer
+            // merge block).
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            r2
+        } else {
+            // If without else, used as an expression, yields the then-branch
+            // value when the condition holds and unit otherwise (Oxy permits
+            // `let x = if c { v };`). The else path produces unit; both merge
+            // via Phi, mirroring the if-else case so the value propagates.
+            let else_id = self.alloc_block();
+            let merge_id = self.alloc_block();
+
+            self.terminate(Terminator::Branch {
+                cond,
+                then_block: then_id,
+                else_block: else_id,
+            });
+
+            self.start_block(then_id);
+            let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+                let r = self.alloc_reg();
+                self.emit(IrOp::ConstUnit(r));
+                r
+            });
+            if self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                self.terminate(Terminator::Jump(merge_id));
+            }
+
+            self.start_block(else_id);
+            let else_reg = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(else_reg));
+            self.terminate(Terminator::Jump(merge_id));
+
+            self.start_block(merge_id);
+            let r = self.alloc_reg();
+            self.emit(IrOp::Phi(r, then_reg, else_reg));
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            r2
+        }
+    }
+
+    fn gen_if_let(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        then_block: &Block,
+        else_block: Option<&Expr>,
+    ) -> Reg {
+        let val = self.gen_expr(expr);
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+
+        let cond = self.gen_pattern_check(pattern, val);
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: then_id,
+            else_block: else_id,
+        });
+
+        self.start_block(then_id);
+        self.gen_pattern_bind(pattern, val);
+        let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(else_id);
+        let else_reg = else_block.map(|eb| self.gen_expr(eb)).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        self.start_block(merge_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::Phi(r, then_reg, else_reg));
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
+    }
+
+    fn gen_if_let_guarded(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        guard: &Expr,
+        then_block: &Block,
+        else_block: Option<&Expr>,
+    ) -> Reg {
+        let val = self.gen_expr(expr);
+        let guard_check_id = self.alloc_block();
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+
+        // Entry: check pattern, branch to guard-check or else
+        let matches = self.gen_pattern_check(pattern, val);
+        self.terminate(Terminator::Branch {
+            cond: matches,
+            then_block: guard_check_id,
+            else_block: else_id,
+        });
+
+        // Guard check: bind pattern (so guard can reference vars), evaluate guard
+        self.start_block(guard_check_id);
+        self.gen_pattern_bind(pattern, val);
+        let guard_val = self.gen_expr(guard);
+        self.terminate(Terminator::Branch {
+            cond: guard_val,
+            then_block: then_id,
+            else_block: else_id,
+        });
+
+        // Then: bind pattern again (idempotent) and run body
+        self.start_block(then_id);
+        self.gen_pattern_bind(pattern, val);
+        let then_reg = self.gen_block_stmts(then_block).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(merge_id));
+        }
+
+        // Else
+        self.start_block(else_id);
+        let else_reg = else_block.map(|eb| self.gen_expr(eb)).unwrap_or_else(|| {
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            r
+        });
+        self.terminate(Terminator::Jump(merge_id));
+
+        self.start_block(merge_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::Phi(r, then_reg, else_reg));
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.emit(IrOp::StoreLocal(phi_temp, r));
+        let cont = self.alloc_block();
+        self.terminate(Terminator::Jump(cont));
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
+    }
+
+    fn gen_match(&mut self, expr: &Expr, arms: &[MatchArm]) -> Reg {
+        let val = self.gen_expr(expr);
+
+        // Pre-allocate all check blocks and body blocks.
+        // IMPORTANT: final_merge must be allocated AFTER body blocks so its block ID
+        // is greater. Codegen processes blocks in ID order and the regs/reg_slot
+        // maps are populated as blocks are visited. If final_merge were processed
+        // before a body block, Return would see neither regs nor reg_slot.
+        //
+        // First check uses current block (no allocation), so we only need n-1 check blocks.
+        let n = arms.len();
+        let check_blocks: Vec<BlockId> = (1..n).map(|_| self.alloc_block()).collect();
+        let body_blocks: Vec<BlockId> = (0..n).map(|_| self.alloc_block()).collect();
+        let final_merge = self.alloc_block();
+        let mut result_regs: Vec<Reg> = Vec::new();
+
+        for (i, arm) in arms.iter().enumerate() {
+            if i > 0 {
+                self.start_block(check_blocks[i - 1]);
+            }
+            let matches = self.gen_pattern_check(&arm.pattern, val);
+            let next_target = if i + 1 < n {
+                check_blocks[i]
+            } else {
+                body_blocks[i]
+            };
+            if let Some(guard) = &arm.guard {
+                // Pattern matches → evaluate guard before executing body.
+                let guard_block = self.alloc_block();
+                self.terminate(Terminator::Branch {
+                    cond: matches,
+                    then_block: guard_block,
+                    else_block: next_target,
+                });
+                self.start_block(guard_block);
+                self.gen_pattern_bind(&arm.pattern, val);
+                let guard_val = self.gen_expr(guard);
+                // Guard truthy → body; falsy → next arm.
+                // Last arm's guard failure falls through to body (exhaustive catch-all).
+                self.terminate(Terminator::Branch {
+                    cond: guard_val,
+                    then_block: body_blocks[i],
+                    else_block: next_target,
+                });
+            } else {
+                self.terminate(Terminator::Branch {
+                    cond: matches,
+                    then_block: body_blocks[i],
+                    else_block: next_target,
+                });
+            }
+        }
+
+        // Generate arm body blocks. An arm body may contain control flow
+        // (for/while/if/nested match), so after lowering it the "current" block
+        // is the body's *exit* block — not body_blocks[i]. Record that exit
+        // block: all merge wiring below must jump from there, otherwise it would
+        // overwrite the branch into the loop (bypassing it) and read a result
+        // register defined in an unreachable block.
+        let mut body_end_blocks: Vec<BlockId> = Vec::new();
+        for (i, arm) in arms.iter().enumerate() {
+            self.start_block(body_blocks[i]);
+            self.gen_pattern_bind(&arm.pattern, val);
+            let reg = self.gen_expr(&arm.body);
+            result_regs.push(reg);
+            body_end_blocks.push(self.current_block);
+        }
+
+        if result_regs.is_empty() {
+            self.start_block(final_merge);
+            let r = self.alloc_reg();
+            self.emit(IrOp::ConstUnit(r));
+            return r;
+        }
+
+        if n == 1 {
+            // Single arm — no Phi needed, return the result directly.
+            self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(final_merge);
+            self.start_block(final_merge);
+            return result_regs[0];
+        }
+
+        if n == 2 {
+            let merge_01 = self.alloc_block();
+            self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(merge_01);
+            self.current.block_mut(body_end_blocks[1]).terminator = Terminator::Jump(merge_01);
+            self.start_block(merge_01);
+            let r = self.alloc_reg();
+            self.emit(IrOp::Phi(r, result_regs[0], result_regs[1]));
+            let phi_temp = self.alloc_local("__phi_tmp");
+            self.emit(IrOp::StoreLocal(phi_temp, r));
+            let cont = self.alloc_block();
+            self.terminate(Terminator::Jump(cont));
+            self.start_block(cont);
+            let r2 = self.alloc_reg();
+            self.emit(IrOp::LoadLocal(r2, phi_temp));
+            return r2;
+        }
+
+        // For 3+ arms: cascade intermediate merges, each combining two results.
+        // body_0 → merge_01 ← body_1
+        // merge_01 → merge_012 ← body_2
+        // ... → final_merge ← body_{n-1}
+        let mut prev_merge: Option<(BlockId, Reg)> = None;
+        // Pair up results: body_0 + body_1 at merge_01, then cascade
+        let mut idx = 0;
+        while idx < n {
+            if idx == 0 {
+                // First pair: body_0, body_1 — wire from their exit blocks.
+                let merge_01 = self.alloc_block();
+                self.current.block_mut(body_end_blocks[0]).terminator = Terminator::Jump(merge_01);
+                self.current.block_mut(body_end_blocks[1]).terminator = Terminator::Jump(merge_01);
+                self.start_block(merge_01);
+                let phi_r = self.alloc_reg();
+                self.emit(IrOp::Phi(phi_r, result_regs[0], result_regs[1]));
+                prev_merge = Some((merge_01, phi_r));
+                idx = 2;
+            } else {
+                // Cascade: prev_merge + body_{idx}
+                let (prev_block, prev_reg) = prev_merge.unwrap();
+                let cascade_merge = if idx + 1 < n {
+                    self.alloc_block()
+                } else {
+                    final_merge
+                };
+                // Patch prev block's terminator to jump to cascade_merge
+                self.current.block_mut(prev_block).terminator = Terminator::Jump(cascade_merge);
+                // Arm's exit block jumps to cascade_merge.
+                self.current.block_mut(body_end_blocks[idx]).terminator =
+                    Terminator::Jump(cascade_merge);
+                self.start_block(cascade_merge);
+                let phi_r = self.alloc_reg();
+                self.emit(IrOp::Phi(phi_r, prev_reg, result_regs[idx]));
+                prev_merge = Some((cascade_merge, phi_r));
+                idx += 1;
+            }
+        }
+        // prev_merge now holds the final merge block with the final phi result.
+        // Store it in a temp, jump to continuation, and reload — isolates Phi
+        // stack ops from user code and keeps reg_def_block correct for nesting.
+        let (last_merge, phi_r) = prev_merge.unwrap();
+        let phi_temp = self.alloc_local("__phi_tmp");
+        self.current
+            .block_mut(last_merge)
+            .push(IrOp::StoreLocal(phi_temp, phi_r));
+        let cont = self.alloc_block();
+        self.current.block_mut(last_merge).terminator = Terminator::Jump(cont);
+        self.start_block(cont);
+        let r2 = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r2, phi_temp));
+        r2
+    }
+
+    /// Emit a pattern-match check: returns a register that is truthy if pattern matches.
+    fn gen_pattern_check(&mut self, pattern: &Pattern, val_reg: Reg) -> Reg {
+        let mut r = self.alloc_reg();
+        match pattern {
+            Pattern::Literal(lit_expr) => {
+                let lit_reg = self.gen_expr(lit_expr);
+                self.emit(IrOp::Eq(r, val_reg, lit_reg));
+            }
+            Pattern::Wildcard(..) | Pattern::Ident(..) | Pattern::Rest(..) => {
+                self.emit(IrOp::ConstBool(r, true));
+            }
+            Pattern::EnumVariant {
+                enum_name,
+                variant,
+                fields,
+                ..
+            } => {
+                // Check variant discriminant, then recursively check inner field
+                // patterns. Canonicalize the enum name so the arm matches the
+                // value's constructed identity across module / use-alias bounds.
+                let resolved_enum = self.resolve_pattern_enum_name(enum_name, variant);
+                self.emit(IrOp::CallBuiltin {
+                    result: r,
+                    func: "oxy_enum_variant_equal",
+                    args: vec![val_reg],
+                    immediates: vec![],
+                    strings: vec![resolved_enum, variant.clone()],
+                });
+                // If there are inner patterns, also check them
+                for (i, inner) in fields.iter().enumerate() {
+                    let inner_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: inner_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                        strings: vec![],
+                    });
+                    let inner_match = self.gen_pattern_check(inner, inner_val);
+                    // AND the results: r = r && inner_match
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, inner_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Tuple(patterns, ..) => {
+                // Check each element recursively, AND all results
+                self.emit(IrOp::ConstBool(r, true));
+                for (i, p) in patterns.iter().enumerate() {
+                    let elem_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: elem_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                        strings: vec![],
+                    });
+                    let elem_match = self.gen_pattern_check(p, elem_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, elem_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                // Check each named field recursively
+                self.emit(IrOp::ConstBool(r, true));
+                for (_fname, p) in fields.iter() {
+                    let field_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: field_val,
+                        func: "oxy_field_access",
+                        args: vec![val_reg],
+                        immediates: vec![],
+                        strings: vec![_fname.clone()],
+                    });
+                    let field_match = self.gen_pattern_check(p, field_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, field_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Or(patterns, ..) => {
+                // Match if ANY sub-pattern matches
+                self.emit(IrOp::ConstBool(r, false));
+                for p in patterns {
+                    let sub_match = self.gen_pattern_check(p, val_reg);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::Or(new_r, r, sub_match));
+                    r = new_r;
+                }
+            }
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                // Check if val_reg is within [start, end] or [start, end)
+                self.emit(IrOp::ConstBool(r, true));
+                if let Some(lo) = start {
+                    let lo_reg = self.alloc_reg();
+                    self.emit(IrOp::ConstInt(lo_reg, *lo));
+                    let ge_check = self.alloc_reg();
+                    self.emit(IrOp::Ge(ge_check, val_reg, lo_reg));
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, ge_check));
+                    r = new_r;
+                }
+                if let Some(hi) = end {
+                    let hi_reg = self.alloc_reg();
+                    self.emit(IrOp::ConstInt(hi_reg, *hi));
+                    let cmp = self.alloc_reg();
+                    if *inclusive {
+                        self.emit(IrOp::Le(cmp, val_reg, hi_reg));
+                    } else {
+                        self.emit(IrOp::Lt(cmp, val_reg, hi_reg));
+                    }
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, cmp));
+                    r = new_r;
+                }
+            }
+            Pattern::Slice(patterns, ..) => {
+                // Check each element against sub-patterns, skipping Rest (..).
+                // No length check — we don't have a collection-len FFI function yet.
+                self.emit(IrOp::ConstBool(r, true));
+                let mut elem_idx = 0usize;
+                for p in patterns {
+                    if matches!(p, Pattern::Rest(..)) {
+                        continue;
+                    }
+                    let elem_val = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: elem_val,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![elem_idx],
+                        strings: vec![],
+                    });
+                    let sub = self.gen_pattern_check(p, elem_val);
+                    let new_r = self.alloc_reg();
+                    self.emit(IrOp::And(new_r, r, sub));
+                    r = new_r;
+                    elem_idx += 1;
+                }
+            }
+        }
+        r
+    }
+
+    fn gen_while(&mut self, condition: &Expr, body: &Block, label: Option<&str>) -> Option<Reg> {
+        let header_id = self.alloc_block();
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+
+        // Register label if present
+        if let Some(lbl) = label {
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
+        }
+
+        // Jump to header
+        self.terminate(Terminator::Jump(header_id));
+
+        // Header: evaluate condition
+        self.start_block(header_id);
+        let cond = self.gen_expr(condition);
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
+
+        // Body
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        self.break_target = Some(exit_id);
+        self.continue_target = Some(header_id);
+
+        self.start_block(body_id);
+        self.gen_block_stmts(body);
+        // Don't overwrite Return/Panic/Halt from return/break inside body.
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(header_id));
+        }
+
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+
+        // Exit
+        self.start_block(exit_id);
+        None
+    }
+
+    fn gen_while_let(
+        &mut self,
+        pattern: &Pattern,
+        expr: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
+        let header_id = self.alloc_block();
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+
+        if let Some(lbl) = label {
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
+        }
+
+        self.terminate(Terminator::Jump(header_id));
+
+        self.start_block(header_id);
+        let val = self.gen_expr(expr);
+        let cond = self.gen_pattern_check(pattern, val);
+        self.terminate(Terminator::Branch {
+            cond,
+            then_block: body_id,
+            else_block: exit_id,
+        });
+
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        self.break_target = Some(exit_id);
+        self.continue_target = Some(header_id);
+
+        self.start_block(body_id);
+        self.gen_pattern_bind(pattern, val);
+        self.gen_block_stmts(body);
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(header_id));
+        }
+
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+
+        self.start_block(exit_id);
+        None
+    }
+
+    fn gen_loop(&mut self, body: &Block, label: Option<&str>) -> Option<Reg> {
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+
+        if let Some(lbl) = label {
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, body_id));
+        }
+
+        self.terminate(Terminator::Jump(body_id));
+
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        let saved_break_slot = self.break_value_slot;
+
+        // Allocate a temp slot to hold the break value
+        let break_slot = self.alloc_local("__loop_break_val");
+        self.break_value_slot = Some(break_slot);
+
+        self.break_target = Some(exit_id);
+        self.continue_target = Some(body_id);
+
+        self.start_block(body_id);
+        self.gen_block_stmts(body);
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(body_id));
+        }
+
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+        self.break_value_slot = saved_break_slot;
+
+        // Exit block: load break value as the loop result
+        self.start_block(exit_id);
+        let r = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r, break_slot));
+        Some(r)
+    }
+
+    fn gen_for_in(
+        &mut self,
+        name: &str,
+        iterable: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
+        let iter_expr_reg = self.gen_expr(iterable);
+        let var_slot = self.alloc_local(name);
+        let state_slot = self.alloc_local("__iter_state");
+
+        // Pre-allocate blocks so label can refer to them
+        let header_id = self.alloc_block();
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+        if let Some(lbl) = label {
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
+        }
+
+        // Create iterator and store state to local slot
+        let iter_tmp = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: iter_tmp,
+            func: "oxy_make_iter",
+            args: vec![iter_expr_reg],
+            immediates: vec![],
+            strings: vec![],
+        });
+        self.emit(IrOp::StoreLocal(state_slot, iter_tmp));
+
+        self.terminate(Terminator::Jump(header_id));
+
+        // Header: call iter.next(). Returns i64 flag (1=has_next, 0=done)
+        // and stores the raw element directly in var_slot.
+        self.start_block(header_id);
+        let has_next = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: has_next,
+            func: "oxy_iter_next",
+            args: vec![],
+            immediates: vec![state_slot, var_slot],
+            strings: vec![],
+        });
+        self.terminate(Terminator::Branch {
+            cond: has_next,
+            then_block: body_id,
+            else_block: exit_id,
+        });
+
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        self.break_target = Some(exit_id);
+        self.continue_target = Some(header_id);
+
+        self.start_block(body_id);
+        self.gen_block_stmts(body);
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(header_id));
+        }
+
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+
+        self.start_block(exit_id);
+        None
+    }
+
+    fn gen_for_destructure(
+        &mut self,
+        names: &[String],
+        iterable: &Expr,
+        body: &Block,
+        label: Option<&str>,
+    ) -> Option<Reg> {
+        let iter_expr_reg = self.gen_expr(iterable);
+        // Allocate state slot first so oxy_iter_next_destructure writes
+        // destructured fields to state_slot+1+i — matching the loop vars.
+        let state_slot = self.alloc_local("__iter_state");
+        for name in names {
+            self.alloc_local(name);
+        }
+
+        let iter_tmp = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: iter_tmp,
+            func: "oxy_make_iter",
+            args: vec![iter_expr_reg],
+            immediates: vec![],
+            strings: vec![],
+        });
+        self.emit(IrOp::StoreLocal(state_slot, iter_tmp));
+
+        let header_id = self.alloc_block();
+        let body_id = self.alloc_block();
+        let exit_id = self.alloc_block();
+        if let Some(lbl) = label {
+            self.labeled_targets
+                .insert(lbl.to_string(), (exit_id, header_id));
+        }
+
+        self.terminate(Terminator::Jump(header_id));
+        self.start_block(header_id);
+        let has_next = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: has_next,
+            func: "oxy_iter_next_destructure",
+            args: vec![],
+            immediates: vec![state_slot],
+            strings: vec![],
+        });
+        self.terminate(Terminator::Branch {
+            cond: has_next,
+            then_block: body_id,
+            else_block: exit_id,
+        });
+
+        let saved_break = self.break_target;
+        let saved_continue = self.continue_target;
+        self.break_target = Some(exit_id);
+        self.continue_target = Some(header_id);
+
+        self.start_block(body_id);
+        self.gen_block_stmts(body);
+        if self.current.blocks[self.current_block]
+            .terminator
+            .is_default()
+        {
+            self.terminate(Terminator::Jump(header_id));
+        }
+
+        self.break_target = saved_break;
+        self.continue_target = saved_continue;
+
+        self.start_block(exit_id);
+        None
+    }
+
+    fn gen_pattern_bind(&mut self, pattern: &Pattern, val_reg: Reg) {
+        match pattern {
+            Pattern::Ident(name, ..) => {
+                let slot = self.alloc_local(name);
+                self.emit(IrOp::StoreLocal(slot, val_reg));
+            }
+            Pattern::Wildcard(..) => {}
+            Pattern::EnumVariant { fields, .. } => {
+                for (i, p) in fields.iter().enumerate() {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                        strings: vec![],
+                    });
+                    self.gen_pattern_bind(p, r);
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                for (_fname, p) in fields.iter() {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_field_access",
+                        args: vec![val_reg],
+                        immediates: vec![],
+                        strings: vec![_fname.clone()],
+                    });
+                    self.gen_pattern_bind(p, r);
+                }
+            }
+            Pattern::Tuple(patterns, ..) => {
+                for (i, p) in patterns.iter().enumerate() {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![i],
+                        strings: vec![],
+                    });
+                    self.gen_pattern_bind(p, r);
+                }
+            }
+            Pattern::Literal(..) => {}
+            Pattern::Or(patterns, ..) => {
+                // Bind from the first sub-pattern. The type checker ensures all
+                // arms bind the same variables with the same types, so any arm
+                // produces equivalent bindings.
+                if let Some(first) = patterns.first() {
+                    self.gen_pattern_bind(first, val_reg);
+                }
+            }
+            Pattern::Rest(..) => {}
+            Pattern::Slice(patterns, ..) => {
+                let mut elem_idx = 0usize;
+                for p in patterns {
+                    if matches!(p, Pattern::Rest(..)) {
+                        continue;
+                    }
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_enum_data_get",
+                        args: vec![val_reg],
+                        immediates: vec![elem_idx],
+                        strings: vec![],
+                    });
+                    self.gen_pattern_bind(p, r);
+                    elem_idx += 1;
+                }
+            }
+            Pattern::Range { .. } => {}
+        }
+    }
+
+    /// Collect free variable names in an expression (variables not in param_names).
+    fn collect_free_vars(
+        &self,
+        expr: &Expr,
+        param_names: &std::collections::HashSet<String>,
+    ) -> Vec<String> {
+        let mut vars = std::collections::HashSet::new();
+        self.collect_idents(expr, param_names, &mut vars);
+        vars.into_iter().collect()
+    }
+
+    fn collect_idents(
+        &self,
+        expr: &Expr,
+        param_names: &std::collections::HashSet<String>,
+        out: &mut std::collections::HashSet<String>,
+    ) {
+        match expr {
+            Expr::Ident(name, ..) => {
+                if !param_names.contains(name) && self.locals.contains_key(name) {
+                    out.insert(name.clone());
+                }
+            }
+            Expr::BinaryOp { left, right, .. } => {
+                self.collect_idents(left, param_names, out);
+                self.collect_idents(right, param_names, out);
+            }
+            Expr::UnaryOp { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::Call { callee, args, .. } => {
+                self.collect_idents(callee, param_names, out);
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
+            }
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.collect_idents(condition, param_names, out);
+                self.collect_idents_in_block(then_block, param_names, out);
+                if let Some(eb) = else_block {
+                    self.collect_idents(eb, param_names, out);
+                }
+            }
+            Expr::Block(block) => self.collect_idents_in_block(block, param_names, out),
+            Expr::MethodCall { object, args, .. } => {
+                self.collect_idents(object, param_names, out);
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
+            }
+            Expr::StructInit { fields, base, .. } => {
+                for (_, v) in fields {
+                    self.collect_idents(v, param_names, out);
+                }
+                if let Some(b) = base {
+                    self.collect_idents(b, param_names, out);
+                }
+            }
+            Expr::FieldAccess { object, .. } => self.collect_idents(object, param_names, out),
+            Expr::Array { elements, .. } => {
+                for e in elements {
+                    self.collect_idents(e, param_names, out);
+                }
+            }
+            Expr::Index { object, index, .. } => {
+                self.collect_idents(object, param_names, out);
+                self.collect_idents(index, param_names, out);
+            }
+            Expr::Assign { target, value, .. } => {
+                self.collect_idents(target, param_names, out);
+                self.collect_idents(value, param_names, out);
+            }
+            Expr::Closure { body, .. } => {
+                self.collect_idents(body, param_names, out);
+            }
+            Expr::Grouped(e, ..) => self.collect_idents(e, param_names, out),
+            Expr::Match { expr, arms, .. } => {
+                self.collect_idents(expr, param_names, out);
+                for arm in arms {
+                    self.collect_idents(&arm.body, param_names, out);
+                    if let Some(guard) = &arm.guard {
+                        self.collect_idents(guard, param_names, out);
+                    }
+                }
+            }
+            Expr::IfLet {
+                expr,
+                guard,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.collect_idents(expr, param_names, out);
+                if let Some(g) = guard {
+                    self.collect_idents(g, param_names, out);
+                }
+                self.collect_idents_in_block(then_block, param_names, out);
+                if let Some(eb) = else_block {
+                    self.collect_idents(eb, param_names, out);
+                }
+            }
+            Expr::Tuple { elements, .. } => {
+                for e in elements {
+                    self.collect_idents(e, param_names, out);
+                }
+            }
+            Expr::PathCall { args, .. } => {
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
+            }
+            Expr::Range { start, end, .. } => {
+                if let Some(s) = start {
+                    self.collect_idents(s, param_names, out);
+                }
+                if let Some(e) = end {
+                    self.collect_idents(e, param_names, out);
+                }
+            }
+            Expr::Repeat { value, count, .. } => {
+                self.collect_idents(value, param_names, out);
+                self.collect_idents(count, param_names, out);
+            }
+            Expr::FString { parts, .. } => {
+                for part in parts {
+                    if let crate::ast::FStringPart::Expr(e) = part {
+                        self.collect_idents(e, param_names, out);
+                    }
+                }
+            }
+            Expr::As { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::Try { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::Return { value, .. } => {
+                if let Some(v) = value {
+                    self.collect_idents(v, param_names, out);
+                }
+            }
+            Expr::AsyncBlock { body, .. } => self.collect_idents_in_block(body, param_names, out),
+            Expr::Await { expr, .. } => self.collect_idents(expr, param_names, out),
+            Expr::MacroCall { args, .. } => {
+                for a in args {
+                    self.collect_idents(a, param_names, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_idents_in_block(
+        &self,
+        block: &Block,
+        param_names: &std::collections::HashSet<String>,
+        out: &mut std::collections::HashSet<String>,
+    ) {
+        for stmt in &block.stmts {
+            match stmt {
+                Stmt::Expr { expr, .. } => self.collect_idents(expr, param_names, out),
+                Stmt::Let { value, .. } => {
+                    if let Some(v) = value {
+                        self.collect_idents(v, param_names, out);
+                    }
+                }
+                Stmt::Return { value, .. } => {
+                    if let Some(v) = value {
+                        self.collect_idents(v, param_names, out);
+                    }
+                }
+                Stmt::While {
+                    condition, body, ..
+                } => {
+                    self.collect_idents(condition, param_names, out);
+                    self.collect_idents_in_block(body, param_names, out);
+                }
+                Stmt::For { iterable, body, .. } => {
+                    self.collect_idents(iterable, param_names, out);
+                    self.collect_idents_in_block(body, param_names, out);
+                }
+                Stmt::Item(_) | Stmt::Use(_) | Stmt::Break { .. } | Stmt::Continue { .. } => {}
+                _ => {}
+            }
+        }
+    }
+
+    fn gen_closure(
+        &mut self,
+        params: &[ClosureParam],
+        body: &Expr,
+        is_async: bool,
+        emit_as_future: bool,
+    ) -> Reg {
+        // Find free variables (captures) by scanning the closure body for Idents
+        // that reference outer-scope locals, not params.
+        let param_names: std::collections::HashSet<String> =
+            params.iter().map(|p| p.name.clone()).collect();
+        let free_vars = self.collect_free_vars(body, &param_names);
+
+        let meta_idx = self.closure_meta.len();
+        let closure_name = format!("closure_{}", meta_idx);
+        let saved = std::mem::replace(
+            &mut self.current,
+            IrFunction::new(closure_name.clone(), 0, 0, usize::MAX),
+        );
+        let saved_locals = std::mem::take(&mut self.locals);
+        // The closure body has its own mutable-slot bookkeeping; the outer sets
+        // (which the capture analysis below consults) are restored afterward.
+        let saved_mut_slots = std::mem::take(&mut self.mut_slots);
+        let saved_celled_slots = std::mem::take(&mut self.celled_slots);
+        let saved_local_count = self.local_count;
+        let saved_current_block = self.current_block;
+        let saved_next_reg = self.next_reg;
+        let saved_next_block = self.next_block;
+        self.local_count = 0;
+        self.next_reg = 0;
+        self.next_block = 0;
+
+        let entry = self.alloc_block();
+        self.current.entry = entry;
+        self.start_block(entry);
+
+        // Record captures (name → outer slot)
+        let mut captures = Vec::new();
+        for name in &free_vars {
+            if let Some(slot) = saved_locals.get(name) {
+                captures.push((name.clone(), *slot));
+            }
+        }
+        self.current.captures = captures;
+
+        // Register closure metadata for runtime capture lookup.
+        let param_names_for_meta: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+        let captures_with_mut: Vec<(String, usize, bool)> = self
+            .current
+            .captures
+            .iter()
+            .map(|(name, slot)| (name.clone(), *slot, saved_mut_slots.contains(slot)))
+            .collect();
+        self.closure_meta
+            .push((param_names_for_meta, captures_with_mut, is_async));
+
+        // Allocate locals for captures FIRST so the closure body can access
+        // them via LoadLocal. Slot indices must match what jit_closure_invoker
+        // writes to the buffer: captures at 0..captures_end, then params.
+        let capture_names: Vec<String> = self
+            .current
+            .captures
+            .iter()
+            .map(|(n, _)| n.clone())
+            .collect();
+        for name in &capture_names {
+            self.alloc_local(name);
+        }
+        // Allocate locals for params and record explicit metadata on IrFunction.
+        for p in params {
+            self.alloc_local(&p.name);
+        }
+        self.current.params = params
+            .iter()
+            .map(|p| {
+                let ty = p
+                    .type_ann
+                    .as_ref()
+                    .map(Self::type_ann_to_type_info)
+                    .unwrap_or(TypeInfo::Unknown);
+                (p.name.clone(), ty)
+            })
+            .collect();
+
+        let result_reg = self.gen_expr(body);
+        if !matches!(
+            self.current.blocks[self.current_block].terminator,
+            Terminator::Return(_)
+        ) {
+            self.terminate(Terminator::Return(result_reg));
+        }
+
+        // Infer return type from the closure body so codegen uses the right
+        // return mechanism (oxy_set_result_i64 for int, push+oxy_return for
+        // other types). Unknown triggers push_int which works for scalars.
+        self.current.return_type = match body {
+            Expr::IntLiteral(..) => crate::type_checker::TypeInfo::I64,
+            Expr::FloatLiteral(..) => crate::type_checker::TypeInfo::F64,
+            Expr::BoolLiteral(..) => crate::type_checker::TypeInfo::Bool,
+            Expr::CharLiteral(..) => crate::type_checker::TypeInfo::Char,
+            Expr::StringLiteral(..) => crate::type_checker::TypeInfo::UserStruct {
+                name: "String".into(),
+                generic_args: vec![],
+            },
+            _ => crate::type_checker::TypeInfo::Unknown,
+        };
+
+        self.current.local_count = self.local_count;
+        self.current.is_async = is_async;
+        self.current.fn_index = self.functions.len();
+        // Snapshot (name, outer_slot) captures before swapping the closure out.
+        let captures_snapshot = self.current.captures.clone();
+        self.functions
+            .push(std::mem::replace(&mut self.current, saved));
+
+        self.locals = saved_locals;
+        self.mut_slots = saved_mut_slots;
+        self.celled_slots = saved_celled_slots;
+        self.local_count = saved_local_count;
+        self.current_block = saved_current_block;
+        self.next_reg = saved_next_reg;
+        self.next_block = saved_next_block;
+
+        // Promote any captured mutable outer binding to a shared `Value::Cell`
+        // before the closure is constructed, so the closure and the outer scope
+        // observe the same storage. `oxy_make_cell` is idempotent per slot via
+        // `celled_slots` (multiple closures may capture the same variable).
+        for (_, outer_slot) in &captures_snapshot {
+            if self.mut_slots.contains(outer_slot) && self.celled_slots.insert(*outer_slot) {
+                self.emit(IrOp::MakeCell(*outer_slot));
+            }
+        }
+
+        // Return a register referencing the closure.
+        // The closure body is compiled as a separate IrFunction in self.functions.
+        // fn_index resolved later by the resolve_fn_indices post-processing pass.
+        let r = self.alloc_reg();
+        self.emit(IrOp::CallBuiltin {
+            result: r,
+            func: if emit_as_future {
+                "oxy_push_async_block"
+            } else {
+                "oxy_push_closure"
+            },
+            args: vec![],
+            immediates: vec![meta_idx],
+            strings: vec![closure_name],
+        });
+        r
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: parse + type-check + generate IR, return the IrGen and program.
+    fn gen(source: &str) -> IrGen {
+        let program = crate::parser::parse(source).expect("parse failed");
+        crate::type_checker::TypeChecker::new()
+            .check_program(&program)
+            .expect("type-check failed");
+        let mut ir = IrGen::new();
+        ir.gen_program(&program);
+        ir
+    }
+
+    /// Helper: find an IrFunction by name.
+    fn find_fn<'a>(ir: &'a IrGen, name: &str) -> &'a IrFunction {
+        ir.functions
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("function not found: {name}"))
+    }
+
+    /// Helper: collect all IrOp variants in a function as strings (for simple matching).
+    fn op_names(f: &IrFunction) -> Vec<String> {
+        f.blocks
+            .iter()
+            .flat_map(|b| b.ops.iter().map(|op| format!("{:?}", op)))
+            .collect()
+    }
+
+    // ── Literals ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_literal_int() {
+        let ir = gen("fn main() -> int { 42 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty(), "should have at least one block");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
+            "should have ConstInt(42), got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_bool_true() {
+        let ir = gen("fn main() -> bool { true }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, true))),
+            "should have ConstBool(true), got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_bool_false() {
+        let ir = gen("fn main() -> bool { false }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstBool(_, false))),
+            "should have ConstBool(false), got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_float() {
+        let ir = gen("fn main() -> float { 3.14 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstFloat(_, _))),
+            "should have ConstFloat, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_string() {
+        let ir = gen("fn main() -> String { \"hello\" }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstString(_, _))),
+            "should have ConstString, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_char() {
+        let ir = gen("fn main() -> char { 'x' }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstChar(_, 'x'))),
+            "should have ConstChar('x'), got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_literal_unit() {
+        let ir = gen("fn main() { }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+        // Should have terminator Return or Halt
+    }
+
+    // ── Binary arithmetic ──────────────────────────────────────────────
+
+    #[test]
+    fn test_add_two_ints() {
+        let ir = gen("fn main() -> int { 1 + 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::Add(_, _, _))),
+            "should have Add, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_sub() {
+        let ir = gen("fn main() -> int { 5 - 3 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Sub(_, _, _))));
+    }
+
+    #[test]
+    fn test_mul() {
+        let ir = gen("fn main() -> int { 2 * 3 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Mul(_, _, _))));
+    }
+
+    #[test]
+    fn test_div() {
+        let ir = gen("fn main() -> int { 6 / 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Div(_, _, _))));
+    }
+
+    #[test]
+    fn test_rem() {
+        let ir = gen("fn main() -> int { 7 % 3 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Rem(_, _, _))));
+    }
+
+    // ── Comparisons ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_eq() {
+        let ir = gen("fn main() -> bool { 1 == 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Eq(_, _, _))));
+    }
+
+    #[test]
+    fn test_neq() {
+        let ir = gen("fn main() -> bool { 1 != 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Neq(_, _, _))));
+    }
+
+    #[test]
+    fn test_lt() {
+        let ir = gen("fn main() -> bool { 1 < 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Lt(_, _, _))));
+    }
+
+    #[test]
+    fn test_gt() {
+        let ir = gen("fn main() -> bool { 3 > 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Gt(_, _, _))));
+    }
+
+    #[test]
+    fn test_le() {
+        let ir = gen("fn main() -> bool { 1 <= 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Le(_, _, _))));
+    }
+
+    #[test]
+    fn test_ge() {
+        let ir = gen("fn main() -> bool { 2 >= 1 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Ge(_, _, _))));
+    }
+
+    // ── Logical operators ──────────────────────────────────────────────
+
+    #[test]
+    fn test_and() {
+        // `&&` lowers to short-circuiting control flow (a Branch on the left
+        // operand merging via Phi), not an eager `And` op that would evaluate
+        // the right operand unconditionally.
+        let ir = gen("fn main() -> bool { true && false }");
+        let f = find_fn(&ir, "main");
+        let has_branch = f
+            .blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Branch { .. }));
+        let has_phi = f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Phi(_, _, _)));
+        let no_eager_and = !f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::And(_, _, _)));
+        assert!(has_branch && has_phi && no_eager_and);
+    }
+
+    #[test]
+    fn test_or() {
+        // `||` short-circuits the same way `&&` does.
+        let ir = gen("fn main() -> bool { true || false }");
+        let f = find_fn(&ir, "main");
+        let has_branch = f
+            .blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Branch { .. }));
+        let has_phi = f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Phi(_, _, _)));
+        let no_eager_or = !f
+            .blocks
+            .iter()
+            .flat_map(|b| &b.ops)
+            .any(|op| matches!(op, IrOp::Or(_, _, _)));
+        assert!(has_branch && has_phi && no_eager_or);
+    }
+
+    // ── Unary ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_neg() {
+        let ir = gen("fn main() -> int { -42 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Neg(_, _))));
+    }
+
+    #[test]
+    fn test_not() {
+        let ir = gen("fn main() -> bool { !true }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Not(_, _))));
+    }
+
+    // ── Bitwise ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_bitand() {
+        let ir = gen("fn main() -> int { 1 & 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::BitAnd(_, _, _))));
+    }
+
+    #[test]
+    fn test_bitor() {
+        let ir = gen("fn main() -> int { 1 | 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::BitOr(_, _, _))));
+    }
+
+    #[test]
+    fn test_bitxor() {
+        let ir = gen("fn main() -> int { 1 ^ 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::BitXor(_, _, _))));
+    }
+
+    #[test]
+    fn test_shl() {
+        let ir = gen("fn main() -> int { 1 << 2 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Shl(_, _, _))));
+    }
+
+    #[test]
+    fn test_shr() {
+        let ir = gen("fn main() -> int { 4 >> 1 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(ops.iter().any(|op| matches!(op, IrOp::Shr(_, _, _))));
+    }
+
+    // ── Variables (let bindings) ───────────────────────────────────────
+
+    #[test]
+    fn test_let_binding() {
+        let ir = gen("fn main() -> int { let x = 5; x }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
+            "should have StoreLocal for let binding, got: {:?}",
+            ops
+        );
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::LoadLocal(_, _))),
+            "should have LoadLocal for reading x, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_let_mut_binding() {
+        let ir = gen("fn main() -> int { let mut x = 5; x = 10; x }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::StoreLocal(_, _))),
+            "should have StoreLocal ops"
+        );
+    }
+
+    #[test]
+    fn test_multiple_lets() {
+        let ir = gen("fn main() -> int { let a = 1; let b = 2; a + b }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter()
+                .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+                .count()
+                >= 2,
+            "should have at least 2 StoreLocal ops"
+        );
+    }
+
+    // ── Control flow (if/else) ─────────────────────────────────────────
+
+    #[test]
+    fn test_if_then() {
+        let ir = gen("fn main() -> int { if true { 1 } else { 0 } }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 3,
+            "should have at least 3 blocks (entry, then, else), got {}",
+            f.blocks.len()
+        );
+        // Should have Branch terminator
+        let entry = &f.blocks[f.entry];
+        assert!(
+            matches!(entry.terminator, Terminator::Branch { .. }),
+            "entry should have Branch terminator, got: {:?}",
+            entry.terminator
+        );
+    }
+
+    #[test]
+    fn test_if_no_else() {
+        let ir = gen("fn main() -> int { if true { 1 }; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 2, "should have at least 2 blocks");
+    }
+
+    #[test]
+    fn test_if_else_if() {
+        let ir = gen("fn main() -> int { if true { 1 } else if false { 2 } else { 3 } }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 4,
+            "should have multiple blocks for else-if chain"
+        );
+    }
+
+    #[test]
+    fn test_if_let() {
+        let ir = gen("fn main() -> int { let x = Option::Some(42); if let Option::Some(v) = x { v } else { 0 } }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 3, "if-let should have multiple blocks");
+    }
+
+    // ── Loops ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_while_loop() {
+        let ir = gen("fn main() -> int { let mut x = 0; while x < 5 { x = x + 1; } x }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 2,
+            "while should have at least 2 blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_loop_expression() {
+        let ir =
+            gen("fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 2,
+            "loop should have multiple blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_for_in() {
+        let ir = gen(
+            "fn main() -> int { let mut sum = 0; for x in vec![1, 2, 3] { sum = sum + x; } sum }",
+        );
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 2,
+            "for-in should have multiple blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_break_value() {
+        let ir = gen("fn main() -> int { let result = loop { break 42 }; result }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 2);
+    }
+
+    #[test]
+    fn test_continue_in_loop() {
+        let ir = gen("fn main() -> int { let mut x = 0; while x < 10 { x = x + 1; if x == 2 { continue; } } x }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 2,
+            "while with continue should have blocks"
+        );
+    }
+
+    // ── Function calls ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_fn_call_no_args() {
+        let ir = gen("fn foo() -> int { 42 } fn main() -> int { foo() }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "should have a call op, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_fn_call_with_args() {
+        let ir = gen("fn add(a: int, b: int) -> int { a + b } fn main() -> int { add(1, 2) }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_method_call() {
+        let ir = gen("fn main() -> int { let s = \"hello\"; s.len() }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "method call should be a CallBuiltin"
+        );
+    }
+
+    #[test]
+    fn test_path_call() {
+        let ir = gen("fn main() -> int { let m = HashMap::new(); 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Return ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_return_value() {
+        let ir = gen("fn main() -> int { return 42; }");
+        let f = find_fn(&ir, "main");
+        let entry = &f.blocks[f.entry];
+        assert!(
+            matches!(entry.terminator, Terminator::Return(_)),
+            "should have Return terminator, got: {:?}",
+            entry.terminator
+        );
+    }
+
+    #[test]
+    fn test_return_expr_tail() {
+        let ir = gen("fn main() -> int { 42 }");
+        let f = find_fn(&ir, "main");
+        let last_block = &f.blocks.last().unwrap();
+        assert!(
+            matches!(last_block.terminator, Terminator::Return(_)),
+            "tail expr should generate Return terminator"
+        );
+    }
+
+    // ── Blocks and scoping ─────────────────────────────────────────────
+
+    #[test]
+    fn test_nested_block() {
+        let ir = gen("fn main() -> int { let x = { let y = 1; y }; x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Struct construction ────────────────────────────────────────────
+
+    #[test]
+    fn test_struct_init() {
+        let ir = gen("struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.x }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "struct init should use CallBuiltin for oxy_struct_init"
+        );
+    }
+
+    #[test]
+    fn test_struct_update() {
+        let ir = gen("struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; let p2 = Point { x: 3, ..p }; p2.x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_field_access() {
+        let ir = gen("struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 1, y: 2 }; p.x }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "field access should use CallBuiltin for oxy_field_access"
+        );
+    }
+
+    // ── Enum variants ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_enum_variant_unit() {
+        let ir = gen("enum Color { Red, Blue } fn main() -> int { let c = Color::Red; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_enum_variant_with_data() {
+        let ir = gen(
+            "enum MyOption { Some(int), None } fn main() -> int { let x = MyOption::Some(42); 0 }",
+        );
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "enum variant should use CallBuiltin"
+        );
+    }
+
+    // ── Pattern matching ───────────────────────────────────────────────
+
+    #[test]
+    fn test_match_expression() {
+        let ir = gen("fn main() -> int { match 1 { 0 => 10, 1 => 20, _ => 30 } }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 3,
+            "match should have multiple blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_match_on_enum() {
+        let ir = gen("enum MyOption { Some(int), None } fn main() -> int { let x = MyOption::Some(42); match x { MyOption::Some(v) => v, MyOption::None => 0 } }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 3,
+            "match on enum should have multiple blocks"
+        );
+    }
+
+    // ── Collections ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_vec_literal() {
+        let ir = gen("fn main() -> int { let v = vec![1, 2, 3]; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let ir = gen("fn main() -> int { let a = [1, 2, 3]; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_tuple_literal() {
+        let ir = gen("fn main() -> int { let t = (1, \"hello\", true); 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_index_expr() {
+        let ir = gen("fn main() -> int { let v = vec![1, 2, 3]; v[0] }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "index should use CallBuiltin for oxy_vec_index"
+        );
+    }
+
+    // ── F-string ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fstring() {
+        let ir = gen("fn main() -> String { let name = \"world\"; f\"Hello {name}!\" }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Try operator ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_try_operator() {
+        let ir =
+            gen("fn main() -> Option { let x = Option::Some(42); let y = x?; Option::Some(y) }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "try should use CallBuiltin for oxy_try_pop"
+        );
+    }
+
+    // ── Closures ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_closure_simple() {
+        let ir = gen("fn main() -> int { let add = |a: int, b: int| -> int { a + b }; add(1, 2) }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+        // Should have a separate function for the closure
+        let closure = ir.functions.iter().find(|f| f.name.contains("closure"));
+        assert!(closure.is_some(), "should have a closure function");
+    }
+
+    #[test]
+    fn test_closure_capture() {
+        let ir = gen("fn main() -> int { let x = 10; let f = || -> int { x }; f() }");
+        let _f = find_fn(&ir, "main");
+        let closure = ir.functions.iter().find(|f| f.name.contains("closure"));
+        assert!(closure.is_some(), "should have a closure function");
+        if let Some(c) = closure {
+            assert!(!c.captures.is_empty(), "closure should capture x");
+        }
+    }
+
+    // ── Async ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_async_block() {
+        let ir = gen("fn main() -> int { let fut = async { 42 }; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Generics ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_generic_fn() {
+        let ir = gen("fn identity(x: int) -> int { x } fn main() -> int { identity(42) }");
+        let f = find_fn(&ir, "identity");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Multiple functions ─────────────────────────────────────────────
+
+    #[test]
+    fn test_multiple_functions() {
+        let ir = gen("fn a() -> int { 1 } fn b() -> int { 2 } fn main() -> int { a() + b() }");
+        assert!(!find_fn(&ir, "a").blocks.is_empty());
+        assert!(!find_fn(&ir, "b").blocks.is_empty());
+        assert!(!find_fn(&ir, "main").blocks.is_empty());
+    }
+
+    // ── Assignment ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_assign() {
+        let ir = gen("fn main() -> int { let mut x = 5; x = 10; x }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        let store_count = ops
+            .iter()
+            .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+            .count();
+        assert!(
+            store_count >= 2,
+            "should have at least 2 stores (init + assignment), got {}",
+            store_count
+        );
+    }
+
+    #[test]
+    fn test_compound_assign() {
+        let ir = gen("fn main() -> int { let mut x = 5; x += 3; x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Self reference ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_method_with_self() {
+        let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
+        // Should generate IR for the inc method
+        let method = ir.functions.iter().find(|f| f.name.contains("inc"));
+        assert!(
+            method.is_some(),
+            "should have inc method, functions: {:?}",
+            ir.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
+    }
+
+    // ── Edge cases ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_empty_function() {
+        let ir = gen("fn main() { }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_deeply_nested() {
+        let ir =
+            gen("fn main() -> int { let x = if true { if false { 1 } else { 2 } } else { 3 }; x }");
+        let f = find_fn(&ir, "main");
+        assert!(f.blocks.len() >= 4, "nested if should have multiple blocks");
+    }
+
+    #[test]
+    fn test_complex_expression() {
+        let ir = gen("fn main() -> int { let a = 1; let b = 2; let c = 3; (a + b) * c }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Compile error tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_unreachable_code_does_not_crash() {
+        // Code after return should be handled gracefully
+        let ir = gen("fn main() -> int { return 42; let x = 1; x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    // ── Gaps from audit: MacroCall, Grouped, Repeat, AsyncBlock, Await ──
+
+    #[test]
+    fn test_grouped_expression() {
+        let ir = gen("fn main() -> int { (42) }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::ConstInt(_, 42))),
+            "grouped should unwrap inner literal, got: {:?}",
+            ops
+        );
+    }
+
+    #[test]
+    fn test_macro_call_println() {
+        let ir = gen("fn main() { println!(\"hello\") }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "println should emit CallBuiltin"
+        );
+    }
+
+    #[test]
+    fn test_repeat_expression() {
+        let ir = gen("fn main() -> int { let a = [0; 5]; 0 }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "repeat should emit CallBuiltin"
+        );
+    }
+
+    #[test]
+    fn test_async_block_expr() {
+        let ir = gen("fn main() -> int { let fut = async { 42 }; 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_await_expr() {
+        let ir = gen("fn main() -> int { let fut = async { 42 }; fut.await }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+            "await should emit CallBuiltin"
+        );
+    }
+
+    // ── Gaps from audit: WhileLet, ForDestructure, LetPattern ──────────
+
+    #[test]
+    fn test_while_let() {
+        let ir = gen("fn main() -> int { let x = Option::Some(1); while let Option::Some(v) = x { break; } 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 3,
+            "while-let should have multiple blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_for_destructure() {
+        let ir =
+            gen("fn main() -> int { for (a, b) in vec![(1, 2), (3, 4)] { let _x = a + b; } 0 }");
+        let f = find_fn(&ir, "main");
+        assert!(
+            f.blocks.len() >= 3,
+            "for-destructure should have multiple blocks, got {}",
+            f.blocks.len()
+        );
+    }
+
+    #[test]
+    fn test_let_pattern() {
+        let ir = gen("fn main() -> int { let (x, y) = (1, 2); x + y }");
+        let f = find_fn(&ir, "main");
+        let ops = &f.blocks[f.entry].ops;
+        assert!(
+            ops.iter()
+                .filter(|op| matches!(op, IrOp::StoreLocal(_, _)))
+                .count()
+                >= 2,
+            "let-pattern should bind both vars"
+        );
+    }
+
+    // ── Gaps from audit: nested closures, labeled break ────────────────
+
+    #[test]
+    fn test_closure_inside_match() {
+        let ir = gen("fn main() -> int { let x = 10; let f = match 1 { 1 => || -> int { x }, _ => || -> int { 0 } }; f() }");
+        let _f = find_fn(&ir, "main");
+        let closures: Vec<_> = ir
+            .functions
+            .iter()
+            .filter(|f| f.name.contains("closure"))
+            .collect();
+        assert!(!closures.is_empty(), "should have closure inside match");
+    }
+
+    #[test]
+    fn test_cast_to_float() {
+        let ir = gen("fn main() -> float { let x: float = 3; x }");
+        let f = find_fn(&ir, "main");
+        assert!(!f.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_method_with_self_param() {
+        let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
+        let method = ir.functions.iter().find(|f| f.name.contains("inc"));
+        assert!(method.is_some(), "should have inc method");
+    }
+}

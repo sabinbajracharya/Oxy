@@ -1,0 +1,12 @@
+fn main() -> () {
+  locals: 2
+  bb0(entry):
+    v0 = const.str "hello"
+    store.local $0, v0
+    make.cell $0
+    v1 = load.local.raw $0
+    v2 = call @oxy_method_call(v1) imm[0] str["len"]
+    store.local $1, v2
+    v3 = const.unit
+    ret v3
+}
