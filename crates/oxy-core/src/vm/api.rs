@@ -65,19 +65,8 @@ pub fn run_compiled_capturing_jit(source: &str) -> Result<(Value, Vec<String>), 
     }
 }
 
-/// JIT-based conformance alias for run.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run_jit(source: &str) -> Result<Value, PipelineError> {
-    run_compiled_jit(source)
-}
-
 /// Run all #[test] and #[compile_error] functions using the JIT backend.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run_tests_jit(path: &str, source: &str) -> Result<Vec<TestResult>, PipelineError> {
-    run_tests_jit_with_options(path, source, HashMap::new())
-}
-
-/// Same as run_tests_jit with externs.
+/// Imported directly by the `jit_interp_parity` test to drive the JIT side.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_tests_jit_with_options(
     path: &str,
