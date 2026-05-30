@@ -39,30 +39,6 @@ fn build_http_response(
     })
 }
 
-/// Build a Value::Struct HttpResponse from raw HttpResultData.
-#[allow(dead_code)]
-pub(crate) fn build_response_from_raw(data: crate::types::HttpResultData) -> Value {
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-    use std::rc::Rc;
-
-    let mut fields = HashMap::new();
-    fields.insert("status".to_string(), Value::I64(data.status));
-    fields.insert("body".to_string(), Value::String(data.body));
-    let mut header_map: HashMap<Value, Value> = HashMap::new();
-    for (k, v) in data.headers {
-        header_map.insert(Value::String(k), Value::String(v));
-    }
-    fields.insert(
-        "headers".to_string(),
-        Value::HashMap(Rc::new(RefCell::new(header_map))),
-    );
-    Value::ok(Value::Struct {
-        name: "HttpResponse".to_string(),
-        fields,
-    })
-}
-
 #[cfg(feature = "http")]
 pub fn call(
     func_name: &str,

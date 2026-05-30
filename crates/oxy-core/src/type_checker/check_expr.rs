@@ -115,28 +115,6 @@ impl TypeChecker {
             .map(|ann| self.substitute_generics(ann, &param_names, &concrete_types))
     }
 
-    #[allow(dead_code)]
-    pub(super) fn check_expr_type(
-        &mut self,
-        expr: &Expr,
-        expected: &TypeInfo,
-    ) -> Result<(), PipelineError> {
-        let inferred = self.infer_expr(expr)?;
-        if !expected.accepts(&inferred) {
-            let span = expr.span();
-            return Err(PipelineError::TypeError {
-                message: format!(
-                    "type mismatch: expected `{}`, got `{}`",
-                    expected.name(),
-                    inferred.name()
-                ),
-                line: span.line,
-                column: span.column,
-            });
-        }
-        Ok(())
-    }
-
     /// Check arity + per-arg type compatibility against the declared
     /// `params`. `display_name` and `span` are used for error messages.
     /// `skip_self` drops the first param (for method-call syntax where

@@ -1,5 +1,3 @@
-// FIXME: remove when JIT is wired into the execution path (Phase 6)
-#![allow(dead_code)]
 //! Runtime context passed to JIT-compiled functions.
 //!
 //! # Layout
