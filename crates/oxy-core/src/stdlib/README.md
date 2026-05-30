@@ -45,4 +45,7 @@ Implements Oxy's standard-library surface (`std::*`, `math::`, `json::`, `rand::
 
 - New module → add `<name>.rs`, register in `mod.rs`/`registry.rs`, add `.ox`
   feature tests, and (if it adds names) update `symbols.rs` (`ALL_MODULES`).
+- Module-level constants (`module::PI`) are table-driven too: set the `Module`'s
+  `constants` resolver in `registry.rs` (use `no_constants` if it has none). Never
+  re-introduce a `match module { … }` special-case in `lookup_constant`.
 - Keep this file table current.

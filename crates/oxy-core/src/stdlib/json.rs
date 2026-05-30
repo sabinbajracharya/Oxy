@@ -2,9 +2,8 @@
 //! `json::to_string`, `json::to_string_pretty`, `json::deserialize`,
 //! `json::from_str`, `json::from_struct` to the JSON codec in `crate::json`.
 //!
-//! Registered in `stdlib::registry::MODULES` so that
-//! `compiler::helpers::is_builtin_path` accepts any `json::*` path and
-//! the VM dispatches through this `call` function.
+//! Registered in `stdlib::registry::MODULES`, so the `oxy_call_path` FFI
+//! resolves any `json::*` path to this `call` function at runtime.
 
 use crate::errors::PipelineError;
 use crate::lexer::Span;

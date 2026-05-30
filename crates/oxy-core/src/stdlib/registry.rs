@@ -1,10 +1,12 @@
 //! Single source of truth for built-in path dispatch.
 //!
-//! Both `compiler::helpers::is_builtin_path` (the compile-time whitelist
-//! deciding when to emit `PathCallBuiltin`) and `vm::Vm::dispatch_pathcall`
-//! (the runtime handler) read from this registry. Adding a new built-in
-//! now needs ONE registration here plus its implementation — the
-//! compiler whitelist stays in sync automatically.
+//! The register-IR backends lower every `Type::method(...)` / `module::fn(...)`
+//! path call to the shared `oxy_call_path` FFI (`jit/ffi/mod.rs`), which
+//! resolves it against this registry at runtime — exact item handlers first,
+//! then user-defined functions, then module dispatch. There is no separate
+//! compile-time whitelist: an unrecognised path simply fails to resolve at
+//! runtime. Adding a new built-in needs ONE registration here plus its
+//! implementation.
 //!
 //! # Two kinds of entries
 //!
@@ -34,10 +36,16 @@ pub type ClosureInvoker<'a> = &'a mut dyn FnMut(&Value, &[Value]) -> Result<Valu
 pub type ModuleCall =
     for<'a> fn(&str, &[Value], &Span, ClosureInvoker<'a>) -> Result<Value, PipelineError>;
 pub type ItemHandler = fn(&[Value]) -> Result<Value, String>;
+/// Resolves a module-level constant (e.g. `math::PI`) by name. Modules that
+/// expose no constants register [`no_constants`].
+pub type ConstantLookup = fn(&str) -> Option<Value>;
 
 pub struct Module {
     pub name: &'static str,
     pub call: ModuleCall,
+    /// Module-level constant resolver — keeps `module::CONST` table-driven
+    /// instead of special-casing module names inside [`lookup_constant`].
+    pub constants: ConstantLookup,
 }
 
 pub struct Item {
@@ -45,12 +53,9 @@ pub struct Item {
     pub handler: ItemHandler,
 }
 
-pub fn modules() -> &'static [Module] {
-    MODULES
-}
-
-pub fn items() -> &'static [Item] {
-    ITEMS
+/// Default `constants` resolver for modules that expose no constants.
+fn no_constants(_name: &str) -> Option<Value> {
+    None
 }
 
 /// Look up a module by name. Returns `Some(call)` if `name` is a registered
@@ -62,10 +67,10 @@ pub fn lookup_module(name: &str) -> Option<ModuleCall> {
 /// Look up a module-level constant such as `math::PI`. Returns the value if the
 /// named module exposes a constant of that name.
 pub fn lookup_constant(module: &str, name: &str) -> Option<Value> {
-    match module {
-        "math" => crate::stdlib::math::constant(name),
-        _ => None,
-    }
+    MODULES
+        .iter()
+        .find(|m| m.name == module)
+        .and_then(|m| (m.constants)(name))
 }
 
 /// Look up an item by path.
@@ -95,20 +100,6 @@ pub fn lookup_item(path: &[&str]) -> Option<ItemHandler> {
     None
 }
 
-/// True iff `path` is a built-in: either `[module, _]` / `[std, module, _]`
-/// against a registered module, or an exact match for a registered item.
-pub fn is_builtin(path: &[&str]) -> bool {
-    match path {
-        [m, _] | ["std", m, _] => {
-            if lookup_module(m).is_some() {
-                return true;
-            }
-        }
-        _ => {}
-    }
-    lookup_item(path).is_some()
-}
-
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -117,64 +108,79 @@ static MODULES: &[Module] = &[
     Module {
         name: "math",
         call: crate::stdlib::math::call,
+        constants: crate::stdlib::math::constant,
     },
     Module {
         name: "fs",
         call: crate::stdlib::fs::call,
+        constants: no_constants,
     },
     Module {
         name: "io",
         call: crate::stdlib::io::call,
+        constants: no_constants,
     },
     #[cfg(feature = "db")]
     Module {
         name: "db",
         call: crate::stdlib::db::call,
+        constants: no_constants,
     },
     Module {
         name: "env",
         call: crate::stdlib::env::call,
+        constants: no_constants,
     },
     Module {
         name: "args",
         call: crate::stdlib::args::call,
+        constants: no_constants,
     },
     Module {
         name: "path",
         call: crate::stdlib::path::call,
+        constants: no_constants,
     },
     Module {
         name: "process",
         call: crate::stdlib::process::call,
+        constants: no_constants,
     },
     Module {
         name: "regex",
         call: crate::stdlib::regex::call,
+        constants: no_constants,
     },
     Module {
         name: "net",
         call: crate::stdlib::net::call,
+        constants: no_constants,
     },
     Module {
         name: "time",
         call: crate::stdlib::time::call,
+        constants: no_constants,
     },
     Module {
         name: "rand",
         call: crate::stdlib::rand::call,
+        constants: no_constants,
     },
     Module {
         name: "json",
         call: crate::stdlib::json::call,
+        constants: no_constants,
     },
     Module {
         name: "http",
         call: crate::stdlib::http::call,
+        constants: no_constants,
     },
     #[cfg(feature = "server")]
     Module {
         name: "server",
         call: crate::stdlib::server::call,
+        constants: no_constants,
     },
 ];
 
