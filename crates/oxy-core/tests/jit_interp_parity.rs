@@ -10,31 +10,27 @@
 //!
 //!     cargo test -p oxy-core --test jit_interp_parity
 //!
-//! ## Expected (deferred) divergences
+//! ## Divergences
 //!
-//! The interpreter deliberately does not run a small set of features that need
-//! native code (the JIT's `fn_table` of compiled function pointers, which the
-//! interpreter does not have):
+//! There should be none. Both backends share the same register IR and the same
+//! `oxy_*` runtime; the only structural difference is who runs a *callee*. Where
+//! the JIT invokes a compiled function through its `fn_table` of native
+//! pointers, the interpreter (whose `fn_table` is empty) interprets it — for
+//! direct calls by intercepting at the IR level, and for callees reached from
+//! inside the shared runtime (higher-order built-ins' closures, async task and
+//! future bodies, user `Display::fmt`) via the thread-local closure-invoker hook
+//! the interpreter installs (`ffi::set_interp_invoke`; see `vm/interp.rs`
+//! `install_invoker`). So async (`spawn`/`await`/`sleep`/`select`), the
+//! higher-order built-ins (`map`/`filter`/`fold`/`sort_by`/`for_each`/
+//! Option·Result combinators), and `std::process::spawn`'s per-line callback all
+//! run on both backends and must agree.
 //!
-//!   * **async** — `spawn`/`await`/`sleep`/`select` drive the scheduler through
-//!     native task pointers.
-//!   * **higher-order built-in methods** — `map`/`filter`/`fold`/`sort_by`/
-//!     `for_each`/Option·Result combinators invoke a user closure from inside a
-//!     Rust loop (`jit_closure_invoker`).
+//! Any divergence is therefore a real regression and fails the test.
 //!
-//! Both raise the canonical `INTERP_UNSUPPORTED_MARKER` ("not supported by the
-//! Oxy IR interpreter"), so a divergence carrying that marker is *expected* and
-//! recognized here by substring. Everything else must be at parity — an
-//! unmarked divergence is a real regression and fails the test.
-//!
-//! The only exception is process-streaming: `std::process::spawn`'s per-line
-//! callback is higher-order, but its closure error is returned *inside* a
-//! `Result` value (the test then asserts on it) rather than surfaced as the
-//! marker — and process spawning is meaningless in a browser anyway. Those
-//! cases are enumerated in `PENDING_CLOSURE_INVOKER`. The test also asserts each
-//! such entry *still* diverges, so the list cannot go stale: implement the
-//! closure-invoker callback and these start passing, failing the test until the
-//! entries are removed.
+//! The `INTERP_UNSUPPORTED_MARKER` substring is still recognized below so that
+//! if a future feature is *deliberately* marked unsupported on the interpreter
+//! (via `unsupported_on_wasm!`), it is classified as an expected deferral rather
+//! than a regression — but nothing is marked today.
 
 use std::collections::HashMap;
 use std::fs;
@@ -44,20 +40,15 @@ use oxy_core::vm::{run_tests_interp_with_options, run_tests_jit_with_options, Te
 
 /// Stable substring of `INTERP_UNSUPPORTED_MARKER` (see `vm/jit/ffi.rs`). A
 /// divergence whose interpreter error contains this is a deliberately
-/// unsupported feature, not a regression.
+/// unsupported feature, not a regression. Nothing is marked unsupported today.
 const UNSUPPORTED_MARKER: &str = "not supported by the Oxy IR interpreter";
 
 /// `(file_stem, test_name)` divergences that are expected but do NOT carry the
-/// marker: `std::process::spawn` streaming, whose higher-order per-line callback
-/// can't run on the interpreter. The callback error comes back inside a `Result`
-/// value (converted to an `assert` failure by the test), so it isn't marker-
-/// tagged. Process spawning has no meaning in a browser regardless. Remove these
-/// once the FFI→interpreter closure-invoker callback lands.
-const PENDING_CLOSURE_INVOKER: &[(&str, &str)] = &[
-    ("spawn", "test_spawn_streams_stdout_lines_in_order"),
-    ("spawn", "test_spawn_handles_many_lines"),
-    ("spawn", "test_spawn_tags_stderr_separately_from_stdout"),
-];
+/// marker. Empty: the FFI→interpreter closure-invoker hook closed the former
+/// gaps (higher-order built-ins, async eager-runs, `std::process::spawn`
+/// streaming). The staleness assertion below keeps this honest — re-add an entry
+/// only alongside a documented, genuinely-diverging case.
+const PENDING_CLOSURE_INVOKER: &[(&str, &str)] = &[];
 
 fn visit_ox_files(dir: &Path, files: &mut Vec<String>) {
     if let Ok(entries) = fs::read_dir(dir) {

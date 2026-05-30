@@ -1769,6 +1769,47 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
     }
 }
 
+// ── Interpreter call-back hook ────────────────────────────────────────
+//
+// On the IR interpreter (the wasm/browser backend) the `fn_table` holds no
+// native pointers, so any runtime site that would invoke a compiled function
+// through `fn_table.fn_ptr(..)` has nothing to call: higher-order built-ins
+// (`map`/`filter`/`fold`/`sort_by`/`for_each`/Option·Result combinators, plus
+// `std::process::spawn`'s per-line callback) via `jit_closure_invoker`, the
+// async eager-runs (`spawn`/`await`) via `oxy_spawn_ffi`/`oxy_await_ffi`, and
+// user `Display::fmt` rendering via `display_via_user_fmt`.
+//
+// The interpreter installs this thread-local hook for the duration of a run.
+// Each such site, on an `fn_table` miss, drives the function by *interpreting*
+// it through the hook instead of calling native code. The JIT never installs
+// the hook and always resolves through `fn_table`, so both backends share one
+// code path and cannot silently diverge — the only difference is who runs the
+// callee. See CLAUDE.md "Two execution backends".
+
+/// Interpret the function at `target_ip` with `frame` as its initial locals
+/// (captures/receiver first, then args), returning its result value or an error
+/// message. The opaque `*const ()` is the installing `Interpreter`. Implemented
+/// in `vm::interp`; the JIT leaves the hook unset.
+pub(crate) type InterpInvokeFn = fn(*const (), usize, Vec<Value>) -> Result<Value, String>;
+
+thread_local! {
+    static INTERP_INVOKE: std::cell::Cell<Option<(InterpInvokeFn, *const ())>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Install (or clear, with `None`) the interpreter call-back hook, returning the
+/// previous value so a guard can restore it — supporting reentrant/nested runs.
+pub(crate) fn set_interp_invoke(
+    hook: Option<(InterpInvokeFn, *const ())>,
+) -> Option<(InterpInvokeFn, *const ())> {
+    INTERP_INVOKE.with(|c| c.replace(hook))
+}
+
+/// The currently-installed interpreter call-back hook, if any. `None` on the JIT.
+fn interp_invoke() -> Option<(InterpInvokeFn, *const ())> {
+    INTERP_INVOKE.with(|c| c.get())
+}
+
 // ── Method dispatch ───────────────────────────────────────────────────
 
 /// JIT-compatible closure invoker callback. Matches the signature
@@ -1784,15 +1825,36 @@ fn jit_closure_invoker(
         _ => return Err("not a callable function".into()),
     };
     let target_ip = ft.target_ip.ok_or("function has no target_ip")?;
-    // A populated `fn_table` always resolves on the JIT; a miss here means we're
-    // on the IR interpreter, which has no native pointer to call the closure
-    // through. Higher-order built-ins (map/filter/fold/sort_by/for_each/
-    // Option·Result combinators) all funnel through this one invoker, so this
-    // single site marks them all as deliberately unsupported there — surfacing
-    // the canonical marker instead of silently returning a wrong/Unit result.
-    let fn_ptr = tables.fn_ptr(target_ip).ok_or_else(|| {
-        format!("higher-order built-in (closure argument): {INTERP_UNSUPPORTED_MARKER}")
-    })?;
+    // A populated `fn_table` always resolves on the JIT. A miss means we're on
+    // the IR interpreter, which has no native pointer to call the closure
+    // through — every higher-order built-in (map/filter/fold/sort_by/for_each/
+    // Option·Result combinators, `std::process::spawn`'s callback) funnels
+    // through this one invoker, so this single site routes them all to the
+    // installed interpreter hook, which runs the closure by interpreting it. If
+    // no hook is installed (interpreter misuse), surface the canonical marker
+    // rather than silently returning a wrong/Unit result.
+    let fn_ptr = match tables.fn_ptr(target_ip) {
+        Some(p) => p,
+        None => {
+            let (invoke, data) = interp_invoke().ok_or_else(|| {
+                format!("higher-order built-in (closure argument): {INTERP_UNSUPPORTED_MARKER}")
+            })?;
+            // Frame layout matches the native path below: captures, then args.
+            let mut frame: Vec<Value> = ft
+                .captured_names
+                .iter()
+                .map(|name| {
+                    ft.closure_env
+                        .borrow()
+                        .get(name)
+                        .ok()
+                        .unwrap_or(Value::Unit)
+                })
+                .collect();
+            frame.extend_from_slice(args);
+            return invoke(data, target_ip, frame);
+        }
+    };
 
     let captures_end = ft.captured_names.len();
     let actual_local_count = tables.local_count(target_ip);
@@ -1930,8 +1992,20 @@ unsafe fn display_via_user_fmt(ctx: &mut JitContext, value: &Value) -> Option<St
         let tables = unsafe { &*ctx.tables };
         let qualified = format!("{lookup_name}::fmt");
         let fn_index = tables.name_to_index(&qualified)?;
-        let fp = tables.fn_table.get(&fn_index).copied()?;
-        (fn_index, fp)
+        match tables.fn_table.get(&fn_index).copied() {
+            Some(fp) => (fn_index, fp),
+            None => {
+                // IR interpreter: no native code. Render through the interpreter
+                // hook (frame = [receiver]); fall back to the default `to_string`
+                // if no hook is installed.
+                let (invoke, data) = interp_invoke()?;
+                let result = invoke(data, fn_index, vec![value.clone()]).ok()?;
+                return Some(match result {
+                    Value::String(s) => s,
+                    other => other.to_string(),
+                });
+            }
+        }
     };
     let result = unsafe { invoke_compiled_method(ctx, fn_index, fp, value.clone(), Vec::new()) };
     Some(match result {
@@ -2718,11 +2792,30 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
             let fn_ptr = match tables.fn_ptr(target_ip) {
                 Some(p) => p,
                 None => {
-                    set_error(
-                        ctx,
-                        format!("JIT: no function for future at ip={target_ip}"),
-                    );
-                    unsafe { push(ctx, Value::Unit) };
+                    // IR interpreter: no native code. Interpret the future body
+                    // (captures, then args) through the hook and push its result.
+                    if let Some((invoke, data)) = interp_invoke() {
+                        let mut frame: Vec<Value> = fut
+                            .captured_names
+                            .iter()
+                            .map(|name| {
+                                fut.closure_env
+                                    .borrow()
+                                    .get(name)
+                                    .ok()
+                                    .unwrap_or(Value::Unit)
+                            })
+                            .collect();
+                        frame.extend(fut.args.iter().cloned());
+                        let result = invoke(data, target_ip, frame).unwrap_or(Value::Unit);
+                        unsafe { push(ctx, result) };
+                    } else {
+                        set_error(
+                            ctx,
+                            format!("JIT: no function for future at ip={target_ip}"),
+                        );
+                        unsafe { push(ctx, Value::Unit) };
+                    }
                     return;
                 }
             };
@@ -2807,6 +2900,17 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 } else {
                     Value::Unit
                 }
+            } else if let Some((invoke, data)) = interp_invoke() {
+                // IR interpreter: interpret the task body to completion eagerly,
+                // mirroring the native eager-run. The captures form the initial
+                // frame (a spawned closure takes no positional args); an error in
+                // the body yields Unit, matching the native `disc != 0` branch.
+                let frame: Vec<Value> = f
+                    .captured_names
+                    .iter()
+                    .map(|name| f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit))
+                    .collect();
+                invoke(data, target_ip, frame).unwrap_or(Value::Unit)
             } else {
                 Value::Unit
             };

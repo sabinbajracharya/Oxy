@@ -264,7 +264,7 @@ pub fn run_compiled_interp_with_options(
 ) -> Result<Value, crate::errors::FerriError> {
     let program = prepare_program(source, source_path, &externs)?;
     let engine = super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
-    let mut interp = super::interp::Interpreter::new(&engine);
+    let interp = super::interp::Interpreter::new(&engine);
     match interp.run() {
         VmResult::Value(v) => Ok(v),
         VmResult::Error(e) => Err(runtime_error(e)),
@@ -319,7 +319,7 @@ pub fn run_tests_interp_with_options(
     crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
 
     let engine = super::interp::InterpEngine::compile(&normal_program).map_err(runtime_error)?;
-    let mut interp = super::interp::Interpreter::new(&engine);
+    let interp = super::interp::Interpreter::new(&engine);
 
     // Collect test functions.
     let test_fns: Vec<&crate::ast::FnDef> = normal_program

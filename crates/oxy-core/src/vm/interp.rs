@@ -44,6 +44,12 @@ use super::VmResult;
 /// the wrong thing on an empty `fn_table`. To *support* such a feature on wasm,
 /// implement it in this module and remove the marker. See CLAUDE.md
 /// "Two execution backends".
+///
+/// Currently nothing routes here: higher-order built-ins and async eager-runs
+/// both call back into the interpreter via the FFI closure-invoker hook (see
+/// `install_invoker`). The macro is kept as the ready, greppable opt-out for any
+/// future feature that genuinely cannot run without native code.
+#[allow(unused_macros)]
 macro_rules! unsupported_on_wasm {
     ($ctx:expr, $feature:expr) => {{
         ffi::set_error(
@@ -149,16 +155,21 @@ impl<'e> Interpreter<'e> {
     }
 
     /// Run `main`.
-    pub(crate) fn run(&mut self) -> VmResult {
+    pub(crate) fn run(&self) -> VmResult {
         self.run_function("main")
     }
 
     /// Run a named function with no arguments (entry point / `#[test]`).
-    pub(crate) fn run_function(&mut self, name: &str) -> VmResult {
+    pub(crate) fn run_function(&self, name: &str) -> VmResult {
         let func = match self.engine.function(name) {
             Some(f) => f,
             None => return VmResult::Error(format!("function not found: {name}")),
         };
+        // Install this interpreter as the thread-local closure invoker for the
+        // whole run so higher-order built-ins and async eager-runs reached
+        // through the shared FFI can call back in and interpret their callees
+        // (the `fn_table` has no native pointer). Restored on drop.
+        let _invoker = self.install_invoker();
         let mut ctx = self.fresh_ctx(func.local_count);
         let disc = self.interpret(&mut ctx, func);
         self.finish(ctx, disc)
@@ -199,7 +210,7 @@ impl<'e> Interpreter<'e> {
 
     /// Interpret one function body in `ctx`, returning its discriminant.
     /// `ctx`'s locals 0..n must already hold the arguments.
-    fn interpret(&mut self, ctx: &mut JitContext, func: &IrFunction) -> Disc {
+    fn interpret(&self, ctx: &mut JitContext, func: &IrFunction) -> Disc {
         let reg_def_block = reg_def_blocks(func);
         let mut regs: HashMap<Reg, Value> = HashMap::new();
         let mut block_id: BlockId = func.entry;
@@ -251,7 +262,7 @@ impl<'e> Interpreter<'e> {
 
     /// Execute a single non-terminator op, updating the register file.
     fn exec_op(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         op: &IrOp,
         regs: &mut HashMap<Reg, Value>,
@@ -393,7 +404,7 @@ impl<'e> Interpreter<'e> {
     /// struct/enum with a matching `Type::<method>` impl, dispatch to that
     /// method instead (mirroring the JIT's `binary_op!` trait dispatch).
     fn binary(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         regs: &mut HashMap<Reg, Value>,
         name: &'static str,
@@ -414,7 +425,7 @@ impl<'e> Interpreter<'e> {
     }
 
     fn unary(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         regs: &mut HashMap<Reg, Value>,
         name: &'static str,
@@ -437,7 +448,7 @@ impl<'e> Interpreter<'e> {
     /// `[receiver, args..]` and return its result. `None` means no overload (a
     /// primitive operand, or no such impl) — the caller falls back to the FFI.
     fn try_op_overload(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         receiver: &Value,
         args: &[Value],
@@ -457,7 +468,7 @@ impl<'e> Interpreter<'e> {
     }
 
     /// Truthiness of a branch condition, via the runtime's own `oxy_is_truthy`.
-    fn truthy(&mut self, ctx: &mut JitContext, cond: Option<&Value>) -> bool {
+    fn truthy(&self, ctx: &mut JitContext, cond: Option<&Value>) -> bool {
         if let Some(v) = cond.cloned() {
             self.push(ctx, v);
         } else {
@@ -470,7 +481,7 @@ impl<'e> Interpreter<'e> {
 
     /// A `CallBuiltin`. Returns the value that lands in the result register.
     fn call_builtin(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         func: &str,
         args: &[Reg],
@@ -503,13 +514,12 @@ impl<'e> Interpreter<'e> {
                     return v;
                 }
             }
-            // Async execution requires driving the cooperative scheduler, which
-            // eagerly runs each task's body through a native fn pointer — none
-            // exist on this backend (the `fn_table` is empty). Falling through
-            // would let `oxy_spawn_ffi` silently yield `Unit`; mark it instead.
-            "oxy_await_ffi" | "oxy_spawn_ffi" | "oxy_sleep_ffi" | "oxy_select_ffi" => {
-                return unsupported_on_wasm!(ctx, "async execution (await/spawn/sleep/select)");
-            }
+            // Async (`spawn`/`await`/`sleep`/`select`) flows to the shared FFI.
+            // The scheduler runs each task eagerly; where the JIT would invoke a
+            // task/future body through a native fn pointer, `oxy_spawn_ffi` /
+            // `oxy_await_ffi` fall back to the installed interpreter hook (see
+            // `install_invoker`) and interpret it instead. `sleep`/`select` touch
+            // only the scheduler's virtual clock, so they need no native code.
             _ => {}
         }
         let arg_vals: Vec<Value> = args.iter().map(|&a| Self::reg_val(regs, a)).collect();
@@ -520,7 +530,7 @@ impl<'e> Interpreter<'e> {
     /// when handled here; `None` to fall through to the FFI (async closures build
     /// a `Future` and non-callables raise the proper error there).
     fn try_call_closure(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         args: &[Reg],
         regs: &HashMap<Reg, Value>,
@@ -554,7 +564,7 @@ impl<'e> Interpreter<'e> {
     /// Returns `None` for built-in receivers (Vec/String/…), letting the FFI's
     /// built-in method dispatch handle them.
     fn try_call_method(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         args: &[Reg],
         regs: &HashMap<Reg, Value>,
@@ -592,7 +602,7 @@ impl<'e> Interpreter<'e> {
     /// arguments as its frame. Returns `None` for stdlib/builtin paths (not in
     /// `name_to_index`), letting the shared FFI's registry dispatch handle them.
     fn try_call_path(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         args: &[Reg],
         regs: &HashMap<Reg, Value>,
@@ -611,7 +621,7 @@ impl<'e> Interpreter<'e> {
     /// caller and return its result value — mirroring the JIT's callee-frame
     /// teardown (`CalleeFrame::execute` / `invoke_compiled_method`).
     fn invoke(
-        &mut self,
+        &self,
         caller_ctx: &mut JitContext,
         callee_fn: &'e IrFunction,
         frame_locals: Vec<Value>,
@@ -627,10 +637,50 @@ impl<'e> Interpreter<'e> {
         result
     }
 
+    /// Interpret the function at `target_ip` with `frame_locals` as its initial
+    /// locals (captures/receiver first, then args), returning its result or an
+    /// error message. This is the body behind the FFI closure-invoker hook: the
+    /// shared `oxy_*` runtime calls back here whenever it would otherwise invoke
+    /// a compiled function through the (empty, on this backend) `fn_table` —
+    /// higher-order built-ins, async eager-runs, user `Display::fmt`.
+    ///
+    /// The result mapping mirrors the JIT's `jit_closure_invoker`: discriminant 0
+    /// is success; anything else is an error carrying `ctx.error_*`.
+    fn invoke_target(&self, target_ip: usize, frame_locals: Vec<Value>) -> Result<Value, String> {
+        if target_ip == usize::MAX || target_ip >= self.engine.functions.len() {
+            return Err(format!(
+                "interpreter: invalid closure target_ip {target_ip}"
+            ));
+        }
+        let callee_fn = &self.engine.functions[target_ip];
+        let local_count = callee_fn.local_count.max(frame_locals.len());
+        let mut ctx = self.fresh_ctx(local_count);
+        for (i, v) in frame_locals.into_iter().enumerate() {
+            unsafe { ctx.local_slot(i).write(v) };
+        }
+        let disc = self.interpret(&mut ctx, callee_fn);
+        let result = std::mem::replace(&mut ctx.result, Value::Unit);
+        if disc == 0 {
+            Ok(result)
+        } else {
+            Err(String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)]).into_owned())
+        }
+    }
+
+    /// Install this interpreter as the thread-local FFI closure-invoker hook for
+    /// the duration of the returned guard. The guard restores the previous hook
+    /// on drop, so nested/reentrant runs compose and the raw `self` pointer never
+    /// outlives the borrow it was taken from.
+    fn install_invoker(&self) -> InvokerGuard {
+        let data = self as *const Self as *const ();
+        let prev = ffi::set_interp_invoke(Some((interp_invoke_trampoline, data)));
+        InvokerGuard { prev }
+    }
+
     /// Call `name` with the given register args + string/immediate ABI metadata,
     /// discarding the result.
     fn call_named(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         name: &str,
         arg_vals: &[Value],
@@ -648,7 +698,7 @@ impl<'e> Interpreter<'e> {
     /// (the function consumes its args and may push one result) tells us whether
     /// a result was produced — independent of the arg count.
     fn call_collect(
-        &mut self,
+        &self,
         ctx: &mut JitContext,
         name: &str,
         arg_vals: &[Value],
@@ -695,6 +745,34 @@ impl<'e> Interpreter<'e> {
         } else {
             Value::Unit
         }
+    }
+}
+
+// ── Closure-invoker hook plumbing ─────────────────────────────────────────────
+
+/// Trampoline matching `ffi::InterpInvokeFn`. Reconstructs the `Interpreter`
+/// from the opaque data pointer installed by `install_invoker` and interprets
+/// the requested target. Sound because `InvokerGuard` clears the hook before the
+/// referenced `Interpreter` (and its `engine` borrow) is dropped, so `data`
+/// never dangles while the hook is live.
+fn interp_invoke_trampoline(
+    data: *const (),
+    target_ip: usize,
+    frame: Vec<Value>,
+) -> Result<Value, String> {
+    let interp = unsafe { &*(data as *const Interpreter<'_>) };
+    interp.invoke_target(target_ip, frame)
+}
+
+/// RAII guard returned by `Interpreter::install_invoker`. Restores the
+/// previously-installed hook (usually `None`) when dropped.
+struct InvokerGuard {
+    prev: Option<(ffi::InterpInvokeFn, *const ())>,
+}
+
+impl Drop for InvokerGuard {
+    fn drop(&mut self) {
+        ffi::set_interp_invoke(self.prev.take());
     }
 }
 
@@ -888,25 +966,28 @@ mod tests {
             .check_program(&program)
             .expect("type check");
         let engine = InterpEngine::compile(&program).expect("ir lowering");
-        let mut interp = Interpreter::new(&engine);
+        let interp = Interpreter::new(&engine);
         interp.run()
     }
 
-    /// Async drives the scheduler through native task pointers the interpreter
-    /// doesn't have. The `unsupported_on_wasm!` marker must turn that into a
-    /// clear error rather than the silent `Unit` the shared FFI would yield.
+    /// Async (`spawn`/`await`) runs eagerly on the interpreter: where the JIT
+    /// would invoke the task body through a native fn pointer, `oxy_spawn_ffi`
+    /// falls back to the installed closure-invoker hook and interprets it. The
+    /// result must match the JIT's.
     #[test]
-    fn interp_async_reports_unsupported_not_silent() {
-        let src = "fn main() { let h = spawn(|| 42); println!(\"{}\", h.await); }";
-        match interp_run(src) {
-            VmResult::Error(e) => assert!(
-                e.contains("not supported"),
-                "expected an explicit unsupported error, got: {e}"
-            ),
-            VmResult::Value(v) => {
-                panic!("async ran to a value on the interpreter instead of erroring: {v:?}")
-            }
-        }
+    fn interp_async_spawn_await() {
+        assert_parity("fn main() { let h = spawn(|| 42); println!(\"{}\", h.await); }");
+    }
+
+    /// A higher-order built-in (`map`/`filter`/`sum`) drives its closure through
+    /// the same hook. This is the central Phase-4b capability.
+    #[test]
+    fn interp_higher_order_builtin() {
+        assert_parity(
+            "fn main() { let v = vec![1, 2, 3, 4]; \
+             let s: int = v.iter().map(|x| x * 2).filter(|x| x > 4).sum(); \
+             println!(\"{}\", s); }",
+        );
     }
 
     /// Assert the interpreter and the JIT produce identical output.

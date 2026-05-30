@@ -186,7 +186,17 @@ Because the same feature must work on both backends, every runtime change risks 
 
 1. **Compile-time — exhaustive match.** `vm/interp.rs` is compiled on **all** targets (not just wasm). Its `match` over `IrOp` / `Terminator` has **no wildcard arm**. Add or remove an IR op and *every native build* fails to compile until the interpreter is updated. Never paper over this with a `_ => {}` arm.
 2. **Test-time — FFI surface consistency.** `ffi_decls()` (codegen's CLIF signatures) and `ffi_symbols()` (the shared pointer+ABI table the interpreter dispatches from) are independent hand-maintained lists. `ffi_consistency_tests` in `jit/mod.rs` asserts they describe the same names and the same return ABI. Add an `oxy_*` to one list but not the other → test fails.
-3. **Runtime opt-out — `unsupported_on_wasm!`.** For a feature reachable through the shared FFI that genuinely cannot run without native code (currently: **async** — the scheduler eagerly drives JIT'd tasks through native fn pointers that don't exist on the interpreter), route it through the `unsupported_on_wasm!(ctx, "feature")` macro in `vm/interp.rs`. It produces a clear error instead of silent wrong output. Grep for the macro to audit what's deliberately unsupported.
+3. **Runtime opt-out — `unsupported_on_wasm!`.** For a feature reachable through the shared FFI that genuinely cannot run without native code, route it through the `unsupported_on_wasm!(ctx, "feature")` macro in `vm/interp.rs`. It produces a clear error instead of silent wrong output. Grep for the macro to audit what's deliberately unsupported — **currently nothing** (the closure-invoker hook below removed the last cases). The macro is kept ready for future use.
+
+### The closure-invoker hook (how callees reach the interpreter)
+
+The JIT invokes a compiled function by calling its native pointer in `JitTables.fn_table`. The interpreter's `fn_table` is **empty**, so any runtime site that would call through it has nothing to invoke. Direct calls (`oxy_call`, `oxy_method_call`, `oxy_call_closure`, path calls, operator overloads) are intercepted at the IR level in `interp.rs` and interpreted recursively. But some callees are reached from *inside* the shared Rust runtime, where IR-level interception can't help:
+
+- **higher-order built-ins** — `map`/`filter`/`fold`/`sort_by`/`for_each`/Option·Result combinators, and `std::process::spawn`'s per-line callback, all invoke a user closure from inside a Rust loop via `jit_closure_invoker`;
+- **async eager-runs** — `oxy_spawn_ffi`/`oxy_await_ffi` run a task/future body to completion through a native pointer;
+- **user `Display::fmt`** — `display_via_user_fmt` renders a struct/enum through its compiled `fmt` method.
+
+For these, the interpreter installs a **thread-local hook** (`ffi::set_interp_invoke`, installed for the whole run by `Interpreter::install_invoker`) that interprets a function at a given `target_ip`. Each of the sites above, on an `fn_table` miss, calls the hook instead of native code. The JIT never installs the hook and always resolves through `fn_table`, so both backends share one code path — the only difference is *who* runs the callee. To support a new "called from inside the runtime" feature on wasm, route its `fn_table` miss to the hook the same way; don't reach for `unsupported_on_wasm!` unless the feature genuinely needs the host.
 
 ### When you change the runtime (adding/removing/changing a feature)
 
@@ -205,10 +215,9 @@ docker compose run --rm dev bash -c "cargo test -p oxy-core --test jit_interp_pa
 
 This is the feature-parity check between the JIT and the wasm interpreter. A failure means the two backends disagree on a program's output — investigate before merging.
 
-### Known interpreter gaps (deferred, tracked)
+### Known interpreter gaps
 
-- **Async execution** (`spawn`/`await`/`sleep`/`select`) — marked `unsupported_on_wasm!`. Needs a closure-invoker callback so the scheduler can drive tasks by interpreting them.
-- **Higher-order built-in methods** that invoke user closures (`vec.map(|x| …)`, `iter.for_each`, `sort_by`) — same closure-invoker callback. Until then they may misbehave on the interpreter; do not rely on them in the playground.
+None. The whole `examples/features/**` corpus is at parity (`jit_interp_parity`): async (`spawn`/`await`/`sleep`/`select`), higher-order built-ins (`map`/`filter`/`fold`/`sort_by`/`for_each`/Option·Result combinators), `std::process::spawn` streaming, and user `Display::fmt` all run identically on both backends via the closure-invoker hook above. If you add a feature the interpreter can't yet run, mark it with `unsupported_on_wasm!` and list it here.
 
 ## Test Infrastructure
 
