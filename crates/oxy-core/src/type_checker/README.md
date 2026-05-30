@@ -16,7 +16,13 @@ this stage (or codegen) rejects the program.
 | `resolve.rs` | Name resolution: paths, use-aliases, module qualification. |
 | `check_item.rs` | Type-checking item bodies (fns, impls, traits, modules). |
 | `check_stmt.rs` | Statement checking (`let`, `use`, control flow). |
-| `check_expr.rs` | Expression type inference. `infer_expr` is a thin dispatcher; each non-trivial `Expr` variant has a focused `infer_<variant>` method (`infer_call`, `infer_method_call`, `infer_binary_op`, `infer_struct_init`, …). |
+| `check_expr.rs` | Expression type inference. Holds the `infer_expr` dispatcher plus the shared call/generic infrastructure (`resolve_generic_return`, `check_args_against_params`). Each non-trivial `Expr` variant is a focused `infer_<variant>` method, grouped into the `check_expr/` submodules below. |
+| `check_expr/calls.rs` | `infer_call`, `infer_method_call`, `infer_path_call`, `infer_macro_call`. |
+| `check_expr/operators.rs` | `infer_binary_op`, `infer_unary_op`, `infer_compound_assign`, `infer_as`, `infer_assign` (+ its `check_assign_root_mutable`). |
+| `check_expr/control_flow.rs` | `infer_if`, `infer_if_let`, `infer_match` (+ exhaustiveness helpers), `infer_block`, `infer_return`. |
+| `check_expr/data.rs` | `infer_struct_init`, `infer_field_access`, `infer_index`, `infer_tuple`, `infer_array`, `infer_repeat`, `infer_range`. |
+| `check_expr/primary.rs` | `infer_ident` (+ `name_matches_known_symbol`), `infer_self_ref`, `infer_path`. |
+| `check_expr/closures.rs` | `infer_closure`, `infer_async_block`, `infer_await`, `infer_try`. |
 | `tests.rs` | Rust unit tests for the type checker. |
 
 ## Key types & entry points
@@ -43,4 +49,7 @@ this stage (or codegen) rejects the program.
 
 - New `Expr`/`Stmt`/`Item` → add inference/checking here.
 - New built-in type/method → ensure `TypeInfo::from_name` and `symbols.rs` agree.
-- Keep this file table current; `check_expr.rs` is a split candidate (large).
+- A new `Expr` variant gets an `infer_<variant>` method in the matching
+  `check_expr/` submodule **and** a dispatch arm in `infer_expr`. The submodule
+  methods are `pub(super)` so the parent dispatcher can call them; keep them so.
+- Keep this file table current.

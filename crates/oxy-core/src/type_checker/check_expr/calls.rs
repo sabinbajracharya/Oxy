@@ -1,0 +1,480 @@
+//! Type inference for call-shaped expressions: free/qualified calls,
+//! method calls, path calls, and macro calls.
+//!
+//! Part of `check_expr` — see that module for the `infer_expr` dispatcher.
+
+use super::*;
+
+impl TypeChecker {
+    pub(super) fn infer_call(
+        &mut self,
+        callee: &Expr,
+        args: &[Expr],
+        span: &Span,
+    ) -> Result<TypeInfo, FerriError> {
+        if let Expr::Ident(name, _) = callee {
+            // Resolve the callee's qualified name and look up its params.
+            let resolved_key = if self.fn_param_types.contains_key(name) {
+                Some(name.clone())
+            } else if !name.contains("::") {
+                // Try use_aliases first (handles `use foo::bar` + `bar()`).
+                if let Some(aliased) = self.use_aliases.get(name) {
+                    if self.fn_param_types.contains_key(aliased) {
+                        Some(aliased.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    let module_prefix = self.module_stack.join("::");
+                    if !module_prefix.is_empty() {
+                        let qualified = format!("{}::{}", module_prefix, name);
+                        if self.fn_param_types.contains_key(&qualified) {
+                            Some(qualified)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            // Fall back to glob imports: a bare `name` may have come from
+            // a `use module::*`. Resolve it to `module::name` so the
+            // visibility check below rejects a private glob item.
+            let resolved_key = resolved_key.or_else(|| {
+                if name.contains("::") {
+                    return None;
+                }
+                self.glob_imports.iter().rev().find_map(|m| {
+                    let q = format!("{m}::{name}");
+                    (self.fn_defs.contains_key(&q) || self.fn_return_types.contains_key(&q))
+                        .then_some(q)
+                })
+            });
+            if let Some(key) = resolved_key {
+                self.check_path_visible(&key, *span)?;
+                let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                self.check_args_against_params(&params, args, false, name, Some(&key), *span)?;
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                if let Some(ret) =
+                    self.resolve_generic_return(&key, &arg_types, false, &HashMap::new())
+                {
+                    return Ok(ret);
+                }
+                if let Some(ret) = self.fn_return_types.get(&key) {
+                    return Ok(ret.clone());
+                }
+            } else {
+                // Unknown callee — fall back to inferring args without
+                // checking against any signature.
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                // Built-in constructors: parameterize the wrapper by
+                // the inner argument's inferred type.
+                match name.as_str() {
+                    "Some" => {
+                        let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                        return Ok(TypeInfo::Option(Box::new(inner)));
+                    }
+                    "Ok" => {
+                        let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                        return Ok(TypeInfo::Result(
+                            Box::new(inner),
+                            Box::new(TypeInfo::Unknown),
+                        ));
+                    }
+                    "Err" => {
+                        let inner = arg_types.first().cloned().unwrap_or(TypeInfo::Unknown);
+                        return Ok(TypeInfo::Result(
+                            Box::new(TypeInfo::Unknown),
+                            Box::new(inner),
+                        ));
+                    }
+                    "spawn" => {
+                        // spawn(|| expr) → JoinHandle<expr_type>. Exactly one
+                        // argument, and it must be a closure.
+                        if args.len() != 1 {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "spawn expects exactly 1 argument (a closure), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        let inner = if let Expr::Closure { body, .. } = &args[0] {
+                            self.infer_expr(body)?
+                        } else {
+                            return Err(FerriError::TypeError {
+                                message: "spawn expects a closure argument, e.g. \
+                                                  spawn(|| expr)"
+                                    .to_string(),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        };
+                        return Ok(TypeInfo::JoinHandle(Box::new(inner)));
+                    }
+                    "sleep" => {
+                        // sleep(duration) → Unit. Exactly one argument.
+                        if args.len() != 1 {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "sleep expects exactly 1 argument (a duration), \
+                                             found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        return Ok(TypeInfo::Unit);
+                    }
+                    "select" => {
+                        // select(h1, h2, ...) → common inner type of all
+                        // JoinHandle args, or Unknown if they differ.
+                        // Requires at least two handles to choose between.
+                        if args.len() < 2 {
+                            return Err(FerriError::TypeError {
+                                message: format!(
+                                    "select expects at least 2 arguments (handles to \
+                                             choose between), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        let mut inner: Option<TypeInfo> = None;
+                        for t in &arg_types {
+                            let unwrapped = match t {
+                                TypeInfo::JoinHandle(inner_ty) => *inner_ty.clone(),
+                                _ => TypeInfo::Unknown,
+                            };
+                            inner = match inner {
+                                None => Some(unwrapped),
+                                Some(prev) if prev == unwrapped => Some(prev),
+                                _ => Some(TypeInfo::Unknown),
+                            };
+                        }
+                        return Ok(inner.unwrap_or(TypeInfo::Unknown));
+                    }
+                    "http::fetch" | "http::fetch_post" => {
+                        // async HTTP call → Future<HttpResponse>
+                        let _ = arg_types; // validate args but don't constrain
+                        return Ok(TypeInfo::Future(Box::new(TypeInfo::UserStruct {
+                            name: "HttpResponse".to_string(),
+                            generic_args: vec![],
+                        })));
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            for arg in args {
+                self.infer_expr(arg)?;
+            }
+        }
+        // Fallback: check if callee is a function-typed value (closure, async closure).
+        // A bare-ident callee that isn't a local binding may be a builtin
+        // or global function resolved at codegen (e.g. `println(..)`); it
+        // is not an undefined *variable*, so don't infer it as a value
+        // (which would trip the undefined-variable check). Undefined value
+        // references in argument position were already checked above.
+        if let Expr::Ident(cname, _) = callee {
+            if self.env.borrow().get(cname).is_none() {
+                return Ok(TypeInfo::Unknown);
+            }
+        }
+        let callee_ty = self.infer_expr(callee)?;
+        if let TypeInfo::Function { params, ret } = &callee_ty {
+            // Only check arg count when params are known (non-empty).
+            // A bare `Fn` type has 0 params and accepts any arity.
+            if !params.is_empty() && args.len() != params.len() {
+                return Err(FerriError::TypeError {
+                    message: format!("expected {} arguments, found {}", params.len(), args.len()),
+                    line: span.line,
+                    column: span.column,
+                });
+            }
+            return Ok(*ret.clone());
+        }
+        Ok(TypeInfo::Unknown)
+    }
+
+    pub(super) fn infer_method_call(
+        &mut self,
+        object: &Expr,
+        method: &str,
+        args: &[Expr],
+        span: &Span,
+    ) -> Result<TypeInfo, FerriError> {
+        let obj_ty = self.infer_expr(object)?;
+        if let TypeInfo::UserStruct {
+            name: struct_name,
+            generic_args,
+        } = &obj_ty
+        {
+            let resolved = self.resolve_struct_name(struct_name);
+            let qualified = format!("{}::{}", resolved, method);
+            let module_qualified = if self.module_stack.is_empty() {
+                None
+            } else {
+                Some(format!(
+                    "{}::{}::{}",
+                    self.module_stack.join("::"),
+                    resolved,
+                    method
+                ))
+            };
+            let resolved_key = if self.fn_param_types.contains_key(&qualified) {
+                Some(qualified.clone())
+            } else if let Some(mq) = module_qualified.as_ref() {
+                if self.fn_param_types.contains_key(mq) {
+                    Some(mq.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            // Seed initial generic bindings from the receiver type
+            // so that `Cell<int>.replace("wrong")` rejects the call.
+            let initial_bindings: HashMap<String, TypeInfo> =
+                if let Some(def) = self.struct_defs.get(&resolved) {
+                    let param_names: Vec<String> =
+                        def.generic_params.iter().map(|p| p.name.clone()).collect();
+                    param_names
+                        .iter()
+                        .zip(generic_args.iter())
+                        .map(|(n, t)| (n.clone(), t.clone()))
+                        .collect()
+                } else {
+                    HashMap::new()
+                };
+            if let Some(key) = resolved_key {
+                let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                self.check_args_against_params_with_bindings(
+                    &params,
+                    args,
+                    true,
+                    method,
+                    Some(&key),
+                    &initial_bindings,
+                    *span,
+                )?;
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                if let Some(ret) =
+                    self.resolve_generic_return(&key, &arg_types, true, &initial_bindings)
+                {
+                    return Ok(ret);
+                }
+                if let Some(ret_ty) = self.fn_return_types.get(&key) {
+                    return Ok(ret_ty.clone());
+                }
+            } else {
+                // Unknown user-method — infer args for side effects,
+                // then fall through to the builtin method table.
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+            }
+        } else {
+            // Check for impl-on-primitive (e.g. `impl Doublable for i64`).
+            let primitive_qualified = format!("{}::{}", obj_ty.name(), method);
+            let prim_key = if self.fn_param_types.contains_key(&primitive_qualified) {
+                Some(primitive_qualified)
+            } else {
+                None
+            };
+            if let Some(key) = prim_key {
+                let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+                self.check_args_against_params(&params, args, true, method, Some(&key), *span)?;
+                if let Some(ret_ty) = self.fn_return_types.get(&key) {
+                    return Ok(ret_ty.clone());
+                }
+            } else {
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                // Validate the method against the builtin method tables.
+                // Skip when the receiver type is Unknown (we have no
+                // signature to compare against) or a UserStruct (handled
+                // above; impl methods may not be in symbols).
+                if obj_ty != TypeInfo::Unknown
+                    && !matches!(obj_ty, TypeInfo::UserStruct { .. })
+                    && !self.method_exists_on(&obj_ty, method)
+                {
+                    return Err(FerriError::TypeError {
+                        message: format!("no method `{method}` on type `{}`", obj_ty.name()),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+                // Fixed-size arrays disallow Vec mutators.
+                if matches!(obj_ty, TypeInfo::Array(..)) && self.is_array_mutator(method) {
+                    return Err(FerriError::TypeError {
+                                message: format!(
+                                    "method `{method}` is not available on fixed-size arrays; convert to `Vec` first"
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                }
+                // Per-method element-type checks for parameterized
+                // containers (`Vec.push(T)`, `HashMap.insert(K, V)`,
+                // ...). Returns the method's parameterized return type
+                // when known.
+                if let Some(ret) =
+                    self.check_builtin_method_args(&obj_ty, method, args, &arg_types, *span)?
+                {
+                    return Ok(ret);
+                }
+            }
+        }
+        // Common built-in method return types. Keeps downstream
+        // type-checking honest when calls are chained through builtins
+        // like `.to_string()`. Anything not listed stays Unknown.
+        Ok(match method {
+            "to_string" => TypeInfo::String,
+            "len" => TypeInfo::I64,
+            "is_empty" | "contains" | "starts_with" | "ends_with" => TypeInfo::Bool,
+            "find" => TypeInfo::Option(Box::new(TypeInfo::I64)),
+            "clone" => obj_ty.clone(),
+            _ => TypeInfo::Unknown,
+        })
+    }
+
+    pub(super) fn infer_path_call(
+        &mut self,
+        path: &[String],
+        args: &[Expr],
+        span: &Span,
+    ) -> Result<TypeInfo, FerriError> {
+        let qualified = path.join("::");
+        // Resolve key, mirroring the lookup order used for fn_return_types.
+        let resolved_key = if self.fn_param_types.contains_key(&qualified) {
+            Some(qualified.clone())
+        } else if path.len() == 2 {
+            self.use_aliases.get(&path[0]).and_then(|prefix| {
+                let aliased = format!("{}::{}", prefix, &path[1]);
+                if self.fn_param_types.contains_key(&aliased) {
+                    Some(aliased)
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+        .or_else(|| {
+            let module_prefix = self.module_stack.join("::");
+            if module_prefix.is_empty() {
+                None
+            } else {
+                let module_qualified = format!("{}::{}", module_prefix, qualified);
+                if self.fn_param_types.contains_key(&module_qualified) {
+                    Some(module_qualified)
+                } else {
+                    None
+                }
+            }
+        });
+        if let Some(key) = resolved_key {
+            self.check_path_visible(&key, *span)?;
+            let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
+            self.check_args_against_params(&params, args, false, &qualified, Some(&key), *span)?;
+            // Substitute generic return type with concrete arg types.
+            let arg_types: Vec<TypeInfo> = args
+                .iter()
+                .map(|a| self.infer_expr(a))
+                .collect::<Result<_, _>>()?;
+            if let Some(ret) = self.resolve_generic_return(&key, &arg_types, false, &HashMap::new())
+            {
+                return Ok(ret);
+            }
+            if let Some(ret) = self.fn_return_types.get(&key) {
+                return Ok(ret.clone());
+            }
+        } else {
+            // Built-in path calls with known return types.
+            let name = qualified.as_str();
+            if name == "http::fetch" || name == "http::fetch_post" {
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+                return Ok(TypeInfo::Future(Box::new(TypeInfo::UserStruct {
+                    name: "HttpResponse".to_string(),
+                    generic_args: vec![],
+                })));
+            }
+            for arg in args {
+                self.infer_expr(arg)?;
+            }
+        }
+        Ok(TypeInfo::Unknown)
+    }
+
+    pub(super) fn infer_macro_call(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+    ) -> Result<TypeInfo, FerriError> {
+        // Infer all args so nested calls / field accesses still get
+        // type-checked.
+        let arg_types: Vec<TypeInfo> = args
+            .iter()
+            .map(|a| self.infer_expr(a))
+            .collect::<Result<_, _>>()?;
+        if name == "vec" {
+            // vec![a, b, c] must be homogeneous (or contain Unknown).
+            let mut leader = TypeInfo::Unknown;
+            for (i, t) in arg_types.iter().enumerate() {
+                if *t == TypeInfo::Unknown {
+                    continue;
+                }
+                if leader == TypeInfo::Unknown {
+                    leader = t.clone();
+                    continue;
+                }
+                if leader.accepts(t) {
+                    continue;
+                }
+                if t.accepts(&leader) {
+                    leader = t.clone();
+                    continue;
+                }
+                let espan = args[i].span();
+                return Err(FerriError::TypeError {
+                    message: format!(
+                        "`vec!` has mixed element types: element {} is `{}`, expected `{}`",
+                        i + 1,
+                        t.name(),
+                        leader.name()
+                    ),
+                    line: espan.line,
+                    column: espan.column,
+                });
+            }
+            return Ok(TypeInfo::Vec(Box::new(leader)));
+        }
+        if name == "dbg" && arg_types.len() == 1 {
+            // dbg!(expr) returns its argument unchanged.
+            return Ok(arg_types.into_iter().next().unwrap());
+        }
+        Ok(TypeInfo::Unknown)
+    }
+}

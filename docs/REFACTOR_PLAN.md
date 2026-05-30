@@ -27,7 +27,7 @@ tree (ADRs + architecture notes). The problems are concentrated, not pervasive.
 | `crates/oxy-core/tests/vm_tests.rs` | 6130 | one giant test file, no categorization |
 | `vm/jit/ir_gen/mod.rs` | 4156 | 218 fns in **one file** inside a dir built to hold many; `gen_expr` alone ≈ 860 lines |
 | `vm/jit/ffi.rs` | 3128 | 107 `oxy_*` runtime fns, all domains in one file |
-| `type_checker/check_expr.rs` | 1844 | only 14 fns → several very large functions |
+| `type_checker/check_expr.rs` | 1844 | ✅ split — dispatcher + 6 `check_expr/` domain submodules |
 | `parser/mod.rs` | 1742 | Pratt core + misc |
 | `ast/mod.rs` | 1657 | every node in one module |
 | `types/mod.rs` | 1502 | `Value` + type system + helpers |
@@ -161,8 +161,16 @@ reads as a table of the expression grammar. Trivial one-liner arms (literals, `G
 (no IR-snapshot proof here — type-checking emits no IR — so the net is the unit +
 feature + vm tests). Param types are clippy-safe (`&Expr`/`&[T]`/`&str`); the only body
 rewrite was stripping `.as_ref()`/`.as_str()` on now-`&Expr`/`&str` bindings.
-A follow-up *pure-move* file split (grouping the `infer_*` methods into `check_expr/`
-submodules) is still open if the ~1940-line file wants further shrinking.
+**Follow-up pure-move file split. ✅ DONE.** The ~1940-line file was carved into a
+lean parent (`check_expr.rs`, ~368 lines: the `infer_expr` dispatcher + the generic/
+arg-checking infrastructure) plus six domain submodules under `check_expr/`:
+`calls.rs`, `operators.rs`, `control_flow.rs`, `data.rs`, `primary.rs`, `closures.rs`
+(largest ~476 lines). Moved `infer_*` methods became `pub(super)` so the parent
+dispatcher can call them; domain-local helpers (`check_assign_root_mutable`,
+`match_is_exhaustive` & friends, `name_matches_known_symbol`) moved with their sole
+caller and stayed private. Submodules reach the parent's imports via `use super::*`.
+Pure move — clippy clean, full suite green (456 lib / 82 IR-snapshot / parity /
+406 vm_tests). See `crates/oxy-core/src/type_checker/README.md`.
 
 **2d. `tests/vm_tests.rs` (6130). ✅ DONE.** Split into `tests/vm_tests/` with a
 `main.rs` harness (Cargo auto-discovers `tests/<dir>/main.rs` as the single `vm_tests`
