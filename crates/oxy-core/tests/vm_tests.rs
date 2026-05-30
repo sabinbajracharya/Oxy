@@ -5890,10 +5890,10 @@ fn main() {
     assert_eq!(output, vec!["1.0\n", "2.0\n"]);
 }
 
-// Regression tests for the slot/stack invariant class of bugs (see
-// docs/architecture/vm-locals-stack-separation.md). After locals were moved
-// to a per-frame Vec separate from the operand stack, these scenarios cannot
-// collide by construction, but the tests guard against architectural drift.
+// Regression tests for the slot/stack invariant class of bugs (historical
+// context: docs/history/vm-locals-stack-separation.md, from the retired bytecode
+// VM). The register IR + per-frame locals make these scenarios collision-free by
+// construction, but the tests guard against architectural drift.
 
 #[test]
 fn test_for_loop_with_range_pattern() {

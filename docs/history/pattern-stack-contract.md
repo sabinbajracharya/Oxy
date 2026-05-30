@@ -1,5 +1,11 @@
 # Pattern compilation: unified stack contract
 
+> **RETIRED — historical.** Describes pattern compilation in the removed
+> `compiler/` (AST → bytecode `Chunk`) and its operand-stack contract, which no
+> longer exists. Pattern lowering now lives in `vm/jit/ir_gen/` (`gen_pattern_check`
+> / `gen_pattern_bind`). Kept for provenance. Current architecture:
+> [`../execution-model.md`](../execution-model.md).
+
 **Status:** Active.
 **Date:** 2026-05-24.
 **Scope:** `crates/oxy-core/src/compiler/expr.rs` — `compile_pattern`,

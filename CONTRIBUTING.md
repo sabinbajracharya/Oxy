@@ -26,34 +26,45 @@ git config core.hooksPath .githooks
 ## How Oxy Works
 
 ```
-Source (.ox) → Lexer → Parser → Type Checker → Compiler → VM (bytecode)
+Source (.ox) → Lexer → Parser → Type Checker → ir_gen (AST → register IR + CFG) → backend
 ```
 
-There is no interpreter. One path: compile to bytecode, execute on the stack-based VM. Values use `Rc<RefCell<>>` under the hood — no borrow checker.
+There is no tree-walking interpreter and no bytecode/stack VM. The AST lowers to a
+**register IR**, then runs on one of two backends that share one runtime: the
+**Cranelift JIT** (native) or the **IR interpreter** (`wasm32`, for the browser
+playground). Values use `Rc<RefCell<>>` under the hood — no borrow checker. See
+[`docs/execution-model.md`](docs/execution-model.md) for the full picture.
 
 ## Project Map
 
+Each source folder has a `README.md` describing its files — start there. High level:
+
 ```
 crates/oxy-core/src/
-├── lexer/            token.rs (Token, TokenKind, Span), mod.rs (tokenizer)
-├── parser/           mod.rs — Pratt parser, ~3200 lines, 15 precedence levels
-├── ast/              mod.rs — Program, Item, Expr, Stmt, FnDef, StructDef, etc.
-├── type_checker/     mod.rs — semantic type checking, field visibility enforcement
-├── compiler/         mod.rs — AST → bytecode Chunk (prescan → compile → post-pass)
-├── vm/
-│   ├── mod.rs        Stack-based VM, builtin_method, dispatch_pathcall, run_tests
-│   └── builtins/     Per-type method dispatches (string, vec, hashmap, etc.)
-├── types/            mod.rs — Value enum (25 variants), type_name, ordering
-├── stdlib/           fs, env, process, regex, net, time, rand, math, db, server
+├── lexer/            tokenizer → Vec<Token>  (token.rs: Token/TokenKind/Span)
+├── parser/           Pratt parser (15 precedence levels): expr/item/stmt/pattern/ty
+├── ast/              Program, Item, Expr, Stmt, FnDef, StructDef, etc.
+├── type_checker/     semantic checking, name resolution, field-visibility enforcement
+├── vm/               execution: shared runtime + two backends
+│   ├── api.rs        public entry points; per-target backend selection
+│   ├── interp.rs     IR interpreter backend (wasm32 / browser)
+│   ├── builtins/     per-type method dispatch (string, vec, hashmap, …)
+│   └── jit/          native backend: ir_gen (AST→IR), ir.rs, codegen.rs (→Cranelift),
+│                     ffi.rs (shared oxy_* runtime), runtime.rs (arith helpers)
+├── types/            Value enum, type_name, ordering
+├── stdlib/           fs, env, process, regex, net, time, rand, math, db, server, …
 ├── symbols.rs        ★ Canonical symbol definitions — single source of truth
 ├── errors.rs         FerriError (Lexer, Parser, TypeError, Runtime)
 └── lib.rs            Public API, re-exports
-crates/oxy-cli/       CLI binary (run, repl, --dump-tokens, --dump-ast, --dump-bytecode)
+crates/oxy-cli/       CLI binary (run, test, repl, --dump-tokens, --dump-ast, --dump-ir)
 crates/oxy-lsp/       LSP server (tower-lsp)
+crates/oxy-tug/       Package manager (tug)
 editors/vscode/       VS Code extension (syntax highlighting + LSP client)
 examples/features/    Feature tests (.ox files with #[test] / #[compile_error])
-tests/                Rust-side tests (vm_tests, feature_examples, symbol_consistency)
+crates/oxy-core/tests/  Rust-side tests (vm_tests, feature_examples, ir_snapshot, …)
 ```
+
+> When you change a folder's files, update that folder's `README.md` in the same PR.
 
 ## Feature Development (TDD)
 
@@ -94,7 +105,7 @@ cargo test -p oxy-core -- feature_examples
 
 ### 3. Implement
 
-Fix the compiler/type checker/VM. Never change the test to pass when the compiler should reject it.
+Fix the type checker / `ir_gen` / codegen. Never change the test to pass when the compiler should reject it.
 
 ### 4. Update downstream systems
 
@@ -103,8 +114,8 @@ Fix the compiler/type checker/VM. Never change the test to pass when the compile
 | New keyword | `symbols.rs` KEYWORDS, `editors/vscode/syntaxes/oxy.tmLanguage.json`, LSP keyword_hover_text |
 | New built-in method | `symbols.rs` (constant + MethodInfo), dispatch in `vm/builtins/`, `method_names()` |
 | New built-in type | `types/mod.rs` Value variant, `vm/builtins/<type>.rs`, `vm/mod.rs` dispatch + `dispatched_type_names()`, `symbols.rs` (constants + TypeInfo) |
-| New syntax (expr/stmt) | Lexer, AST, parser, type checker, compiler, VM, LSP |
-| New operator | Lexer, parser (precedence), compiler, VM, `oxy.tmLanguage.json` |
+| New syntax (expr/stmt) | Lexer, AST, parser, type checker, `vm/jit/ir_gen/`, `vm/interp.rs`, LSP |
+| New operator | Lexer, parser (precedence), `ir_gen` + codegen + interpreter, `oxy.tmLanguage.json` |
 
 ### 5. Validate
 
@@ -184,7 +195,7 @@ The `tests/symbol_consistency.rs` file has 26 tests that enforce this bi-directi
 
 ## The Symbols Module
 
-`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both the compiler/VM and the LSP read from it. Never hardcode a keyword, type name, or method name in the LSP.
+`crates/oxy-core/src/symbols.rs` is the **single source of truth** for all language symbols. Both the compiler and the LSP read from it. Never hardcode a keyword, type name, or method name in the LSP.
 
 What it defines:
 - `KEYWORDS` — all 36 keywords
@@ -203,9 +214,9 @@ For new expressions, statements, or patterns:
 2. **AST** — add variants in `ast/mod.rs`
 3. **Parser** — add parsing in `parser/mod.rs` (Pratt precedence if it's an expression)
 4. **Type checker** — add type inference/checking in `type_checker/mod.rs`
-5. **Compiler** — add bytecode emission in `compiler/mod.rs`
-6. **VM** — add opcode execution in `vm/mod.rs`
-7. **Tests** — `.ox` feature tests covering happy path, edge cases, `#[compile_error]`
+5. **IR generation** — lower the new node in `vm/jit/ir_gen/` (emit `IrOp`s / `Terminator`s)
+6. **Both backends** — handle any new `IrOp`/`Terminator` in `vm/jit/codegen.rs` (CLIF) **and** `vm/interp.rs` (the no-wildcard match breaks the build until you do)
+7. **Tests** — `.ox` feature tests covering happy path, edge cases, `#[compile_error]`; regenerate IR snapshots and run `--test jit_interp_parity`
 8. **LSP** — update completions/hover if user-facing
 9. **TextMate grammar** — update `editors/vscode/syntaxes/oxy.tmLanguage.json` if keywords, types, or operators changed
 
@@ -249,8 +260,8 @@ No co-author trailers. One logical change per commit.
 ## Debugging
 
 ```bash
-# Dump bytecode
-cargo run -- --dump-bytecode examples/hello.ox
+# Dump the lowered register IR
+cargo run -- --dump-ir examples/hello.ox
 
 # Dump tokens
 cargo run -- --dump-tokens examples/hello.ox
@@ -258,8 +269,8 @@ cargo run -- --dump-tokens examples/hello.ox
 # Dump AST
 cargo run -- --dump-ast examples/hello.ox
 
-# Per-opcode VM execution trace
-OXY_VM_TRACE=1 cargo test -p oxy-core --test vm_tests -- test_string_len
+# Dump the register IR for every compiled function (stderr)
+OXY_VM_TRACE=1 cargo test -p oxy-core --test feature_examples 2> ir_dump.txt
 ```
 
 ## Common Pitfalls

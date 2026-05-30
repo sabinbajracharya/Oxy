@@ -1,5 +1,10 @@
 # VM Locals/Operand Stack Separation
 
+> **RETIRED — historical.** Describes the removed stack-based **bytecode VM**
+> (single `self.stack: Vec<Value>`, `frame.base + slot`, `OpCode`), which no longer
+> exists. Oxy now lowers to a register IR run by the Cranelift JIT / IR interpreter.
+> Kept for provenance. Current architecture: [`../execution-model.md`](../execution-model.md).
+
 Architecture decision record. Refactor landed 2026-05-21.
 
 ## Background — the original architecture

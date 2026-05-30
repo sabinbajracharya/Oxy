@@ -105,6 +105,7 @@ crates/oxy-core/src/
 │   ├── mod.rs                   #   VmResult type, public API re-exports
 │   ├── api.rs                   #   Public entry points (run_compiled, run_tests)
 │   ├── scheduler.rs             #   Async task scheduler
+│   ├── interp.rs                #   IR interpreter backend (wasm32) — compiled on all targets
 │   ├── builtins/                #   Per-type method implementations
 │   │   ├── mod.rs               #     Re-exports
 │   │   ├── numeric.rs           #     int/byte/float methods
@@ -127,6 +128,7 @@ crates/oxy-core/src/
 │   ├── ir_gen/mod.rs            #   AST → Register IR + CFG
 │   ├── codegen.rs               #   IR → Cranelift CLIF
 │   ├── ffi.rs                   #   FFI bridge (oxy_* functions)
+│   ├── ir_snapshot.rs           #   IR pretty-printer for snapshot tests
 │   └── runtime.rs               #   Arithmetic/cast helpers called by FFI
 ├── stdlib/
 │   ├── mod.rs                   #   Stdlib registration + table-driven registry
@@ -151,9 +153,8 @@ crates/oxy-core/src/
 ├── env/mod.rs                   #   Lexical scope chain
 ├── json/mod.rs                  #   Hand-written JSON ser/de
 ├── http/mod.rs                  #   HTTP client (ureq wrapper)
-├── errors.rs                    #   FerriError: Lexer, Parser, TypeError, Runtime
-└── repl.rs                      #   REPL utilities
-crates/oxy-cli/src/main.rs       #   CLI binary: run, test, repl
+└── errors.rs                    #   FerriError: Lexer, Parser, TypeError, Runtime
+crates/oxy-cli/src/main.rs       #   CLI binary: run, test, repl (run_repl lives here)
 crates/oxy-lsp/src/main.rs       #   LSP server (tower-lsp)
 crates/oxy-tug/                  #   Package manager (tug)
 ├── src/
@@ -166,6 +167,24 @@ crates/oxy-tug/                  #   Package manager (tug)
 │   └── scaffold.rs              #     tug new/init
 └── tests/                       #   Integration tests
 ```
+
+## Per-Folder Documentation (keep it current)
+
+Every source folder has a `README.md` documenting, for both humans and AI agents,
+what the folder is for, what each file does, its key types/entry points, its
+invariants/gotchas, and what else must change when you change it. The same applies to
+each crate root (`crates/oxy-*/README.md`).
+
+**Rule (load-bearing):** when you **add, remove, rename, or change the responsibility
+of a file** in a folder, **update that folder's `README.md` in the same change**. A PR
+that restructures a folder without updating its `README.md` is incomplete. When you
+split a large file, map each new file in the README's file table.
+
+- Folder map and architecture overview: each `crates/oxy-core/src/**/README.md`.
+- Project-level architecture: [`docs/README.md`](docs/README.md) →
+  [`docs/execution-model.md`](docs/execution-model.md) is the canonical execution model.
+- Retired docs (the removed tree-walking interpreter and bytecode VM) live under
+  `docs/history/` — do not treat them as current.
 
 ## Two Execution Backends (native JIT + wasm IR interpreter)
 
@@ -232,6 +251,10 @@ None. The whole `examples/features/**` corpus is at parity (`jit_interp_parity`)
 | Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
 | Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/JIT | `crates/oxy-core/tests/symbol_consistency.rs` |
 | Extern modules | `#[test]` for `--extern` dependency loading | `crates/oxy-core/tests/extern_modules.rs` |
+| IR snapshot tests | golden-file compare of the pretty-printed register IR | `crates/oxy-core/tests/ir_snapshot_tests.rs` (+ `tests/snapshots/ir/**`) |
+| JIT↔interp parity | runs the `examples/features/**` corpus through both backends and diffs output | `crates/oxy-core/tests/jit_interp_parity.rs` |
+
+**IR snapshot golden files are pinned to LF via `.gitattributes`** (`tests/snapshots/ir/**/*.txt text eol=lf`). The pretty-printer only emits `\n`; without the pin, a Windows checkout (`core.autocrlf`) rewrites them to CRLF and fails every snapshot test with a phantom "no line differences" mismatch. The test also normalizes newlines defensively. Regenerate goldens with `UPDATE_SNAPSHOTS=1 cargo test -p oxy-core ir_snapshot`.
 
 ### `run_tests()` flow (`vm/mod.rs`)
 
@@ -274,7 +297,8 @@ This is the ONLY acceptable process for adding features:
 6. **Update downstream systems as needed:**
    - **LSP** (`crates/oxy-lsp/src/main.rs`) — new AST nodes, keywords, built-in types, or methods may need completion/hover/diagnostic updates
    - **VS Code extension** (`editors/vscode/`) — new keywords, types, or operators may need syntax highlighting updates in `oxy.tmLanguage.json`
-   - **REPL** (`crates/oxy-core/src/repl.rs`) — new language constructs may need REPL-specific handling
+   - **REPL** (`crates/oxy-cli/src/main.rs`, `run_repl`) — new language constructs may need REPL-specific handling
+   - **Folder docs** — if you add/remove a file or change a folder's responsibility, update that folder's `README.md` (see "Per-Folder Documentation" below)
    - At minimum, verify the LSP compiles: `cargo test -p oxy-lsp`
 7. **Run full validation:**
    ```bash
@@ -498,4 +522,4 @@ When debugging a JIT feature test failure, the ONLY valid investigation path is:
 3. **Trace `codegen` for those IR ops** — what CLIF/FFI calls result?
 4. **If the FFI function looks wrong, read it in `ffi.rs` or `jit/runtime.rs`**
 
-The `vm/` directory contains only public API entry points (`api.rs`), the async scheduler (`scheduler.rs`), built-in method implementations (`builtins/`), and the shared `VmResult` type. Arithmetic helpers live in `jit/runtime.rs`. There is no other execution engine.
+The `vm/` directory contains the public API entry points (`api.rs`), the async scheduler (`scheduler.rs`), built-in method implementations (`builtins/`), the wasm IR interpreter (`interp.rs`), the shared `VmResult` type, and the `jit/` backend. Arithmetic helpers live in `jit/runtime.rs`. The JIT and the interpreter are the only two execution engines, and they share one runtime (see "Two Execution Backends" above).

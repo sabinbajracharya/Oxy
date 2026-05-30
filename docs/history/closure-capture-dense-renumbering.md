@@ -1,5 +1,10 @@
 # Closure Capture Dense Renumbering
 
+> **RETIRED — historical.** Describes the removed stack-based **bytecode VM**
+> (`OpCode`, operand stack, `LoadLocal`/`CallClosure`), which no longer exists. Oxy
+> now lowers to a register IR run by the Cranelift JIT / IR interpreter. Kept for
+> provenance. Current architecture: [`../execution-model.md`](../execution-model.md).
+
 Architecture decision record. Refactor landed 2026-05-23.
 
 ## Background — closure capture layout after locals-separation
