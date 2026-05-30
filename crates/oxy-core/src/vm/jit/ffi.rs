@@ -28,7 +28,7 @@ type OutputPtr = *const std::rc::Rc<std::cell::RefCell<Vec<String>>>;
 
 // ── Stack helpers (used by JIT and FFI internally) ──────────────────
 
-unsafe fn push(ctx: &mut JitContext, val: Value) {
+pub(crate) unsafe fn push(ctx: &mut JitContext, val: Value) {
     let slot = ctx.push_slot();
     unsafe {
         slot.write(val);
@@ -36,14 +36,14 @@ unsafe fn push(ctx: &mut JitContext, val: Value) {
 }
 
 /// Write an error message to the context, replacing any existing error.
-fn set_error(ctx: &mut JitContext, msg: String) {
+pub(crate) fn set_error(ctx: &mut JitContext, msg: String) {
     let len = msg.len().min(1023);
     ctx.error_msg[..len].copy_from_slice(&msg.as_bytes()[..len]);
     // Ensure error_len is non-zero even for empty messages (e.g. ? propagation).
     ctx.error_len = if len == 0 { 1 } else { len };
 }
 
-unsafe fn pop(ctx: &mut JitContext) -> Value {
+pub(crate) unsafe fn pop(ctx: &mut JitContext) -> Value {
     if ctx.sp == 0 {
         return Value::Unit;
     }
@@ -2881,96 +2881,122 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
 
 // ── Symbol registry ──────────────────────────────────────────────────
 
+/// What an `oxy_*` FFI function returns through the C ABI (independent of any
+/// value it may push onto the operand stack). The IR interpreter needs this to
+/// decide whether to capture a scalar return; the Cranelift backend derives the
+/// same shape from `ffi_decls`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum FfiRet {
+    /// Returns nothing through the ABI (result, if any, is pushed on the stack).
+    Void,
+    /// Returns an `i64` (e.g. loop discriminants from `oxy_iter_next`).
+    I64,
+    /// Returns an `i8` boolean (e.g. `oxy_is_truthy`).
+    I8,
+}
+
+/// Single source of truth for every `oxy_*` FFI function: its name, raw
+/// function pointer, and ABI return kind. Both the Cranelift symbol registry
+/// (native) and the IR interpreter (all targets) consume this table, so a
+/// function added here is visible to both backends. The `symbol_consistency`
+/// test cross-checks this against `ffi_decls` so the two never drift.
+pub(crate) fn ffi_symbols() -> Vec<(&'static str, *const u8, FfiRet)> {
+    use FfiRet::*;
+    vec![
+        ("oxy_set_result_i64", oxy_set_result_i64 as _, Void),
+        ("oxy_push_unit", oxy_push_unit as _, Void),
+        ("oxy_push_bool", oxy_push_bool as _, Void),
+        ("oxy_push_int", oxy_push_int as _, Void),
+        ("oxy_push_float", oxy_push_float as _, Void),
+        ("oxy_push_char", oxy_push_char as _, Void),
+        ("oxy_push_string", oxy_push_string as _, Void),
+        ("oxy_pop", oxy_pop as _, Void),
+        ("oxy_dup", oxy_dup as _, Void),
+        ("oxy_load_local", oxy_load_local as _, Void),
+        ("oxy_load_local_raw", oxy_load_local_raw as _, Void),
+        ("oxy_read_local_i64", oxy_read_local_i64 as _, I64),
+        ("oxy_store_local", oxy_store_local as _, Void),
+        ("oxy_store_local_raw", oxy_store_local_raw as _, Void),
+        ("oxy_make_cell", oxy_make_cell as _, Void),
+        ("oxy_print_val", oxy_print_val as _, Void),
+        ("oxy_println_val", oxy_println_val as _, Void),
+        ("oxy_add", oxy_add as _, Void),
+        ("oxy_sub", oxy_sub as _, Void),
+        ("oxy_mul", oxy_mul as _, Void),
+        ("oxy_div", oxy_div as _, Void),
+        ("oxy_mod", oxy_mod as _, Void),
+        ("oxy_eq", oxy_eq as _, Void),
+        ("oxy_neq", oxy_neq as _, Void),
+        ("oxy_lt", oxy_lt as _, Void),
+        ("oxy_gt", oxy_gt as _, Void),
+        ("oxy_le", oxy_le as _, Void),
+        ("oxy_ge", oxy_ge as _, Void),
+        ("oxy_and", oxy_and as _, Void),
+        ("oxy_or", oxy_or as _, Void),
+        ("oxy_bitand", oxy_bitand as _, Void),
+        ("oxy_bitor", oxy_bitor as _, Void),
+        ("oxy_bitxor", oxy_bitxor as _, Void),
+        ("oxy_shl", oxy_shl as _, Void),
+        ("oxy_shr", oxy_shr as _, Void),
+        ("oxy_neg", oxy_neg as _, Void),
+        ("oxy_not", oxy_not as _, Void),
+        ("oxy_bitnot", oxy_bitnot as _, Void),
+        ("oxy_is_falsy", oxy_is_falsy as _, I8),
+        ("oxy_is_truthy", oxy_is_truthy as _, I8),
+        ("oxy_push_named_fn", oxy_push_named_fn as _, Void),
+        ("oxy_push_closure", oxy_push_closure as _, Void),
+        ("oxy_push_async_block", oxy_push_async_block as _, Void),
+        ("oxy_call_closure", oxy_call_closure as _, Void),
+        ("oxy_return", oxy_return as _, Void),
+        ("oxy_error_discriminant", oxy_error_discriminant as _, I64),
+        ("oxy_panic", oxy_panic as _, Void),
+        ("oxy_make_array", oxy_make_array as _, Void),
+        ("oxy_make_fixed_array", oxy_make_fixed_array as _, Void),
+        ("oxy_make_tuple", oxy_make_tuple as _, Void),
+        ("oxy_make_iter", oxy_make_iter as _, Void),
+        ("oxy_make_repeat", oxy_make_repeat as _, Void),
+        ("oxy_iter_len", oxy_iter_len as _, Void),
+        ("oxy_iter_next", oxy_iter_next as _, I64),
+        (
+            "oxy_iter_next_destructure",
+            oxy_iter_next_destructure as _,
+            I64,
+        ),
+        ("oxy_vec_index", oxy_vec_index as _, Void),
+        ("oxy_vec_index_store", oxy_vec_index_store as _, Void),
+        ("oxy_make_range", oxy_make_range as _, Void),
+        ("oxy_to_string", oxy_to_string as _, Void),
+        ("oxy_fstring_concat", oxy_fstring_concat as _, Void),
+        ("oxy_format", oxy_format as _, Void),
+        ("oxy_dbg", oxy_dbg as _, Void),
+        ("oxy_struct_init", oxy_struct_init as _, Void),
+        ("oxy_struct_update", oxy_struct_update as _, Void),
+        ("oxy_field_access", oxy_field_access as _, Void),
+        ("oxy_field_store", oxy_field_store as _, Void),
+        ("oxy_method_call", oxy_method_call as _, Void),
+        ("oxy_try_pop", oxy_try_pop as _, Void),
+        ("oxy_cast_int", oxy_cast_int as _, Void),
+        ("oxy_cast_byte", oxy_cast_byte as _, Void),
+        ("oxy_cast_float", oxy_cast_float as _, Void),
+        ("oxy_cast_to_char", oxy_cast_to_char as _, Void),
+        ("oxy_bind_ident", oxy_bind_ident as _, Void),
+        ("oxy_enum_data_get", oxy_enum_data_get as _, Void),
+        ("oxy_enum_variant_equal", oxy_enum_variant_equal as _, Void),
+        ("oxy_make_enum_variant", oxy_make_enum_variant as _, Void),
+        ("oxy_const_enum_variant", oxy_const_enum_variant as _, Void),
+        ("oxy_module_const", oxy_module_const as _, Void),
+        ("oxy_path_call_builtin", oxy_path_call_builtin as _, Void),
+        ("oxy_display_arg", oxy_display_arg as _, Void),
+        ("oxy_await_ffi", oxy_await_ffi as _, Void),
+        ("oxy_spawn_ffi", oxy_spawn_ffi as _, Void),
+        ("oxy_sleep_ffi", oxy_sleep_ffi as _, Void),
+        ("oxy_select_ffi", oxy_select_ffi as _, Void),
+    ]
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
-    let syms: &[(&str, *const u8)] = &[
-        ("oxy_set_result_i64", oxy_set_result_i64 as _),
-        ("oxy_push_unit", oxy_push_unit as _),
-        ("oxy_push_bool", oxy_push_bool as _),
-        ("oxy_push_int", oxy_push_int as _),
-        ("oxy_push_float", oxy_push_float as _),
-        ("oxy_push_char", oxy_push_char as _),
-        ("oxy_push_string", oxy_push_string as _),
-        ("oxy_pop", oxy_pop as _),
-        ("oxy_dup", oxy_dup as _),
-        ("oxy_load_local", oxy_load_local as _),
-        ("oxy_load_local_raw", oxy_load_local_raw as _),
-        ("oxy_read_local_i64", oxy_read_local_i64 as _),
-        ("oxy_store_local", oxy_store_local as _),
-        ("oxy_store_local_raw", oxy_store_local_raw as _),
-        ("oxy_make_cell", oxy_make_cell as _),
-        ("oxy_print_val", oxy_print_val as _),
-        ("oxy_println_val", oxy_println_val as _),
-        ("oxy_add", oxy_add as _),
-        ("oxy_sub", oxy_sub as _),
-        ("oxy_mul", oxy_mul as _),
-        ("oxy_div", oxy_div as _),
-        ("oxy_mod", oxy_mod as _),
-        ("oxy_eq", oxy_eq as _),
-        ("oxy_neq", oxy_neq as _),
-        ("oxy_lt", oxy_lt as _),
-        ("oxy_gt", oxy_gt as _),
-        ("oxy_le", oxy_le as _),
-        ("oxy_ge", oxy_ge as _),
-        ("oxy_and", oxy_and as _),
-        ("oxy_or", oxy_or as _),
-        ("oxy_bitand", oxy_bitand as _),
-        ("oxy_bitor", oxy_bitor as _),
-        ("oxy_bitxor", oxy_bitxor as _),
-        ("oxy_shl", oxy_shl as _),
-        ("oxy_shr", oxy_shr as _),
-        ("oxy_neg", oxy_neg as _),
-        ("oxy_not", oxy_not as _),
-        ("oxy_bitnot", oxy_bitnot as _),
-        ("oxy_is_falsy", oxy_is_falsy as _),
-        ("oxy_is_truthy", oxy_is_truthy as _),
-        ("oxy_push_named_fn", oxy_push_named_fn as _),
-        ("oxy_push_closure", oxy_push_closure as _),
-        ("oxy_push_async_block", oxy_push_async_block as _),
-        ("oxy_call_closure", oxy_call_closure as _),
-        ("oxy_return", oxy_return as _),
-        ("oxy_error_discriminant", oxy_error_discriminant as _),
-        ("oxy_panic", oxy_panic as _),
-        ("oxy_make_array", oxy_make_array as _),
-        ("oxy_make_fixed_array", oxy_make_fixed_array as _),
-        ("oxy_make_tuple", oxy_make_tuple as _),
-        ("oxy_make_iter", oxy_make_iter as _),
-        ("oxy_make_repeat", oxy_make_repeat as _),
-        ("oxy_iter_len", oxy_iter_len as _),
-        ("oxy_iter_next", oxy_iter_next as _),
-        ("oxy_iter_next_destructure", oxy_iter_next_destructure as _),
-        ("oxy_vec_index", oxy_vec_index as _),
-        ("oxy_vec_index_store", oxy_vec_index_store as _),
-        ("oxy_make_range", oxy_make_range as _),
-        ("oxy_to_string", oxy_to_string as _),
-        ("oxy_fstring_concat", oxy_fstring_concat as _),
-        ("oxy_format", oxy_format as _),
-        ("oxy_dbg", oxy_dbg as _),
-        ("oxy_struct_init", oxy_struct_init as _),
-        ("oxy_struct_update", oxy_struct_update as _),
-        ("oxy_field_access", oxy_field_access as _),
-        ("oxy_field_store", oxy_field_store as _),
-        ("oxy_method_call", oxy_method_call as _),
-        ("oxy_try_pop", oxy_try_pop as _),
-        ("oxy_cast_int", oxy_cast_int as _),
-        ("oxy_cast_byte", oxy_cast_byte as _),
-        ("oxy_cast_float", oxy_cast_float as _),
-        ("oxy_cast_to_char", oxy_cast_to_char as _),
-        ("oxy_bind_ident", oxy_bind_ident as _),
-        ("oxy_enum_data_get", oxy_enum_data_get as _),
-        ("oxy_enum_variant_equal", oxy_enum_variant_equal as _),
-        ("oxy_make_enum_variant", oxy_make_enum_variant as _),
-        ("oxy_const_enum_variant", oxy_const_enum_variant as _),
-        ("oxy_module_const", oxy_module_const as _),
-        ("oxy_path_call_builtin", oxy_path_call_builtin as _),
-        ("oxy_display_arg", oxy_display_arg as _),
-        ("oxy_await_ffi", oxy_await_ffi as _),
-        ("oxy_spawn_ffi", oxy_spawn_ffi as _),
-        ("oxy_sleep_ffi", oxy_sleep_ffi as _),
-        ("oxy_select_ffi", oxy_select_ffi as _),
-    ];
-
-    for (name, ptr) in syms {
-        builder.symbol(*name, *ptr);
+    for (name, ptr, _ret) in ffi_symbols() {
+        builder.symbol(name, ptr);
     }
 }

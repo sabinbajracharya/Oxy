@@ -16,7 +16,7 @@ pub(crate) mod ir_gen;
 pub(crate) mod ir_snapshot;
 pub(crate) mod runtime;
 
-pub(crate) use context::JitContext;
+pub(crate) use context::{ClosureRuntimeMeta, JitContext, JitTables};
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use ffi::register_ffi_symbols;
 
