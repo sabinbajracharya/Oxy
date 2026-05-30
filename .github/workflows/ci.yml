@@ -49,6 +49,35 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets --all-features
 
+  wasm-test:
+    name: WASM execution test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.93.0"
+          target: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Runs the IR interpreter compiled to real wasm32 in a wasm runtime.
+      # The jit↔interp parity test only runs both backends on the native host
+      # (where usize == i64), so it cannot catch wasm ABI/signature mismatches.
+      # This job does. Release build keeps the module small enough to run.
+      - name: Run wasm smoke tests
+        run: |
+          cd playground/wasm
+          wasm-pack test --node --release
+
   build:
     name: Build release
     runs-on: ubuntu-latest
