@@ -212,10 +212,14 @@ impl IrGen {
         // Resolve the first remaining segment through use_aliases.
         // If found, the alias provides a fully-qualified path so we skip
         // prepending current_module_prefix. Otherwise fall back to the
-        // module prefix for relative resolution.
+        // module prefix for relative resolution. The alias target is split
+        // back into individual segments (a `use std::env` alias maps to the
+        // string "std::env") so the path stays segment-aligned — downstream
+        // FFI dispatch matches paths segment-by-segment (`["std", mod, fn]`),
+        // which a single embedded-`::` segment would silently defeat.
         if let Some(first) = iter.next() {
             if let Some(resolved_first) = self.use_aliases.get(first) {
-                resolved.push(resolved_first.clone());
+                resolved.extend(resolved_first.split("::").map(str::to_string));
             } else {
                 resolved.extend(module_parts.iter().map(|s| s.to_string()));
                 resolved.push(first.clone());
