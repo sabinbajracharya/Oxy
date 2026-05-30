@@ -121,6 +121,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_to_string", &[types::I64], None),
         ("oxy_fstring_concat", &[types::I64, types::I64], None),
         ("oxy_format", &[types::I64, types::I64], None),
+        ("oxy_dbg", &[types::I64, types::I64], None),
         (
             "oxy_field_access",
             &[types::I64, types::I64, types::I64],

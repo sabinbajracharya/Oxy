@@ -1608,6 +1608,10 @@ impl TypeChecker {
                     }
                     return Ok(TypeInfo::Vec(Box::new(leader)));
                 }
+                if name == "dbg" && arg_types.len() == 1 {
+                    // dbg!(expr) returns its argument unchanged.
+                    return Ok(arg_types.into_iter().next().unwrap());
+                }
                 Ok(TypeInfo::Unknown)
             }
             Expr::Path { segments, .. } => {

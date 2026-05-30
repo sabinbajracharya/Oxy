@@ -1581,6 +1581,34 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
     }
 }
 
+/// `dbg!(expr)` — debug-print the value and return it. Multiple args render as
+/// a tuple (matching Rust's `dbg!(a, b)`); zero args print/return unit. The
+/// value is left on the operand stack so `let x = dbg!(v)` binds it. Output
+/// goes to the run's capture buffer when present, else stdout.
+extern "C" fn oxy_dbg(ctx: *mut JitContext, count: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let mut vals = Vec::with_capacity(count);
+    for _ in 0..count {
+        vals.push(unsafe { pop(ctx) });
+    }
+    vals.reverse();
+    let value = match count {
+        1 => vals.pop().unwrap(),
+        0 => Value::Unit,
+        _ => Value::Tuple(vals),
+    };
+    let line = value.to_debug_string();
+    if !ctx.output.is_null() {
+        let output = unsafe { &*ctx.output };
+        output.borrow_mut().push(format!("{line}\n"));
+    } else {
+        println!("{line}");
+    }
+    unsafe {
+        push(ctx, value);
+    }
+}
+
 // ── Structs ───────────────────────────────────────────────────────────
 
 extern "C" fn oxy_struct_init(
@@ -2915,6 +2943,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_to_string", oxy_to_string as _),
         ("oxy_fstring_concat", oxy_fstring_concat as _),
         ("oxy_format", oxy_format as _),
+        ("oxy_dbg", oxy_dbg as _),
         ("oxy_struct_init", oxy_struct_init as _),
         ("oxy_struct_update", oxy_struct_update as _),
         ("oxy_field_access", oxy_field_access as _),
