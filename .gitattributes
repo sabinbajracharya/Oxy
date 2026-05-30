@@ -1,0 +1,5 @@
+# IR golden snapshots are compared byte-for-byte against output the IR
+# pretty-printer generates in-memory with '\n'. Force LF on checkout so a
+# Windows clone (Git's core.autocrlf=true) doesn't rewrite them to CRLF and
+# fail every ir_snapshot test with a phantom "no line differences" mismatch.
+crates/oxy-core/tests/snapshots/ir/**/*.txt text eol=lf

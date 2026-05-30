@@ -57,12 +57,22 @@ fn assert_ir_snapshot_raw(name: &str, source: &str) {
 
     let expected = fs::read_to_string(&path).expect("failed to read snapshot file");
 
-    if actual != expected {
+    // The IR pretty-printer only ever emits '\n'. A Windows checkout
+    // (core.autocrlf) may store the golden file with CRLF, so normalize both
+    // sides before comparing — a stray '\r' is never meaningful IR output, and
+    // comparing raw bytes would fail every test on Windows with no visible diff.
+    if normalize_newlines(&actual) != normalize_newlines(&expected) {
         panic!(
             "IR snapshot mismatch for '{name}':\n\n{diff}\nTo update: UPDATE_SNAPSHOTS=1 cargo test -p oxy-core ir_snapshot",
             diff = line_diff(&expected, &actual)
         );
     }
+}
+
+/// Normalize CRLF / lone CR to LF so snapshot comparison is independent of how
+/// Git checked out the golden file (Windows `core.autocrlf` rewrites LF→CRLF).
+fn normalize_newlines(s: &str) -> String {
+    s.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 /// Minimal unified-diff-style comparison: shows ` ` (same), `-` (expected only),
