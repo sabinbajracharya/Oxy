@@ -718,16 +718,23 @@ impl<'e> Interpreter<'e> {
             self.push(ctx, v.clone());
         }
 
-        // ABI: ctx, then each string as (ptr, len), then each immediate. All are
-        // passed as i64 (matching codegen's iconst lowering). The string buffers
-        // are borrowed from the live IR op, so the pointers stay valid.
-        let mut raw: Vec<i64> = Vec::with_capacity(strings.len() * 2 + immediates.len());
+        // ABI: ctx, then each string as (ptr, len), then each immediate. Every
+        // trailing scalar is passed **pointer-width** (`usize`), because that is
+        // what the `oxy_*` functions the interpreter reaches actually declare —
+        // slot indices, counts, `*const u8` string pointers and their lengths
+        // are all pointer-width. On 64-bit native `usize == i64` (so this matches
+        // the JIT's i64 iconst lowering), but on `wasm32` `usize == i32`; passing
+        // these as a fixed `i64` made the transmuted call signature disagree with
+        // the function's real wasm type and trapped with "indirect call signature
+        // mismatch". The string buffers are borrowed from the live IR op, so the
+        // pointers stay valid for the duration of the call.
+        let mut raw: Vec<usize> = Vec::with_capacity(strings.len() * 2 + immediates.len());
         for s in strings {
-            raw.push(s.as_ptr() as i64);
-            raw.push(s.len() as i64);
+            raw.push(s.as_ptr() as usize);
+            raw.push(s.len());
         }
         for imm in immediates {
-            raw.push(*imm as i64);
+            raw.push(*imm);
         }
 
         let scalar = unsafe { call_raw(ptr, ctx, &raw, ret) };
@@ -871,19 +878,33 @@ fn phi_source(
     regs.get(&a).or_else(|| regs.get(&b)).cloned()
 }
 
-/// Call an `oxy_*` FFI pointer with `ctx` followed by `args` (all i64), matching
-/// the codegen ABI. Returns the scalar result for `I64`/`I8` return kinds.
+/// Call an `oxy_*` FFI pointer with `ctx` followed by `args` (all pointer-width),
+/// matching the runtime ABI. Returns the scalar result for `I64`/`I8` return
+/// kinds.
+///
+/// Trailing args are `usize`, not `i64`: the functions the interpreter reaches
+/// declare pointer-width params (slot indices, counts, `*const u8` pointers and
+/// `usize` lengths), and on `wasm32` `usize == i32`. A `*const u8` and a `usize`
+/// share the same wasm type (`i32`), so a uniform `usize` transmute target lines
+/// up with both. Functions taking a genuinely 64-bit param (e.g. the const-push
+/// helpers' `i64`/`f64`, `oxy_set_result_i64`) are codegen-only and must **not**
+/// be routed here — every interpreter-reached `oxy_*` takes pointer-width args.
 ///
 /// # Safety
 /// `ptr` must point to an `extern "C"` function whose signature is
-/// `(*mut JitContext, i64 × args.len()) -> {(), i64, i8}` consistent with `ret`.
-unsafe fn call_raw(ptr: *const u8, ctx: &mut JitContext, args: &[i64], ret: FfiRet) -> Option<i64> {
+/// `(*mut JitContext, usize × args.len()) -> {(), i64, i8}` consistent with `ret`.
+unsafe fn call_raw(
+    ptr: *const u8,
+    ctx: &mut JitContext,
+    args: &[usize],
+    ret: FfiRet,
+) -> Option<i64> {
     let c = ctx as *mut JitContext;
-    // Maps each repetition element to the literal type `i64`, so the function
+    // Maps each repetition element to the literal type `usize`, so the function
     // signature's parameter list repeats in lockstep with the argument indices.
-    macro_rules! as_i64 {
+    macro_rules! as_usize {
         ($_idx:tt) => {
-            i64
+            usize
         };
     }
     macro_rules! dispatch {
@@ -892,7 +913,7 @@ unsafe fn call_raw(ptr: *const u8, ctx: &mut JitContext, args: &[i64], ret: FfiR
                 FfiRet::Void => {
                     match args.len() {
                         $( $n => {
-                            let f: extern "C" fn(*mut JitContext $(, as_i64!($idx))*) =
+                            let f: extern "C" fn(*mut JitContext $(, as_usize!($idx))*) =
                                 unsafe { std::mem::transmute(ptr) };
                             f(c $(, args[$idx])*);
                         } )*
@@ -903,7 +924,7 @@ unsafe fn call_raw(ptr: *const u8, ctx: &mut JitContext, args: &[i64], ret: FfiR
                 FfiRet::I64 => {
                     match args.len() {
                         $( $n => {
-                            let f: extern "C" fn(*mut JitContext $(, as_i64!($idx))*) -> i64 =
+                            let f: extern "C" fn(*mut JitContext $(, as_usize!($idx))*) -> i64 =
                                 unsafe { std::mem::transmute(ptr) };
                             Some(f(c $(, args[$idx])*))
                         } )*
@@ -913,7 +934,7 @@ unsafe fn call_raw(ptr: *const u8, ctx: &mut JitContext, args: &[i64], ret: FfiR
                 FfiRet::I8 => {
                     match args.len() {
                         $( $n => {
-                            let f: extern "C" fn(*mut JitContext $(, as_i64!($idx))*) -> i8 =
+                            let f: extern "C" fn(*mut JitContext $(, as_usize!($idx))*) -> i8 =
                                 unsafe { std::mem::transmute(ptr) };
                             Some(f(c $(, args[$idx])*) as i64)
                         } )*

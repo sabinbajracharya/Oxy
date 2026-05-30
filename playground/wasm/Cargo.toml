@@ -3,9 +3,14 @@ name = "oxy-wasm"
 version = "0.1.0"
 edition = "2021"
 
+# `rlib` (alongside `cdylib`) lets the wasm-execution smoke test in `tests/`
+# link the library and call `run_oxy`/`run_tests_oxy` directly.
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 oxy-core = { path = "../../crates/oxy-core", default-features = false }
 wasm-bindgen = "0.2"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

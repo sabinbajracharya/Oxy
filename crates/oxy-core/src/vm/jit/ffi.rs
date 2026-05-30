@@ -754,17 +754,22 @@ fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, ar
 
 // ── Closures ─────────────────────────────────────────────────────────
 
-extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i64, meta_idx: i64) {
+extern "C" fn oxy_push_closure(
+    ctx: *mut JitContext,
+    name_ptr: *const u8,
+    name_len: usize,
+    meta_idx: usize,
+) {
     let ctx = unsafe { &mut *ctx };
 
     let name = unsafe {
-        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
 
     // Look up captures metadata.
     let tables = unsafe { &*ctx.tables };
-    let meta = tables.closure_meta(meta_idx as usize).cloned();
+    let meta = tables.closure_meta(meta_idx).cloned();
     let (param_names, captured, is_async) = meta
         .map(|m| (m.param_names, m.captured, m.is_async))
         .unwrap_or_default();
@@ -831,10 +836,10 @@ extern "C" fn oxy_push_closure(ctx: *mut JitContext, name_ptr: i64, name_len: i6
 
 /// Create a `Value::Function` for a named (non-closure) function so it can
 /// be called through the same `oxy_call_closure` path as everything else.
-extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: i64, name_len: i64) {
+extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: *const u8, name_len: usize) {
     let ctx = unsafe { &mut *ctx };
     let name = unsafe {
-        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
     let tables = unsafe { &*ctx.tables };
@@ -872,21 +877,21 @@ extern "C" fn oxy_push_named_fn(ctx: *mut JitContext, name_ptr: i64, name_len: i
 
 extern "C" fn oxy_push_async_block(
     ctx: *mut JitContext,
-    name_ptr: i64,
-    name_len: i64,
-    meta_idx: i64,
+    name_ptr: *const u8,
+    name_len: usize,
+    meta_idx: usize,
 ) {
     let ctx = unsafe { &mut *ctx };
 
     let name = unsafe {
-        let bytes = std::slice::from_raw_parts(name_ptr as *const u8, name_len as usize);
+        let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
 
     let tables = unsafe { &*ctx.tables };
     let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
-    let meta = tables.closure_meta(meta_idx as usize).cloned();
+    let meta = tables.closure_meta(meta_idx).cloned();
     let captured = meta.map(|m| m.captured.clone()).unwrap_or_default();
 
     let closure_env = crate::env::Environment::new();
@@ -1498,7 +1503,7 @@ extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_make_range(ctx: *mut JitContext, inclusive: i64) {
+extern "C" fn oxy_make_range(ctx: *mut JitContext, inclusive: usize) {
     let ctx = unsafe { &mut *ctx };
     let end = unsafe { pop(ctx) };
     let start = unsafe { pop(ctx) };
