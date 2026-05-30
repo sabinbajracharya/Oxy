@@ -2,16 +2,24 @@
 //
 // Extracted from vm/mod.rs to keep that file focused on the Vm struct and its
 // execution loop.
+//
+// Backend selection lives in *one* place: the `ExecutionBackend` seam near the
+// bottom. The two backends (Cranelift JIT on native, IR interpreter elsewhere)
+// each implement that trait, and `ActiveBackend` is the single `#[cfg]`-selected
+// alias the public dispatchers route through — so target selection is one
+// polymorphic call rather than a `#[cfg]` branch repeated at every entry point.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::VmResult;
+use crate::ast::Program;
+use crate::errors::PipelineError;
 use crate::types::Value;
 
 /// Wrap a backend message string as a runtime `PipelineError` (line/column unknown).
-fn runtime_error(message: String) -> crate::errors::PipelineError {
-    crate::errors::PipelineError::Runtime {
+fn runtime_error(message: String) -> PipelineError {
+    PipelineError::Runtime {
         message,
         line: 0,
         column: 0,
@@ -22,12 +30,12 @@ fn runtime_error(message: String) -> crate::errors::PipelineError {
 //
 // Cranelift emits host machine code and is unavailable on `wasm32`, so the
 // whole JIT surface is gated to non-wasm. On wasm, execution runs through the
-// portable IR interpreter (see the `*_interp_*` entry points below); the public
-// dispatchers at the bottom of this file pick the backend per target.
+// portable IR interpreter (see the `*_interp_*` entry points below). The
+// `ExecutionBackend` seam picks between them per target.
 
 /// Compile and run using the Cranelift JIT backend.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_compiled_jit(source: &str) -> Result<Value, crate::errors::PipelineError> {
+pub fn run_compiled_jit(source: &str) -> Result<Value, PipelineError> {
     run_compiled_jit_with_options(source, None, HashMap::new())
 }
 
@@ -37,57 +45,35 @@ pub fn run_compiled_jit_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::PipelineError> {
+) -> Result<Value, PipelineError> {
     let mut jit_vm = super::jit::JitVm::compile_with_options(source, source_path, externs)
-        .map_err(|e| crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        })?;
+        .map_err(runtime_error)?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
-        VmResult::Error(e) => Err(crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        }),
+        VmResult::Error(e) => Err(runtime_error(e)),
     }
 }
 
 /// Compile and run with JIT, capturing printed output.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_compiled_capturing_jit(
-    source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
-    let mut jit_vm =
-        super::jit::JitVm::compile(source).map_err(|e| crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        })?;
+pub fn run_compiled_capturing_jit(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
+    let mut jit_vm = super::jit::JitVm::compile(source).map_err(runtime_error)?;
     jit_vm.with_captured_output();
     match jit_vm.run() {
         VmResult::Value(v) => Ok((v, jit_vm.captured_output())),
-        VmResult::Error(e) => Err(crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        }),
+        VmResult::Error(e) => Err(runtime_error(e)),
     }
 }
 
 /// JIT-based conformance alias for run.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_jit(source: &str) -> Result<Value, crate::errors::PipelineError> {
+pub fn run_jit(source: &str) -> Result<Value, PipelineError> {
     run_compiled_jit(source)
 }
 
 /// Run all #[test] and #[compile_error] functions using the JIT backend.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_tests_jit(
-    path: &str,
-    source: &str,
-) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
+pub fn run_tests_jit(path: &str, source: &str) -> Result<Vec<TestResult>, PipelineError> {
     run_tests_jit_with_options(path, source, HashMap::new())
 }
 
@@ -97,131 +83,8 @@ pub fn run_tests_jit_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
-    let mut program = crate::parser::parse(source)?;
-    let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
-    super::jit::resolve_modules(&mut program.items, source_dir, &externs).map_err(|e| {
-        crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        }
-    })?;
-
-    let mut normal_items: Vec<crate::ast::Item> = Vec::new();
-    let mut compile_error_fns: Vec<crate::ast::FnDef> = Vec::new();
-
-    for item in program.items {
-        if let crate::ast::Item::Function(ref f) = item {
-            if f.attributes.iter().any(|a| a.name == "compile_error") {
-                compile_error_fns.push(f.clone());
-                continue;
-            }
-        }
-        normal_items.push(item);
-    }
-
-    let mut normal_program = crate::ast::Program {
-        items: normal_items,
-        span: program.span,
-    };
-    super::jit::expand_derives(&mut normal_program);
-
-    crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
-
-    // Build JIT engine from the typed program
-    let engine = super::jit::JitEngine::compile(&normal_program).map_err(|e| {
-        crate::errors::PipelineError::Runtime {
-            message: e,
-            line: 0,
-            column: 0,
-        }
-    })?;
-    let mut jit_vm = super::jit::JitVm {
-        engine,
-        output: None,
-    };
-
-    // Collect test functions
-    let test_fns: Vec<&crate::ast::FnDef> = normal_program
-        .items
-        .iter()
-        .filter_map(|item| {
-            if let crate::ast::Item::Function(f) = item {
-                if f.attributes.iter().any(|a| a.name == "test") {
-                    Some(f)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let mut results = Vec::new();
-    for test_fn in &test_fns {
-        if jit_vm.engine.functions.contains_key(&test_fn.name) {
-            let result = jit_vm.run_function(&test_fn.name);
-            match result {
-                VmResult::Value(_) => results.push(TestResult {
-                    name: test_fn.name.clone(),
-                    passed: true,
-                    error: None,
-                }),
-                VmResult::Error(e) => results.push(TestResult {
-                    name: test_fn.name.clone(),
-                    passed: false,
-                    error: Some(e),
-                }),
-            }
-        } else {
-            results.push(TestResult {
-                name: test_fn.name.clone(),
-                passed: false,
-                error: Some("JIT: function not found".into()),
-            });
-        }
-    }
-
-    // Test compile_error functions (unchanged from VM path)
-    for ce_fn in &compile_error_fns {
-        let ce_item = crate::ast::Item::Function(ce_fn.clone());
-        let mut ce_items = normal_program.items.clone();
-        ce_items.push(ce_item);
-        let ce_program = crate::ast::Program {
-            items: ce_items,
-            span: program.span,
-        };
-
-        let tc_result = crate::type_checker::TypeChecker::new().check_program(&ce_program);
-        if tc_result.is_err() {
-            results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: true,
-                error: None,
-            });
-            continue;
-        }
-
-        let compile_result = super::jit::JitEngine::compile(&ce_program);
-        match compile_result {
-            Err(_) => results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: true,
-                error: None,
-            }),
-            Ok(_) => results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: false,
-                error: Some(
-                    "expected compilation error, but code compiled successfully".to_string(),
-                ),
-            }),
-        }
-    }
-
-    Ok(results)
+) -> Result<Vec<TestResult>, PipelineError> {
+    run_tests_with_backend::<JitBackend>(path, source, externs)
 }
 
 // ── IR interpreter entry points (all targets) ─────────────────────────
@@ -229,8 +92,7 @@ pub fn run_tests_jit_with_options(
 // The portable register-IR interpreter (`vm::interp`) executes the same IR the
 // Cranelift backend compiles, delegating runtime semantics to the shared `oxy_*`
 // FFI. It is the execution backend on `wasm32`, where Cranelift is unavailable.
-// These mirror the `*_jit_*` functions above one-to-one so the public
-// dispatchers can route by target with identical observable behavior.
+// These mirror the `*_jit_*` functions above one-to-one.
 //
 // They are available on *all* targets (not just wasm): on native they are the
 // reference engine the `jit_interp_parity` test diffs the JIT against. Only the
@@ -242,7 +104,7 @@ fn prepare_program(
     source: &str,
     source_path: Option<&str>,
     externs: &HashMap<String, PathBuf>,
-) -> Result<crate::ast::Program, crate::errors::PipelineError> {
+) -> Result<Program, PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = source_path.and_then(|p| {
         std::path::Path::new(p)
@@ -261,7 +123,7 @@ pub fn run_compiled_interp_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::PipelineError> {
+) -> Result<Value, PipelineError> {
     let program = prepare_program(source, source_path, &externs)?;
     let engine = super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
     let interp = super::interp::Interpreter::new(&engine);
@@ -272,9 +134,7 @@ pub fn run_compiled_interp_with_options(
 }
 
 /// Compile and run using the IR interpreter, capturing printed output.
-pub fn run_compiled_capturing_interp(
-    source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
+pub fn run_compiled_capturing_interp(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
     let program = prepare_program(source, None, &HashMap::new())?;
     let engine = super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
     let mut interp = super::interp::Interpreter::new(&engine);
@@ -286,20 +146,176 @@ pub fn run_compiled_capturing_interp(
 }
 
 /// Run all #[test] and #[compile_error] functions using the IR interpreter.
-/// Mirrors [`run_tests_jit_with_options`] block-for-block, swapping the JIT
-/// engine for the interpreter.
 pub fn run_tests_interp_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
+) -> Result<Vec<TestResult>, PipelineError> {
+    run_tests_with_backend::<InterpBackend>(path, source, externs)
+}
+
+// ── Backend seam ──────────────────────────────────────────────────────
+//
+// `ExecutionBackend` is the one place where the two engines differ from the
+// entry points' point of view. Each method delegates to the concrete
+// `*_jit_*` / `*_interp_*` machinery above; the trait adds the polymorphic
+// seam, not new behavior. `ActiveBackend` selects the backend per target with
+// a single `#[cfg]`, and the shared orchestration (`run_tests_with_backend`)
+// stays backend-agnostic.
+
+/// One pluggable execution backend. Implemented by [`JitBackend`] (native
+/// Cranelift) and [`InterpBackend`] (portable IR interpreter). The
+/// type-checking front-end (`prepare_program`) is shared and runs before any
+/// backend-specific work; these methods cover only what genuinely differs.
+trait ExecutionBackend {
+    /// Compile `source` and run `main`, returning its final value.
+    fn run_with_options(
+        source: &str,
+        source_path: Option<&str>,
+        externs: HashMap<String, PathBuf>,
+    ) -> Result<Value, PipelineError>;
+
+    /// Compile `source` and run `main`, capturing printed output.
+    fn run_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError>;
+
+    /// Compile a type-checked `program` once, then run each named `#[test]`
+    /// function against it. Returns one [`TestResult`] per name, in order.
+    fn run_test_functions(
+        program: &Program,
+        test_names: &[String],
+    ) -> Result<Vec<TestResult>, PipelineError>;
+
+    /// Compile-check a type-checked `program` without running it. Used to
+    /// confirm `#[compile_error]` functions are rejected at lowering/codegen
+    /// time and to give `disassemble_source` an end-to-end compile check.
+    fn compile_check(program: &Program) -> Result<(), PipelineError>;
+}
+
+/// Native Cranelift JIT backend.
+#[cfg(not(target_arch = "wasm32"))]
+enum JitBackend {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ExecutionBackend for JitBackend {
+    fn run_with_options(
+        source: &str,
+        source_path: Option<&str>,
+        externs: HashMap<String, PathBuf>,
+    ) -> Result<Value, PipelineError> {
+        run_compiled_jit_with_options(source, source_path, externs)
+    }
+
+    fn run_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
+        run_compiled_capturing_jit(source)
+    }
+
+    fn run_test_functions(
+        program: &Program,
+        test_names: &[String],
+    ) -> Result<Vec<TestResult>, PipelineError> {
+        let engine = super::jit::JitEngine::compile(program).map_err(runtime_error)?;
+        let mut jit_vm = super::jit::JitVm {
+            engine,
+            output: None,
+        };
+        let mut results = Vec::new();
+        for name in test_names {
+            if jit_vm.engine.functions.contains_key(name) {
+                results.push(test_result(name, jit_vm.run_function(name)));
+            } else {
+                results.push(TestResult {
+                    name: name.clone(),
+                    passed: false,
+                    error: Some("JIT: function not found".into()),
+                });
+            }
+        }
+        Ok(results)
+    }
+
+    fn compile_check(program: &Program) -> Result<(), PipelineError> {
+        super::jit::JitEngine::compile(program)
+            .map(|_| ())
+            .map_err(runtime_error)
+    }
+}
+
+/// Portable register-IR interpreter backend.
+enum InterpBackend {}
+
+impl ExecutionBackend for InterpBackend {
+    fn run_with_options(
+        source: &str,
+        source_path: Option<&str>,
+        externs: HashMap<String, PathBuf>,
+    ) -> Result<Value, PipelineError> {
+        run_compiled_interp_with_options(source, source_path, externs)
+    }
+
+    fn run_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
+        run_compiled_capturing_interp(source)
+    }
+
+    fn run_test_functions(
+        program: &Program,
+        test_names: &[String],
+    ) -> Result<Vec<TestResult>, PipelineError> {
+        let engine = super::interp::InterpEngine::compile(program).map_err(runtime_error)?;
+        let interp = super::interp::Interpreter::new(&engine);
+        Ok(test_names
+            .iter()
+            .map(|name| test_result(name, interp.run_function(name)))
+            .collect())
+    }
+
+    fn compile_check(program: &Program) -> Result<(), PipelineError> {
+        super::interp::InterpEngine::compile(program)
+            .map(|_| ())
+            .map_err(runtime_error)
+    }
+}
+
+/// The backend selected for this build: Cranelift JIT on native, IR
+/// interpreter on `wasm32`. This is the **only** `#[cfg(target_arch)]` switch
+/// for execution — every public dispatcher routes through it.
+#[cfg(not(target_arch = "wasm32"))]
+type ActiveBackend = JitBackend;
+#[cfg(target_arch = "wasm32")]
+type ActiveBackend = InterpBackend;
+
+/// Build a [`TestResult`] from a function's [`VmResult`].
+fn test_result(name: &str, outcome: VmResult) -> TestResult {
+    match outcome {
+        VmResult::Value(_) => TestResult {
+            name: name.to_string(),
+            passed: true,
+            error: None,
+        },
+        VmResult::Error(e) => TestResult {
+            name: name.to_string(),
+            passed: false,
+            error: Some(e),
+        },
+    }
+}
+
+/// Backend-agnostic test-suite orchestration: the front-end (parse → resolve →
+/// split `#[compile_error]` fns → expand derives → type-check) plus the
+/// `#[compile_error]` rejection loop are identical across backends, so they
+/// live here once. Only `B::run_test_functions` and `B::compile_check` differ.
+fn run_tests_with_backend<B: ExecutionBackend>(
+    path: &str,
+    source: &str,
+    externs: HashMap<String, PathBuf>,
+) -> Result<Vec<TestResult>, PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
     super::jit::resolve_modules(&mut program.items, source_dir, &externs).map_err(runtime_error)?;
 
+    // Split off the `#[compile_error]` functions — they are expected to fail,
+    // so they must not participate in the type-check/compile of the suite.
     let mut normal_items: Vec<crate::ast::Item> = Vec::new();
     let mut compile_error_fns: Vec<crate::ast::FnDef> = Vec::new();
-
     for item in program.items {
         if let crate::ast::Item::Function(ref f) = item {
             if f.attributes.iter().any(|a| a.name == "compile_error") {
@@ -310,91 +326,58 @@ pub fn run_tests_interp_with_options(
         normal_items.push(item);
     }
 
-    let mut normal_program = crate::ast::Program {
+    let mut normal_program = Program {
         items: normal_items,
         span: program.span,
     };
     super::jit::expand_derives(&mut normal_program);
-
     crate::type_checker::TypeChecker::new().check_program(&normal_program)?;
 
-    let engine = super::interp::InterpEngine::compile(&normal_program).map_err(runtime_error)?;
-    let interp = super::interp::Interpreter::new(&engine);
-
-    // Collect test functions.
-    let test_fns: Vec<&crate::ast::FnDef> = normal_program
+    // Run the `#[test]` functions on the chosen backend.
+    let test_names: Vec<String> = normal_program
         .items
         .iter()
-        .filter_map(|item| {
-            if let crate::ast::Item::Function(f) = item {
-                if f.attributes.iter().any(|a| a.name == "test") {
-                    Some(f)
-                } else {
-                    None
-                }
-            } else {
-                None
+        .filter_map(|item| match item {
+            crate::ast::Item::Function(f) if f.attributes.iter().any(|a| a.name == "test") => {
+                Some(f.name.clone())
             }
+            _ => None,
         })
         .collect();
+    let mut results = B::run_test_functions(&normal_program, &test_names)?;
 
-    let mut results = Vec::new();
-    for test_fn in &test_fns {
-        match interp.run_function(&test_fn.name) {
-            VmResult::Value(_) => results.push(TestResult {
-                name: test_fn.name.clone(),
-                passed: true,
-                error: None,
-            }),
-            VmResult::Error(e) => results.push(TestResult {
-                name: test_fn.name.clone(),
-                passed: false,
-                error: Some(e),
-            }),
-        }
-    }
-
-    // Test compile_error functions: each must fail to type-check or lower.
+    // Each `#[compile_error]` function must fail to type-check or to lower.
     for ce_fn in &compile_error_fns {
-        let ce_item = crate::ast::Item::Function(ce_fn.clone());
         let mut ce_items = normal_program.items.clone();
-        ce_items.push(ce_item);
-        let ce_program = crate::ast::Program {
+        ce_items.push(crate::ast::Item::Function(ce_fn.clone()));
+        let ce_program = Program {
             items: ce_items,
             span: program.span,
         };
 
-        let tc_result = crate::type_checker::TypeChecker::new().check_program(&ce_program);
-        if tc_result.is_err() {
-            results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: true,
-                error: None,
-            });
-            continue;
-        }
+        let rejected = crate::type_checker::TypeChecker::new()
+            .check_program(&ce_program)
+            .is_err()
+            || B::compile_check(&ce_program).is_err();
 
-        match super::interp::InterpEngine::compile(&ce_program) {
-            Err(_) => results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: true,
-                error: None,
-            }),
-            Ok(_) => results.push(TestResult {
-                name: ce_fn.name.clone(),
-                passed: false,
-                error: Some(
-                    "expected compilation error, but code compiled successfully".to_string(),
-                ),
-            }),
-        }
+        results.push(TestResult {
+            name: ce_fn.name.clone(),
+            passed: rejected,
+            error: if rejected {
+                None
+            } else {
+                Some("expected compilation error, but code compiled successfully".to_string())
+            },
+        });
     }
 
     Ok(results)
 }
 
+// ── Public dispatchers ────────────────────────────────────────────────
+
 /// Compile and run with captured output (for testing).
-pub fn run_compiled(source: &str) -> Result<Value, crate::errors::PipelineError> {
+pub fn run_compiled(source: &str) -> Result<Value, PipelineError> {
     run_compiled_with_options(source, None, HashMap::new())
 }
 
@@ -408,38 +391,22 @@ pub fn run_compiled_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::PipelineError> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        run_compiled_jit_with_options(source, source_path, externs)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        run_compiled_interp_with_options(source, source_path, externs)
-    }
+) -> Result<Value, PipelineError> {
+    ActiveBackend::run_with_options(source, source_path, externs)
 }
 
 /// Compile and run, capturing printed output (for testing).
-pub fn run_compiled_capturing(
-    source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        run_compiled_capturing_jit(source)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        run_compiled_capturing_interp(source)
-    }
+pub fn run_compiled_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
+    ActiveBackend::run_capturing(source)
 }
 
 /// Run a program and capture its output (compatibility alias).
-pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
+pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
     run_compiled_capturing(source)
 }
 
 /// Run a program, return its value (compatibility alias).
-pub fn run(source: &str) -> Result<Value, crate::errors::PipelineError> {
+pub fn run(source: &str) -> Result<Value, PipelineError> {
     run_compiled(source)
 }
 
@@ -448,10 +415,7 @@ pub fn run(source: &str) -> Result<Value, crate::errors::PipelineError> {
 /// Also verifies the program compiles all the way to native code, so callers
 /// that use this purely as a compile check (e.g. `tug build`) fail on codegen
 /// errors and not just type errors.
-pub fn disassemble_source(
-    path: &str,
-    source: &str,
-) -> Result<String, crate::errors::PipelineError> {
+pub fn disassemble_source(path: &str, source: &str) -> Result<String, PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
     super::jit::resolve_modules(&mut program.items, source_dir, &HashMap::new())
@@ -464,10 +428,7 @@ pub fn disassemble_source(
     // Compile end-to-end so a failed lowering surfaces as an error. On native
     // this exercises the full Cranelift codegen; on wasm (no Cranelift) the IR
     // interpreter's lowering is the equivalent compile check.
-    #[cfg(not(target_arch = "wasm32"))]
-    super::jit::JitEngine::compile(&program).map_err(runtime_error)?;
-    #[cfg(target_arch = "wasm32")]
-    super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
+    ActiveBackend::compile_check(&program)?;
 
     Ok(disassembly)
 }
@@ -481,10 +442,7 @@ pub struct TestResult {
 
 /// Run all #[test] functions in source via the VM, and verify that
 /// #[compile_error] functions fail to compile.
-pub fn run_tests(
-    path: &str,
-    source: &str,
-) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
+pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, PipelineError> {
     run_tests_with_options(path, source, HashMap::new())
 }
 
@@ -494,15 +452,8 @@ pub fn run_tests_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        run_tests_jit_with_options(path, source, externs)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        run_tests_interp_with_options(path, source, externs)
-    }
+) -> Result<Vec<TestResult>, PipelineError> {
+    run_tests_with_backend::<ActiveBackend>(path, source, externs)
 }
 
 /// Compile `source` through parse → type-check → ir_gen and return the

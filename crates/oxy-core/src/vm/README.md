@@ -11,14 +11,18 @@ by construction:
 | Cranelift JIT | native (x86/aarch64/…) | `jit/` | CLI, `tug`, native tests |
 | IR interpreter | `wasm32` | `interp.rs` | browser playground/tutorial |
 
-`api.rs` picks the backend per target via `#[cfg(target_arch = "wasm32")]`.
+`api.rs` picks the backend per target through one seam: the `ExecutionBackend`
+trait (implemented by `JitBackend` and `InterpBackend`) plus a single
+`#[cfg(target_arch = "wasm32")]`-selected `ActiveBackend` alias. Every public
+dispatcher routes through `ActiveBackend`, so the target switch is one
+polymorphic call rather than a `#[cfg]` branch repeated at each entry point.
 
 ## Files
 
 | File | Responsibility |
 |---|---|
 | `mod.rs` | `VmResult`, public re-exports, `builtin_method` dispatch, `dispatched_type_names()`, `run_tests` plumbing, FFI consistency tests. |
-| `api.rs` | Public entry points (`run_compiled`, `run_tests`, `disassemble_source`); per-target backend selection. |
+| `api.rs` | Public entry points (`run_compiled`, `run_tests`, `disassemble_source`); the `ExecutionBackend` seam + `ActiveBackend` per-target selection. |
 | `scheduler.rs` | Async task scheduler (`spawn`/`await`/`sleep`/`select`). |
 | `interp.rs` | The IR interpreter backend (compiled on **all** targets, used on wasm). |
 | `builtins/` | Per-type method implementations (see its README). |
