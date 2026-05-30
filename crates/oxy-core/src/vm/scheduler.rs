@@ -67,6 +67,7 @@ mod clock {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 mod clock {
     use std::cell::Cell;
 
