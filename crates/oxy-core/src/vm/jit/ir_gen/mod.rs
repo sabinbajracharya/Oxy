@@ -95,6 +95,11 @@ pub(crate) struct IrGen {
     /// carries its concrete struct name for method dispatch. `None` outside a
     /// method body.
     current_self_type: Option<String>,
+    /// Type aliases: qualified alias name → qualified target type name (from
+    /// `type Alias = Target;`). Lets `Alias::Variant` and `Alias::assoc()`
+    /// resolve to the underlying enum/struct. Collected in the pre-pass so
+    /// forward references work regardless of definition order.
+    type_aliases: std::collections::HashMap<String, String>,
 }
 
 impl IrGen {
@@ -140,6 +145,7 @@ impl IrGen {
             unit_structs: std::collections::HashSet::new(),
             fn_names: std::collections::HashSet::new(),
             current_self_type: None,
+            type_aliases: std::collections::HashMap::new(),
         }
     }
 
@@ -222,6 +228,25 @@ impl IrGen {
         // Output remaining path segments.
         resolved.extend(iter.cloned());
         resolved
+    }
+
+    /// Replace a leading type-alias segment with its underlying type. Given an
+    /// already module-resolved path whose first N-1 segments name a type (e.g.
+    /// `["Direction", "Up"]` or `["P", "origin"]`), rewrite that type portion
+    /// through the alias map so the call resolves to the real enum/struct
+    /// (`["Dir", "Up"]`, `["Point", "origin"]`). Non-alias paths pass through.
+    fn resolve_type_alias_in_path(&self, segments: &[String]) -> Vec<String> {
+        if segments.len() < 2 {
+            return segments.to_vec();
+        }
+        let type_part = segments[..segments.len() - 1].join("::");
+        if let Some(target) = self.type_aliases.get(&type_part) {
+            let mut out: Vec<String> = target.split("::").map(str::to_string).collect();
+            out.push(segments[segments.len() - 1].clone());
+            out
+        } else {
+            segments.to_vec()
+        }
     }
 
     /// Resolve a `use` declaration's path to an absolute segment list. Unlike
@@ -685,6 +710,29 @@ impl IrGen {
                             format!("{prefix}::{}", m.name)
                         };
                         self.register_generic_fns(body, &nested);
+                    }
+                }
+                Item::TypeAlias { name, target, .. } => {
+                    // Only simple named targets can be used as a path prefix
+                    // (`Alias::Variant`). Compound targets (arrays, generics)
+                    // have no associated items, so they're irrelevant here.
+                    if let TypeAnnotation::Named {
+                        name: target_name, ..
+                    } = target
+                    {
+                        let alias_q = if prefix.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{prefix}::{name}")
+                        };
+                        // A bare target name resolves within the same module;
+                        // an already-qualified one is taken as written.
+                        let target_q = if prefix.is_empty() || target_name.contains("::") {
+                            target_name.clone()
+                        } else {
+                            format!("{prefix}::{target_name}")
+                        };
+                        self.type_aliases.insert(alias_q, target_q);
                     }
                 }
                 _ => {}
@@ -1512,6 +1560,7 @@ impl IrGen {
                     _ => path.clone(),
                 };
                 let resolved_path = self.resolve_module_path(&path);
+                let resolved_path = self.resolve_type_alias_in_path(&resolved_path);
                 // A path call from inside a module to a *sibling* top-level
                 // module (e.g. `crate_lib::get_value()` from within `other_mod`)
                 // must not get the current module prefix prepended. If
@@ -1725,6 +1774,7 @@ impl IrGen {
                 // constant such as `math::PI` — route those to oxy_module_const
                 // rather than fabricating a bogus enum variant.
                 let resolved = self.resolve_module_path(segments);
+                let resolved = self.resolve_type_alias_in_path(&resolved);
                 let variant = resolved.last().cloned().unwrap_or_default();
                 let r = self.alloc_reg();
                 if resolved.len() > 1 {
