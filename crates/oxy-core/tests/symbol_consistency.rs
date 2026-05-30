@@ -249,6 +249,28 @@ fn test_modules_not_empty() {
     assert!(paths.contains(&"math::"));
 }
 
+/// Every module the LSP advertises in `symbols::ALL_MODULES` must be a real
+/// module registered for runtime dispatch in `stdlib::registry::MODULES`.
+/// Otherwise completion would offer a `module::` path that fails to resolve at
+/// runtime. (The reverse is intentionally *not* required: `io`/`args`/`path`
+/// dispatch at runtime but are deliberately kept out of completions.)
+#[test]
+fn test_all_modules_resolve_in_registry() {
+    use oxy_core::stdlib::registry;
+    for m in symbols::ALL_MODULES {
+        // Normalize the completion path (`std::fs::`, `json::`) to the bare
+        // dispatch name (`fs`, `json`) the registry keys on.
+        let bare = m.path.trim_end_matches("::");
+        let bare = bare.strip_prefix("std::").unwrap_or(bare);
+        assert!(
+            registry::lookup_module(bare).is_some(),
+            "symbols::ALL_MODULES advertises `{}` (bare `{bare}`), but no such \
+             module is registered in stdlib::registry::MODULES",
+            m.path
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Test 7: Keyword list includes core keywords
 // ---------------------------------------------------------------------------
