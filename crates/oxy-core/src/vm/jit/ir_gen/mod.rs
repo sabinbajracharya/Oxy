@@ -43,6 +43,10 @@ pub(crate) struct IrGen {
     global_consts: std::collections::HashMap<String, crate::ast::Expr>,
     /// Use aliases: local_name → qualified_name (from `use path::to::item;`).
     use_aliases: std::collections::HashMap<String, String>,
+    /// Source modules brought into scope by glob imports (`use path::to::*;`),
+    /// already resolved to absolute paths. A bare callee that matches no alias
+    /// or sibling is resolved against these by trying `glob_mod::name`.
+    glob_mods: Vec<String>,
     /// Variant name → parent enum name (e.g. "Some" → "Option").
     /// Seeded from AST enum definitions so user-defined enums work without hardcoding.
     variant_to_enum: std::collections::HashMap<String, String>,
@@ -115,6 +119,7 @@ impl IrGen {
             labeled_targets: std::collections::HashMap::new(),
             global_consts: std::collections::HashMap::new(),
             use_aliases: std::collections::HashMap::new(),
+            glob_mods: Vec::new(),
             variant_to_enum: Self::builtin_variants(),
             local_types: std::collections::HashMap::new(),
             current_module_prefix: String::new(),
@@ -208,6 +213,49 @@ impl IrGen {
         }
 
         // Output remaining path segments.
+        resolved.extend(iter.cloned());
+        resolved
+    }
+
+    /// Resolve a `use` declaration's path to an absolute segment list. Unlike
+    /// reference sites (handled by [`resolve_module_path`], which are relative
+    /// to the enclosing module), `use` paths are crate-absolute — `use a::b`
+    /// inside `mod m` means `a::b`, not `m::a::b`. Only a leading `self` /
+    /// `super` / `crate` prefix makes the path relative, and that prefix is
+    /// resolved against the current module context.
+    fn resolve_use_path(&self, path: &[String]) -> Vec<String> {
+        let mut module_parts: Vec<&str> = self
+            .current_module_prefix
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut iter = path.iter().peekable();
+        let mut had_prefix = false;
+        while let Some(seg) = iter.peek() {
+            match seg.as_str() {
+                "self" => {
+                    iter.next();
+                    had_prefix = true;
+                }
+                "super" => {
+                    module_parts.pop();
+                    iter.next();
+                    had_prefix = true;
+                }
+                "crate" => {
+                    module_parts.clear();
+                    iter.next();
+                    had_prefix = true;
+                }
+                _ => break,
+            }
+        }
+        let mut resolved: Vec<String> = Vec::new();
+        // A self/super/crate prefix anchors the remaining path to the resolved
+        // module context; a bare path is already crate-absolute.
+        if had_prefix {
+            resolved.extend(module_parts.iter().map(|s| s.to_string()));
+        }
         resolved.extend(iter.cloned());
         resolved
     }
@@ -320,25 +368,7 @@ impl IrGen {
                         self.gen_module_items(items, &m.name);
                     }
                 }
-                Item::Use(use_def) => {
-                    let base_path = use_def.path.join("::");
-                    match &use_def.tree {
-                        crate::ast::UseTree::Simple(alias) => {
-                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
-                                use_def.path.last().cloned().unwrap_or_default()
-                            });
-                            self.use_aliases.insert(local_name, base_path.clone());
-                        }
-                        crate::ast::UseTree::Group(items) => {
-                            for (name, alias) in items {
-                                let local_name = alias.as_ref().unwrap_or(name);
-                                let qualified = format!("{}::{}", base_path, name);
-                                self.use_aliases.insert(local_name.clone(), qualified);
-                            }
-                        }
-                        crate::ast::UseTree::Glob => {}
-                    }
-                }
+                Item::Use(use_def) => self.register_use(use_def),
                 Item::Enum(e) => self.register_enum(e),
                 Item::Struct(s) => match &s.kind {
                     crate::ast::StructKind::Tuple(types) => {
@@ -412,40 +442,7 @@ impl IrGen {
                         self.gen_fn(default_fn, Some(&qualified_type));
                     }
                 }
-                Item::Use(use_def) => {
-                    let base_path = use_def.path.join("::");
-                    let is_pub = matches!(use_def.visibility, crate::ast::Visibility::Pub);
-                    match &use_def.tree {
-                        crate::ast::UseTree::Simple(alias) => {
-                            let local_name = alias.as_ref().cloned().unwrap_or_else(|| {
-                                use_def.path.last().cloned().unwrap_or_default()
-                            });
-                            self.use_aliases
-                                .insert(local_name.clone(), base_path.clone());
-                            if is_pub {
-                                let reexport_key = format!("{prefix}::{local_name}");
-                                self.fn_aliases.insert(reexport_key, base_path);
-                            }
-                        }
-                        crate::ast::UseTree::Group(items) => {
-                            for (name, alias) in items {
-                                let local_name = alias.as_ref().unwrap_or(name);
-                                let qualified = format!("{}::{}", base_path, name);
-                                self.use_aliases
-                                    .insert(local_name.clone(), qualified.clone());
-                                if is_pub {
-                                    let reexport_key = format!("{prefix}::{local_name}");
-                                    self.fn_aliases.insert(reexport_key, qualified);
-                                }
-                            }
-                        }
-                        crate::ast::UseTree::Glob => {
-                            if is_pub {
-                                self.register_glob_fn_aliases(prefix, &base_path);
-                            }
-                        }
-                    }
-                }
+                Item::Use(use_def) => self.register_use(use_def),
                 Item::Const { name, value, .. } => {
                     self.global_consts.insert(name.clone(), value.clone());
                 }
@@ -469,15 +466,61 @@ impl IrGen {
         self.current_module_prefix = saved_prefix;
     }
 
+    /// Register a `use` declaration's aliases, glob imports, and — for a
+    /// `pub use` inside a module — re-exports. Path prefixes (`self` / `super`
+    /// / `crate`) are resolved against the current module context, so this must
+    /// run with `current_module_prefix` set to the module containing the `use`.
+    /// Shared by the three sites that handle `use` (top-level items, module
+    /// items, and in-function statements) so glob handling and prefix
+    /// resolution stay identical across all of them.
+    fn register_use(&mut self, use_def: &crate::ast::UseDef) {
+        let base = self.resolve_use_path(&use_def.path).join("::");
+        let prefix = self.current_module_prefix.clone();
+        // A `pub use` inside a module re-exports the item at `prefix::local`.
+        let reexport =
+            matches!(use_def.visibility, crate::ast::Visibility::Pub) && !prefix.is_empty();
+        match &use_def.tree {
+            crate::ast::UseTree::Simple(alias) => {
+                let local = alias
+                    .clone()
+                    .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                self.use_aliases.insert(local.clone(), base.clone());
+                if reexport {
+                    self.fn_aliases.insert(format!("{prefix}::{local}"), base);
+                }
+            }
+            crate::ast::UseTree::Group(items) => {
+                for (name, alias) in items {
+                    let local = alias.as_ref().unwrap_or(name);
+                    let qualified = format!("{base}::{name}");
+                    self.use_aliases.insert(local.clone(), qualified.clone());
+                    if reexport {
+                        self.fn_aliases
+                            .insert(format!("{prefix}::{local}"), qualified);
+                    }
+                }
+            }
+            crate::ast::UseTree::Glob => {
+                self.glob_mods.push(base.clone());
+                if reexport {
+                    self.register_glob_fn_aliases(&prefix, &base);
+                }
+            }
+        }
+    }
+
     /// Register glob re-exports: for every function whose name starts with
-    /// `source_mod::`, register it under `prefix::item_name`.
+    /// `source_mod::`, register it under `prefix::item_name`. Iterates
+    /// `fn_names` (fully populated by the pre-pass) rather than the
+    /// incrementally-built `functions`, so re-exports resolve regardless of
+    /// whether the source module is defined before or after the `pub use`.
     fn register_glob_fn_aliases(&mut self, prefix: &str, source_mod: &str) {
         let source_prefix = format!("{source_mod}::");
         let known_names: Vec<String> = self
-            .functions
+            .fn_names
             .iter()
-            .map(|f| f.name.clone())
             .filter(|n| n.starts_with(&source_prefix))
+            .cloned()
             .collect();
         for full_name in &known_names {
             if let Some(item_name) = full_name.strip_prefix(&source_prefix) {
@@ -490,11 +533,18 @@ impl IrGen {
         }
     }
 
-    /// Resolve a function name through the re-export alias chain.
+    /// Resolve a function name through the re-export alias chain. Follows
+    /// chains like layer3::value → layer2::value → layer1::value, stopping on
+    /// any revisited name so a self-referential alias (e.g. `pub use self::val`
+    /// registering `m::val → m::val`) or a cycle terminates instead of looping.
     fn resolve_fn_alias(&self, name: &str) -> String {
         let mut current = name.to_string();
-        // Follow chains like layer3::value → layer2::value → layer1::value.
+        let mut seen = std::collections::HashSet::new();
+        seen.insert(current.clone());
         while let Some(target) = self.fn_aliases.get(&current) {
+            if !seen.insert(target.clone()) {
+                break;
+            }
             current = target.clone();
         }
         current
@@ -514,6 +564,17 @@ impl IrGen {
         let qualified = self.resolve_module_path(&[name.to_string()]).join("::");
         if qualified != name && self.fn_names.contains(&qualified) {
             return self.resolve_fn_alias(&qualified);
+        }
+        // Glob imports (`use mod::*`): try `glob_mod::name`, following any
+        // re-export chain, and accept the first candidate that names a real
+        // function. fn_names is fully populated by the pre-pass, so this works
+        // whether the source module is defined before or after the glob.
+        for glob_mod in &self.glob_mods {
+            let candidate = format!("{glob_mod}::{name}");
+            let resolved = self.resolve_fn_alias(&candidate);
+            if self.fn_names.contains(&resolved) {
+                return resolved;
+            }
         }
         self.resolve_fn_alias(name)
     }
@@ -896,26 +957,7 @@ impl IrGen {
                 None
             }
             Stmt::Use(use_def) => {
-                let base_path = use_def.path.join("::");
-                match &use_def.tree {
-                    crate::ast::UseTree::Simple(alias) => {
-                        let local_name = alias
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
-                        self.use_aliases.insert(local_name, base_path.clone());
-                    }
-                    crate::ast::UseTree::Group(items) => {
-                        for (name, alias) in items {
-                            let local_name = alias.as_ref().unwrap_or(name);
-                            let qualified = format!("{}::{}", base_path, name);
-                            self.use_aliases.insert(local_name.clone(), qualified);
-                        }
-                    }
-                    crate::ast::UseTree::Glob => {
-                        // Glob entries are resolved by the compiler
-                    }
-                }
+                self.register_use(use_def);
                 None
             }
             Stmt::Item(_) => None,
