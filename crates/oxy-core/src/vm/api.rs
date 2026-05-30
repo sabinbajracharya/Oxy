@@ -224,17 +224,20 @@ pub fn run_tests_jit_with_options(
     Ok(results)
 }
 
-// ── IR interpreter entry points (wasm only) ───────────────────────────
+// ── IR interpreter entry points (all targets) ─────────────────────────
 //
 // The portable register-IR interpreter (`vm::interp`) executes the same IR the
 // Cranelift backend compiles, delegating runtime semantics to the shared `oxy_*`
 // FFI. It is the execution backend on `wasm32`, where Cranelift is unavailable.
 // These mirror the `*_jit_*` functions above one-to-one so the public
 // dispatchers can route by target with identical observable behavior.
+//
+// They are available on *all* targets (not just wasm): on native they are the
+// reference engine the `jit_interp_parity` test diffs the JIT against. Only the
+// Cranelift JIT is genuinely native-only.
 
 /// Parse → resolve modules → expand derives → type-check, yielding a program
 /// ready for IR lowering. Shared front-end for the interpreter entry points.
-#[cfg(target_arch = "wasm32")]
 fn prepare_program(
     source: &str,
     source_path: Option<&str>,
@@ -254,7 +257,6 @@ fn prepare_program(
 
 /// Compile and run using the portable IR interpreter, with optional source path
 /// and externs.
-#[cfg(target_arch = "wasm32")]
 pub fn run_compiled_interp_with_options(
     source: &str,
     source_path: Option<&str>,
@@ -270,7 +272,6 @@ pub fn run_compiled_interp_with_options(
 }
 
 /// Compile and run using the IR interpreter, capturing printed output.
-#[cfg(target_arch = "wasm32")]
 pub fn run_compiled_capturing_interp(
     source: &str,
 ) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
@@ -287,7 +288,6 @@ pub fn run_compiled_capturing_interp(
 /// Run all #[test] and #[compile_error] functions using the IR interpreter.
 /// Mirrors [`run_tests_jit_with_options`] block-for-block, swapping the JIT
 /// engine for the interpreter.
-#[cfg(target_arch = "wasm32")]
 pub fn run_tests_interp_with_options(
     path: &str,
     source: &str,

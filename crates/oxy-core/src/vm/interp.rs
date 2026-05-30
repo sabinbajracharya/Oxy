@@ -48,12 +48,7 @@ macro_rules! unsupported_on_wasm {
     ($ctx:expr, $feature:expr) => {{
         ffi::set_error(
             $ctx,
-            format!(
-                "{}: not supported by the Oxy IR interpreter (the wasm/browser \
-                 execution backend); it runs only under the native Cranelift JIT. \
-                 See CLAUDE.md \u{201c}Two execution backends\u{201d}.",
-                $feature
-            ),
+            format!("{}: {}", $feature, ffi::INTERP_UNSUPPORTED_MARKER),
         );
         Value::Unit
     }};
@@ -214,6 +209,15 @@ impl<'e> Interpreter<'e> {
             let block = &func.blocks[block_id];
             for op in &block.ops {
                 self.exec_op(ctx, op, &mut regs, prev_block, &reg_def_block);
+                // A genuine runtime error (panic, failed builtin, unsupported
+                // feature) aborts the function immediately, like the JIT's
+                // panic path — otherwise a later op (e.g. an `assert_eq`) would
+                // overwrite `ctx.error_*` and mask the real cause. The empty `?`
+                // marker is NOT a real error: it is consumed by a following
+                // `CheckError`, so it must not short-circuit here.
+                if has_real_error(ctx) {
+                    return discriminant(ctx);
+                }
             }
             match &block.terminator {
                 Terminator::Return(r) => {
@@ -293,6 +297,11 @@ impl<'e> Interpreter<'e> {
             }
 
             // ── Arithmetic / comparison / bitwise: shared FFI semantics ──────
+            //
+            // Arithmetic and bitwise ops are operator-overloadable on user
+            // structs/enums; `binary`/`unary` recognize that from the FFI op
+            // name (see `overload_method`) and dispatch to the `Type::<method>`
+            // trait impl before the numeric fallback, mirroring the JIT macros.
             IrOp::Add(r, a, b) => self.binary(ctx, regs, "oxy_add", *r, *a, *b),
             IrOp::Sub(r, a, b) => self.binary(ctx, regs, "oxy_sub", *r, *a, *b),
             IrOp::Mul(r, a, b) => self.binary(ctx, regs, "oxy_mul", *r, *a, *b),
@@ -379,7 +388,10 @@ impl<'e> Interpreter<'e> {
 
     // ── FFI dispatch ─────────────────────────────────────────────────────────
 
-    /// Push lhs, push rhs, call the binary op, store the popped result.
+    /// Push lhs, push rhs, call the binary op, store the popped result. If the
+    /// op is operator-overloadable (see `overload_method`) and `lhs` is a user
+    /// struct/enum with a matching `Type::<method>` impl, dispatch to that
+    /// method instead (mirroring the JIT's `binary_op!` trait dispatch).
     fn binary(
         &mut self,
         ctx: &mut JitContext,
@@ -389,8 +401,15 @@ impl<'e> Interpreter<'e> {
         lhs: Reg,
         rhs: Reg,
     ) {
-        let args = [Self::reg_val(regs, lhs), Self::reg_val(regs, rhs)];
-        let v = self.call_collect(ctx, name, &args, &[], &[]);
+        let l = Self::reg_val(regs, lhs);
+        let r = Self::reg_val(regs, rhs);
+        if let Some(method) = overload_method(name) {
+            if let Some(v) = self.try_op_overload(ctx, &l, std::slice::from_ref(&r), method) {
+                regs.insert(dst, v);
+                return;
+            }
+        }
+        let v = self.call_collect(ctx, name, &[l, r], &[], &[]);
         regs.insert(dst, v);
     }
 
@@ -402,9 +421,39 @@ impl<'e> Interpreter<'e> {
         dst: Reg,
         operand: Reg,
     ) {
-        let args = [Self::reg_val(regs, operand)];
-        let v = self.call_collect(ctx, name, &args, &[], &[]);
-        regs.insert(dst, v);
+        let v = Self::reg_val(regs, operand);
+        if let Some(method) = overload_method(name) {
+            if let Some(out) = self.try_op_overload(ctx, &v, &[], method) {
+                regs.insert(dst, out);
+                return;
+            }
+        }
+        let out = self.call_collect(ctx, name, &[v], &[], &[]);
+        regs.insert(dst, out);
+    }
+
+    /// Operator-overload dispatch: if `receiver` is a user struct/enum whose
+    /// type defines `<Type>::<method>`, interpret that method with frame
+    /// `[receiver, args..]` and return its result. `None` means no overload (a
+    /// primitive operand, or no such impl) — the caller falls back to the FFI.
+    fn try_op_overload(
+        &mut self,
+        ctx: &mut JitContext,
+        receiver: &Value,
+        args: &[Value],
+        method: &str,
+    ) -> Option<Value> {
+        let lookup = match receiver {
+            Value::Struct { name, .. } => name.clone(),
+            Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+            _ => return None,
+        };
+        let qualified = format!("{lookup}::{method}");
+        let &idx = self.engine.name_to_index.get(&qualified)?;
+        let mut frame = vec![receiver.clone()];
+        frame.extend_from_slice(args);
+        let callee_fn = &self.engine.functions[idx];
+        Some(self.invoke(ctx, callee_fn, frame))
     }
 
     /// Truthiness of a branch condition, via the runtime's own `oxy_is_truthy`.
@@ -441,6 +490,16 @@ impl<'e> Interpreter<'e> {
             }
             "oxy_method_call" => {
                 if let Some(v) = self.try_call_method(ctx, args, regs, strings) {
+                    return v;
+                }
+            }
+            // Module-qualified and associated-function calls (`math::add(..)`,
+            // `Counter::new(..)`). On the JIT these resolve through the function
+            // table; here the table is empty, so the shared FFI would fall
+            // through to its stdlib/enum-variant handling and mis-handle a user
+            // function (e.g. construct a bogus `EnumVariant`). Resolve by name first.
+            "oxy_path_call_builtin" => {
+                if let Some(v) = self.try_call_path(ctx, args, regs, strings) {
                     return v;
                 }
             }
@@ -523,6 +582,27 @@ impl<'e> Interpreter<'e> {
 
         let eng = self.engine;
         let callee_fn = &eng.functions[idx];
+        Some(self.invoke(ctx, callee_fn, frame))
+    }
+
+    /// Intercept a module-qualified / associated-function path call
+    /// (`oxy_path_call_builtin`). The path arrives as a single NUL-separated
+    /// string (the FFI splits on `\0`); joined with `::` it is the qualified
+    /// function name. If it names a user function, interpret it with the call
+    /// arguments as its frame. Returns `None` for stdlib/builtin paths (not in
+    /// `name_to_index`), letting the shared FFI's registry dispatch handle them.
+    fn try_call_path(
+        &mut self,
+        ctx: &mut JitContext,
+        args: &[Reg],
+        regs: &HashMap<Reg, Value>,
+        strings: &[String],
+    ) -> Option<Value> {
+        let path = strings.first()?;
+        let fn_name = path.split('\0').collect::<Vec<_>>().join("::");
+        let &idx = self.engine.name_to_index.get(&fn_name)?;
+        let frame: Vec<Value> = args.iter().map(|&a| Self::reg_val(regs, a)).collect();
+        let callee_fn = &self.engine.functions[idx];
         Some(self.invoke(ctx, callee_fn, frame))
     }
 
@@ -620,6 +700,29 @@ impl<'e> Interpreter<'e> {
 
 // ── Free helpers ────────────────────────────────────────────────────────────
 
+/// Map an `oxy_*` binary/unary op FFI name to the trait method an operator
+/// overload would define on a user type, or `None` for ops the JIT does not
+/// overload (comparisons, `&&`/`||`). Single source for the same op→method
+/// mapping the JIT encodes in its `binary_op!`/unary macros.
+fn overload_method(ffi_name: &str) -> Option<&'static str> {
+    match ffi_name {
+        "oxy_add" => Some("add"),
+        "oxy_sub" => Some("sub"),
+        "oxy_mul" => Some("mul"),
+        "oxy_div" => Some("div"),
+        "oxy_mod" => Some("rem"),
+        "oxy_bitand" => Some("bitand"),
+        "oxy_bitor" => Some("bitor"),
+        "oxy_bitxor" => Some("bitxor"),
+        "oxy_shl" => Some("shl"),
+        "oxy_shr" => Some("shr"),
+        "oxy_neg" => Some("neg"),
+        "oxy_not" => Some("not"),
+        "oxy_bitnot" => Some("bitnot"),
+        _ => None,
+    }
+}
+
 /// The JIT discriminant for a context: 2 if an error is set, else 0.
 fn discriminant(ctx: &JitContext) -> Disc {
     if ctx.error_len > 0 {
@@ -627,6 +730,13 @@ fn discriminant(ctx: &JitContext) -> Disc {
     } else {
         0
     }
+}
+
+/// Whether a *real* runtime error is set, as opposed to the empty-message `?`
+/// propagation marker (`error_len == 1 && error_msg[0] == 0`). Only real errors
+/// abort the block loop; the `?` marker is left for `CheckError` to consume.
+fn has_real_error(ctx: &JitContext) -> bool {
+    ctx.error_len > 0 && !(ctx.error_len == 1 && ctx.error_msg[0] == 0)
 }
 
 /// Propagate a callee's error state to its caller, mirroring `CalleeFrame::execute`.
@@ -891,6 +1001,32 @@ mod tests {
     fn interp_closure_capture() {
         assert_parity(
             "fn main() { let base = 100; let add = |x| x + base; println!(\"{}\", add(7)); }",
+        );
+    }
+
+    #[test]
+    fn interp_operator_overload() {
+        assert_parity(
+            "struct V2 { x: int, y: int }\n\
+             impl V2 { fn add(self, o: V2) -> V2 { V2 { x: self.x + o.x, y: self.y + o.y } } }\n\
+             fn main() { let a = V2 { x: 1, y: 2 }; let b = V2 { x: 3, y: 4 }; let c = a + b; println!(\"{} {}\", c.x, c.y); }",
+        );
+    }
+
+    #[test]
+    fn interp_associated_function() {
+        assert_parity(
+            "struct Counter { n: int }\n\
+             impl Counter { fn new() -> Counter { Counter { n: 42 } } }\n\
+             fn main() { let c = Counter::new(); println!(\"{}\", c.n); }",
+        );
+    }
+
+    #[test]
+    fn interp_module_function_call() {
+        assert_parity(
+            "mod math { pub fn square(x: int) -> int { x * x } }\n\
+             fn main() { println!(\"{}\", math::square(7)); }",
         );
     }
 

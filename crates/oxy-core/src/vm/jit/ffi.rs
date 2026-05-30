@@ -1784,9 +1784,15 @@ fn jit_closure_invoker(
         _ => return Err("not a callable function".into()),
     };
     let target_ip = ft.target_ip.ok_or("function has no target_ip")?;
-    let fn_ptr = tables
-        .fn_ptr(target_ip)
-        .ok_or(format!("JIT: no function for closure at ip={target_ip}"))?;
+    // A populated `fn_table` always resolves on the JIT; a miss here means we're
+    // on the IR interpreter, which has no native pointer to call the closure
+    // through. Higher-order built-ins (map/filter/fold/sort_by/for_each/
+    // Option·Result combinators) all funnel through this one invoker, so this
+    // single site marks them all as deliberately unsupported there — surfacing
+    // the canonical marker instead of silently returning a wrong/Unit result.
+    let fn_ptr = tables.fn_ptr(target_ip).ok_or_else(|| {
+        format!("higher-order built-in (closure argument): {INTERP_UNSUPPORTED_MARKER}")
+    })?;
 
     let captures_end = ft.captured_names.len();
     let actual_local_count = tables.local_count(target_ip);
@@ -2894,6 +2900,17 @@ pub(crate) enum FfiRet {
     /// Returns an `i8` boolean (e.g. `oxy_is_truthy`).
     I8,
 }
+
+/// Canonical phrase identifying a feature the portable IR interpreter (the
+/// wasm/browser backend) cannot run because it needs native code. Both the
+/// `unsupported_on_wasm!` marker in `vm::interp` and the closure-invoker miss
+/// below embed it, so the `jit_interp_parity` test can recognize a deliberately
+/// unsupported divergence by this stable substring. Keep the leading sentence
+/// fragment "not supported by the Oxy IR interpreter" intact — it is the match
+/// key.
+pub(crate) const INTERP_UNSUPPORTED_MARKER: &str =
+    "not supported by the Oxy IR interpreter (the wasm/browser execution backend); \
+     it runs only under the native Cranelift JIT. See CLAUDE.md \u{201c}Two execution backends\u{201d}.";
 
 /// Single source of truth for every `oxy_*` FFI function: its name, raw
 /// function pointer, and ABI return kind. Both the Cranelift symbol registry
