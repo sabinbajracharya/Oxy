@@ -46,7 +46,10 @@ fn wasm_locals_and_while() {
 // oxy_make_array + oxy_vec_index (usize count/index).
 #[wasm_bindgen_test]
 fn wasm_vec_index() {
-    check("fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }", "20\n");
+    check(
+        "fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }",
+        "20\n",
+    );
 }
 
 // oxy_make_range (the `inclusive` flag) + for-loop iteration.
@@ -100,7 +103,10 @@ fn wasm_recursion() {
 // the interpreter hook (eager run).
 #[wasm_bindgen_test]
 fn wasm_async_spawn_await() {
-    check("fn main() { let h = spawn(|| 21 * 2); println!(\"{}\", h.await); }", "42\n");
+    check(
+        "fn main() { let h = spawn(|| 21 * 2); println!(\"{}\", h.await); }",
+        "42\n",
+    );
 }
 
 // String methods + f-string formatting (oxy_method_call on a String receiver,
