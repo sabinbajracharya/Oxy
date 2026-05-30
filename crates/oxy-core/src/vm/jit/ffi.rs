@@ -195,11 +195,11 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 
 // ── Output ───────────────────────────────────────────────────────────
 
-/// Substitute positional placeholders in a format template with `args`, using
-/// Oxy's Display representation. `{}` and any `{:...}` spec (e.g. `{:?}`) format
-/// the next positional argument identically — Oxy has a single value
-/// representation, so Debug and Display coincide. `{{` and `}}` are literal
-/// braces. Shared by `format!`, `print!`, and `println!`.
+/// Substitute positional placeholders in a format template with `args`. `{}`
+/// uses Oxy's Display representation; `{:?}` (any spec whose body contains `?`)
+/// uses the Debug representation, which quotes strings/chars and recurses into
+/// collections. `{{` and `}}` are literal braces. Shared by `format!`,
+/// `print!`, and `println!`.
 fn format_template(template: &str, args: &[Value]) -> String {
     let mut result = String::new();
     let mut arg_idx = 0;
@@ -211,14 +211,23 @@ fn format_template(template: &str, args: &[Value]) -> String {
                 result.push('{');
             }
             '{' => {
-                // Skip the placeholder body / format spec up to `}`.
+                // Consume the placeholder body / format spec up to `}`, noting
+                // whether it requested Debug (`?`) rendering.
+                let mut is_debug = false;
                 for cc in chars.by_ref() {
                     if cc == '}' {
                         break;
                     }
+                    if cc == '?' {
+                        is_debug = true;
+                    }
                 }
                 if let Some(v) = args.get(arg_idx) {
-                    result.push_str(&v.to_string());
+                    if is_debug {
+                        result.push_str(&v.to_debug_string());
+                    } else {
+                        result.push_str(&v.to_string());
+                    }
                 }
                 arg_idx += 1;
             }
