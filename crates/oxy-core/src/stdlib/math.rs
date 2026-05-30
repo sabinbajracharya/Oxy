@@ -4,16 +4,16 @@
 //! along with constants like `PI` and `E`.
 
 use crate::errors::check_arg_count;
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
 /// Convert a Value to f64.
-pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, FerriError> {
+pub fn value_to_f64(val: &Value, span: &Span) -> Result<f64, PipelineError> {
     match val {
         Value::I64(n) => Ok(*n as f64),
         Value::F64(f) => Ok(*f),
-        _ => Err(FerriError::Runtime {
+        _ => Err(PipelineError::Runtime {
             message: format!("expected numeric argument, got {}", val.type_name()),
             line: span.line,
             column: span.column,
@@ -39,7 +39,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "sqrt" => unary_op("sqrt", args, f64::sqrt, span),
         "abs" => {
@@ -47,7 +47,7 @@ pub fn call(
             match &args[0] {
                 Value::I64(n) => Ok(Value::I64(n.abs())),
                 Value::F64(f) => Ok(float_to_value(f.abs())),
-                _ => Err(FerriError::Runtime {
+                _ => Err(PipelineError::Runtime {
                     message: format!(
                         "math::abs() requires numeric argument, got {}",
                         args[0].type_name()
@@ -118,7 +118,7 @@ pub fn call(
                 }
             }
         }
-        _ => Err(FerriError::Runtime {
+        _ => Err(PipelineError::Runtime {
             message: format!("unknown math function `math::{func_name}`"),
             line: span.line,
             column: span.column,
@@ -140,7 +140,7 @@ fn unary_op(
     args: &[Value],
     op: fn(f64) -> f64,
     span: &Span,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     check_arg_count(&format!("math::{name}"), 1, args, span)?;
     let x = value_to_f64(&args[0], span)?;
     Ok(float_to_value(op(x)))
@@ -151,17 +151,17 @@ fn binary_op(
     args: &[Value],
     op: fn(f64, f64) -> f64,
     span: &Span,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     check_arg_count(&format!("math::{name}"), 2, args, span)?;
     let a = value_to_f64(&args[0], span)?;
     let b = value_to_f64(&args[1], span)?;
     Ok(float_to_value(op(a, b)))
 }
 
-fn math_int(val: &Value, name: &str, span: &Span) -> Result<i64, FerriError> {
+fn math_int(val: &Value, name: &str, span: &Span) -> Result<i64, PipelineError> {
     match val {
         Value::I64(n) => Ok(*n),
-        _ => Err(FerriError::Runtime {
+        _ => Err(PipelineError::Runtime {
             message: format!(
                 "math::{name} requires integer arguments, got {}",
                 val.type_name()

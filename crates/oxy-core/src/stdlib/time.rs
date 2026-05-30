@@ -3,7 +3,7 @@
 //! Provides access to wall-clock time and elapsed-time measurement.
 
 use crate::errors::check_arg_count;
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::stdlib::math::value_to_f64;
 use crate::types::Value;
@@ -14,7 +14,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "now" => {
             check_arg_count("time::now", 0, args, span)?;
@@ -39,7 +39,7 @@ pub fn call(
                 .as_secs_f64();
             Ok(Value::F64(now - start))
         }
-        _ => Err(FerriError::Runtime {
+        _ => Err(PipelineError::Runtime {
             message: format!("unknown time function `time::{func_name}`"),
             line: span.line,
             column: span.column,

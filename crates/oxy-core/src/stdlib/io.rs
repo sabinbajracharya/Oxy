@@ -5,7 +5,7 @@
 
 use std::io::{BufRead, Read};
 
-use crate::errors::{check_arg_count, runtime_error, FerriError};
+use crate::errors::{check_arg_count, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -14,7 +14,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "read_to_string" => {
             check_arg_count("std::io::read_to_string", 0, args, span)?;

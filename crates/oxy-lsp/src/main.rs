@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 use oxy_core::ast::{Item, Program};
-use oxy_core::errors::FerriError;
+use oxy_core::errors::PipelineError;
 
 struct OxyLsp {
     client: Client,
@@ -93,19 +93,19 @@ fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-fn error_to_diagnostic(e: &FerriError) -> Diagnostic {
+fn error_to_diagnostic(e: &PipelineError) -> Diagnostic {
     let (message, line, column) = match e {
-        FerriError::Lexer {
+        PipelineError::Lexer {
             message,
             line,
             column,
         } => (message.clone(), *line, *column),
-        FerriError::Parser {
+        PipelineError::Parser {
             message,
             line,
             column,
         } => (message.clone(), *line, *column),
-        FerriError::Runtime {
+        PipelineError::Runtime {
             message,
             line,
             column,
@@ -1106,7 +1106,7 @@ mod tests {
 
     #[test]
     fn test_error_to_diagnostic() {
-        let err = FerriError::Parser {
+        let err = PipelineError::Parser {
             message: "unexpected token".to_string(),
             line: 3,
             column: 5,

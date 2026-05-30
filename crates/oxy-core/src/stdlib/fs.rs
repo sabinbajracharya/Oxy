@@ -3,7 +3,7 @@
 //! Provides file and directory operations mirroring `std::fs`.
 //! All fallible operations return `Result<T, String>`.
 
-use crate::errors::{check_arg_count, expect_string, runtime_error, FerriError};
+use crate::errors::{check_arg_count, expect_string, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -13,7 +13,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         // --- File content operations ---
         "read_to_string" => {

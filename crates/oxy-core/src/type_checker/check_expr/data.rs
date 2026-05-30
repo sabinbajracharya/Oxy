@@ -12,7 +12,7 @@ impl TypeChecker {
         fields: &[(String, Expr)],
         base: &Option<Box<Expr>>,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let resolved = self.resolve_struct_name(name);
         self.check_path_visible(&resolved, *span)?;
         // Pre-collect declared field types AND each field's raw
@@ -71,7 +71,7 @@ impl TypeChecker {
                 let decl_ty =
                     self.substitute_generics(raw_ann, &generic_param_names, &inferred_generics);
                 if !decl_ty.accepts(val_ty) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "type mismatch: field `{}.{field_name}` declared as `{}`, got `{}`",
                             resolved,
@@ -108,7 +108,7 @@ impl TypeChecker {
         object: &Expr,
         field: &str,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let obj_ty = self.infer_expr(object)?;
         if let TypeInfo::UserStruct {
             name: struct_name,
@@ -133,7 +133,7 @@ impl TypeChecker {
                                 ));
                             }
                         }
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message: format!("no field `{field}` on struct `{resolved}`"),
                             line: span.line,
                             column: span.column,
@@ -148,7 +148,7 @@ impl TypeChecker {
                                     &generic_args_owned,
                                 ));
                             }
-                            return Err(FerriError::TypeError {
+                            return Err(PipelineError::TypeError {
                                 message: format!("no field `{field}` on tuple struct `{resolved}`"),
                                 line: span.line,
                                 column: span.column,
@@ -157,7 +157,7 @@ impl TypeChecker {
                         return Ok(TypeInfo::Unknown);
                     }
                     StructKind::Unit => {
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message: format!("no field `{field}` on unit struct `{resolved}`"),
                             line: span.line,
                             column: span.column,
@@ -176,7 +176,7 @@ impl TypeChecker {
         // user-accessible fields. If the receiver type is known and
         // concrete, an unknown field is a compile error.
         if obj_ty != TypeInfo::Unknown && !matches!(obj_ty, TypeInfo::UserStruct { .. }) {
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!("no field `{field}` on type `{}`", obj_ty.name()),
                 line: span.line,
                 column: span.column,
@@ -189,7 +189,7 @@ impl TypeChecker {
         &mut self,
         object: &Expr,
         index: &Expr,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let obj_ty = self.infer_expr(object)?;
         let idx_ty = self.infer_expr(index)?;
         let is_range_index = matches!(index, Expr::Range { .. });
@@ -200,7 +200,7 @@ impl TypeChecker {
         );
         if is_seq && !is_range_index && idx_ty != TypeInfo::Unknown && !idx_ty.is_integer() {
             let ispan = index.span();
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!(
                     "cannot index `{}` with `{}`: expected integer",
                     obj_ty.name(),
@@ -233,7 +233,7 @@ impl TypeChecker {
         Ok(TypeInfo::Unknown)
     }
 
-    pub(super) fn infer_tuple(&mut self, elements: &[Expr]) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_tuple(&mut self, elements: &[Expr]) -> Result<TypeInfo, PipelineError> {
         for e in elements {
             self.infer_expr(e)?;
         }
@@ -244,7 +244,7 @@ impl TypeChecker {
         &mut self,
         elements: &[Expr],
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let mut elem_types = Vec::with_capacity(elements.len());
         for e in elements {
             elem_types.push(self.infer_expr(e)?);
@@ -268,7 +268,7 @@ impl TypeChecker {
                 continue;
             }
             let espan = elements[i].span();
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!(
                     "array literal has mixed element types: element {} is `{}`, expected `{}`",
                     i + 1,
@@ -287,7 +287,7 @@ impl TypeChecker {
         &mut self,
         value: &Expr,
         count: &Expr,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let val_ty = self.infer_expr(value)?;
         let _ = self.infer_expr(count)?;
         // The repeat count is the array's length, which must be known at
@@ -297,7 +297,7 @@ impl TypeChecker {
             Expr::IntLiteral(n, _, _) => *n as usize,
             _ => {
                 let span = count.span();
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: "array repeat count must be a constant integer literal, e.g. `[0; 5]`"
                         .to_string(),
                     line: span.line,
@@ -313,11 +313,11 @@ impl TypeChecker {
         start: &Option<Box<Expr>>,
         end: &Option<Box<Expr>>,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         if let Some(s) = start {
             let st = self.infer_expr(s)?;
             if st != TypeInfo::Unknown && !st.is_integer() {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!("range start must be an integer, got `{}`", st.name()),
                     line: span.line,
                     column: span.column,
@@ -327,7 +327,7 @@ impl TypeChecker {
         if let Some(e) = end {
             let et = self.infer_expr(e)?;
             if et != TypeInfo::Unknown && !et.is_integer() {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!("range end must be an integer, got `{}`", et.name()),
                     line: span.line,
                     column: span.column,

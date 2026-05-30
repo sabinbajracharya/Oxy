@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::errors::check_arg_count;
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -67,7 +67,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "random" => {
             check_arg_count("rand::random", 0, args, span)?;
@@ -78,7 +78,7 @@ pub fn call(
             match (&args[0], &args[1]) {
                 (Value::I64(min), Value::I64(max)) => {
                     if min >= max {
-                        return Err(FerriError::Runtime {
+                        return Err(PipelineError::Runtime {
                             message: "rand::range() requires min < max".into(),
                             line: span.line,
                             column: span.column,
@@ -89,7 +89,7 @@ pub fn call(
                     let val = min + (raw % range) as i64;
                     Ok(Value::I64(val))
                 }
-                _ => Err(FerriError::Runtime {
+                _ => Err(PipelineError::Runtime {
                     message: "rand::range() requires integer arguments".into(),
                     line: span.line,
                     column: span.column,
@@ -104,7 +104,7 @@ pub fn call(
             match (&args[0], &args[1]) {
                 (Value::I64(lo), Value::I64(hi)) => {
                     if lo > hi {
-                        return Err(FerriError::Runtime {
+                        return Err(PipelineError::Runtime {
                             message: "rand::rand_int(lo, hi) requires lo <= hi".into(),
                             line: span.line,
                             column: span.column,
@@ -114,7 +114,7 @@ pub fn call(
                     let raw = simple_random_u64();
                     Ok(Value::I64(lo + (raw % span_size) as i64))
                 }
-                _ => Err(FerriError::Runtime {
+                _ => Err(PipelineError::Runtime {
                     message: "rand::rand_int() requires integer arguments".into(),
                     line: span.line,
                     column: span.column,
@@ -125,7 +125,7 @@ pub fn call(
             check_arg_count("rand::bool", 0, args, span)?;
             Ok(Value::Bool(simple_random_u64() % 2 == 0))
         }
-        _ => Err(FerriError::Runtime {
+        _ => Err(PipelineError::Runtime {
             message: format!("unknown rand function `rand::{func_name}`"),
             line: span.line,
             column: span.column,

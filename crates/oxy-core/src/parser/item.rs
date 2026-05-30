@@ -1,7 +1,7 @@
 use super::*;
 
 impl Parser {
-    pub(super) fn parse_item(&mut self) -> Result<Item, FerriError> {
+    pub(super) fn parse_item(&mut self) -> Result<Item, PipelineError> {
         // Parse optional attributes: `#[name(arg1, arg2, ...)]`
         let mut attributes = Vec::new();
         while self.check(&TokenKind::Hash) {
@@ -49,7 +49,7 @@ impl Parser {
     }
 
     /// Parse a single attribute: `#[name(arg1, arg2, ...)]` or `#[name]`.
-    fn parse_attribute(&mut self) -> Result<Attribute, FerriError> {
+    fn parse_attribute(&mut self) -> Result<Attribute, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Hash)?;
         self.expect(TokenKind::LBracket)?;
@@ -87,7 +87,7 @@ impl Parser {
         })
     }
 
-    fn parse_module_def(&mut self, visibility: Visibility) -> Result<ModuleDef, FerriError> {
+    fn parse_module_def(&mut self, visibility: Visibility) -> Result<ModuleDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Mod)?;
         let name = self.expect_ident()?;
@@ -119,7 +119,10 @@ impl Parser {
         }
     }
 
-    pub(super) fn parse_use_def(&mut self, visibility: Visibility) -> Result<UseDef, FerriError> {
+    pub(super) fn parse_use_def(
+        &mut self,
+        visibility: Visibility,
+    ) -> Result<UseDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Use)?;
 
@@ -217,7 +220,7 @@ impl Parser {
         })
     }
 
-    fn parse_type_alias(&mut self) -> Result<Item, FerriError> {
+    fn parse_type_alias(&mut self) -> Result<Item, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Type)?;
         let name = self.expect_ident()?;
@@ -232,7 +235,7 @@ impl Parser {
         })
     }
 
-    fn parse_const_def(&mut self, is_static: bool) -> Result<Item, FerriError> {
+    fn parse_const_def(&mut self, is_static: bool) -> Result<Item, PipelineError> {
         let start_span = self.current_span();
         if is_static {
             self.expect(TokenKind::Static)?;
@@ -263,7 +266,7 @@ impl Parser {
         is_async: bool,
         attributes: Vec<Attribute>,
         visibility: Visibility,
-    ) -> Result<FnDef, FerriError> {
+    ) -> Result<FnDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Fn)?;
 
@@ -332,7 +335,7 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_param_list(&mut self) -> Result<Vec<Param>, FerriError> {
+    pub(super) fn parse_param_list(&mut self) -> Result<Vec<Param>, PipelineError> {
         let mut params = Vec::new();
 
         if self.check(&TokenKind::RParen) {
@@ -407,7 +410,7 @@ impl Parser {
         &mut self,
         attributes: Vec<Attribute>,
         visibility: Visibility,
-    ) -> Result<StructDef, FerriError> {
+    ) -> Result<StructDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Struct)?;
         let name = self.expect_ident()?;
@@ -501,7 +504,7 @@ impl Parser {
         &mut self,
         attributes: Vec<Attribute>,
         visibility: Visibility,
-    ) -> Result<EnumDef, FerriError> {
+    ) -> Result<EnumDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Enum)?;
         let name = self.expect_ident()?;
@@ -606,7 +609,7 @@ impl Parser {
     }
 
     /// Parse `impl Type { ... }` or `impl Trait for Type { ... }`
-    fn parse_impl_or_impl_trait(&mut self) -> Result<Item, FerriError> {
+    fn parse_impl_or_impl_trait(&mut self) -> Result<Item, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Impl)?;
         // Optional generic parameters on the impl block itself, e.g.
@@ -678,7 +681,7 @@ impl Parser {
 
     // === Trait parsing ===
 
-    fn parse_trait_def(&mut self, visibility: Visibility) -> Result<TraitDef, FerriError> {
+    fn parse_trait_def(&mut self, visibility: Visibility) -> Result<TraitDef, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Trait)?;
         let name = self.expect_ident()?;

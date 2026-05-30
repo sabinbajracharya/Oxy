@@ -209,11 +209,13 @@ Done **after** files are small enough to reason about. Targeted, not sweeping.
   any gaps so adding a stdlib module is "add a file + register," nothing else.
 - **Symbol source-of-truth:** verify nothing bypasses `symbols.rs` (the anti-pattern
   list already forbids raw method-name strings — audit for stragglers).
-- **Error types:** `FerriError` is a leftover from the Ferrite era (see CHANGELOG
-  v0.2.1). **Decision: rename it**, but to a **language-name-independent** identifier
-  so a future language rename doesn't drag the type name with it. Recommended:
-  idiomatic `Error` (exposed as `errors::Error`) or `PipelineError` — confirm at
-  rename time. Do **not** name it after "Oxy". Mechanical, wide diff → its own commit.
+- **Error types:** ✅ **done** — `FerriError` (a leftover from the Ferrite era, see
+  CHANGELOG v0.2.1) was renamed to the language-name-independent `PipelineError`
+  (329 references across `oxy-core`/`oxy-cli`/`oxy-lsp`, defined in `errors.rs`,
+  exposed as `errors::PipelineError`). The name spans the whole lexer → parser →
+  type-checker → runtime pipeline, which matches its variant set (it also carries the
+  `Return`/`Break`/`Continue` control-flow signals). Pure token rename + refreshed doc
+  comment; full suite green.
 
 Each item is its own commit with a clear before/after rationale.
 

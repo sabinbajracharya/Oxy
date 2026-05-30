@@ -12,7 +12,7 @@ impl TypeChecker {
         then_block: &Block,
         else_block: &Option<Box<Expr>>,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         self.infer_expr(condition)?;
         let then_ty = self.block_tail_type(then_block)?;
         let result = if let Some(else_expr) = else_block {
@@ -32,7 +32,7 @@ impl TypeChecker {
         then_block: &Block,
         else_block: &Option<Box<Expr>>,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let _ = self.infer_expr(inner)?;
         let saved = self.env.clone();
         self.env = TypeEnv::child(&saved);
@@ -56,10 +56,10 @@ impl TypeChecker {
         matched: &Expr,
         arms: &[MatchArm],
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let matched_ty = self.infer_expr(matched)?;
         if !self.match_is_exhaustive(&matched_ty, arms) {
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: "non-exhaustive match: add a `_ =>` arm or cover all cases".to_string(),
                 line: span.line,
                 column: span.column,
@@ -94,7 +94,7 @@ impl TypeChecker {
         Ok(leader)
     }
 
-    pub(super) fn infer_block(&mut self, block: &Block) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_block(&mut self, block: &Block) -> Result<TypeInfo, PipelineError> {
         let mut last_ty = TypeInfo::Unit;
         for (i, stmt) in block.stmts.iter().enumerate() {
             let is_last = i == block.stmts.len() - 1;
@@ -117,7 +117,7 @@ impl TypeChecker {
     pub(super) fn infer_return(
         &mut self,
         value: &Option<Box<Expr>>,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         if let Some(expr) = value {
             let _ = self.infer_expr(expr)?;
         }

@@ -2,7 +2,7 @@
 //!
 //! Provides process control and command execution mirroring `std::process`.
 
-use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, FerriError};
+use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -12,7 +12,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "exit" => {
             check_arg_count("std::process::exit", 1, args, span)?;
@@ -65,7 +65,7 @@ pub fn call(
 }
 
 /// Execute a command and return a struct with stdout, stderr, and status code.
-fn run_command(program: &str, args: &[&str], _span: &Span) -> Result<Value, FerriError> {
+fn run_command(program: &str, args: &[&str], _span: &Span) -> Result<Value, PipelineError> {
     match std::process::Command::new(program).args(args).output() {
         Ok(output) => {
             let mut fields = std::collections::HashMap::new();
@@ -100,7 +100,7 @@ fn run_spawn(
     args: &[String],
     callback: &Value,
     cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     use std::io::{BufRead, BufReader};
     use std::process::{Command, Stdio};
     use std::sync::mpsc;

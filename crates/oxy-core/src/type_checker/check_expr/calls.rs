@@ -11,7 +11,7 @@ impl TypeChecker {
         callee: &Expr,
         args: &[Expr],
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         if let Expr::Ident(name, _) = callee {
             // Resolve the callee's qualified name and look up its params.
             let resolved_key = if self.fn_param_types.contains_key(name) {
@@ -101,7 +101,7 @@ impl TypeChecker {
                         // spawn(|| expr) → JoinHandle<expr_type>. Exactly one
                         // argument, and it must be a closure.
                         if args.len() != 1 {
-                            return Err(FerriError::TypeError {
+                            return Err(PipelineError::TypeError {
                                 message: format!(
                                     "spawn expects exactly 1 argument (a closure), found {}",
                                     args.len()
@@ -113,7 +113,7 @@ impl TypeChecker {
                         let inner = if let Expr::Closure { body, .. } = &args[0] {
                             self.infer_expr(body)?
                         } else {
-                            return Err(FerriError::TypeError {
+                            return Err(PipelineError::TypeError {
                                 message: "spawn expects a closure argument, e.g. \
                                                   spawn(|| expr)"
                                     .to_string(),
@@ -126,7 +126,7 @@ impl TypeChecker {
                     "sleep" => {
                         // sleep(duration) → Unit. Exactly one argument.
                         if args.len() != 1 {
-                            return Err(FerriError::TypeError {
+                            return Err(PipelineError::TypeError {
                                 message: format!(
                                     "sleep expects exactly 1 argument (a duration), \
                                              found {}",
@@ -144,7 +144,7 @@ impl TypeChecker {
                         // JoinHandle args, or Unknown if they differ.
                         // Requires at least two handles to choose between.
                         if args.len() < 2 {
-                            return Err(FerriError::TypeError {
+                            return Err(PipelineError::TypeError {
                                 message: format!(
                                     "select expects at least 2 arguments (handles to \
                                              choose between), found {}",
@@ -200,7 +200,7 @@ impl TypeChecker {
             // Only check arg count when params are known (non-empty).
             // A bare `Fn` type has 0 params and accepts any arity.
             if !params.is_empty() && args.len() != params.len() {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!("expected {} arguments, found {}", params.len(), args.len()),
                     line: span.line,
                     column: span.column,
@@ -217,7 +217,7 @@ impl TypeChecker {
         method: &str,
         args: &[Expr],
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let obj_ty = self.infer_expr(object)?;
         if let TypeInfo::UserStruct {
             name: struct_name,
@@ -318,7 +318,7 @@ impl TypeChecker {
                     && !matches!(obj_ty, TypeInfo::UserStruct { .. })
                     && !self.method_exists_on(&obj_ty, method)
                 {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!("no method `{method}` on type `{}`", obj_ty.name()),
                         line: span.line,
                         column: span.column,
@@ -326,7 +326,7 @@ impl TypeChecker {
                 }
                 // Fixed-size arrays disallow Vec mutators.
                 if matches!(obj_ty, TypeInfo::Array(..)) && self.is_array_mutator(method) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                                 message: format!(
                                     "method `{method}` is not available on fixed-size arrays; convert to `Vec` first"
                                 ),
@@ -363,7 +363,7 @@ impl TypeChecker {
         path: &[String],
         args: &[Expr],
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let qualified = path.join("::");
         // Resolve key, mirroring the lookup order used for fn_return_types.
         let resolved_key = if self.fn_param_types.contains_key(&qualified) {
@@ -432,7 +432,7 @@ impl TypeChecker {
         &mut self,
         name: &str,
         args: &[Expr],
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         // Infer all args so nested calls / field accesses still get
         // type-checked.
         let arg_types: Vec<TypeInfo> = args
@@ -458,7 +458,7 @@ impl TypeChecker {
                     continue;
                 }
                 let espan = args[i].span();
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!(
                         "`vec!` has mixed element types: element {} is `{}`, expected `{}`",
                         i + 1,

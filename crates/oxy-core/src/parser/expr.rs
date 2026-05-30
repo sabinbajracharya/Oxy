@@ -1,7 +1,7 @@
 use super::*;
 
 impl Parser {
-    fn parse_struct_init(&mut self, name: String, start_span: Span) -> Result<Expr, FerriError> {
+    fn parse_struct_init(&mut self, name: String, start_span: Span) -> Result<Expr, PipelineError> {
         self.expect(TokenKind::LBrace)?;
         let mut fields = Vec::new();
         let mut base = None;
@@ -48,7 +48,7 @@ impl Parser {
 
     // === Expression parsing (Pratt / precedence climbing) ===
 
-    pub(super) fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, FerriError> {
+    pub(super) fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
         let mut left = self.parse_prefix()?;
 
         while !self.is_at_end() {
@@ -63,7 +63,7 @@ impl Parser {
         Ok(left)
     }
 
-    pub(super) fn parse_prefix(&mut self) -> Result<Expr, FerriError> {
+    pub(super) fn parse_prefix(&mut self) -> Result<Expr, PipelineError> {
         match self.peek_kind().clone() {
             // Literals
             TokenKind::IntLiteral(n, suffix) => {
@@ -580,7 +580,7 @@ impl Parser {
         }
     }
 
-    fn parse_infix(&mut self, left: Expr, prec: Precedence) -> Result<Expr, FerriError> {
+    fn parse_infix(&mut self, left: Expr, prec: Precedence) -> Result<Expr, PipelineError> {
         let op_span = self.current_span();
         let op_kind = self.peek_kind().clone();
 
@@ -782,7 +782,7 @@ impl Parser {
         )))
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, FerriError> {
+    fn parse_if_expr(&mut self) -> Result<Expr, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::If)?;
 
@@ -820,7 +820,7 @@ impl Parser {
         })
     }
 
-    fn parse_if_let_expr(&mut self, start_span: Span) -> Result<Expr, FerriError> {
+    fn parse_if_let_expr(&mut self, start_span: Span) -> Result<Expr, PipelineError> {
         self.expect(TokenKind::Let)?;
         let pattern = self.parse_pattern()?;
         self.expect(TokenKind::Eq)?;
@@ -863,7 +863,7 @@ impl Parser {
     }
 
     /// Parse a closure expression: `|params| expr` or `|params| { body }`
-    fn parse_closure(&mut self, is_async: bool) -> Result<Expr, FerriError> {
+    fn parse_closure(&mut self, is_async: bool) -> Result<Expr, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Pipe)?;
 
@@ -919,7 +919,7 @@ impl Parser {
     }
 
     /// Parse a closure with no params: `|| expr` or `|| { body }`
-    fn parse_empty_closure(&mut self, is_async: bool) -> Result<Expr, FerriError> {
+    fn parse_empty_closure(&mut self, is_async: bool) -> Result<Expr, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::PipePipe)?;
 
@@ -947,7 +947,7 @@ impl Parser {
         })
     }
 
-    fn parse_match_expr(&mut self) -> Result<Expr, FerriError> {
+    fn parse_match_expr(&mut self) -> Result<Expr, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Match)?;
 
@@ -998,7 +998,7 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_arg_list(&mut self) -> Result<Vec<Expr>, FerriError> {
+    pub(super) fn parse_arg_list(&mut self) -> Result<Vec<Expr>, PipelineError> {
         let mut args = Vec::new();
 
         if self.check(&TokenKind::RParen) || self.check(&TokenKind::RBracket) {
@@ -1021,7 +1021,7 @@ impl Parser {
 
     /// Parse turbofish: `::<Type1, Type2, ...>`.  Assumes `::` has just been consumed.
     /// Uses angle-bracket depth tracking to handle nested types like `Vec<i64>`.
-    pub(super) fn parse_turbofish(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
+    pub(super) fn parse_turbofish(&mut self) -> Result<Vec<TypeAnnotation>, PipelineError> {
         let mut depth: u32 = 1;
         let mut current_type = String::new();
         let mut type_start = self.current_span();

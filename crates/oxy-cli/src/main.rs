@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process;
 
 use colored::Colorize;
-use oxy_core::errors::{CallFrame, FerriError};
+use oxy_core::errors::{CallFrame, PipelineError};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -502,11 +502,11 @@ fn print_help() {
 }
 
 /// Display a rich error with colored output, source context, and optional stack trace.
-fn display_error(err: &FerriError, source: &str, call_stack: &[CallFrame]) {
+fn display_error(err: &PipelineError, source: &str, call_stack: &[CallFrame]) {
     let is_tty = atty_stderr();
 
     match err {
-        FerriError::Runtime {
+        PipelineError::Runtime {
             message,
             line,
             column,
@@ -544,7 +544,7 @@ fn display_error(err: &FerriError, source: &str, call_stack: &[CallFrame]) {
                 }
             }
         }
-        FerriError::Parser {
+        PipelineError::Parser {
             message,
             line,
             column,
@@ -554,7 +554,7 @@ fn display_error(err: &FerriError, source: &str, call_stack: &[CallFrame]) {
                 print_source_context(source, *line, *column, is_tty);
             }
         }
-        FerriError::Lexer {
+        PipelineError::Lexer {
             message,
             line,
             column,

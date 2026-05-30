@@ -8,7 +8,7 @@
 //! Registered in `stdlib::registry::MODULES`. When the `http` cargo feature
 //! is disabled this dispatcher returns a clear error from every call.
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -69,10 +69,10 @@ pub fn call(
     args: &[Value],
     _span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     let body_arg = || args.get(1).map(|v| v.to_string());
     let lift = |r: Result<Value, String>| {
-        r.map_err(|e| FerriError::Runtime {
+        r.map_err(|e| PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -85,7 +85,7 @@ pub fn call(
         "delete" => lift(http_call("DELETE", args, None)),
         "fetch" => Ok(fetch_get(args)),
         "fetch_post" => Ok(fetch_post(args)),
-        other => Err(FerriError::Runtime {
+        other => Err(PipelineError::Runtime {
             message: format!("unknown http function `http::{other}`"),
             line: 0,
             column: 0,
@@ -99,8 +99,8 @@ pub fn call(
     _args: &[Value],
     _span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
-    Err(FerriError::Runtime {
+) -> Result<Value, PipelineError> {
+    Err(PipelineError::Runtime {
         message: "`http::` is not available in this build (the `http` feature is disabled)".into(),
         line: 0,
         column: 0,

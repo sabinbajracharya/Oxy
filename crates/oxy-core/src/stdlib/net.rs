@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 
-use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, FerriError};
+use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -16,7 +16,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         // --- TCP ---
         "tcp_connect" => {

@@ -3,7 +3,7 @@
 //! Parses a token stream into an AST. Operator precedence follows Rust's rules.
 
 use crate::ast::*;
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::{Span, Token, TokenKind};
 use crate::types::{ERR_VARIANT, NONE_VARIANT, OK_VARIANT, OPTION_TYPE, RESULT_TYPE, SOME_VARIANT};
 
@@ -124,7 +124,7 @@ impl Parser {
     }
 
     /// Parse the tokens into a [`Program`].
-    pub fn parse(mut self) -> Result<Program, FerriError> {
+    pub fn parse(mut self) -> Result<Program, PipelineError> {
         let start_span = self.current_span();
         let mut items = Vec::new();
 
@@ -191,7 +191,7 @@ impl Parser {
         }
     }
 
-    fn expect(&mut self, kind: TokenKind) -> Result<&Token, FerriError> {
+    fn expect(&mut self, kind: TokenKind) -> Result<&Token, PipelineError> {
         if self.check(&kind) {
             Ok(self.advance())
         } else {
@@ -203,7 +203,7 @@ impl Parser {
         }
     }
 
-    fn expect_ident(&mut self) -> Result<String, FerriError> {
+    fn expect_ident(&mut self) -> Result<String, PipelineError> {
         match self.peek_kind().clone() {
             TokenKind::Ident(name) => {
                 self.advance();
@@ -222,7 +222,7 @@ impl Parser {
     }
 
     /// Like `expect_ident` but also accepts `self`, `super`, `crate`, `Self` as path segments.
-    fn expect_path_segment(&mut self) -> Result<String, FerriError> {
+    fn expect_path_segment(&mut self) -> Result<String, PipelineError> {
         match self.peek_kind().clone() {
             TokenKind::Ident(name) => {
                 self.advance();
@@ -251,9 +251,9 @@ impl Parser {
         }
     }
 
-    fn error(&self, message: String) -> FerriError {
+    fn error(&self, message: String) -> PipelineError {
         let span = self.current_span();
-        FerriError::Parser {
+        PipelineError::Parser {
             message,
             line: span.line,
             column: span.column,
@@ -265,7 +265,11 @@ impl Parser {
     }
 
     /// Parse the raw content of an f-string into `FStringPart`s.
-    fn parse_fstring_parts(&self, raw: &str, span: Span) -> Result<Vec<FStringPart>, FerriError> {
+    fn parse_fstring_parts(
+        &self,
+        raw: &str,
+        span: Span,
+    ) -> Result<Vec<FStringPart>, PipelineError> {
         let mut parts = Vec::new();
         let mut literal = String::new();
         let chars: Vec<char> = raw.chars().collect();
@@ -302,7 +306,7 @@ impl Parser {
                     i += 1;
                 }
                 if depth > 0 {
-                    return Err(FerriError::Parser {
+                    return Err(PipelineError::Parser {
                         message: "unterminated interpolation in f-string".into(),
                         line: span.line,
                         column: span.column,
@@ -310,7 +314,7 @@ impl Parser {
                 }
                 // Parse the expression text via a sub-parser
                 let tokens =
-                    crate::lexer::tokenize(&expr_text).map_err(|_| FerriError::Parser {
+                    crate::lexer::tokenize(&expr_text).map_err(|_| PipelineError::Parser {
                         message: format!("failed to tokenize f-string expression: {expr_text}"),
                         line: span.line,
                         column: span.column,
@@ -319,7 +323,7 @@ impl Parser {
                 let expr =
                     sub_parser
                         .parse_expr(Precedence::None)
-                        .map_err(|_| FerriError::Parser {
+                        .map_err(|_| PipelineError::Parser {
                             message: format!("failed to parse f-string expression: {expr_text}"),
                             line: span.line,
                             column: span.column,
@@ -349,7 +353,7 @@ impl Parser {
 }
 
 /// Convenience function to parse source code into an AST.
-pub fn parse(source: &str) -> Result<Program, FerriError> {
+pub fn parse(source: &str) -> Result<Program, PipelineError> {
     let tokens = crate::lexer::tokenize(source)?;
     Parser::new(tokens).parse()
 }

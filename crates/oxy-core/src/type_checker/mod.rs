@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::*;
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::symbols;
 
@@ -116,7 +116,7 @@ impl TypeInfo {
         }
     }
 
-    pub fn from_annotation(ann: &Option<TypeAnnotation>) -> Result<TypeInfo, FerriError> {
+    pub fn from_annotation(ann: &Option<TypeAnnotation>) -> Result<TypeInfo, PipelineError> {
         let ann = match ann {
             Some(a) => a,
             None => return Ok(TypeInfo::Unknown),
@@ -148,8 +148,8 @@ impl TypeInfo {
     pub fn apply_generics(
         head: TypeInfo,
         generic_args: &[TypeAnnotation],
-    ) -> Result<TypeInfo, FerriError> {
-        let arg = |i: usize| -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
+        let arg = |i: usize| -> Result<TypeInfo, PipelineError> {
             match generic_args.get(i) {
                 Some(a) => Self::from_annotation(&Some(a.clone())),
                 None => Ok(TypeInfo::Unknown),
@@ -522,7 +522,7 @@ impl Default for TypeChecker {
 }
 
 impl TypeChecker {
-    pub fn check_program(&mut self, program: &Program) -> Result<(), FerriError> {
+    pub fn check_program(&mut self, program: &Program) -> Result<(), PipelineError> {
         // First pass: collect struct defs, type aliases, and use aliases
         self.collect_defs(&program.items, "");
 

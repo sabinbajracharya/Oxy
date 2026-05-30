@@ -6,7 +6,7 @@ mod token;
 
 pub use token::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind};
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 
 /// Lexer that tokenizes Oxy source code.
 pub struct Lexer<'src> {
@@ -36,7 +36,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// Tokenize the entire source, returning all tokens including a trailing `Eof`.
-    pub fn tokenize(mut self) -> Result<Vec<Token>, FerriError> {
+    pub fn tokenize(mut self) -> Result<Vec<Token>, PipelineError> {
         let mut tokens = Vec::new();
 
         loop {
@@ -52,7 +52,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// Scan the next token from the source.
-    fn next_token(&mut self) -> Result<Token, FerriError> {
+    fn next_token(&mut self) -> Result<Token, PipelineError> {
         self.skip_whitespace_and_comments()?;
 
         if self.is_at_end() {
@@ -255,7 +255,7 @@ impl<'src> Lexer<'src> {
             }
 
             other => {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: format!("unexpected character '{other}'"),
                     line: self.line,
                     column: self.column - 1,
@@ -268,14 +268,14 @@ impl<'src> Lexer<'src> {
 
     // === Scanning helpers ===
 
-    fn scan_string(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+    fn scan_string(&mut self, _start_offset: usize) -> Result<TokenKind, PipelineError> {
         let start_line = self.line;
         let start_col = self.column;
         let mut value = String::new();
 
         loop {
             if self.is_at_end() {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: "unterminated string literal".into(),
                     line: start_line,
                     column: start_col - 1,
@@ -287,7 +287,7 @@ impl<'src> Lexer<'src> {
                 '"' => break,
                 '\\' => {
                     if self.is_at_end() {
-                        return Err(FerriError::Lexer {
+                        return Err(PipelineError::Lexer {
                             message: "unterminated escape sequence in string".into(),
                             line: self.line,
                             column: self.column,
@@ -311,7 +311,7 @@ impl<'src> Lexer<'src> {
                             value.push(ch);
                         }
                         _ => {
-                            return Err(FerriError::Lexer {
+                            return Err(PipelineError::Lexer {
                                 message: format!("unknown escape sequence '\\{escaped}'"),
                                 line: self.line,
                                 column: self.column - 1,
@@ -328,14 +328,14 @@ impl<'src> Lexer<'src> {
 
     /// Scan an f-string literal: `f"..."`. The opening `f"` has already been consumed.
     /// The raw content (including `{expr}` segments) is stored as-is.
-    fn scan_fstring(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+    fn scan_fstring(&mut self, _start_offset: usize) -> Result<TokenKind, PipelineError> {
         let start_line = self.line;
         let start_col = self.column;
         let mut raw = String::new();
 
         loop {
             if self.is_at_end() {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: "unterminated f-string literal".into(),
                     line: start_line,
                     column: start_col - 1,
@@ -347,7 +347,7 @@ impl<'src> Lexer<'src> {
                 '"' => break,
                 '\\' => {
                     if self.is_at_end() {
-                        return Err(FerriError::Lexer {
+                        return Err(PipelineError::Lexer {
                             message: "unterminated escape sequence in f-string".into(),
                             line: self.line,
                             column: self.column,
@@ -363,7 +363,7 @@ impl<'src> Lexer<'src> {
                         '0' => raw.push('\0'),
                         '\'' => raw.push('\''),
                         _ => {
-                            return Err(FerriError::Lexer {
+                            return Err(PipelineError::Lexer {
                                 message: format!("unknown escape sequence '\\{escaped}'"),
                                 line: self.line,
                                 column: self.column - 1,
@@ -403,7 +403,7 @@ impl<'src> Lexer<'src> {
                             }
                         }
                         if depth > 0 {
-                            return Err(FerriError::Lexer {
+                            return Err(PipelineError::Lexer {
                                 message: "unterminated interpolation in f-string".into(),
                                 line: start_line,
                                 column: start_col - 1,
@@ -428,7 +428,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// Scan a raw string literal: `r"..."` or `r#"..."#`.
-    fn scan_raw_string(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+    fn scan_raw_string(&mut self, _start_offset: usize) -> Result<TokenKind, PipelineError> {
         // Count opening hash characters (for r#"..."# style)
         let mut hash_count = 0usize;
         while !self.is_at_end() && self.peek() == '#' {
@@ -437,7 +437,7 @@ impl<'src> Lexer<'src> {
         }
         // Expect opening quote
         if self.is_at_end() || self.peek() != '"' {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "expected '\"' after r\" or r#\"".into(),
                 line: self.line,
                 column: self.column,
@@ -468,16 +468,16 @@ impl<'src> Lexer<'src> {
             }
         }
 
-        Err(FerriError::Lexer {
+        Err(PipelineError::Lexer {
             message: "unterminated raw string literal".into(),
             line: self.line,
             column: self.column,
         })
     }
 
-    fn scan_char(&mut self, _start_offset: usize) -> Result<TokenKind, FerriError> {
+    fn scan_char(&mut self, _start_offset: usize) -> Result<TokenKind, PipelineError> {
         if self.is_at_end() {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "unterminated character literal".into(),
                 line: self.line,
                 column: self.column,
@@ -487,7 +487,7 @@ impl<'src> Lexer<'src> {
         let ch = self.advance();
         let value = if ch == '\\' {
             if self.is_at_end() {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: "unterminated escape sequence in character literal".into(),
                     line: self.line,
                     column: self.column,
@@ -505,7 +505,7 @@ impl<'src> Lexer<'src> {
                 'x' => self.scan_hex_escape(2)?,
                 'u' => self.scan_unicode_escape()?,
                 _ => {
-                    return Err(FerriError::Lexer {
+                    return Err(PipelineError::Lexer {
                         message: format!("unknown escape sequence '\\{escaped}'"),
                         line: self.line,
                         column: self.column - 1,
@@ -517,7 +517,7 @@ impl<'src> Lexer<'src> {
         };
 
         if !self.match_char('\'') {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "unterminated character literal (expected closing ')".into(),
                 line: self.line,
                 column: self.column,
@@ -527,11 +527,11 @@ impl<'src> Lexer<'src> {
         Ok(TokenKind::CharLiteral(value))
     }
 
-    fn scan_hex_escape(&mut self, digits: usize) -> Result<char, FerriError> {
+    fn scan_hex_escape(&mut self, digits: usize) -> Result<char, PipelineError> {
         let mut hex = String::with_capacity(digits);
         for _ in 0..digits {
             if self.is_at_end() || !self.peek().is_ascii_hexdigit() {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: format!("expected {digits} hex digits in escape sequence"),
                     line: self.line,
                     column: self.column,
@@ -539,21 +539,21 @@ impl<'src> Lexer<'src> {
             }
             hex.push(self.advance());
         }
-        let code = u32::from_str_radix(&hex, 16).map_err(|_| FerriError::Lexer {
+        let code = u32::from_str_radix(&hex, 16).map_err(|_| PipelineError::Lexer {
             message: format!("invalid hex escape '\\x{hex}'"),
             line: self.line,
             column: self.column,
         })?;
-        char::from_u32(code).ok_or_else(|| FerriError::Lexer {
+        char::from_u32(code).ok_or_else(|| PipelineError::Lexer {
             message: format!("invalid character code in hex escape: {code}"),
             line: self.line,
             column: self.column,
         })
     }
 
-    fn scan_unicode_escape(&mut self) -> Result<char, FerriError> {
+    fn scan_unicode_escape(&mut self) -> Result<char, PipelineError> {
         if !self.match_char('{') {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "expected '{' in unicode escape sequence".into(),
                 line: self.line,
                 column: self.column,
@@ -562,7 +562,7 @@ impl<'src> Lexer<'src> {
         let mut hex = String::new();
         while !self.is_at_end() && self.peek() != '}' {
             if !self.peek().is_ascii_hexdigit() {
-                return Err(FerriError::Lexer {
+                return Err(PipelineError::Lexer {
                     message: "invalid character in unicode escape".into(),
                     line: self.line,
                     column: self.column,
@@ -571,32 +571,36 @@ impl<'src> Lexer<'src> {
             hex.push(self.advance());
         }
         if !self.match_char('}') {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "expected '}' to close unicode escape".into(),
                 line: self.line,
                 column: self.column,
             });
         }
         if hex.is_empty() || hex.len() > 6 {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: "unicode escape must have 1-6 hex digits".into(),
                 line: self.line,
                 column: self.column,
             });
         }
-        let code = u32::from_str_radix(&hex, 16).map_err(|_| FerriError::Lexer {
+        let code = u32::from_str_radix(&hex, 16).map_err(|_| PipelineError::Lexer {
             message: format!("invalid unicode escape '\\u{{{hex}}}'"),
             line: self.line,
             column: self.column,
         })?;
-        char::from_u32(code).ok_or_else(|| FerriError::Lexer {
+        char::from_u32(code).ok_or_else(|| PipelineError::Lexer {
             message: format!("invalid unicode code point: U+{code:04X}"),
             line: self.line,
             column: self.column,
         })
     }
 
-    fn scan_number(&mut self, first: char, _start_offset: usize) -> Result<TokenKind, FerriError> {
+    fn scan_number(
+        &mut self,
+        first: char,
+        _start_offset: usize,
+    ) -> Result<TokenKind, PipelineError> {
         let mut num_str = String::new();
         num_str.push(first);
 
@@ -615,7 +619,7 @@ impl<'src> Lexer<'src> {
                     }
                     self.reject_literal_suffix()?;
                     let val =
-                        parse_int_literal(&num_str[2..], 16).map_err(|_| FerriError::Lexer {
+                        parse_int_literal(&num_str[2..], 16).map_err(|_| PipelineError::Lexer {
                             message: format!("invalid hex literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
@@ -632,7 +636,7 @@ impl<'src> Lexer<'src> {
                     }
                     self.reject_literal_suffix()?;
                     let val =
-                        parse_int_literal(&num_str[2..], 8).map_err(|_| FerriError::Lexer {
+                        parse_int_literal(&num_str[2..], 8).map_err(|_| PipelineError::Lexer {
                             message: format!("invalid octal literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
@@ -651,7 +655,7 @@ impl<'src> Lexer<'src> {
                     }
                     self.reject_literal_suffix()?;
                     let val =
-                        parse_int_literal(&num_str[2..], 2).map_err(|_| FerriError::Lexer {
+                        parse_int_literal(&num_str[2..], 2).map_err(|_| PipelineError::Lexer {
                             message: format!("invalid binary literal '{num_str}'"),
                             line: self.line,
                             column: self.column,
@@ -716,7 +720,7 @@ impl<'src> Lexer<'src> {
         }
 
         if !suffix_str.is_empty() {
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: format!(
                     "literal suffix `{suffix_str}` is not supported in Oxy. \
                      Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
@@ -726,7 +730,7 @@ impl<'src> Lexer<'src> {
             });
         }
         if is_float {
-            let val: f64 = num_str.parse().map_err(|_| FerriError::Lexer {
+            let val: f64 = num_str.parse().map_err(|_| PipelineError::Lexer {
                 message: format!("invalid float literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
@@ -737,7 +741,7 @@ impl<'src> Lexer<'src> {
             // (reinterpreted as i64) — matches hex/octal/binary behavior so
             // `9223372036854775808` (= i64::MIN as u64) tokenizes successfully
             // and a unary `-` in front of it produces i64::MIN.
-            let val: i64 = parse_int_literal(&num_str, 10).map_err(|_| FerriError::Lexer {
+            let val: i64 = parse_int_literal(&num_str, 10).map_err(|_| PipelineError::Lexer {
                 message: format!("invalid integer literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
@@ -765,7 +769,7 @@ impl<'src> Lexer<'src> {
 
     // === Whitespace and comment handling ===
 
-    fn skip_whitespace_and_comments(&mut self) -> Result<(), FerriError> {
+    fn skip_whitespace_and_comments(&mut self) -> Result<(), PipelineError> {
         loop {
             // Skip whitespace
             while !self.is_at_end() && self.peek().is_ascii_whitespace() {
@@ -807,7 +811,7 @@ impl<'src> Lexer<'src> {
                     }
                 }
                 if depth > 0 {
-                    return Err(FerriError::Lexer {
+                    return Err(PipelineError::Lexer {
                         message: "unterminated block comment".into(),
                         line: start_line,
                         column: start_col,
@@ -865,14 +869,14 @@ impl<'src> Lexer<'src> {
     /// (e.g. `123`, `0xFFu8`, `3.14`), reject it with a fix-it
     /// error. Oxy's only integer/float types are `int`, `byte`, `float`,
     /// reached via typed bindings or `as` casts — never via suffixes.
-    fn reject_literal_suffix(&mut self) -> Result<(), FerriError> {
+    fn reject_literal_suffix(&mut self) -> Result<(), PipelineError> {
         if !self.is_at_end() && (self.peek() == 'i' || self.peek() == 'u' || self.peek() == 'f') {
             let mut suffix = String::new();
             suffix.push(self.advance());
             while !self.is_at_end() && self.peek().is_ascii_digit() {
                 suffix.push(self.advance());
             }
-            return Err(FerriError::Lexer {
+            return Err(PipelineError::Lexer {
                 message: format!(
                     "literal suffix `{suffix}` is not supported in Oxy. \
                      Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
@@ -912,7 +916,7 @@ impl<'src> Lexer<'src> {
 }
 
 /// Convenience function to tokenize a source string.
-pub fn tokenize(source: &str) -> Result<Vec<Token>, FerriError> {
+pub fn tokenize(source: &str) -> Result<Vec<Token>, PipelineError> {
     Lexer::new(source).tokenize()
 }
 

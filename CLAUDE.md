@@ -153,7 +153,7 @@ crates/oxy-core/src/
 ├── env/mod.rs                   #   Lexical scope chain
 ├── json/mod.rs                  #   Hand-written JSON ser/de
 ├── http/mod.rs                  #   HTTP client (ureq wrapper)
-└── errors.rs                    #   FerriError: Lexer, Parser, TypeError, Runtime
+└── errors.rs                    #   PipelineError: Lexer, Parser, TypeError, Runtime
 crates/oxy-cli/src/main.rs       #   CLI binary: run, test, repl (run_repl lives here)
 crates/oxy-lsp/src/main.rs       #   LSP server (tower-lsp)
 crates/oxy-tug/                  #   Package manager (tug)

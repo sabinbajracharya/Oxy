@@ -22,7 +22,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -32,7 +32,7 @@ use crate::types::Value;
 pub type ClosureInvoker<'a> = &'a mut dyn FnMut(&Value, &[Value]) -> Result<Value, String>;
 
 pub type ModuleCall =
-    for<'a> fn(&str, &[Value], &Span, ClosureInvoker<'a>) -> Result<Value, FerriError>;
+    for<'a> fn(&str, &[Value], &Span, ClosureInvoker<'a>) -> Result<Value, PipelineError>;
 pub type ItemHandler = fn(&[Value]) -> Result<Value, String>;
 
 pub struct Module {

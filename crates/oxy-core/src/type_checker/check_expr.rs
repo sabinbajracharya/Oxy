@@ -120,11 +120,11 @@ impl TypeChecker {
         &mut self,
         expr: &Expr,
         expected: &TypeInfo,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         let inferred = self.infer_expr(expr)?;
         if !expected.accepts(&inferred) {
             let span = expr.span();
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!(
                     "type mismatch: expected `{}`, got `{}`",
                     expected.name(),
@@ -151,7 +151,7 @@ impl TypeChecker {
         display_name: &str,
         fn_key: Option<&str>,
         span: Span,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         self.check_args_against_params_with_bindings(
             params,
             args,
@@ -175,14 +175,14 @@ impl TypeChecker {
         fn_key: Option<&str>,
         initial_bindings: &HashMap<String, TypeInfo>,
         span: Span,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         let effective: &[TypeInfo] = if skip_self && !params.is_empty() {
             &params[1..]
         } else {
             params
         };
         if args.len() != effective.len() {
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!(
                     "wrong number of arguments to `{display_name}`: expected {}, got {}",
                     effective.len(),
@@ -212,7 +212,7 @@ impl TypeChecker {
                         bind_generic_params(ann, arg_ty, generic_names, &mut bindings, i)
                     {
                         let arg_span = args[i].span();
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message: format!(
                                 "type mismatch in call to `{display_name}`: argument {} - {msg}",
                                 i + 1,
@@ -229,7 +229,7 @@ impl TypeChecker {
         for (i, (param_ty, arg_ty)) in effective.iter().zip(arg_types.iter()).enumerate() {
             if !param_ty.accepts(arg_ty) {
                 let arg_span = args[i].span();
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!(
                         "type mismatch in call to `{display_name}`: argument {} expected `{}`, got `{}`",
                         i + 1,
@@ -247,7 +247,7 @@ impl TypeChecker {
     /// Infers the type of an expression. This is a thin dispatcher: each
     /// non-trivial variant is handled by a dedicated `infer_<variant>` method
     /// below, so this `match` stays a readable table of the expression grammar.
-    pub(super) fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, PipelineError> {
         match expr {
             Expr::IntLiteral(..) => Ok(TypeInfo::I64),
             Expr::FloatLiteral(..) => Ok(TypeInfo::F64),

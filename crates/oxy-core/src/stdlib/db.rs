@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use rusqlite::{params_from_iter, types::Value as SqlValue, Connection};
 
-use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, FerriError};
+use crate::errors::{check_arg_count, expect_integer, expect_string, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -40,7 +40,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "open" => {
             check_arg_count("std::db::open", 1, args, span)?;
@@ -76,7 +76,9 @@ pub fn call(
             };
             match execute(&conn, sql, &args[2..], span) {
                 Ok(v) => Ok(Value::ok(v)),
-                Err(FerriError::Runtime { message, .. }) => Ok(Value::err(Value::String(message))),
+                Err(PipelineError::Runtime { message, .. }) => {
+                    Ok(Value::err(Value::String(message)))
+                }
                 Err(e) => Err(e),
             }
         }
@@ -99,7 +101,9 @@ pub fn call(
             };
             match query(&conn, sql, &args[2..], span) {
                 Ok(v) => Ok(Value::ok(v)),
-                Err(FerriError::Runtime { message, .. }) => Ok(Value::err(Value::String(message))),
+                Err(PipelineError::Runtime { message, .. }) => {
+                    Ok(Value::err(Value::String(message)))
+                }
                 Err(e) => Err(e),
             }
         }
@@ -125,8 +129,8 @@ pub fn call(
 }
 
 /// Open a SQLite database file. Creates the file if it doesn't exist.
-pub fn open(path: &str, span: &Span) -> Result<Connection, FerriError> {
-    Connection::open(path).map_err(|e| FerriError::Runtime {
+pub fn open(path: &str, span: &Span) -> Result<Connection, PipelineError> {
+    Connection::open(path).map_err(|e| PipelineError::Runtime {
         message: format!("failed to open database '{path}': {e}"),
         line: span.line,
         column: span.column,
@@ -134,8 +138,8 @@ pub fn open(path: &str, span: &Span) -> Result<Connection, FerriError> {
 }
 
 /// Open an in-memory SQLite database.
-pub fn open_in_memory(span: &Span) -> Result<Connection, FerriError> {
-    Connection::open_in_memory().map_err(|e| FerriError::Runtime {
+pub fn open_in_memory(span: &Span) -> Result<Connection, PipelineError> {
+    Connection::open_in_memory().map_err(|e| PipelineError::Runtime {
         message: format!("failed to open in-memory database: {e}"),
         line: span.line,
         column: span.column,
@@ -149,11 +153,11 @@ pub fn execute(
     sql: &str,
     params: &[Value],
     span: &Span,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     let sql_params = convert_params(params, span)?;
     let affected = conn
         .execute(sql, params_from_iter(sql_params.iter()))
-        .map_err(|e| FerriError::Runtime {
+        .map_err(|e| PipelineError::Runtime {
             message: format!("SQL execute error: {e}"),
             line: span.line,
             column: span.column,
@@ -167,9 +171,9 @@ pub fn query(
     sql: &str,
     params: &[Value],
     span: &Span,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     let sql_params = convert_params(params, span)?;
-    let mut stmt = conn.prepare(sql).map_err(|e| FerriError::Runtime {
+    let mut stmt = conn.prepare(sql).map_err(|e| PipelineError::Runtime {
         message: format!("SQL prepare error: {e}"),
         line: span.line,
         column: span.column,
@@ -186,7 +190,7 @@ pub fn query(
             }
             Ok(fields)
         })
-        .map_err(|e| FerriError::Runtime {
+        .map_err(|e| PipelineError::Runtime {
             message: format!("SQL query error: {e}"),
             line: span.line,
             column: span.column,
@@ -194,7 +198,7 @@ pub fn query(
 
     let mut result = Vec::new();
     for row in rows {
-        let fields = row.map_err(|e| FerriError::Runtime {
+        let fields = row.map_err(|e| PipelineError::Runtime {
             message: format!("SQL row error: {e}"),
             line: span.line,
             column: span.column,
@@ -216,7 +220,7 @@ pub fn last_insert_id(conn: &Connection) -> Value {
 }
 
 /// Convert Oxy Values to rusqlite-compatible parameters.
-fn convert_params(params: &[Value], span: &Span) -> Result<Vec<SqlValue>, FerriError> {
+fn convert_params(params: &[Value], span: &Span) -> Result<Vec<SqlValue>, PipelineError> {
     params
         .iter()
         .map(|v| match v {
@@ -225,7 +229,7 @@ fn convert_params(params: &[Value], span: &Span) -> Result<Vec<SqlValue>, FerriE
             Value::String(s) => Ok(SqlValue::Text(s.clone())),
             Value::Bool(b) => Ok(SqlValue::Integer(if *b { 1 } else { 0 })),
             Value::Unit => Ok(SqlValue::Null),
-            _ => Err(FerriError::Runtime {
+            _ => Err(PipelineError::Runtime {
                 message: format!("cannot use {} as SQL parameter", v.type_name()),
                 line: span.line,
                 column: span.column,

@@ -1,7 +1,11 @@
 use super::*;
 
 impl TypeChecker {
-    pub(super) fn check_stmt(&mut self, stmt: &Stmt, fn_ret: &TypeInfo) -> Result<(), FerriError> {
+    pub(super) fn check_stmt(
+        &mut self,
+        stmt: &Stmt,
+        fn_ret: &TypeInfo,
+    ) -> Result<(), PipelineError> {
         match stmt {
             Stmt::Let {
                 name,
@@ -23,7 +27,7 @@ impl TypeChecker {
                     TypeInfo::Unknown
                 };
                 if !declared.accepts(&inferred) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "type mismatch: variable `{name}` declared as `{}`, but value has type `{}`",
                             declared.display_name(), inferred.display_name()
@@ -51,7 +55,7 @@ impl TypeChecker {
                     let inferred = self.infer_expr(expr)?;
                     if inferred != TypeInfo::Unit && !fn_ret.accepts(&inferred) {
                         let span = expr.span();
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message: format!(
                                 "type mismatch: function returns `{}`, but tail expression has type `{}`",
                                 fn_ret.name(), inferred.name()
@@ -116,7 +120,7 @@ impl TypeChecker {
                     TypeInfo::Unit
                 };
                 if !fn_ret.accepts(&inferred) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "type mismatch: function returns `{}`, but return expression has type `{}`",
                             fn_ret.name(), inferred.name()
@@ -171,7 +175,7 @@ impl TypeChecker {
                 self.env = body_env;
                 self.bind_pattern(pattern, false);
                 self.loop_depth += 1;
-                let result = (|| -> Result<(), FerriError> {
+                let result = (|| -> Result<(), PipelineError> {
                     for s in &body.stmts {
                         self.check_stmt(s, fn_ret)?;
                     }
@@ -212,7 +216,7 @@ impl TypeChecker {
             }
             Stmt::Break { span, .. } => {
                 if self.loop_depth == 0 {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: "break outside of loop".into(),
                         line: span.line,
                         column: span.column,
@@ -222,7 +226,7 @@ impl TypeChecker {
             }
             Stmt::Continue { span, .. } => {
                 if self.loop_depth == 0 {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: "continue outside of loop".into(),
                         line: span.line,
                         column: span.column,
@@ -303,7 +307,7 @@ impl TypeChecker {
         &mut self,
         block: &Block,
         fn_ret: &TypeInfo,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         let block_env = TypeEnv::child(&self.env);
         let saved = self.env.clone();
         self.env = block_env;

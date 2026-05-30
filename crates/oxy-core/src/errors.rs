@@ -2,9 +2,12 @@
 
 use crate::types::Value;
 
-/// Errors produced by the Oxy interpreter.
+/// Errors surfaced anywhere in the compile/run pipeline (lexer → parser →
+/// type checker → runtime), plus the non-error control-flow signals
+/// (`Return`/`Break`/`Continue`) that ride the same `Result` channel and are
+/// caught at function/loop boundaries.
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum FerriError {
+pub enum PipelineError {
     /// Lexer error with source location.
     #[error("[{line}:{column}] {message}")]
     Lexer {
@@ -47,9 +50,9 @@ pub enum FerriError {
     Continue(Option<String>),
 }
 
-/// Shorthand constructor for `FerriError::Runtime`.
-pub fn runtime_error(message: impl Into<String>, span: &crate::lexer::Span) -> FerriError {
-    FerriError::Runtime {
+/// Shorthand constructor for `PipelineError::Runtime`.
+pub fn runtime_error(message: impl Into<String>, span: &crate::lexer::Span) -> PipelineError {
+    PipelineError::Runtime {
         message: message.into(),
         line: span.line,
         column: span.column,
@@ -62,7 +65,7 @@ pub fn check_arg_count(
     expected: usize,
     args: &[crate::types::Value],
     span: &crate::lexer::Span,
-) -> Result<(), FerriError> {
+) -> Result<(), PipelineError> {
     if args.len() != expected {
         return Err(runtime_error(
             format!("{name}() takes {expected} argument(s), got {}", args.len()),
@@ -77,7 +80,7 @@ pub fn expect_string<'a>(
     val: &'a crate::types::Value,
     context: &str,
     span: &crate::lexer::Span,
-) -> Result<&'a str, FerriError> {
+) -> Result<&'a str, PipelineError> {
     match val {
         crate::types::Value::String(s) => Ok(s.as_str()),
         _ => Err(runtime_error(
@@ -92,7 +95,7 @@ pub fn expect_integer(
     val: &crate::types::Value,
     context: &str,
     span: &crate::lexer::Span,
-) -> Result<i64, FerriError> {
+) -> Result<i64, PipelineError> {
     match val {
         crate::types::Value::I64(n) => Ok(*n),
         _ => Err(runtime_error(

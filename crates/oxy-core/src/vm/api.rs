@@ -9,9 +9,9 @@ use std::path::PathBuf;
 use super::VmResult;
 use crate::types::Value;
 
-/// Wrap a backend message string as a runtime `FerriError` (line/column unknown).
-fn runtime_error(message: String) -> crate::errors::FerriError {
-    crate::errors::FerriError::Runtime {
+/// Wrap a backend message string as a runtime `PipelineError` (line/column unknown).
+fn runtime_error(message: String) -> crate::errors::PipelineError {
+    crate::errors::PipelineError::Runtime {
         message,
         line: 0,
         column: 0,
@@ -27,7 +27,7 @@ fn runtime_error(message: String) -> crate::errors::FerriError {
 
 /// Compile and run using the Cranelift JIT backend.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_compiled_jit(source: &str) -> Result<Value, crate::errors::FerriError> {
+pub fn run_compiled_jit(source: &str) -> Result<Value, crate::errors::PipelineError> {
     run_compiled_jit_with_options(source, None, HashMap::new())
 }
 
@@ -37,16 +37,16 @@ pub fn run_compiled_jit_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::FerriError> {
+) -> Result<Value, crate::errors::PipelineError> {
     let mut jit_vm = super::jit::JitVm::compile_with_options(source, source_path, externs)
-        .map_err(|e| crate::errors::FerriError::Runtime {
+        .map_err(|e| crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
         })?;
     match jit_vm.run() {
         VmResult::Value(v) => Ok(v),
-        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime {
+        VmResult::Error(e) => Err(crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -58,9 +58,9 @@ pub fn run_compiled_jit_with_options(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_compiled_capturing_jit(
     source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
+) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
     let mut jit_vm =
-        super::jit::JitVm::compile(source).map_err(|e| crate::errors::FerriError::Runtime {
+        super::jit::JitVm::compile(source).map_err(|e| crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -68,7 +68,7 @@ pub fn run_compiled_capturing_jit(
     jit_vm.with_captured_output();
     match jit_vm.run() {
         VmResult::Value(v) => Ok((v, jit_vm.captured_output())),
-        VmResult::Error(e) => Err(crate::errors::FerriError::Runtime {
+        VmResult::Error(e) => Err(crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -78,7 +78,7 @@ pub fn run_compiled_capturing_jit(
 
 /// JIT-based conformance alias for run.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_jit(source: &str) -> Result<Value, crate::errors::FerriError> {
+pub fn run_jit(source: &str) -> Result<Value, crate::errors::PipelineError> {
     run_compiled_jit(source)
 }
 
@@ -87,7 +87,7 @@ pub fn run_jit(source: &str) -> Result<Value, crate::errors::FerriError> {
 pub fn run_tests_jit(
     path: &str,
     source: &str,
-) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
     run_tests_jit_with_options(path, source, HashMap::new())
 }
 
@@ -97,11 +97,11 @@ pub fn run_tests_jit_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
     super::jit::resolve_modules(&mut program.items, source_dir, &externs).map_err(|e| {
-        crate::errors::FerriError::Runtime {
+        crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -131,7 +131,7 @@ pub fn run_tests_jit_with_options(
 
     // Build JIT engine from the typed program
     let engine = super::jit::JitEngine::compile(&normal_program).map_err(|e| {
-        crate::errors::FerriError::Runtime {
+        crate::errors::PipelineError::Runtime {
             message: e,
             line: 0,
             column: 0,
@@ -242,7 +242,7 @@ fn prepare_program(
     source: &str,
     source_path: Option<&str>,
     externs: &HashMap<String, PathBuf>,
-) -> Result<crate::ast::Program, crate::errors::FerriError> {
+) -> Result<crate::ast::Program, crate::errors::PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = source_path.and_then(|p| {
         std::path::Path::new(p)
@@ -261,7 +261,7 @@ pub fn run_compiled_interp_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::FerriError> {
+) -> Result<Value, crate::errors::PipelineError> {
     let program = prepare_program(source, source_path, &externs)?;
     let engine = super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
     let interp = super::interp::Interpreter::new(&engine);
@@ -274,7 +274,7 @@ pub fn run_compiled_interp_with_options(
 /// Compile and run using the IR interpreter, capturing printed output.
 pub fn run_compiled_capturing_interp(
     source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
+) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
     let program = prepare_program(source, None, &HashMap::new())?;
     let engine = super::interp::InterpEngine::compile(&program).map_err(runtime_error)?;
     let mut interp = super::interp::Interpreter::new(&engine);
@@ -292,7 +292,7 @@ pub fn run_tests_interp_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
     super::jit::resolve_modules(&mut program.items, source_dir, &externs).map_err(runtime_error)?;
@@ -394,7 +394,7 @@ pub fn run_tests_interp_with_options(
 }
 
 /// Compile and run with captured output (for testing).
-pub fn run_compiled(source: &str) -> Result<Value, crate::errors::FerriError> {
+pub fn run_compiled(source: &str) -> Result<Value, crate::errors::PipelineError> {
     run_compiled_with_options(source, None, HashMap::new())
 }
 
@@ -408,7 +408,7 @@ pub fn run_compiled_with_options(
     source: &str,
     source_path: Option<&str>,
     externs: HashMap<String, PathBuf>,
-) -> Result<Value, crate::errors::FerriError> {
+) -> Result<Value, crate::errors::PipelineError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         run_compiled_jit_with_options(source, source_path, externs)
@@ -422,7 +422,7 @@ pub fn run_compiled_with_options(
 /// Compile and run, capturing printed output (for testing).
 pub fn run_compiled_capturing(
     source: &str,
-) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
+) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         run_compiled_capturing_jit(source)
@@ -434,12 +434,12 @@ pub fn run_compiled_capturing(
 }
 
 /// Run a program and capture its output (compatibility alias).
-pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), crate::errors::FerriError> {
+pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), crate::errors::PipelineError> {
     run_compiled_capturing(source)
 }
 
 /// Run a program, return its value (compatibility alias).
-pub fn run(source: &str) -> Result<Value, crate::errors::FerriError> {
+pub fn run(source: &str) -> Result<Value, crate::errors::PipelineError> {
     run_compiled(source)
 }
 
@@ -448,7 +448,10 @@ pub fn run(source: &str) -> Result<Value, crate::errors::FerriError> {
 /// Also verifies the program compiles all the way to native code, so callers
 /// that use this purely as a compile check (e.g. `tug build`) fail on codegen
 /// errors and not just type errors.
-pub fn disassemble_source(path: &str, source: &str) -> Result<String, crate::errors::FerriError> {
+pub fn disassemble_source(
+    path: &str,
+    source: &str,
+) -> Result<String, crate::errors::PipelineError> {
     let mut program = crate::parser::parse(source)?;
     let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
     super::jit::resolve_modules(&mut program.items, source_dir, &HashMap::new())
@@ -478,7 +481,10 @@ pub struct TestResult {
 
 /// Run all #[test] functions in source via the VM, and verify that
 /// #[compile_error] functions fail to compile.
-pub fn run_tests(path: &str, source: &str) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+pub fn run_tests(
+    path: &str,
+    source: &str,
+) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
     run_tests_with_options(path, source, HashMap::new())
 }
 
@@ -488,7 +494,7 @@ pub fn run_tests_with_options(
     path: &str,
     source: &str,
     externs: HashMap<String, PathBuf>,
-) -> Result<Vec<TestResult>, crate::errors::FerriError> {
+) -> Result<Vec<TestResult>, crate::errors::PipelineError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         run_tests_jit_with_options(path, source, externs)

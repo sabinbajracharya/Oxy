@@ -1,7 +1,7 @@
 use super::*;
 
 impl Parser {
-    pub(super) fn parse_type_annotation(&mut self) -> Result<TypeAnnotation, FerriError> {
+    pub(super) fn parse_type_annotation(&mut self) -> Result<TypeAnnotation, PipelineError> {
         let span = self.current_span();
         // Accept `Self` as a type
         if self.check(&TokenKind::SelfUpper) {
@@ -109,7 +109,7 @@ impl Parser {
             let size: usize = match self.peek_kind() {
                 TokenKind::IntLiteral(n, _) => {
                     if *n < 0 {
-                        return Err(FerriError::Parser {
+                        return Err(PipelineError::Parser {
                             message: "array size must be non-negative".into(),
                             line: self.current_span().line,
                             column: self.current_span().column,
@@ -120,7 +120,7 @@ impl Parser {
                     val
                 }
                 _ => {
-                    return Err(FerriError::Parser {
+                    return Err(PipelineError::Parser {
                         message: "expected integer literal for array size".into(),
                         line: self.current_span().line,
                         column: self.current_span().column,
@@ -151,7 +151,7 @@ impl Parser {
     /// Parse generic type arguments `<T, U, ...>` into a list of nested
     /// `TypeAnnotation`s. Handles nesting (`Vec<Vec<i64>>`) via the recursive
     /// `parse_type_annotation` call.
-    pub(super) fn parse_generic_args(&mut self) -> Result<Vec<TypeAnnotation>, FerriError> {
+    pub(super) fn parse_generic_args(&mut self) -> Result<Vec<TypeAnnotation>, PipelineError> {
         self.expect(TokenKind::Lt)?;
         let mut args = Vec::new();
         if self.check(&TokenKind::Gt) {
@@ -171,7 +171,7 @@ impl Parser {
     /// Close a `<...>` clause, splitting a leading `>>` (Shr) into two `>`s
     /// when needed. Lets `Vec<Option<int>>` parse without forcing users to
     /// space-separate `> >`.
-    pub(super) fn expect_gt_split_shr(&mut self) -> Result<(), FerriError> {
+    pub(super) fn expect_gt_split_shr(&mut self) -> Result<(), PipelineError> {
         if self.check(&TokenKind::Gt) {
             self.advance();
             Ok(())
@@ -188,7 +188,7 @@ impl Parser {
         }
     }
 
-    pub(super) fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, FerriError> {
+    pub(super) fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, PipelineError> {
         self.expect(TokenKind::Lt)?;
         let mut params = Vec::new();
 
@@ -228,7 +228,7 @@ impl Parser {
     }
 
     /// Parse a type name optionally followed by generic arguments: `Ident` or `Ident<A, B>`.
-    pub(super) fn parse_type_name_with_args(&mut self) -> Result<String, FerriError> {
+    pub(super) fn parse_type_name_with_args(&mut self) -> Result<String, PipelineError> {
         let name = self.expect_ident()?;
         if self.check(&TokenKind::Lt) {
             self.advance(); // consume `<`

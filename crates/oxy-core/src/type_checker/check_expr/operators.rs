@@ -12,13 +12,13 @@ impl TypeChecker {
         left: &Expr,
         right: &Expr,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let lt = self.infer_expr(left)?;
         let rt = self.infer_expr(right)?;
         let is_num = |t: &TypeInfo| t.is_integer() || t.is_float();
         let known = |t: &TypeInfo| *t != TypeInfo::Unknown;
         // Helper to format a clean operand mismatch error.
-        let mk_err = |msg: String| FerriError::TypeError {
+        let mk_err = |msg: String| PipelineError::TypeError {
             message: msg,
             line: span.line,
             column: span.column,
@@ -132,7 +132,7 @@ impl TypeChecker {
         op: &UnaryOp,
         inner: &Expr,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let inner_ty = self.infer_expr(inner)?;
         match op {
             UnaryOp::Neg => {
@@ -143,7 +143,7 @@ impl TypeChecker {
                     || inner_ty.is_float()
                     || matches!(inner_ty, TypeInfo::UserStruct { .. });
                 if !ok {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "unary `-` requires a numeric operand, got `{}`",
                             inner_ty.name()
@@ -156,7 +156,7 @@ impl TypeChecker {
             }
             UnaryOp::Not => {
                 if inner_ty != TypeInfo::Unknown && inner_ty != TypeInfo::Bool {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "unary `!` requires a `bool` operand, got `{}`",
                             inner_ty.name()
@@ -169,7 +169,7 @@ impl TypeChecker {
             }
             UnaryOp::BitNot => {
                 if inner_ty != TypeInfo::Unknown && !inner_ty.is_integer() {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "unary `~` requires an integer operand, got `{}`",
                             inner_ty.name()
@@ -187,12 +187,12 @@ impl TypeChecker {
         &mut self,
         target: &Expr,
         value: &Expr,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let vt = self.infer_expr(value)?;
         if let Expr::Ident(name, _) = target {
             if let Some(existing) = self.env.borrow().get(name) {
                 if !existing.accepts(&vt) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                                 message: format!(
                                     "type mismatch: cannot compound-assign `{}` to variable `{name}` of type `{}`",
                                     vt.name(),
@@ -212,7 +212,7 @@ impl TypeChecker {
         expr: &Expr,
         type_name: &str,
         span: &Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let _ = self.infer_expr(expr)?;
         let target = TypeInfo::from_name(type_name);
         // `as` is only meaningful for primitive scalar conversions.
@@ -221,7 +221,7 @@ impl TypeChecker {
             || target.is_float()
             || matches!(target, TypeInfo::Bool | TypeInfo::String | TypeInfo::Char);
         if !is_scalar {
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                         message: format!(
                             "`as` cast to unknown type `{type_name}`; only numeric, bool, String, and char are supported"
                         ),
@@ -236,14 +236,14 @@ impl TypeChecker {
         &mut self,
         target: &Expr,
         value: &Expr,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let vt = self.infer_expr(value)?;
         match target {
             Expr::Ident(name, _) => {
                 let existing_mut = self.env.borrow().get_mutable(name);
                 // Reassigning a known binding requires it to be `let mut`.
                 if existing_mut == Some(false) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                                 message: format!(
                                     "cannot assign to immutable variable `{name}`; declare it with `let mut {name}`"
                                 ),
@@ -254,7 +254,7 @@ impl TypeChecker {
                 // Check compatibility with existing binding
                 if let Some(existing) = self.env.borrow().get(name) {
                     if !existing.accepts(&vt) {
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                                     message: format!(
                                         "type mismatch: cannot assign `{}` to variable `{name}` of type `{}`",
                                         vt.name(),
@@ -302,7 +302,7 @@ impl TypeChecker {
                                         ann => self.resolve_annotation(ann),
                                     };
                                     if !decl_ty.accepts(&vt) {
-                                        return Err(FerriError::TypeError {
+                                        return Err(PipelineError::TypeError {
                                                     message: format!(
                                                         "type mismatch: cannot assign `{}` to field `{}.{field}` of type `{}`",
                                                         vt.name(),
@@ -329,7 +329,7 @@ impl TypeChecker {
     /// owning binding is mutable. `x.f = …` needs `let mut x`; `self.f = …`
     /// needs `mut self`. Roots without a binding name (indexing a temporary,
     /// etc.) are left unchecked.
-    fn check_assign_root_mutable(&self, object: &Expr, span: Span) -> Result<(), FerriError> {
+    fn check_assign_root_mutable(&self, object: &Expr, span: Span) -> Result<(), PipelineError> {
         let mut cur = object;
         loop {
             match cur {
@@ -341,7 +341,7 @@ impl TypeChecker {
                 }
                 Expr::Ident(name, _) => {
                     if let Some(false) = self.env.borrow().get_mutable(name) {
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message: format!(
                                 "cannot assign to a field of immutable variable `{name}`; declare it with `let mut {name}`"
                             ),
@@ -353,7 +353,7 @@ impl TypeChecker {
                 }
                 Expr::SelfRef { .. } => {
                     if let Some(false) = self.env.borrow().get_mutable("self") {
-                        return Err(FerriError::TypeError {
+                        return Err(PipelineError::TypeError {
                             message:
                                 "cannot assign to a field through immutable `self`; declare the method with `mut self`"
                                     .to_string(),

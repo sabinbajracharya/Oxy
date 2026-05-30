@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::errors::{check_arg_count, runtime_error, FerriError};
+use crate::errors::{check_arg_count, runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -28,7 +28,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "parse" => {
             check_arg_count("std::args::parse", 0, args, span)?;
@@ -115,7 +115,7 @@ fn build_args_value(p: ParsedArgs) -> Value {
     }
 }
 
-fn expect_vec_of_strings(v: &Value, name: &str, span: &Span) -> Result<Vec<String>, FerriError> {
+fn expect_vec_of_strings(v: &Value, name: &str, span: &Span) -> Result<Vec<String>, PipelineError> {
     match v {
         Value::Vec(rc) => {
             let mut out = Vec::new();

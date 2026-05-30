@@ -54,7 +54,7 @@ crates/oxy-core/src/
 ├── types/            Value enum, type_name, ordering
 ├── stdlib/           fs, env, process, regex, net, time, rand, math, db, server, …
 ├── symbols.rs        ★ Canonical symbol definitions — single source of truth
-├── errors.rs         FerriError (Lexer, Parser, TypeError, Runtime)
+├── errors.rs         PipelineError (Lexer, Parser, TypeError, Runtime; + Return/Break/Continue control flow)
 └── lib.rs            Public API, re-exports
 crates/oxy-cli/       CLI binary (run, test, repl, --dump-tokens, --dump-ast, --dump-ir)
 crates/oxy-lsp/       LSP server (tower-lsp)

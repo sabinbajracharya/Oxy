@@ -6,7 +6,7 @@
 //! `compiler::helpers::is_builtin_path` accepts any `json::*` path and
 //! the VM dispatches through this `call` function.
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -15,7 +15,7 @@ pub fn call(
     args: &[Value],
     _span: &Span,
     _cb: crate::stdlib::registry::ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     let map_err = |e: String| Value::err(Value::String(e));
     let result: Value = match func_name {
         "parse" => match crate::json::deserialize(&format_first(args)) {
@@ -60,7 +60,7 @@ pub fn call(
             }
         }
         other => {
-            return Err(FerriError::Runtime {
+            return Err(PipelineError::Runtime {
                 message: format!("unknown json function `json::{other}`"),
                 line: 0,
                 column: 0,

@@ -1,7 +1,7 @@
 use super::*;
 
 impl TypeChecker {
-    pub(super) fn check_item(&mut self, item: &Item) -> Result<(), FerriError> {
+    pub(super) fn check_item(&mut self, item: &Item) -> Result<(), PipelineError> {
         match item {
             Item::Function(f) => self.check_function(f),
             Item::Const {
@@ -18,7 +18,7 @@ impl TypeChecker {
                 };
                 let inferred = self.infer_expr(value)?;
                 if !declared.accepts(&inferred) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "type mismatch: const `{name}` declared as `{}`, but value has type `{}`",
                             declared.name(), inferred.name()
@@ -85,7 +85,7 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn check_function(&mut self, f: &FnDef) -> Result<(), FerriError> {
+    pub(super) fn check_function(&mut self, f: &FnDef) -> Result<(), PipelineError> {
         // Track the function's own generic params, plus any inherited from
         // an enclosing impl block, while we walk its body.
         let impl_generics = self
@@ -158,7 +158,7 @@ impl TypeChecker {
         self.env = fn_env;
         let saved_fn_return = std::mem::replace(&mut self.current_fn_return, ret_ty.clone());
 
-        let body_result = (|| -> Result<(), FerriError> {
+        let body_result = (|| -> Result<(), PipelineError> {
             for stmt in &f.body.stmts {
                 self.check_stmt(stmt, &ret_ty)?;
             }

@@ -1,7 +1,7 @@
 use super::*;
 
 impl Parser {
-    pub(super) fn parse_pattern(&mut self) -> Result<Pattern, FerriError> {
+    pub(super) fn parse_pattern(&mut self) -> Result<Pattern, PipelineError> {
         let first = self.parse_single_pattern()?;
 
         // Check for or-pattern: `A | B | C`
@@ -22,7 +22,7 @@ impl Parser {
         &mut self,
         name: String,
         start_span: Span,
-    ) -> Result<Pattern, FerriError> {
+    ) -> Result<Pattern, PipelineError> {
         self.expect(TokenKind::LBrace)?;
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
@@ -53,7 +53,7 @@ impl Parser {
     }
 
     /// Parse a single pattern (without or-pattern `|` handling).
-    fn parse_single_pattern(&mut self) -> Result<Pattern, FerriError> {
+    fn parse_single_pattern(&mut self) -> Result<Pattern, PipelineError> {
         match self.peek_kind().clone() {
             TokenKind::Underscore => {
                 let span = self.current_span();

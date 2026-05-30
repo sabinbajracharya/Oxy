@@ -5,14 +5,14 @@
 //! and static file serving.
 //!
 //! Designed as a self-contained module with minimal coupling to the
-//! interpreter — only takes/returns `Value` and `FerriError`.
+//! interpreter — only takes/returns `Value` and `PipelineError`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
 use std::rc::Rc;
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -445,7 +445,7 @@ pub fn read_request(stream: &std::net::TcpStream) -> Result<String, String> {
 }
 
 /// Create a Response::text() value.
-pub fn response_text(text: &str, _span: &Span) -> Result<Value, FerriError> {
+pub fn response_text(text: &str, _span: &Span) -> Result<Value, PipelineError> {
     let mut fields = HashMap::new();
     fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(text.to_string()));
@@ -460,7 +460,7 @@ pub fn response_text(text: &str, _span: &Span) -> Result<Value, FerriError> {
 }
 
 /// Create a Response::json() value.
-pub fn response_json(body: &str, _span: &Span) -> Result<Value, FerriError> {
+pub fn response_json(body: &str, _span: &Span) -> Result<Value, PipelineError> {
     let mut fields = HashMap::new();
     fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(body.to_string()));
@@ -475,7 +475,7 @@ pub fn response_json(body: &str, _span: &Span) -> Result<Value, FerriError> {
 }
 
 /// Create a Response::html() value.
-pub fn response_html(body: &str, _span: &Span) -> Result<Value, FerriError> {
+pub fn response_html(body: &str, _span: &Span) -> Result<Value, PipelineError> {
     let mut fields = HashMap::new();
     fields.insert("status".to_string(), Value::I64(200));
     fields.insert("body".to_string(), Value::String(body.to_string()));
@@ -490,7 +490,7 @@ pub fn response_html(body: &str, _span: &Span) -> Result<Value, FerriError> {
 }
 
 /// Create a Response::status() value.
-pub fn response_with_status(status: u16, body: &str, _span: &Span) -> Result<Value, FerriError> {
+pub fn response_with_status(status: u16, body: &str, _span: &Span) -> Result<Value, PipelineError> {
     let mut fields = HashMap::new();
     fields.insert("status".to_string(), Value::I64(status as i64));
     fields.insert("body".to_string(), Value::String(body.to_string()));
@@ -639,7 +639,7 @@ pub fn call(
     args: &[Value],
     span: &Span,
     cb: ClosureInvoker<'_>,
-) -> Result<Value, FerriError> {
+) -> Result<Value, PipelineError> {
     match func_name {
         "new" => {
             check_arg_count("std::server::new", 0, args, span)?;

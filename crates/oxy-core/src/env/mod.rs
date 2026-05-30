@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::errors::FerriError;
+use crate::errors::PipelineError;
 use crate::types::Value;
 
 /// A shared reference to an environment.
@@ -49,13 +49,13 @@ impl Environment {
     }
 
     /// Look up a variable by name, searching up the parent chain.
-    pub fn get(&self, name: &str) -> Result<Value, FerriError> {
+    pub fn get(&self, name: &str) -> Result<Value, PipelineError> {
         if let Some((value, _)) = self.values.get(name) {
             Ok(value.clone())
         } else if let Some(parent) = &self.parent {
             parent.borrow().get(name)
         } else {
-            Err(FerriError::Runtime {
+            Err(PipelineError::Runtime {
                 message: format!("undefined variable '{name}'"),
                 line: 0,
                 column: 0,
@@ -65,10 +65,10 @@ impl Environment {
 
     /// Assign a new value to an existing variable. Searches up the parent chain.
     /// Returns an error if the variable doesn't exist or isn't mutable.
-    pub fn set(&mut self, name: &str, value: Value) -> Result<(), FerriError> {
+    pub fn set(&mut self, name: &str, value: Value) -> Result<(), PipelineError> {
         if let Some((existing, mutable)) = self.values.get_mut(name) {
             if !*mutable {
-                return Err(FerriError::Runtime {
+                return Err(PipelineError::Runtime {
                     message: format!("cannot assign to immutable variable '{name}'"),
                     line: 0,
                     column: 0,
@@ -79,7 +79,7 @@ impl Environment {
         } else if let Some(parent) = &self.parent {
             parent.borrow_mut().set(name, value)
         } else {
-            Err(FerriError::Runtime {
+            Err(PipelineError::Runtime {
                 message: format!("undefined variable '{name}'"),
                 line: 0,
                 column: 0,

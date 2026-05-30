@@ -71,7 +71,11 @@ impl TypeChecker {
     /// isn't a known type. Used at type-annotation sites to surface
     /// `let v: Vec<bogus_name> = …` as a clean "unknown type" diagnostic
     /// instead of a downstream "type mismatch".
-    pub(super) fn validate_type_known(&self, ty: &TypeInfo, span: Span) -> Result<(), FerriError> {
+    pub(super) fn validate_type_known(
+        &self,
+        ty: &TypeInfo,
+        span: Span,
+    ) -> Result<(), PipelineError> {
         match ty {
             TypeInfo::UserStruct { name, generic_args } => {
                 if !self.is_known_user_type(name) {
@@ -91,7 +95,7 @@ impl TypeChecker {
                         ),
                         None => format!("unknown type `{name}`"),
                     };
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message,
                         line: span.line,
                         column: span.column,
@@ -136,12 +140,12 @@ impl TypeChecker {
 
     /// Type of the trailing semicolon-less expression in a block, or `Unit`
     /// if the block has no producing tail.
-    pub(super) fn block_tail_type(&mut self, block: &Block) -> Result<TypeInfo, FerriError> {
+    pub(super) fn block_tail_type(&mut self, block: &Block) -> Result<TypeInfo, PipelineError> {
         let block_env = TypeEnv::child(&self.env);
         let saved = self.env.clone();
         self.env = block_env;
         let mut result = TypeInfo::Unit;
-        let body_result = (|| -> Result<(), FerriError> {
+        let body_result = (|| -> Result<(), PipelineError> {
             for stmt in &block.stmts {
                 if let Stmt::Expr {
                     expr,
@@ -171,7 +175,7 @@ impl TypeChecker {
         b: &TypeInfo,
         kind: &str,
         span: Span,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         if *a == TypeInfo::Unknown {
             return Ok(b.clone());
         }
@@ -190,7 +194,7 @@ impl TypeChecker {
         if b.accepts(a) {
             return Ok(b.clone());
         }
-        Err(FerriError::TypeError {
+        Err(PipelineError::TypeError {
             message: format!(
                 "{kind} branches produce incompatible types `{}` and `{}`",
                 a.display_name(),
@@ -320,12 +324,12 @@ impl TypeChecker {
         args: &[Expr],
         arg_types: &[TypeInfo],
         span: Span,
-    ) -> Result<Option<TypeInfo>, FerriError> {
-        let check = |expected: &TypeInfo, pos: usize, label: &str| -> Result<(), FerriError> {
+    ) -> Result<Option<TypeInfo>, PipelineError> {
+        let check = |expected: &TypeInfo, pos: usize, label: &str| -> Result<(), PipelineError> {
             let actual = arg_types.get(pos).cloned().unwrap_or(TypeInfo::Unknown);
             if !expected.accepts(&actual) {
                 let aspan = args.get(pos).map(|a| a.span()).unwrap_or(span);
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!(
                         "type mismatch in `{method}` {label}: expected `{}`, got `{}`",
                         expected.display_name(),
@@ -438,7 +442,7 @@ impl TypeChecker {
         struct_name: &str,
         field_name: &str,
         span: Span,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         if let Some(struct_def) = self.struct_defs.get(struct_name) {
             if let StructKind::Named(fields) = &struct_def.kind {
                 for field in fields {
@@ -448,7 +452,7 @@ impl TypeChecker {
                                 struct_name.rsplit_once("::").map(|(m, _)| m).unwrap_or("");
                             let current_module = self.module_stack.join("::");
                             if struct_module != current_module {
-                                return Err(FerriError::Runtime {
+                                return Err(PipelineError::Runtime {
                                     message: format!(
                                         "field `{}` of struct `{}` is private",
                                         field_name, struct_name
@@ -472,7 +476,7 @@ impl TypeChecker {
         &self,
         qualified_name: &str,
         span: Span,
-    ) -> Result<(), FerriError> {
+    ) -> Result<(), PipelineError> {
         let current_module = self.module_stack.join("::");
 
         // 1. Check function visibility.
@@ -483,7 +487,7 @@ impl TypeChecker {
                 &current_module,
                 &self.module_vis,
             ) {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!("function `{qualified_name}` is private"),
                     line: span.line,
                     column: span.column,
@@ -503,7 +507,7 @@ impl TypeChecker {
                 &current_module,
                 &self.module_vis,
             ) {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!("struct `{qualified_name}` is private"),
                     line: span.line,
                     column: span.column,
@@ -553,14 +557,14 @@ fn check_module_path_visible(
     current_module: &str,
     module_vis: &HashMap<String, Visibility>,
     span: Span,
-) -> Result<(), FerriError> {
+) -> Result<(), PipelineError> {
     let segments: Vec<&str> = qualified_name.split("::").collect();
     if segments.len() >= 2 {
         for i in 1..segments.len() {
             let module_path = segments[..i].join("::");
             if let Some(vis) = module_vis.get(&module_path) {
                 if !is_visible_from(vis, &module_path, current_module, module_vis) {
-                    return Err(FerriError::TypeError {
+                    return Err(PipelineError::TypeError {
                         message: format!(
                             "module `{module_path}` is private and cannot be accessed \
                              from outside"

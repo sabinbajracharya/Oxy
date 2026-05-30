@@ -6,7 +6,11 @@
 use super::*;
 
 impl TypeChecker {
-    pub(super) fn infer_ident(&mut self, name: &str, _span: &Span) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_ident(
+        &mut self,
+        name: &str,
+        _span: &Span,
+    ) -> Result<TypeInfo, PipelineError> {
         if let Some(ty) = self.env.borrow().get(name) {
             return Ok(ty);
         }
@@ -72,14 +76,14 @@ impl TypeChecker {
             Some(s) => format!("undefined variable '{name}'; did you mean '{s}'?"),
             None => format!("undefined variable '{name}'"),
         };
-        Err(FerriError::TypeError {
+        Err(PipelineError::TypeError {
             message,
             line: _span.line,
             column: _span.column,
         })
     }
 
-    pub(super) fn infer_self_ref(&mut self) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_self_ref(&mut self) -> Result<TypeInfo, PipelineError> {
         if let Some(ref impl_type) = self.current_impl_type {
             Ok(TypeInfo::user_struct(impl_type.clone()))
         } else {
@@ -87,7 +91,7 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn infer_path(&mut self, segments: &[String]) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_path(&mut self, segments: &[String]) -> Result<TypeInfo, PipelineError> {
         let qualified = segments.join("::");
         if let Some(ret) = self.fn_return_types.get(&qualified) {
             return Ok(ret.clone());

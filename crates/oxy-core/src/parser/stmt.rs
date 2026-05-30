@@ -3,7 +3,7 @@ use super::*;
 impl Parser {
     // === Block parsing ===
 
-    pub(super) fn parse_block(&mut self) -> Result<Block, FerriError> {
+    pub(super) fn parse_block(&mut self) -> Result<Block, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::LBrace)?;
 
@@ -24,7 +24,7 @@ impl Parser {
 
     // === Statement parsing ===
 
-    pub(super) fn parse_stmt(&mut self) -> Result<Stmt, FerriError> {
+    pub(super) fn parse_stmt(&mut self) -> Result<Stmt, PipelineError> {
         // Check for 'label: while/loop/for
         if let Some(label) = self.try_parse_loop_label() {
             let label = Some(label);
@@ -98,7 +98,7 @@ impl Parser {
         None
     }
 
-    fn parse_let_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_let_stmt(&mut self) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Let)?;
 
@@ -171,7 +171,7 @@ impl Parser {
         })
     }
 
-    fn parse_return_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_return_stmt(&mut self) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Return)?;
 
@@ -193,7 +193,7 @@ impl Parser {
         })
     }
 
-    fn parse_while_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
+    fn parse_while_stmt(&mut self, label: Option<String>) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::While)?;
 
@@ -226,7 +226,7 @@ impl Parser {
         })
     }
 
-    fn parse_loop_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
+    fn parse_loop_stmt(&mut self, label: Option<String>) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Loop)?;
 
@@ -240,7 +240,7 @@ impl Parser {
         })
     }
 
-    fn parse_for_stmt(&mut self, label: Option<String>) -> Result<Stmt, FerriError> {
+    fn parse_for_stmt(&mut self, label: Option<String>) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::For)?;
 
@@ -292,7 +292,7 @@ impl Parser {
         })
     }
 
-    fn parse_break_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_break_stmt(&mut self) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Break)?;
 
@@ -323,7 +323,7 @@ impl Parser {
         })
     }
 
-    fn parse_continue_stmt(&mut self) -> Result<Stmt, FerriError> {
+    fn parse_continue_stmt(&mut self) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
         self.expect(TokenKind::Continue)?;
 
@@ -347,7 +347,7 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_expr_stmt(&mut self) -> Result<Stmt, FerriError> {
+    pub(super) fn parse_expr_stmt(&mut self) -> Result<Stmt, PipelineError> {
         // Expression-with-block (`if`, `match`, `{ ... }`) at statement
         // position is a self-contained statement — it does NOT chain infix
         // operators with the following tokens. This matches Rust:

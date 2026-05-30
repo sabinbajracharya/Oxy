@@ -12,7 +12,7 @@ impl TypeChecker {
         return_type: &Option<TypeAnnotation>,
         body: &Expr,
         is_async: &bool,
-    ) -> Result<TypeInfo, FerriError> {
+    ) -> Result<TypeInfo, PipelineError> {
         let mut param_types = Vec::with_capacity(params.len());
         let closure_env = TypeEnv::child(&self.env);
         for p in params {
@@ -31,7 +31,7 @@ impl TypeChecker {
         if let Some(ref ann) = return_type {
             let declared_ret = self.resolve_annotation(ann);
             if !declared_ret.accepts(&inferred_ret) {
-                return Err(FerriError::TypeError {
+                return Err(PipelineError::TypeError {
                     message: format!(
                         "type mismatch: closure returns `{}`, but body has type `{}`",
                         declared_ret.name(),
@@ -53,7 +53,7 @@ impl TypeChecker {
         })
     }
 
-    pub(super) fn infer_await(&mut self, inner: &Expr) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_await(&mut self, inner: &Expr) -> Result<TypeInfo, PipelineError> {
         let inner_ty = self.infer_expr(inner)?;
         match inner_ty {
             TypeInfo::Future(t) => Ok(*t),
@@ -62,12 +62,16 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn infer_async_block(&mut self, body: &Block) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_async_block(&mut self, body: &Block) -> Result<TypeInfo, PipelineError> {
         let last_ty = self.block_tail_type(body)?;
         Ok(TypeInfo::Future(Box::new(last_ty)))
     }
 
-    pub(super) fn infer_try(&mut self, inner: &Expr, span: &Span) -> Result<TypeInfo, FerriError> {
+    pub(super) fn infer_try(
+        &mut self,
+        inner: &Expr,
+        span: &Span,
+    ) -> Result<TypeInfo, PipelineError> {
         let inner_ty = self.infer_expr(inner)?;
         // The `?` operator only makes sense in a function whose
         // return type is `Result<_, _>` or `Option<_>`. Otherwise
@@ -78,7 +82,7 @@ impl TypeChecker {
             TypeInfo::Result(..) | TypeInfo::Option(..) | TypeInfo::Unknown
         );
         if !ok_here {
-            return Err(FerriError::TypeError {
+            return Err(PipelineError::TypeError {
                 message: format!(
                     "`?` cannot be used in a function returning `{}`. \
                              The enclosing function must return `Result<_, _>` or \
@@ -98,7 +102,7 @@ impl TypeChecker {
             TypeInfo::Result(ok, _) => Ok((**ok).clone()),
             TypeInfo::Option(inner) => Ok((**inner).clone()),
             TypeInfo::Unknown => Ok(TypeInfo::Unknown),
-            other => Err(FerriError::TypeError {
+            other => Err(PipelineError::TypeError {
                 message: format!(
                     "`?` requires a `Result` or `Option` operand; got `{}`",
                     other.display_name()
