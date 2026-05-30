@@ -16,8 +16,10 @@
 //! case) ride the shared FFI automatically; the `symbol_consistency` test guards
 //! that string-keyed surface.
 
-// FIXME: remove once the interpreter is wired into the wasm execution path
-// (api.rs target dispatch). Until then it is exercised only by tests on native.
+// This module is the execution backend on `wasm32` (wired through api.rs target
+// dispatch) and the reference engine for the `jit_interp_parity` test on native.
+// On a native *non-test* build (e.g. the CLI, which always uses the JIT) nothing
+// here is reachable, so allow dead code rather than litter cfg attributes.
 #![allow(dead_code)]
 
 use std::collections::HashMap;
