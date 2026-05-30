@@ -32,6 +32,33 @@ use super::jit::ir_gen::IrGen;
 use super::jit::{ClosureRuntimeMeta, JitContext, JitTables};
 use super::VmResult;
 
+/// Explicitly mark a runtime feature as **not implemented by the IR interpreter**
+/// (the wasm/browser execution backend). Sets a clear interpreter error in `ctx`
+/// and evaluates to `Value::Unit`, so the next `Return`/`Halt` surfaces it as a
+/// normal runtime error instead of the feature misbehaving silently.
+///
+/// This is the deliberate, greppable opt-out the project's two-backend policy
+/// calls for: when a feature is reachable through the shared FFI but genuinely
+/// cannot run without native code (e.g. the async scheduler driving JIT'd
+/// tasks), route it here rather than letting it fall through to an FFI that does
+/// the wrong thing on an empty `fn_table`. To *support* such a feature on wasm,
+/// implement it in this module and remove the marker. See CLAUDE.md
+/// "Two execution backends".
+macro_rules! unsupported_on_wasm {
+    ($ctx:expr, $feature:expr) => {{
+        ffi::set_error(
+            $ctx,
+            format!(
+                "{}: not supported by the Oxy IR interpreter (the wasm/browser \
+                 execution backend); it runs only under the native Cranelift JIT. \
+                 See CLAUDE.md \u{201c}Two execution backends\u{201d}.",
+                $feature
+            ),
+        );
+        Value::Unit
+    }};
+}
+
 /// A program lowered to register IR, ready for interpretation. The interpreter
 /// analogue of `JitEngine` — holds the IR functions plus the metadata tables an
 /// executing context reads, but no native code.
@@ -417,6 +444,13 @@ impl<'e> Interpreter<'e> {
                     return v;
                 }
             }
+            // Async execution requires driving the cooperative scheduler, which
+            // eagerly runs each task's body through a native fn pointer — none
+            // exist on this backend (the `fn_table` is empty). Falling through
+            // would let `oxy_spawn_ffi` silently yield `Unit`; mark it instead.
+            "oxy_await_ffi" | "oxy_spawn_ffi" | "oxy_sleep_ffi" | "oxy_select_ffi" => {
+                return unsupported_on_wasm!(ctx, "async execution (await/spawn/sleep/select)");
+            }
             _ => {}
         }
         let arg_vals: Vec<Value> = args.iter().map(|&a| Self::reg_val(regs, a)).collect();
@@ -734,6 +768,35 @@ mod tests {
     /// The same source run through the Cranelift JIT, for parity assertions.
     fn jit_capture(src: &str) -> Vec<String> {
         crate::vm::run_compiled_capturing(src).expect("jit run").1
+    }
+
+    /// Run `src`'s `main` through the interpreter and return the final result.
+    fn interp_run(src: &str) -> VmResult {
+        let mut program = crate::parser::parse(src).expect("parse");
+        crate::vm::jit::expand_derives(&mut program);
+        crate::type_checker::TypeChecker::new()
+            .check_program(&program)
+            .expect("type check");
+        let engine = InterpEngine::compile(&program).expect("ir lowering");
+        let mut interp = Interpreter::new(&engine);
+        interp.run()
+    }
+
+    /// Async drives the scheduler through native task pointers the interpreter
+    /// doesn't have. The `unsupported_on_wasm!` marker must turn that into a
+    /// clear error rather than the silent `Unit` the shared FFI would yield.
+    #[test]
+    fn interp_async_reports_unsupported_not_silent() {
+        let src = "fn main() { let h = spawn(|| 42); println!(\"{}\", h.await); }";
+        match interp_run(src) {
+            VmResult::Error(e) => assert!(
+                e.contains("not supported"),
+                "expected an explicit unsupported error, got: {e}"
+            ),
+            VmResult::Value(v) => {
+                panic!("async ran to a value on the interpreter instead of erroring: {v:?}")
+            }
+        }
     }
 
     /// Assert the interpreter and the JIT produce identical output.

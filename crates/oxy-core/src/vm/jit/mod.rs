@@ -621,3 +621,88 @@ impl JitVm {
         }
     }
 }
+
+// ── Divergence guard: FFI surface consistency ─────────────────────────────
+//
+// The two execution backends reach the runtime through different doors that
+// must describe the *same* FFI surface:
+//   • the Cranelift JIT declares each `oxy_*` signature via `ffi_decls()` and
+//     binds the pointer via `register_ffi_symbols()` (which reads `ffi_symbols`),
+//   • the portable IR interpreter builds its dispatch table straight from
+//     `ffi_symbols()`.
+//
+// So `ffi_decls()` (codegen's view) and `ffi_symbols()` (the shared
+// pointer+ABI table the interpreter trusts) are independent hand-maintained
+// lists. If they drift, the failure is silent and backend-specific: a function
+// in `ffi_decls` but not `ffi_symbols` links on neither but the interpreter
+// can't call it; a function in `ffi_symbols` but not `ffi_decls` is callable by
+// the interpreter yet invisible to codegen; a return-kind mismatch makes the
+// interpreter capture (or drop) a scalar the JIT handles the other way. This
+// test turns all three into a build-time failure. It is the string-keyed
+// counterpart to the exhaustive `match` in `vm::interp` (which guards the
+// statically-typed `IrOp`/`Terminator` surface at compile time).
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod ffi_consistency_tests {
+    use super::ffi::{ffi_symbols, FfiRet};
+    use super::{ffi_decls, types};
+    use std::collections::BTreeMap;
+
+    /// The ABI return kind a `ffi_decls` entry implies, so it can be compared
+    /// against the `FfiRet` declared alongside the symbol pointer.
+    fn decl_ret_kind(ret: Option<types::Type>) -> FfiRet {
+        match ret {
+            None => FfiRet::Void,
+            Some(types::I8) => FfiRet::I8,
+            Some(types::I64) => FfiRet::I64,
+            Some(other) => panic!(
+                "ffi_decls return type {other:?} has no FfiRet mapping; \
+                 extend FfiRet and decl_ret_kind together"
+            ),
+        }
+    }
+
+    #[test]
+    fn ffi_decls_and_symbols_describe_the_same_surface() {
+        let decls: BTreeMap<&str, FfiRet> = ffi_decls()
+            .into_iter()
+            .map(|(name, _params, ret)| (name, decl_ret_kind(ret)))
+            .collect();
+        let symbols: BTreeMap<&str, FfiRet> = ffi_symbols()
+            .into_iter()
+            .map(|(name, _ptr, ret)| (name, ret))
+            .collect();
+
+        let only_in_decls: Vec<&&str> =
+            decls.keys().filter(|k| !symbols.contains_key(*k)).collect();
+        let only_in_symbols: Vec<&&str> =
+            symbols.keys().filter(|k| !decls.contains_key(*k)).collect();
+
+        assert!(
+            only_in_decls.is_empty(),
+            "FFI functions declared for codegen but missing from ffi_symbols \
+             (interpreter can't call them, JIT can't link them): {only_in_decls:?}. \
+             Add them to ffi_symbols() in ffi.rs."
+        );
+        assert!(
+            only_in_symbols.is_empty(),
+            "FFI functions in ffi_symbols but missing from ffi_decls \
+             (interpreter sees them, codegen can't): {only_in_symbols:?}. \
+             Add them to ffi_decls() in jit/mod.rs."
+        );
+
+        let mismatched: Vec<String> = decls
+            .iter()
+            .filter_map(|(name, decl_ret)| {
+                let sym_ret = symbols[name];
+                (sym_ret != *decl_ret)
+                    .then(|| format!("{name}: ffi_decls={decl_ret:?} vs ffi_symbols={sym_ret:?}"))
+            })
+            .collect();
+        assert!(
+            mismatched.is_empty(),
+            "FFI return-ABI mismatch between ffi_decls and ffi_symbols \
+             (interpreter would mis-capture the scalar return): {mismatched:?}"
+        );
+    }
+}

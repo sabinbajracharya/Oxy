@@ -167,6 +167,49 @@ crates/oxy-tug/                  #   Package manager (tug)
 └── tests/                       #   Integration tests
 ```
 
+## Two Execution Backends (native JIT + wasm IR interpreter)
+
+Oxy has **two execution backends that run the same register IR**:
+
+| Backend | Target | Lives in | Used by |
+|---|---|---|---|
+| **Cranelift JIT** | native (x86/aarch64/…) | `vm/jit/` (`codegen.rs`, `JitEngine`, `JitVm`) | CLI, `tug`, native tests |
+| **IR interpreter** | `wasm32` | `vm/interp.rs` (`InterpEngine`, `Interpreter`) | browser playground/tutorial |
+
+**Why two.** Cranelift emits host machine code and mmaps it executable — it cannot run in a browser wasm sandbox, and it has no wasm-emitting backend. The playground (`playground/wasm` → `oxy-wasm`) needs in-browser execution, so on `wasm32` we walk the IR instead of compiling it.
+
+**One IR, one runtime.** Both backends consume the identical `IrFunction`s from `ir_gen`, and both delegate runtime semantics to the **same shared `oxy_*` FFI** (`jit/ffi.rs`) and arithmetic helpers (`jit/runtime.rs`). The interpreter does **not** reimplement language semantics — it pushes operands and calls the same FFI bodies the JIT calls. Arithmetic, collections, strings, structs, enums, `?`, closures, user methods, recursion all ride that shared layer, so they cannot diverge by construction. `api.rs` picks the backend per target via `#[cfg(target_arch = "wasm32")]`.
+
+### The divergence guards (this is load-bearing — do not weaken)
+
+Because the same feature must work on both backends, every runtime change risks silently breaking the wasm path. Three guards make divergence **loud**:
+
+1. **Compile-time — exhaustive match.** `vm/interp.rs` is compiled on **all** targets (not just wasm). Its `match` over `IrOp` / `Terminator` has **no wildcard arm**. Add or remove an IR op and *every native build* fails to compile until the interpreter is updated. Never paper over this with a `_ => {}` arm.
+2. **Test-time — FFI surface consistency.** `ffi_decls()` (codegen's CLIF signatures) and `ffi_symbols()` (the shared pointer+ABI table the interpreter dispatches from) are independent hand-maintained lists. `ffi_consistency_tests` in `jit/mod.rs` asserts they describe the same names and the same return ABI. Add an `oxy_*` to one list but not the other → test fails.
+3. **Runtime opt-out — `unsupported_on_wasm!`.** For a feature reachable through the shared FFI that genuinely cannot run without native code (currently: **async** — the scheduler eagerly drives JIT'd tasks through native fn pointers that don't exist on the interpreter), route it through the `unsupported_on_wasm!(ctx, "feature")` macro in `vm/interp.rs`. It produces a clear error instead of silent wrong output. Grep for the macro to audit what's deliberately unsupported.
+
+### When you change the runtime (adding/removing/changing a feature)
+
+You **must** keep the interpreter in sync — there is no "native-only" shortcut for a language feature:
+- New `IrOp` / `Terminator` → the build breaks until you handle it in `interp.rs` (guard #1).
+- New `oxy_*` FFI → add it to **both** `ffi_decls()` and `ffi_symbols()` (guard #2 enforces it). The interpreter then calls it automatically via `ffi_symbols`.
+- A feature that can't run on the interpreter → mark it with `unsupported_on_wasm!` (guard #3) **or** implement it in `interp.rs`. Do not let it fall through to an FFI that misbehaves on an empty `fn_table`.
+
+### Parity command
+
+Run the same `.ox` corpus through both backends and diff the output:
+
+```bash
+docker compose run --rm dev bash -c "cargo test -p oxy-core --test jit_interp_parity"
+```
+
+This is the feature-parity check between the JIT and the wasm interpreter. A failure means the two backends disagree on a program's output — investigate before merging.
+
+### Known interpreter gaps (deferred, tracked)
+
+- **Async execution** (`spawn`/`await`/`sleep`/`select`) — marked `unsupported_on_wasm!`. Needs a closure-invoker callback so the scheduler can drive tasks by interpreting them.
+- **Higher-order built-in methods** that invoke user closures (`vec.map(|x| …)`, `iter.for_each`, `sort_by`) — same closure-invoker callback. Until then they may misbehave on the interpreter; do not rely on them in the playground.
+
 ## Test Infrastructure
 
 ### Test types
