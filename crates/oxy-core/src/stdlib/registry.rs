@@ -393,6 +393,13 @@ fn assert_ne_handler(args: &[Value]) -> Result<Value, String> {
 fn assert_handler(args: &[Value]) -> Result<Value, String> {
     let cond = args.first().cloned().unwrap_or(Value::Unit);
     if !cond.is_truthy() {
+        // `assert!(cond, "msg", fmt_args...)` — the optional message is a
+        // format template (matching Rust). Reuse the same template engine as
+        // `format!`/`println!` so `{}`/`{:?}` behave identically.
+        if args.len() >= 2 {
+            let template = args[1].to_string();
+            return Err(crate::types::format_template(&template, &args[2..]));
+        }
         return Err(format!("assertion failed: `{:?}` is not truthy", cond));
     }
     Ok(Value::Unit)

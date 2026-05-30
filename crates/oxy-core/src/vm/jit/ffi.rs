@@ -195,51 +195,10 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 
 // ── Output ───────────────────────────────────────────────────────────
 
-/// Substitute positional placeholders in a format template with `args`. `{}`
-/// uses Oxy's Display representation; `{:?}` (any spec whose body contains `?`)
-/// uses the Debug representation, which quotes strings/chars and recurses into
-/// collections. `{{` and `}}` are literal braces. Shared by `format!`,
-/// `print!`, and `println!`.
-fn format_template(template: &str, args: &[Value]) -> String {
-    let mut result = String::new();
-    let mut arg_idx = 0;
-    let mut chars = template.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '{' if chars.peek() == Some(&'{') => {
-                chars.next();
-                result.push('{');
-            }
-            '{' => {
-                // Consume the placeholder body / format spec up to `}`, noting
-                // whether it requested Debug (`?`) rendering.
-                let mut is_debug = false;
-                for cc in chars.by_ref() {
-                    if cc == '}' {
-                        break;
-                    }
-                    if cc == '?' {
-                        is_debug = true;
-                    }
-                }
-                if let Some(v) = args.get(arg_idx) {
-                    if is_debug {
-                        result.push_str(&v.to_debug_string());
-                    } else {
-                        result.push_str(&v.to_string());
-                    }
-                }
-                arg_idx += 1;
-            }
-            '}' if chars.peek() == Some(&'}') => {
-                chars.next();
-                result.push('}');
-            }
-            _ => result.push(c),
-        }
-    }
-    result
-}
+// `format_template` (the `format!`/`print!`/`println!` placeholder engine)
+// lives in `crate::types` so it is reachable wasm-side and from the stdlib
+// registry without depending on the Cranelift-gated `jit` module.
+use crate::types::format_template;
 
 extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };

@@ -19,7 +19,27 @@ impl TypeChecker {
                     } else {
                         format!("{}::{}", prefix, e.name)
                     };
+                    let variant_names: Vec<String> =
+                        e.variants.iter().map(|v| v.name.clone()).collect();
+                    for v in &variant_names {
+                        self.enum_variant_names.insert(v.clone());
+                    }
+                    // Keyed under both the qualified and bare enum name so
+                    // exhaustiveness lookups work regardless of how the matched
+                    // value's type name was resolved.
+                    self.enum_variants
+                        .insert(e.name.clone(), variant_names.clone());
+                    self.enum_variants.insert(qualified.clone(), variant_names);
                     self.enum_defs.insert(qualified);
+                }
+                Item::Const { name, .. } => {
+                    let qualified = if prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}::{}", prefix, name)
+                    };
+                    self.const_names.insert(name.clone());
+                    self.const_names.insert(qualified);
                 }
                 Item::TypeAlias { name, target, .. } => {
                     let qualified = if prefix.is_empty() {

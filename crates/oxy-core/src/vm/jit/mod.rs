@@ -547,7 +547,7 @@ impl JitVm {
         let local_count = self.engine.local_count;
         match self.engine.entry_fn_ptr() {
             Some(ptr) => self.call_fn(ptr, local_count),
-            None => VmResult::Error("no entry point".to_string()),
+            None => VmResult::Error("no `main` function defined".to_string()),
         }
     }
 

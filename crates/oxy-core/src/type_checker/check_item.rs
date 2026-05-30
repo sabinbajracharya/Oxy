@@ -149,7 +149,9 @@ impl TypeChecker {
 
         let fn_env = TypeEnv::child(&self.env);
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
-            fn_env.borrow_mut().define(&param.name, p_ty.clone());
+            fn_env
+                .borrow_mut()
+                .define_mut(&param.name, p_ty.clone(), param.is_mut);
         }
 
         let saved_env = self.env.clone();

@@ -354,10 +354,19 @@ impl TypeInfo {
     }
 }
 
-/// Scoped type environment.
+/// A local binding: its inferred/declared type plus whether the binding is
+/// reassignable (`let mut`, `mut param`, `mut self`). Mutability is *not*
+/// borrow checking — it mirrors `const` vs `let` in JS, controlling whether
+/// the name can be reassigned and whether its fields can be mutated.
 #[derive(Clone)]
+struct Binding {
+    ty: TypeInfo,
+    mutable: bool,
+}
+
+/// Scoped type environment.
 struct TypeEnv {
-    bindings: HashMap<String, TypeInfo>,
+    bindings: HashMap<String, Binding>,
     parent: Option<Rc<RefCell<TypeEnv>>>,
 }
 
@@ -376,18 +385,45 @@ impl TypeEnv {
         }))
     }
 
+    /// Define an immutable binding (the common case).
     fn define(&mut self, name: &str, ty: TypeInfo) {
-        self.bindings.insert(name.to_string(), ty);
+        self.define_mut(name, ty, false);
+    }
+
+    /// Define a binding with explicit mutability.
+    fn define_mut(&mut self, name: &str, ty: TypeInfo, mutable: bool) {
+        self.bindings
+            .insert(name.to_string(), Binding { ty, mutable });
     }
 
     fn get(&self, name: &str) -> Option<TypeInfo> {
-        if let Some(ty) = self.bindings.get(name) {
-            return Some(ty.clone());
+        self.lookup(name).map(|b| b.ty)
+    }
+
+    /// Returns whether `name` is bound and, if so, whether it is mutable.
+    fn get_mutable(&self, name: &str) -> Option<bool> {
+        self.lookup(name).map(|b| b.mutable)
+    }
+
+    fn lookup(&self, name: &str) -> Option<Binding> {
+        if let Some(b) = self.bindings.get(name) {
+            return Some(b.clone());
         }
         if let Some(ref parent) = self.parent {
-            return parent.borrow().get(name);
+            return parent.borrow().lookup(name);
         }
         None
+    }
+
+    /// Collect every binding name visible in this scope chain (innermost
+    /// first). Used to build "did you mean" suggestions for unknown idents.
+    fn collect_names(&self, out: &mut Vec<String>) {
+        for k in self.bindings.keys() {
+            out.push(k.clone());
+        }
+        if let Some(ref parent) = self.parent {
+            parent.borrow().collect_names(out);
+        }
     }
 }
 
@@ -437,6 +473,16 @@ pub struct TypeChecker {
     /// to `module::name` through a glob is visibility-checked like any other
     /// path, so a glob can't smuggle in a private item.
     glob_imports: Vec<String>,
+    /// Qualified enum name → its variant short-names. Drives match
+    /// exhaustiveness for enums.
+    enum_variants: HashMap<String, Vec<String>>,
+    /// All bare enum-variant names in scope (user enums + the `Option`/`Result`
+    /// prelude). A bare ident matching one of these is a unit-variant value
+    /// (`None`), not an undefined variable.
+    enum_variant_names: std::collections::HashSet<String>,
+    /// Names of global `const` items (bare and qualified). A bare ident
+    /// matching one of these is a constant reference, not an undefined variable.
+    const_names: std::collections::HashSet<String>,
 }
 
 impl TypeChecker {
@@ -459,6 +505,12 @@ impl TypeChecker {
             module_vis: HashMap::new(),
             reexports: HashMap::new(),
             glob_imports: Vec::new(),
+            enum_variants: HashMap::new(),
+            enum_variant_names: ["Some", "None", "Ok", "Err"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            const_names: std::collections::HashSet::new(),
         }
     }
 }

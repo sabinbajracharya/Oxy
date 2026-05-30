@@ -824,6 +824,53 @@ impl Value {
     }
 }
 
+/// Render a `format!`-style template against positional arguments. Supports
+/// `{}` (Display), `{:?}` (Debug, via [`Value::to_debug_string`]), and the
+/// `{{` / `}}` escapes. Shared by the JIT FFI print/format builtins and by
+/// `assert!`'s optional message — it is pure `Value`→`String` formatting with
+/// no backend dependency, so it lives here (wasm-safe) rather than in the
+/// Cranelift-gated `jit` module.
+pub(crate) fn format_template(template: &str, args: &[Value]) -> String {
+    let mut result = String::new();
+    let mut arg_idx = 0;
+    let mut chars = template.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '{' if chars.peek() == Some(&'{') => {
+                chars.next();
+                result.push('{');
+            }
+            '{' => {
+                // Consume the placeholder body / format spec up to `}`, noting
+                // whether it requested Debug (`?`) rendering.
+                let mut is_debug = false;
+                for cc in chars.by_ref() {
+                    if cc == '}' {
+                        break;
+                    }
+                    if cc == '?' {
+                        is_debug = true;
+                    }
+                }
+                if let Some(v) = args.get(arg_idx) {
+                    if is_debug {
+                        result.push_str(&v.to_debug_string());
+                    } else {
+                        result.push_str(&v.to_string());
+                    }
+                }
+                arg_idx += 1;
+            }
+            '}' if chars.peek() == Some(&'}') => {
+                chars.next();
+                result.push('}');
+            }
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
 /// Structural equality for [`Value`]; functions and futures are never equal.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
