@@ -5,7 +5,10 @@
 
 #![allow(dead_code)]
 
+// ── Cranelift backend (native only) ────────────────────────────────────
+#[cfg(not(target_arch = "wasm32"))]
 mod codegen;
+// ── Shared register-IR + runtime (compiled on all targets) ─────────────
 mod context;
 pub(crate) mod ffi;
 pub(crate) mod ir;
@@ -14,12 +17,18 @@ pub(crate) mod ir_snapshot;
 pub(crate) mod runtime;
 
 pub(crate) use context::JitContext;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use ffi::register_ffi_symbols;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::vm::VmResult;
+#[cfg(not(target_arch = "wasm32"))]
 use cranelift_codegen::ir::types;
+#[cfg(not(target_arch = "wasm32"))]
 use cranelift_codegen::settings::{self, Configurable};
+#[cfg(not(target_arch = "wasm32"))]
 use cranelift_frontend::FunctionBuilderContext;
+#[cfg(not(target_arch = "wasm32"))]
 use cranelift_jit::{JITBuilder, JITModule};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -28,8 +37,10 @@ use std::path::PathBuf;
 pub(crate) type JitFn = extern "C" fn(*mut JitContext) -> u64;
 
 /// FFI function declarations with their parameter types and return type.
+#[cfg(not(target_arch = "wasm32"))]
 type FfiDecl = (&'static str, &'static [types::Type], Option<types::Type>);
 
+#[cfg(not(target_arch = "wasm32"))]
 fn ffi_decls() -> Vec<FfiDecl> {
     vec![
         ("oxy_set_result_i64", &[types::I64, types::I64], None),
@@ -386,6 +397,7 @@ fn default_value_for_type(type_name: &str, span: crate::lexer::Span) -> crate::a
 
 // ── JitEngine ────────────────────────────────────────────────────────────
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct JitEngine {
     /// Function name → JIT fn pointer.
     pub(crate) functions: HashMap<String, *const u8>,
@@ -400,6 +412,7 @@ pub(crate) struct JitEngine {
     pub(crate) tables: context::JitTables,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl JitEngine {
     /// Build a JIT engine from a typed AST program.
     pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
@@ -509,11 +522,13 @@ impl JitEngine {
 
 // ── JitVm ──────────────────────────────────────────────────────────────
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct JitVm {
     pub(crate) engine: JitEngine,
     pub(crate) output: Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl JitVm {
     /// Compile an Oxy program and prepare to run it.
     pub fn compile(source: &str) -> Result<Self, String> {

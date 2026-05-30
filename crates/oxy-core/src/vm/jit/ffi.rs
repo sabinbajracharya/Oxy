@@ -16,6 +16,7 @@ extern "C" fn oxy_set_result_i64(ctx: *mut super::JitContext, val: i64) {
 
 use super::context::{JitContext, JitTables};
 use crate::types::Value;
+#[cfg(not(target_arch = "wasm32"))]
 use cranelift_jit::JITBuilder;
 use std::collections::HashMap;
 
@@ -2880,6 +2881,7 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
 
 // ── Symbol registry ──────────────────────────────────────────────────
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
     let syms: &[(&str, *const u8)] = &[
         ("oxy_set_result_i64", oxy_set_result_i64 as _),

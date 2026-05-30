@@ -7,7 +7,11 @@
 
 use crate::types::Value;
 
-#[cfg(not(target_arch = "wasm32"))]
+// The `jit` module hosts the shared register-IR + runtime layer (ir, ir_gen,
+// ir_snapshot, context, runtime, and the oxy_* FFI bodies) which compile on
+// ALL targets, plus the Cranelift-specific backend (codegen, JitEngine, JitVm)
+// which is gated to non-wasm inside the module. On wasm there is no Cranelift,
+// so execution runs through the portable IR interpreter in `vm::interp`.
 pub(crate) mod jit;
 pub(crate) mod scheduler;
 
