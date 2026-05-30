@@ -8,13 +8,24 @@ becomes a CFG and expressions become register operations.
 
 ## Files
 
+The `IrGen` struct and its lowering methods are split across one `impl IrGen` per
+file. `mod.rs` owns the struct, state, and core helpers; each domain file adds an
+`impl IrGen` block (cross-file methods are `pub(super)`).
+
 | File | Responsibility |
 |---|---|
-| `mod.rs` | The entire `IrGen` lowering pass: `gen_program`, `gen_fn`/`gen_method`, `gen_stmt`, `gen_expr`, control flow (`gen_if`/`gen_match`/`gen_while`/`gen_for_*`), patterns, closures. |
+| `mod.rs` | The `IrGen` struct + all state fields, `new`, register allocation (`alloc_reg`/`alloc_block`/`alloc_local`), `emit`/`terminate`/`start_block`, `coerce_reg*`, `lookup_local`, `register_enum`, and the submodule wiring. |
+| `functions.rs` | Program / module / function lowering: `gen_program`, `gen_module_items`, `gen_fn`/`gen_method`/`gen_fn_named`, and the use/glob/generic-fn registration helpers. |
+| `resolve.rs` | Name, path, and type-alias resolution: `resolve_module_path`, `resolve_use_path`, `resolve_callable_name`, `type_ann_to_type_info`, etc. |
+| `statements.rs` | `gen_block_stmts`, `gen_stmt`, `gen_store_lvalue`. |
+| `expressions.rs` | `gen_expr` (the large expression dispatcher) + `gen_short_circuit`. |
+| `control_flow.rs` | `gen_if`/`gen_if_let*`, `gen_match`, `gen_while`/`gen_while_let`, `gen_loop`, `gen_for_in`/`gen_for_destructure`. |
+| `patterns.rs` | `gen_pattern_check`, `gen_pattern_bind`. |
+| `closures.rs` | `gen_closure` + free-variable analysis (`collect_free_vars`/`collect_idents*`). |
+| `tests.rs` | `#[cfg(test)]` unit tests for lowering. |
 
-> `mod.rs` is the largest file in the tree (~4k lines). It lives in its own directory
-> precisely so it can be split by lowering domain (functions / statements /
-> expressions / control_flow / patterns / closures) — a planned refactor.
+> `expressions.rs` is still large because `gen_expr` is one cohesive dispatcher; a
+> finer split (calls / struct-init / operators) is a possible follow-up.
 
 ## Compilation pipeline
 
