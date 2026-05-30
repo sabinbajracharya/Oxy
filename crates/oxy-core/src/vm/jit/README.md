@@ -15,7 +15,7 @@ IR interpreter (`../interp.rs`) consumes the identical `IrFunction`s.
 | `ir.rs` | Register IR types: `IrOp`, `Terminator`, `IrFunction`, registers, basic blocks. |
 | `ir_gen/` | AST → register IR + CFG (see its README). |
 | `codegen.rs` | IR → Cranelift CLIF → native code; declares FFI signatures via `ffi_decls()`. |
-| `ffi.rs` | The shared `oxy_*` runtime functions both backends call; `ffi_symbols()` (interpreter dispatch table) + the closure-invoker hook. |
+| `ffi/` | The shared `oxy_*` runtime functions both backends call. `mod.rs` holds the core machinery (push/pop, call stack, arithmetic + macros, closures, method dispatch, scheduler, the closure-invoker hook, and `ffi_symbols()`); the self-contained domains are split out: `collections.rs`, `strings_fmt.rs`, `structs.rs`, `casts.rs`, `enums.rs`. Moved fns are `pub(super)` and referenced by module path in `ffi_symbols()`. |
 | `runtime.rs` | Arithmetic / cast helpers invoked by the FFI. |
 | `context.rs` | `JitContext` — output buffer, locals, error state. |
 | `ir_snapshot.rs` | IR pretty-printer used by the snapshot tests. |
@@ -49,4 +49,5 @@ IR interpreter (`../interp.rs`) consumes the identical `IrFunction`s.
   `../interp.rs` (no-wildcard match breaks the build until you do).
 - Regenerate snapshots when IR output changes:
   `UPDATE_SNAPSHOTS=1 cargo test -p oxy-core ir_snapshot`.
-- `ffi.rs` and `ir_gen/mod.rs` are split candidates (large) — keep this table current.
+- `ffi/mod.rs` is still large (the entangled core); further extraction of the
+  call-stack and closure machinery is a possible follow-up. Keep this table current.

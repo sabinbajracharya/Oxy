@@ -1092,688 +1092,6 @@ extern "C" fn oxy_panic(ctx: *mut JitContext) {
     ctx.error_len = len;
 }
 
-// ── Collections ──────────────────────────────────────────────────────
-
-extern "C" fn oxy_make_array(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut elements = Vec::with_capacity(count);
-    for _ in 0..count {
-        elements.push(unsafe { pop(ctx) });
-    }
-    elements.reverse();
-    unsafe {
-        push(
-            ctx,
-            Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements))),
-        );
-    }
-}
-
-extern "C" fn oxy_make_fixed_array(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut elements = Vec::with_capacity(count);
-    for _ in 0..count {
-        elements.push(unsafe { pop(ctx) });
-    }
-    elements.reverse();
-    unsafe {
-        push(ctx, Value::Array(elements));
-    }
-}
-
-extern "C" fn oxy_make_tuple(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut elements = Vec::with_capacity(count);
-    for _ in 0..count {
-        elements.push(unsafe { pop(ctx) });
-    }
-    elements.reverse();
-    unsafe {
-        push(ctx, Value::Tuple(elements));
-    }
-}
-
-extern "C" fn oxy_make_repeat(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let count_val = unsafe { pop(ctx) };
-    let value = unsafe { pop(ctx) };
-    let count = match &count_val {
-        Value::I64(n) => *n as usize,
-        Value::U8(n) => *n as usize,
-        _ => {
-            set_error(
-                ctx,
-                format!("repeat count must be integer, got {count_val:?}"),
-            );
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
-        }
-    };
-    let mut elements = Vec::with_capacity(count);
-    for _ in 0..count {
-        elements.push(value.clone());
-    }
-    unsafe {
-        push(
-            ctx,
-            Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(elements))),
-        );
-    }
-}
-
-extern "C" fn oxy_iter_next_destructure(ctx: *mut JitContext, state_slot: usize) -> i64 {
-    // Like oxy_iter_next, but stores each destructured element field to
-    // local slots state_slot+1..state_slot+n. Returns 1 (has_next) or 0 (done).
-    let ctx = unsafe { &mut *ctx };
-    let target_ptr = unsafe { ctx.buffer.add(state_slot) };
-    let target = unsafe { &*target_ptr };
-
-    let (vec_clone, index) = match target {
-        Value::Tuple(ref elements) if elements.len() >= 2 => (
-            elements[0].clone(),
-            match &elements[1] {
-                Value::I64(n) => *n as usize,
-                Value::U8(n) => *n as usize,
-                _ => 0,
-            },
-        ),
-        _ => {
-            return 0;
-        }
-    };
-
-    let len = match &vec_clone {
-        Value::Vec(rc) => rc.borrow().len(),
-        Value::Array(a) => a.len(),
-        _ => 0,
-    };
-
-    if index < len {
-        let elem = match &vec_clone {
-            Value::Vec(rc) => rc.borrow().get(index).cloned().unwrap_or(Value::Unit),
-            Value::Array(a) => a.get(index).cloned().unwrap_or(Value::Unit),
-            _ => Value::Unit,
-        };
-        // Store destructured bindings: each element of the tuple to state_slot+i
-        if let Value::Tuple(ref fields) = elem {
-            for (i, field) in fields.iter().enumerate() {
-                let dest_ptr = unsafe { ctx.buffer.add(state_slot + 1 + i) };
-                unsafe {
-                    std::ptr::drop_in_place(dest_ptr);
-                }
-                unsafe {
-                    dest_ptr.write(field.clone());
-                }
-            }
-        }
-        unsafe {
-            std::ptr::drop_in_place(target_ptr);
-            target_ptr.write(Value::Tuple(vec![
-                vec_clone,
-                Value::I64((index + 1) as i64),
-            ]));
-        }
-        1 // has next element
-    } else {
-        0 // no more elements
-    }
-}
-
-// ── Iteration ─────────────────────────────────────────────────────────
-
-extern "C" fn oxy_make_iter(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let result = match val.into_iterable() {
-        Ok(vec) => {
-            // Store (Vec, index: 0) as a tuple to track iteration state.
-            Value::Tuple(vec![
-                Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(vec))),
-                Value::I64(0),
-            ])
-        }
-        Err(e) => {
-            set_error(ctx, e);
-            Value::Tuple(vec![Value::Unit, Value::I64(0)])
-        }
-    };
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_iter_len(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let len = match &val {
-        Value::Tuple(elements) if elements.len() >= 2 => match &elements[0] {
-            Value::Vec(rc) => rc.borrow().len() as i64,
-            Value::String(s) => s.len() as i64,
-            Value::Array(a) => a.len() as i64,
-            _ => {
-                set_error(
-                    ctx,
-                    format!("cannot get length of {}", elements[0].type_name()),
-                );
-                0i64
-            }
-        },
-        Value::Vec(rc) => rc.borrow().len() as i64,
-        Value::String(s) => s.len() as i64,
-        Value::Array(a) => a.len() as i64,
-        _ => {
-            set_error(ctx, format!("cannot get length of {}", val.type_name()));
-            0i64
-        }
-    };
-    unsafe {
-        push(ctx, Value::I64(len));
-    }
-}
-
-extern "C" fn oxy_iter_next(ctx: *mut JitContext, state_slot: usize, var_slot: usize) -> i64 {
-    let ctx = unsafe { &mut *ctx };
-    let target_ptr = unsafe { ctx.buffer.add(state_slot) };
-    let target = unsafe { &*target_ptr };
-
-    let (vec_clone, index) = match target {
-        Value::Tuple(ref elements) if elements.len() >= 2 => (
-            elements[0].clone(),
-            match &elements[1] {
-                Value::I64(n) => *n as usize,
-                Value::U8(n) => *n as usize,
-                _ => 0,
-            },
-        ),
-        _ => {
-            return 0; // no more elements
-        }
-    };
-
-    let len = match &vec_clone {
-        Value::Vec(rc) => rc.borrow().len(),
-        Value::Array(a) => a.len(),
-        Value::String(s) => s.chars().count(),
-        _ => 0,
-    };
-
-    if index < len {
-        let elem = match &vec_clone {
-            Value::Vec(rc) => rc.borrow().get(index).cloned().unwrap_or(Value::Unit),
-            Value::Array(a) => a.get(index).cloned().unwrap_or(Value::Unit),
-            Value::String(s) => {
-                let c = s.chars().nth(index).unwrap_or('\0');
-                Value::Char(c)
-            }
-            _ => Value::Unit,
-        };
-        // Store raw element in the loop variable's local slot.
-        let dest_ptr = unsafe { ctx.buffer.add(var_slot) };
-        unsafe {
-            std::ptr::drop_in_place(dest_ptr);
-            dest_ptr.write(elem);
-        }
-        unsafe {
-            std::ptr::drop_in_place(target_ptr);
-            target_ptr.write(Value::Tuple(vec![
-                vec_clone,
-                Value::I64((index + 1) as i64),
-            ]));
-        }
-        1 // has next element
-    } else {
-        0 // no more elements
-    }
-}
-
-extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let index_val = unsafe { pop(ctx) };
-    let collection = unsafe { pop(ctx) };
-
-    // Handle range slicing.
-    if let Value::Range(start, end) = &index_val {
-        let result = match collection {
-            Value::String(ref s) => {
-                let len = s.chars().count() as i64;
-                let s_start = *start;
-                let s_end = if *end == i64::MAX { len } else { *end };
-                let clamped_start = s_start.max(0).min(len) as usize;
-                let clamped_end = s_end.max(0).min(len) as usize;
-                if clamped_end <= clamped_start {
-                    Value::String(String::new())
-                } else {
-                    Value::String(
-                        s.chars()
-                            .skip(clamped_start)
-                            .take(clamped_end - clamped_start)
-                            .collect(),
-                    )
-                }
-            }
-            Value::Vec(rc) => {
-                let v = rc.borrow();
-                let len = v.len() as i64;
-                let s_start = *start;
-                let s_end = if *end == i64::MAX { len } else { *end };
-                let clamped_start = s_start.max(0).min(len) as usize;
-                let clamped_end = s_end.max(0).min(len) as usize;
-                Value::Vec(std::rc::Rc::new(std::cell::RefCell::new(
-                    v[clamped_start..clamped_end].to_vec(),
-                )))
-            }
-            Value::Array(ref a) => {
-                let len = a.len() as i64;
-                let s_start = *start;
-                let s_end = if *end == i64::MAX { len } else { *end };
-                let clamped_start = s_start.max(0).min(len) as usize;
-                let clamped_end = s_end.max(0).min(len) as usize;
-                Value::Array(a[clamped_start..clamped_end].to_vec())
-            }
-            _ => {
-                set_error(ctx, format!("cannot slice {collection:?}"));
-                Value::Unit
-            }
-        };
-        unsafe {
-            push(ctx, result);
-        }
-        return;
-    }
-
-    // Map indexing (`m[key]`) keys by the index value itself, not a position.
-    match &collection {
-        Value::HashMap(rc) => {
-            let result = match rc.borrow().get(&index_val) {
-                Some(v) => v.clone(),
-                None => {
-                    set_error(ctx, format!("key not found: {index_val:?}"));
-                    Value::Unit
-                }
-            };
-            unsafe { push(ctx, result) };
-            return;
-        }
-        Value::BTreeMap(rc) => {
-            let result = match rc.borrow().get(&index_val) {
-                Some(v) => v.clone(),
-                None => {
-                    set_error(ctx, format!("key not found: {index_val:?}"));
-                    Value::Unit
-                }
-            };
-            unsafe { push(ctx, result) };
-            return;
-        }
-        _ => {}
-    }
-
-    let idx = super::runtime::value_to_i64(&index_val) as usize;
-    // Indexing past the end is a runtime error, not a silent `Unit`. Each
-    // sequence type reports its own length so the message is actionable; a
-    // `None` from `.get()` (or `.nth()`) is the out-of-bounds signal.
-    let result = match collection {
-        Value::Vec(rc) => match rc.borrow().get(idx).cloned() {
-            Some(v) => v,
-            None => {
-                set_error(
-                    ctx,
-                    format!(
-                        "index out of bounds: the len is {} but the index is {idx}",
-                        rc.borrow().len()
-                    ),
-                );
-                Value::Unit
-            }
-        },
-        Value::Array(ref a) => match a.get(idx).cloned() {
-            Some(v) => v,
-            None => {
-                set_error(
-                    ctx,
-                    format!(
-                        "index out of bounds: the len is {} but the index is {idx}",
-                        a.len()
-                    ),
-                );
-                Value::Unit
-            }
-        },
-        Value::String(ref s) => match s.chars().nth(idx) {
-            Some(c) => Value::Char(c),
-            None => {
-                set_error(
-                    ctx,
-                    format!(
-                        "index out of bounds: the len is {} but the index is {idx}",
-                        s.chars().count()
-                    ),
-                );
-                Value::Unit
-            }
-        },
-        Value::Tuple(ref t) => match t.get(idx).cloned() {
-            Some(v) => v,
-            None => {
-                set_error(
-                    ctx,
-                    format!(
-                        "index out of bounds: the len is {} but the index is {idx}",
-                        t.len()
-                    ),
-                );
-                Value::Unit
-            }
-        },
-        _ => {
-            set_error(ctx, format!("cannot index {collection:?}"));
-            Value::Unit
-        }
-    };
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_vec_index_store(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let value = unsafe { pop(ctx) };
-    let index_val = unsafe { pop(ctx) };
-    let collection = unsafe { pop(ctx) };
-    let idx = super::runtime::value_to_i64(&index_val) as usize;
-    match collection {
-        Value::Vec(rc) => {
-            let mut v = rc.borrow_mut();
-            if idx < v.len() {
-                v[idx] = value.clone();
-            }
-        }
-        _ => {
-            set_error(ctx, format!("cannot index-store {collection:?}"));
-            unsafe {
-                push(ctx, value);
-            }
-            return;
-        }
-    }
-    unsafe {
-        push(ctx, value);
-    }
-}
-
-extern "C" fn oxy_make_range(ctx: *mut JitContext, inclusive: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let end = unsafe { pop(ctx) };
-    let start = unsafe { pop(ctx) };
-    let s = match &start {
-        Value::I64(n) => *n,
-        Value::U8(n) => *n as i64,
-        _ => {
-            set_error(ctx, format!("range start must be integer, got {start:?}"));
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
-        }
-    };
-    let e = match &end {
-        Value::I64(n) => *n,
-        Value::U8(n) => *n as i64,
-        _ => {
-            set_error(ctx, format!("range end must be integer, got {end:?}"));
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
-        }
-    };
-    let e = if inclusive != 0 { e + 1 } else { e };
-    unsafe {
-        push(ctx, Value::Range(s, e));
-    }
-}
-
-// ── String operations ─────────────────────────────────────────────────
-
-extern "C" fn oxy_to_string(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let s = val.to_string();
-    unsafe {
-        push(ctx, Value::String(s));
-    }
-}
-
-extern "C" fn oxy_fstring_concat(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut parts = Vec::with_capacity(count);
-    for _ in 0..count {
-        parts.push(unsafe { pop(ctx) });
-    }
-    parts.reverse();
-    let result: String = parts.iter().map(|v| v.to_string()).collect();
-    unsafe {
-        push(ctx, Value::String(result));
-    }
-}
-
-extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut vals = Vec::with_capacity(count);
-    for _ in 0..count {
-        vals.push(unsafe { pop(ctx) });
-    }
-    vals.reverse();
-    if vals.is_empty() {
-        unsafe {
-            push(ctx, Value::String(String::new()));
-        }
-        return;
-    }
-    let template = vals[0].to_string();
-    if count == 1 {
-        unsafe {
-            push(ctx, Value::String(template));
-        }
-        return;
-    }
-    let result = format_template_with(&template, &vals[1..], |v| unsafe {
-        display_via_user_fmt(ctx, v)
-    });
-    unsafe {
-        push(ctx, Value::String(result));
-    }
-}
-
-/// `dbg!(expr)` — debug-print the value and return it. Multiple args render as
-/// a tuple (matching Rust's `dbg!(a, b)`); zero args print/return unit. The
-/// value is left on the operand stack so `let x = dbg!(v)` binds it. Output
-/// goes to the run's capture buffer when present, else stdout.
-extern "C" fn oxy_dbg(ctx: *mut JitContext, count: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let mut vals = Vec::with_capacity(count);
-    for _ in 0..count {
-        vals.push(unsafe { pop(ctx) });
-    }
-    vals.reverse();
-    let value = match count {
-        1 => vals.pop().unwrap(),
-        0 => Value::Unit,
-        _ => Value::Tuple(vals),
-    };
-    let line = value.to_debug_string();
-    if !ctx.output.is_null() {
-        let output = unsafe { &*ctx.output };
-        output.borrow_mut().push(format!("{line}\n"));
-    } else {
-        println!("{line}");
-    }
-    unsafe {
-        push(ctx, value);
-    }
-}
-
-// ── Structs ───────────────────────────────────────────────────────────
-
-extern "C" fn oxy_struct_init(
-    ctx: *mut JitContext,
-    name_ptr: *const u8,
-    name_len: usize,
-    field_names_ptr: *const u8,
-    field_names_len: usize,
-    field_count: usize,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
-    let name = String::from_utf8_lossy(name_bytes).into_owned();
-    let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
-    let field_names: Vec<&str> = fn_bytes
-        .split(|b| *b == 0)
-        .map(|s| std::str::from_utf8(s).unwrap_or(""))
-        .collect();
-    let mut fields = HashMap::new();
-    for i in (0..field_count).rev() {
-        let val = unsafe { pop(ctx) };
-        let fname = field_names
-            .get(i)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("_f{i}"));
-        fields.insert(fname, val);
-    }
-    unsafe {
-        push(ctx, Value::Struct { name, fields });
-    }
-}
-
-extern "C" fn oxy_struct_update(
-    ctx: *mut JitContext,
-    field_names_ptr: *const u8,
-    field_names_len: usize,
-    field_count: usize,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let base = unsafe { pop(ctx) };
-    let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
-    let field_names: Vec<&str> = fn_bytes
-        .split(|b| *b == 0)
-        .map(|s| std::str::from_utf8(s).unwrap_or(""))
-        .collect();
-    let mut overrides = Vec::with_capacity(field_count);
-    for _ in 0..field_count {
-        overrides.push(unsafe { pop(ctx) });
-    }
-    overrides.reverse();
-    match base {
-        Value::Struct { name, fields } => {
-            let mut new_fields = fields.clone();
-            for (i, val) in overrides.into_iter().enumerate() {
-                let fname = field_names
-                    .get(i)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| format!("_f{i}"));
-                new_fields.insert(fname, val);
-            }
-            unsafe {
-                push(
-                    ctx,
-                    Value::Struct {
-                        name,
-                        fields: new_fields,
-                    },
-                );
-            }
-        }
-        _ => {
-            set_error(ctx, format!("struct update on non-struct: {base:?}"));
-            unsafe {
-                push(ctx, base);
-            }
-        }
-    }
-}
-
-extern "C" fn oxy_field_access(ctx: *mut JitContext, name_ptr: *const u8, name_len: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let obj = unsafe { pop(ctx) };
-    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
-    let name = String::from_utf8_lossy(name_bytes);
-    let result = match &obj {
-        Value::Struct { fields, .. } => fields.get(name.as_ref()).cloned().unwrap_or(Value::Unit),
-        Value::Tuple(ref elements) => {
-            if let Ok(idx) = name.parse::<usize>() {
-                match elements.get(idx).cloned() {
-                    Some(v) => v,
-                    None => {
-                        // Out-of-range tuple index is a runtime error, not a
-                        // silent `Unit` — mirrors sequence indexing in
-                        // oxy_vec_index.
-                        set_error(
-                            ctx,
-                            format!(
-                                "index out of bounds: the len is {} but the index is {idx}",
-                                elements.len()
-                            ),
-                        );
-                        unsafe {
-                            push(ctx, Value::Unit);
-                        }
-                        return;
-                    }
-                }
-            } else {
-                set_error(ctx, format!("tuple field not an integer: {name}"));
-                unsafe {
-                    push(ctx, Value::Unit);
-                }
-                return;
-            }
-        }
-        _ => {
-            set_error(ctx, format!("field access on non-struct: {obj:?}"));
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-            return;
-        }
-    };
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_len: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let value = unsafe { pop(ctx) };
-    let obj = unsafe { pop(ctx) };
-    let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
-    let name = String::from_utf8_lossy(name_bytes);
-    match obj {
-        Value::Struct {
-            name: sname,
-            mut fields,
-        } => {
-            fields.insert(name.into_owned(), value);
-            unsafe {
-                push(
-                    ctx,
-                    Value::Struct {
-                        name: sname,
-                        fields,
-                    },
-                );
-            }
-        }
-        _ => {
-            set_error(ctx, format!("field store on non-struct: {obj:?}"));
-            unsafe {
-                push(ctx, obj);
-            }
-        }
-    }
-}
-
 // ── Interpreter call-back hook ────────────────────────────────────────
 //
 // On the IR interpreter (the wasm/browser backend) the `fn_table` holds no
@@ -2324,7 +1642,7 @@ fn dispatch_builtin_method(
     }
 }
 
-// ── Try / Cast ────────────────────────────────────────────────────────
+// ── Try ─────────────────────────────────────────────────────────────
 
 extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
@@ -2362,45 +1680,6 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
     }
 }
 
-extern "C" fn oxy_cast_int(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let result = super::runtime::cast_to_int(&val, crate::types::IntegerWidth::I64);
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_cast_byte(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let result = super::runtime::cast_to_int(&val, crate::types::IntegerWidth::U8);
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_cast_float(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let result = super::runtime::cast_to_float(&val, crate::types::FloatWidth::F64);
-    unsafe {
-        push(ctx, result);
-    }
-}
-
-extern "C" fn oxy_cast_to_char(ctx: *mut JitContext) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    let n = super::runtime::value_to_i64(&val);
-    let c = char::from_u32(n as u32).unwrap_or('\u{FFFD}');
-    unsafe {
-        push(ctx, Value::Char(c));
-    }
-}
-
-// ── Pattern matching ──────────────────────────────────────────────────
-
 extern "C" fn oxy_bind_ident(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
@@ -2408,157 +1687,6 @@ extern "C" fn oxy_bind_ident(ctx: *mut JitContext, index: usize) {
         ctx.buffer.add(index).write(val);
     }
 }
-
-extern "C" fn oxy_enum_data_get(ctx: *mut JitContext, index: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let val = unsafe { pop(ctx) };
-    match &val {
-        Value::EnumVariant { data, .. } => {
-            let inner = data.get(index).cloned().unwrap_or(Value::Unit);
-            unsafe {
-                push(ctx, inner);
-            }
-        }
-        Value::Tuple(ref t) => {
-            let inner = t.get(index).cloned().unwrap_or(Value::Unit);
-            unsafe {
-                push(ctx, inner);
-            }
-        }
-        Value::Array(ref a) => {
-            let inner = a.get(index).cloned().unwrap_or(Value::Unit);
-            unsafe {
-                push(ctx, inner);
-            }
-        }
-        Value::Vec(ref rc) => {
-            let inner = rc.borrow().get(index).cloned().unwrap_or(Value::Unit);
-            unsafe {
-                push(ctx, inner);
-            }
-        }
-        _ => {
-            set_error(ctx, format!("EnumDataGet on non-enum: {val:?}"));
-            unsafe {
-                push(ctx, Value::Unit);
-            }
-        }
-    }
-}
-
-extern "C" fn oxy_enum_variant_equal(
-    ctx: *mut JitContext,
-    enum_name_ptr: *const u8,
-    enum_name_len: usize,
-    variant_ptr: *const u8,
-    variant_len: usize,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let enum_name = unsafe {
-        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
-        String::from_utf8_lossy(slice).to_string()
-    };
-    let variant = unsafe {
-        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
-        String::from_utf8_lossy(slice).to_string()
-    };
-    let val = unsafe { pop(ctx) };
-    let matched = matches!(
-        &val,
-        Value::EnumVariant { enum_name: en, variant: v, .. }
-            if en == &enum_name && v == &variant
-    );
-    unsafe {
-        push(ctx, Value::Bool(matched));
-    }
-}
-
-extern "C" fn oxy_make_enum_variant(
-    ctx: *mut JitContext,
-    enum_name_ptr: *const u8,
-    enum_name_len: usize,
-    variant_ptr: *const u8,
-    variant_len: usize,
-    arg_count: usize,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let enum_name = unsafe {
-        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
-        String::from_utf8_lossy(slice).to_string()
-    };
-    let variant = unsafe {
-        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
-        String::from_utf8_lossy(slice).to_string()
-    };
-    let mut data = Vec::with_capacity(arg_count);
-    for _ in 0..arg_count {
-        data.push(unsafe { pop(ctx) });
-    }
-    data.reverse();
-    unsafe {
-        push(
-            ctx,
-            Value::EnumVariant {
-                enum_name,
-                variant,
-                data,
-            },
-        );
-    }
-}
-
-extern "C" fn oxy_const_enum_variant(
-    ctx: *mut JitContext,
-    enum_name_ptr: *const u8,
-    enum_name_len: usize,
-    variant_ptr: *const u8,
-    variant_len: usize,
-) {
-    let ctx = unsafe { &mut *ctx };
-    let enum_name = unsafe {
-        let slice = std::slice::from_raw_parts(enum_name_ptr, enum_name_len);
-        String::from_utf8_lossy(slice).into_owned()
-    };
-    let variant = unsafe {
-        let slice = std::slice::from_raw_parts(variant_ptr, variant_len);
-        String::from_utf8_lossy(slice).into_owned()
-    };
-    unsafe {
-        push(
-            ctx,
-            Value::EnumVariant {
-                enum_name,
-                variant,
-                data: vec![],
-            },
-        );
-    }
-}
-
-/// Resolve a module-level constant path (e.g. `math::PI`, `std::math::PI`) to
-/// its value. Errors if the path doesn't name a known module constant.
-extern "C" fn oxy_module_const(ctx: *mut JitContext, path_ptr: *const u8, path_len: usize) {
-    let ctx = unsafe { &mut *ctx };
-    let path = unsafe {
-        let slice = std::slice::from_raw_parts(path_ptr, path_len);
-        String::from_utf8_lossy(slice).into_owned()
-    };
-    let segments: Vec<&str> = path.split("::").collect();
-    let lookup = match segments.as_slice() {
-        [module, name] => crate::stdlib::registry::lookup_constant(module, name),
-        ["std", module, name] => crate::stdlib::registry::lookup_constant(module, name),
-        _ => None,
-    };
-    match lookup {
-        Some(val) => unsafe { push(ctx, val) },
-        None => {
-            set_error(ctx, format!("unknown constant: {path}"));
-            unsafe { push(ctx, Value::Unit) };
-        }
-    }
-}
-
-// ── PathCall builtins ─────────────────────────────────────────────────
 
 extern "C" fn oxy_path_call_builtin(
     ctx: *mut JitContext,
@@ -3076,41 +2204,65 @@ pub(crate) fn ffi_symbols() -> Vec<(&'static str, *const u8, FfiRet)> {
         ("oxy_return", oxy_return as _, Void),
         ("oxy_error_discriminant", oxy_error_discriminant as _, I64),
         ("oxy_panic", oxy_panic as _, Void),
-        ("oxy_make_array", oxy_make_array as _, Void),
-        ("oxy_make_fixed_array", oxy_make_fixed_array as _, Void),
-        ("oxy_make_tuple", oxy_make_tuple as _, Void),
-        ("oxy_make_iter", oxy_make_iter as _, Void),
-        ("oxy_make_repeat", oxy_make_repeat as _, Void),
-        ("oxy_iter_len", oxy_iter_len as _, Void),
-        ("oxy_iter_next", oxy_iter_next as _, I64),
+        ("oxy_make_array", collections::oxy_make_array as _, Void),
+        (
+            "oxy_make_fixed_array",
+            collections::oxy_make_fixed_array as _,
+            Void,
+        ),
+        ("oxy_make_tuple", collections::oxy_make_tuple as _, Void),
+        ("oxy_make_iter", collections::oxy_make_iter as _, Void),
+        ("oxy_make_repeat", collections::oxy_make_repeat as _, Void),
+        ("oxy_iter_len", collections::oxy_iter_len as _, Void),
+        ("oxy_iter_next", collections::oxy_iter_next as _, I64),
         (
             "oxy_iter_next_destructure",
-            oxy_iter_next_destructure as _,
+            collections::oxy_iter_next_destructure as _,
             I64,
         ),
-        ("oxy_vec_index", oxy_vec_index as _, Void),
-        ("oxy_vec_index_store", oxy_vec_index_store as _, Void),
-        ("oxy_make_range", oxy_make_range as _, Void),
-        ("oxy_to_string", oxy_to_string as _, Void),
-        ("oxy_fstring_concat", oxy_fstring_concat as _, Void),
-        ("oxy_format", oxy_format as _, Void),
-        ("oxy_dbg", oxy_dbg as _, Void),
-        ("oxy_struct_init", oxy_struct_init as _, Void),
-        ("oxy_struct_update", oxy_struct_update as _, Void),
-        ("oxy_field_access", oxy_field_access as _, Void),
-        ("oxy_field_store", oxy_field_store as _, Void),
+        ("oxy_vec_index", collections::oxy_vec_index as _, Void),
+        (
+            "oxy_vec_index_store",
+            collections::oxy_vec_index_store as _,
+            Void,
+        ),
+        ("oxy_make_range", collections::oxy_make_range as _, Void),
+        ("oxy_to_string", strings_fmt::oxy_to_string as _, Void),
+        (
+            "oxy_fstring_concat",
+            strings_fmt::oxy_fstring_concat as _,
+            Void,
+        ),
+        ("oxy_format", strings_fmt::oxy_format as _, Void),
+        ("oxy_dbg", strings_fmt::oxy_dbg as _, Void),
+        ("oxy_struct_init", structs::oxy_struct_init as _, Void),
+        ("oxy_struct_update", structs::oxy_struct_update as _, Void),
+        ("oxy_field_access", structs::oxy_field_access as _, Void),
+        ("oxy_field_store", structs::oxy_field_store as _, Void),
         ("oxy_method_call", oxy_method_call as _, Void),
         ("oxy_try_pop", oxy_try_pop as _, Void),
-        ("oxy_cast_int", oxy_cast_int as _, Void),
-        ("oxy_cast_byte", oxy_cast_byte as _, Void),
-        ("oxy_cast_float", oxy_cast_float as _, Void),
-        ("oxy_cast_to_char", oxy_cast_to_char as _, Void),
+        ("oxy_cast_int", casts::oxy_cast_int as _, Void),
+        ("oxy_cast_byte", casts::oxy_cast_byte as _, Void),
+        ("oxy_cast_float", casts::oxy_cast_float as _, Void),
+        ("oxy_cast_to_char", casts::oxy_cast_to_char as _, Void),
         ("oxy_bind_ident", oxy_bind_ident as _, Void),
-        ("oxy_enum_data_get", oxy_enum_data_get as _, Void),
-        ("oxy_enum_variant_equal", oxy_enum_variant_equal as _, Void),
-        ("oxy_make_enum_variant", oxy_make_enum_variant as _, Void),
-        ("oxy_const_enum_variant", oxy_const_enum_variant as _, Void),
-        ("oxy_module_const", oxy_module_const as _, Void),
+        ("oxy_enum_data_get", enums::oxy_enum_data_get as _, Void),
+        (
+            "oxy_enum_variant_equal",
+            enums::oxy_enum_variant_equal as _,
+            Void,
+        ),
+        (
+            "oxy_make_enum_variant",
+            enums::oxy_make_enum_variant as _,
+            Void,
+        ),
+        (
+            "oxy_const_enum_variant",
+            enums::oxy_const_enum_variant as _,
+            Void,
+        ),
+        ("oxy_module_const", enums::oxy_module_const as _, Void),
         ("oxy_path_call_builtin", oxy_path_call_builtin as _, Void),
         ("oxy_display_arg", oxy_display_arg as _, Void),
         ("oxy_await_ffi", oxy_await_ffi as _, Void),
@@ -3126,3 +2278,9 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         builder.symbol(name, ptr);
     }
 }
+
+mod casts;
+mod collections;
+mod enums;
+mod strings_fmt;
+mod structs;
