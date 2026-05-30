@@ -93,7 +93,7 @@ pub fn test_project(project: &Project) -> Result<i32, String> {
     invoke_oxy(project, "test", &[])
 }
 
-/// Type-check the entry file by compiling it via `oxy --dump-bytecode` and
+/// Type-check the entry file by compiling it via `oxy --dump-ir` and
 /// discarding the output. This is the closest equivalent to `cargo build`
 /// for a script-style language with no separate "object file" output.
 pub fn build_project(project: &Project) -> Result<i32, String> {
@@ -102,9 +102,9 @@ pub fn build_project(project: &Project) -> Result<i32, String> {
     let oxy = locate_oxy()?;
 
     let mut cmd = Command::new(&oxy);
-    cmd.arg("--dump-bytecode");
+    cmd.arg("--dump-ir");
     cmd.arg(&entry);
-    // --dump-bytecode does not accept --extern yet; this is acceptable for now
+    // --dump-ir does not accept --extern yet; this is acceptable for now
     // because dependency-using projects will use `tug run` / `tug test`.
     // Surface the externs anyway for diagnostic clarity if oxy adds support.
     let _ = externs; // intentionally unused for now

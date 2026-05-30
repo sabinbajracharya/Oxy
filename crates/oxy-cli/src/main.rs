@@ -62,15 +62,14 @@ fn main() {
             });
             dump_ast(file);
         }
-        Some("--dump-bytecode") => {
+        // `--dump-bytecode` is the legacy name kept as a hidden alias; Oxy
+        // compiles through a register IR, not bytecode.
+        Some(flag @ ("--dump-ir" | "--dump-bytecode")) => {
             let file = args.get(2).unwrap_or_else(|| {
-                eprintln!(
-                    "{} --dump-bytecode requires a file argument",
-                    "error:".red().bold()
-                );
+                eprintln!("{} {flag} requires a file argument", "error:".red().bold());
                 process::exit(2);
             });
-            dump_bytecode(file);
+            dump_ir(file);
         }
         Some(cmd) => {
             eprintln!("{} unknown command '{cmd}'", "error:".red().bold());
@@ -435,7 +434,7 @@ fn dump_ast(path: &str) {
     }
 }
 
-fn dump_bytecode(path: &str) {
+fn dump_ir(path: &str) {
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -489,8 +488,8 @@ fn print_help() {
     );
     println!("  {}    Dump AST for a file", "--dump-ast <file>".cyan());
     println!(
-        "  {} Dump compiled bytecode for a file",
-        "--dump-bytecode <file>".cyan()
+        "  {}       Dump the lowered register IR for a file",
+        "--dump-ir <file>".cyan()
     );
     println!(
         "  {}           Print version information",

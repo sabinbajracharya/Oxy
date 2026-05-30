@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Renamed the `--dump-bytecode` CLI flag to `--dump-ir`, reflecting the
+  register-IR pipeline (Oxy compiles through a register IR to native code via
+  Cranelift, not bytecode). `--dump-bytecode` is kept as a hidden alias.
+
 ## v0.4.0 — 2026-05-25
 
 Highlights: a brand-new package manager (`tug`), a Rust-style split between

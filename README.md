@@ -2,7 +2,7 @@
 
 **Rust syntax, scripting freedom.**
 
-Oxy is a bytecode-compiled programming language written in Rust that replicates Rust's syntax — without the borrow checker or ownership rules. Write Rust-like code, run it instantly on a stack-based VM.
+Oxy is a JIT-compiled programming language written in Rust that replicates Rust's syntax — without the borrow checker or ownership rules. Write Rust-like code; it lowers to a register IR and compiles to native machine code via Cranelift. The same IR also runs in the browser through an interpreter, so the [playground](playground/wasm) executes Oxy with no native toolchain.
 
 ## Hello World
 
@@ -54,7 +54,7 @@ Options:
   --extern <name>=<path>   Register an external module dependency
   --dump-tokens <file>     Show lexer output (debugging)
   --dump-ast <file>        Show parser AST output (debugging)
-  --dump-bytecode <file>   Show compiled bytecode (debugging)
+  --dump-ir <file>         Show the lowered register IR (debugging)
 ```
 
 ### `tug` — package manager
@@ -270,17 +270,17 @@ code --install-extension editors/vscode/oxy-lang-0.1.0.vsix
 ```
 crates/
 ├── oxy-core/src/
-│   ├── compiler/        # Bytecode compiler (AST → VM opcodes)
-│   │   ├── mod.rs       #   Prescan, compile items, module handling
-│   │   ├── expr.rs      #   Expression compilation
-│   │   ├── pattern.rs   #   Pattern compilation
-│   │   └── visibility.rs#   Visibility enforcement
-│   ├── vm/              # Stack-based VM + test runner
-│   │   ├── mod.rs       #   Dispatch, builtin_method, run_tests
+│   ├── vm/              # Execution: shared runtime + two backends
+│   │   ├── api.rs       #   Public entry points (run, run_tests)
 │   │   ├── builtins/    #   Per-type method implementations
-│   │   ├── arith.rs     #   Arithmetic operations
-│   │   ├── call.rs      #   Function call dispatch
-│   │   └── format.rs    #   String formatting (println!, format!)
+│   │   ├── scheduler.rs #   Async task scheduler
+│   │   ├── interp.rs    #   IR interpreter backend (wasm32 / browser)
+│   │   └── jit/         #   Native backend
+│   │       ├── ir_gen/  #     AST → register IR + CFG
+│   │       ├── ir.rs    #     Register IR types
+│   │       ├── codegen.rs    # IR → Cranelift CLIF → native code
+│   │       ├── ffi.rs   #     Shared oxy_* runtime (both backends)
+│   │       └── runtime.rs    # Arithmetic / cast helpers
 │   ├── type_checker/    # Static type validation
 │   │   ├── mod.rs       #   TypeChecker struct, check_program
 │   │   ├── check_expr.rs#   Expression type inference
@@ -301,7 +301,7 @@ crates/
 └── oxy-tug/             # Package manager (tug new, build, add, install)
 editors/vscode/          # VS Code extension
 examples/
-├── features/            # Language feature tests (200+ .ox files)
+├── features/            # Language feature tests (100+ .ox files)
 └── showcase/            # Showcase projects (todo-cli, http-scraper, etc.)
 playground/wasm/         # WebAssembly playground
 ```
