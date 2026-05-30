@@ -152,8 +152,17 @@ this. Proposed split by lowering domain, keeping `IrGen` impl blocks across file
 two lists **stay together** — the consistency test depends on them being co-located
 and exhaustive).
 
-**2c. `type_checker/check_expr.rs` (1844, 14 fns).** Identify the oversized fns and
-extract by expr family (calls/paths, operators, literals/collections, match/if).
+**2c. `type_checker/check_expr.rs` (1844, 14 fns). ✅ DONE (method extraction).**
+`infer_expr` was a single ~1450-line `match`. Extracted all 28 non-trivial arms into
+focused `infer_<variant>` methods (`infer_call`, `infer_method_call`, `infer_binary_op`,
+`infer_struct_init`, `infer_match`, …); `infer_expr` is now a ~110-line dispatcher that
+reads as a table of the expression grammar. Trivial one-liner arms (literals, `Grouped`,
+`FString`) stay inline. Behavior-preserving: clippy clean and the full suite green
+(no IR-snapshot proof here — type-checking emits no IR — so the net is the unit +
+feature + vm tests). Param types are clippy-safe (`&Expr`/`&[T]`/`&str`); the only body
+rewrite was stripping `.as_ref()`/`.as_str()` on now-`&Expr`/`&str` bindings.
+A follow-up *pure-move* file split (grouping the `infer_*` methods into `check_expr/`
+submodules) is still open if the ~1940-line file wants further shrinking.
 
 **2d. `tests/vm_tests.rs` (6130). ✅ DONE.** Split into `tests/vm_tests/` with a
 `main.rs` harness (Cargo auto-discovers `tests/<dir>/main.rs` as the single `vm_tests`

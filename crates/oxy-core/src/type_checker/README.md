@@ -16,7 +16,7 @@ this stage (or codegen) rejects the program.
 | `resolve.rs` | Name resolution: paths, use-aliases, module qualification. |
 | `check_item.rs` | Type-checking item bodies (fns, impls, traits, modules). |
 | `check_stmt.rs` | Statement checking (`let`, `use`, control flow). |
-| `check_expr.rs` | Expression type inference (calls, paths, operators, field access, match). |
+| `check_expr.rs` | Expression type inference. `infer_expr` is a thin dispatcher; each non-trivial `Expr` variant has a focused `infer_<variant>` method (`infer_call`, `infer_method_call`, `infer_binary_op`, `infer_struct_init`, …). |
 | `tests.rs` | Rust unit tests for the type checker. |
 
 ## Key types & entry points
