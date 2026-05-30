@@ -167,6 +167,28 @@ extern "C" fn oxy_store_local(ctx: *mut JitContext, index: usize) {
     }
 }
 
+/// Store into a slot transparently: always overwrite, never write through a
+/// `Cell`. Used for spill slots, which are transient register storage and must
+/// round-trip values faithfully (the dual of `oxy_load_local_raw`).
+///
+/// `oxy_store_local` writes *through* a cell so `self.field = v` and captured
+/// mutable variables propagate — correct for real locals. But a spill slot that
+/// happens to hold a `Cell` (from a previous iteration spilling a `LoadLocalRaw`
+/// result) would, under that rule, have the next iteration's value written into
+/// the cell's interior, producing `Cell(Cell(..))` and corrupting dispatch. Here
+/// the previous occupant is dropped and the new value written in its place, so a
+/// spilled cell is replaced rather than nested. The slot is either zeroed
+/// (`I64(0)`, a no-op drop) or a prior valid value, so `drop_in_place` is sound.
+extern "C" fn oxy_store_local_raw(ctx: *mut JitContext, index: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let val = unsafe { pop(ctx) };
+    let target = unsafe { ctx.buffer.add(index) };
+    unsafe {
+        std::ptr::drop_in_place(target);
+        target.write(val);
+    }
+}
+
 /// Read a local slot and return its raw i64 representation.
 /// Returns 0 for non-integer types (they always flow through the FFI stack).
 extern "C" fn oxy_read_local_i64(ctx: *mut JitContext, index: usize) -> i64 {
@@ -184,6 +206,18 @@ extern "C" fn oxy_read_local_i64(ctx: *mut JitContext, index: usize) -> i64 {
 extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { ctx.buffer.add(index).read() };
+    // Idempotent: a slot that already holds a `Cell` is left untouched. The
+    // compile-time `celled_slots` guard only stops the op being *emitted* twice;
+    // it cannot stop the single emitted op from *executing* repeatedly when it
+    // sits in a loop (e.g. a `mut` receiver in a `while let` condition). Without
+    // this guard a second execution would wrap `Cell(v)` into `Cell(Cell(v))`,
+    // and dispatch would then see the inner cell instead of the real value.
+    if matches!(&val, Value::Cell(_)) {
+        // `val` is a shallow bitwise copy of the slot; forget it so its Drop
+        // doesn't decrement the Rc still owned by the slot.
+        std::mem::forget(val);
+        return;
+    }
     let cell = Value::Cell(std::rc::Rc::new(std::cell::RefCell::new(val)));
     // val was a shallow copy; it has been moved into the Rc so it won't Drop.
     // The original in the buffer is overwritten by write() below (write does
@@ -197,8 +231,9 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 
 // `format_template` (the `format!`/`print!`/`println!` placeholder engine)
 // lives in `crate::types` so it is reachable wasm-side and from the stdlib
-// registry without depending on the Cranelift-gated `jit` module.
-use crate::types::format_template;
+// registry without depending on the Cranelift-gated `jit` module. The JIT print
+// builtins use the `_with` variant to layer on `Display::fmt` dispatch.
+use crate::types::format_template_with;
 
 extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
     let ctx = unsafe { &mut *ctx };
@@ -215,7 +250,9 @@ extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
         print!("{template}");
         return;
     }
-    let result = format_template(&template, &vals[1..]);
+    let result = format_template_with(&template, &vals[1..], |v| unsafe {
+        display_via_user_fmt(ctx, v)
+    });
     print!("{result}");
 }
 
@@ -232,7 +269,9 @@ extern "C" fn oxy_println_val(ctx: *mut JitContext, count: usize) {
         vals[0].to_string()
     } else {
         let template = vals[0].to_string();
-        format_template(&template, &vals[1..])
+        format_template_with(&template, &vals[1..], |v| unsafe {
+            display_via_user_fmt(ctx, v)
+        })
     };
     if !ctx.output.is_null() {
         let output = unsafe { &*ctx.output };
@@ -1480,7 +1519,9 @@ extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
         }
         return;
     }
-    let result = format_template(&template, &vals[1..]);
+    let result = format_template_with(&template, &vals[1..], |v| unsafe {
+        display_via_user_fmt(ctx, v)
+    });
     unsafe {
         push(ctx, Value::String(result));
     }
@@ -1675,6 +1716,111 @@ fn jit_closure_invoker(tables: &JitTables, func: &Value, args: &[Value]) -> Resu
     }
 }
 
+/// Invoke a JIT-compiled method (`fn_index`/`fp` resolved by the caller) with an
+/// explicit receiver and argument list, returning its result `Value`.
+///
+/// This is the shared frame-setup/teardown for every "call a compiled method from
+/// FFI" site: regular method dispatch (`oxy_method_call`) and `Display` rendering
+/// in the format builtins both route through here so the buffer-swap and cleanup
+/// invariants live in exactly one place. A fresh callee buffer is allocated, the
+/// receiver and args are written into the new frame, `ctx`'s stack window is
+/// swapped to it for the duration of the call, then all callee slots are dropped
+/// and the original window restored. Safe to call reentrantly (e.g. formatting a
+/// struct while another method is mid-flight) because it never touches the
+/// caller's live stack region.
+///
+/// # Safety
+/// `ctx` must be valid and `fp` must be the JIT entry point for `fn_index`.
+unsafe fn invoke_compiled_method(
+    ctx: &mut JitContext,
+    fn_index: usize,
+    fp: usize,
+    receiver: Value,
+    args: Vec<Value>,
+) -> Value {
+    let tables = unsafe { &*ctx.tables };
+    let arg_count = args.len();
+    let fn_local_count = tables.local_count(fn_index);
+    let total_frame = fn_local_count.max(1 + arg_count);
+    const STACK_CAP2: usize = 2048;
+    let callee_cap = total_frame + STACK_CAP2;
+    let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+    let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
+
+    unsafe {
+        callee_buf.add(0).write(receiver);
+    }
+    for (i, arg) in args.into_iter().enumerate() {
+        unsafe {
+            callee_buf.add(1 + i).write(arg);
+        }
+    }
+
+    let saved_buffer = ctx.buffer;
+    let saved_capacity = ctx.capacity;
+    let saved_local_count = ctx.local_count;
+    let saved_sp = ctx.sp;
+    ctx.buffer = callee_buf;
+    ctx.capacity = callee_cap;
+    ctx.local_count = total_frame;
+    ctx.sp = 0;
+
+    let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
+        unsafe { std::mem::transmute(fp as *const ()) };
+    let _disc = fn_ptr(ctx);
+
+    for i in 0..ctx.local_count {
+        unsafe {
+            std::ptr::drop_in_place(ctx.buffer.add(i));
+        }
+    }
+    for i in 0..ctx.sp {
+        unsafe {
+            std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
+        }
+    }
+    unsafe {
+        std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
+    }
+
+    let result = std::mem::replace(&mut ctx.result, Value::Unit);
+    ctx.buffer = saved_buffer;
+    ctx.capacity = saved_capacity;
+    ctx.local_count = saved_local_count;
+    ctx.sp = saved_sp;
+    result
+}
+
+/// Render a value via its user-defined `Display::fmt` method, if one exists.
+///
+/// `{}` placeholders in `format!`/`println!` should use a struct/enum's `fmt`
+/// method when the type implements `Display` (`fn fmt(self) -> String`). Returns
+/// `Some(rendered)` when such a method is found and invoked, `None` otherwise so
+/// the caller falls back to the value's default `to_string`. Only structs and
+/// enum variants can carry user methods, so every other value returns `None`.
+///
+/// # Safety
+/// `ctx` must be valid (used to resolve and invoke the compiled `fmt`).
+unsafe fn display_via_user_fmt(ctx: &mut JitContext, value: &Value) -> Option<String> {
+    let lookup_name = match value {
+        Value::Struct { name, .. } => name.clone(),
+        Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+        _ => return None,
+    };
+    let (fn_index, fp) = {
+        let tables = unsafe { &*ctx.tables };
+        let qualified = format!("{lookup_name}::fmt");
+        let fn_index = tables.name_to_index(&qualified)?;
+        let fp = tables.fn_table.get(&fn_index).copied()?;
+        (fn_index, fp)
+    };
+    let result = unsafe { invoke_compiled_method(ctx, fn_index, fp, value.clone(), Vec::new()) };
+    Some(match result {
+        Value::String(s) => s,
+        other => other.to_string(),
+    })
+}
+
 extern "C" fn oxy_method_call(
     ctx: *mut JitContext,
     name_ptr: *const u8,
@@ -1693,9 +1839,20 @@ extern "C" fn oxy_method_call(
     args.reverse();
     let receiver = unsafe { pop(ctx) };
 
+    // A mutable local receiver arrives wrapped in a `Value::Cell` so a `mut self`
+    // method can write the updated struct back through the shared storage (see the
+    // MethodCall lowering in ir_gen). Dispatch keys off the *inner* value's type,
+    // but the cell itself is what we hand to the method as `self` — unwrapping here
+    // would sever the write-back path. Peek through the cell for the lookup name
+    // while leaving `receiver` (the cell) intact for the call.
+    let dispatch_value = match &receiver {
+        Value::Cell(rc) => rc.borrow().clone(),
+        other => other.clone(),
+    };
+
     // Determine lookup name from receiver type (like old VM does)
-    let type_name = receiver.type_name().to_string();
-    let lookup_name = match &receiver {
+    let type_name = dispatch_value.type_name().to_string();
+    let lookup_name = match &dispatch_value {
         Value::Struct { name, .. } => name.clone(),
         Value::EnumVariant { enum_name, .. } => enum_name.clone(),
         _ => type_name,
@@ -1708,54 +1865,7 @@ extern "C" fn oxy_method_call(
     let qualified = format!("{lookup_name}::{method_name}");
     if let Some(fn_index) = tables.name_to_index(&qualified) {
         if let Some(fp) = tables.fn_table.get(&fn_index).copied() {
-            let fn_local_count = tables.local_count(fn_index);
-            let total_frame = fn_local_count.max(1 + arg_count);
-            const STACK_CAP2: usize = 2048;
-            let callee_cap = total_frame + STACK_CAP2;
-            let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
-            let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
-
-            unsafe {
-                callee_buf.add(0).write(receiver);
-            }
-            for (i, arg) in args.into_iter().enumerate() {
-                unsafe {
-                    callee_buf.add(1 + i).write(arg);
-                }
-            }
-
-            let saved_buffer = ctx.buffer;
-            let saved_capacity = ctx.capacity;
-            let saved_local_count = ctx.local_count;
-            let saved_sp = ctx.sp;
-            ctx.buffer = callee_buf;
-            ctx.capacity = callee_cap;
-            ctx.local_count = total_frame;
-            ctx.sp = 0;
-
-            let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
-                unsafe { std::mem::transmute(fp as *const ()) };
-            let _disc = fn_ptr(ctx);
-
-            for i in 0..ctx.local_count {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(i));
-                }
-            }
-            for i in 0..ctx.sp {
-                unsafe {
-                    std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
-                }
-            }
-            unsafe {
-                std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
-            }
-
-            let result = std::mem::replace(&mut ctx.result, Value::Unit);
-            ctx.buffer = saved_buffer;
-            ctx.capacity = saved_capacity;
-            ctx.local_count = saved_local_count;
-            ctx.sp = saved_sp;
+            let result = unsafe { invoke_compiled_method(ctx, fn_index, fp, receiver, args) };
             unsafe {
                 push(ctx, result);
             }
@@ -1763,8 +1873,13 @@ extern "C" fn oxy_method_call(
         }
     }
 
-    // Fall back to built-in dispatch
-    let result = dispatch_builtin_method(tables, receiver.clone(), &method_name, args.clone());
+    // Fall back to built-in dispatch. Built-in receivers (Vec, String, …) are
+    // either value types or already `Rc<RefCell>`-shared, so they're never the
+    // cell-wrapped mutable receivers the user-method path relies on — dispatch on
+    // the unwrapped value so a celled mutable local (e.g. `let mut v = vec![]`)
+    // still resolves to the underlying collection's methods.
+    let result =
+        dispatch_builtin_method(tables, dispatch_value.clone(), &method_name, args.clone());
 
     match result {
         Ok(val) => unsafe {
@@ -2658,6 +2773,7 @@ pub(crate) fn register_ffi_symbols(builder: &mut JITBuilder) {
         ("oxy_load_local_raw", oxy_load_local_raw as _),
         ("oxy_read_local_i64", oxy_read_local_i64 as _),
         ("oxy_store_local", oxy_store_local as _),
+        ("oxy_store_local_raw", oxy_store_local_raw as _),
         ("oxy_make_cell", oxy_make_cell as _),
         ("oxy_print_val", oxy_print_val as _),
         ("oxy_println_val", oxy_println_val as _),

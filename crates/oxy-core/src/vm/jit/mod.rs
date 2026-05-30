@@ -53,6 +53,7 @@ fn ffi_decls() -> Vec<FfiDecl> {
             Some(types::I64),
         ),
         ("oxy_store_local", &[types::I64, types::I64], None),
+        ("oxy_store_local_raw", &[types::I64, types::I64], None),
         ("oxy_make_cell", &[types::I64, types::I64], None),
         ("oxy_print_val", &[types::I64, types::I64], None),
         ("oxy_println_val", &[types::I64, types::I64], None),

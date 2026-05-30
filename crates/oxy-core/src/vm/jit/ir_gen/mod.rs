@@ -89,6 +89,12 @@ pub(crate) struct IrGen {
     /// lowering. Lets a call site qualify a bare callee with the current module
     /// prefix (sibling call) only when such a function actually exists.
     fn_names: std::collections::HashSet<String>,
+    /// Type name of the impl block currently being lowered (e.g. "Counter" or
+    /// "shapes::Point"). `Self` in a method body — both `Self { .. }` struct
+    /// literals and `Self::assoc()` paths — resolves to this name so the value
+    /// carries its concrete struct name for method dispatch. `None` outside a
+    /// method body.
+    current_self_type: Option<String>,
 }
 
 impl IrGen {
@@ -133,6 +139,7 @@ impl IrGen {
             mono_emitted: std::collections::HashSet::new(),
             unit_structs: std::collections::HashSet::new(),
             fn_names: std::collections::HashSet::new(),
+            current_self_type: None,
         }
     }
 
@@ -330,7 +337,7 @@ impl IrGen {
                     // runtime resolves methods by a value's base struct name.
                     let prefix = imp.base_type_name().to_string();
                     for method in &imp.methods {
-                        self.gen_fn(method, Some(&prefix));
+                        self.gen_method(method, &prefix);
                     }
                 }
                 Item::Trait(t) => {
@@ -340,7 +347,7 @@ impl IrGen {
                     let prefix = imp.base_type_name().to_string();
                     // Compile provided methods
                     for method in &imp.methods {
-                        self.gen_fn(method, Some(&prefix));
+                        self.gen_method(method, &prefix);
                     }
                     // Compile trait default methods that weren't overridden
                     let default_fns: Vec<crate::ast::FnDef> = self
@@ -357,7 +364,7 @@ impl IrGen {
                         })
                         .unwrap_or_default();
                     for default_fn in &default_fns {
-                        self.gen_fn(default_fn, Some(&prefix));
+                        self.gen_method(default_fn, &prefix);
                     }
                 }
                 Item::Const { name, value, .. } => {
@@ -409,7 +416,7 @@ impl IrGen {
                 Item::Impl(imp) => {
                     let qualified_type = format!("{prefix}::{}", imp.base_type_name());
                     for method in &imp.methods {
-                        self.gen_fn(method, Some(&qualified_type));
+                        self.gen_method(method, &qualified_type);
                     }
                 }
                 Item::Trait(t) => {
@@ -419,7 +426,7 @@ impl IrGen {
                 Item::ImplTrait(imp) => {
                     let qualified_type = format!("{prefix}::{}", imp.base_type_name());
                     for method in &imp.methods {
-                        self.gen_fn(method, Some(&qualified_type));
+                        self.gen_method(method, &qualified_type);
                     }
                     // Compile trait default methods that weren't overridden.
                     let full_trait_name = format!("{prefix}::{}", imp.trait_name);
@@ -439,7 +446,7 @@ impl IrGen {
                         })
                         .unwrap_or_default();
                     for default_fn in &default_fns {
-                        self.gen_fn(default_fn, Some(&qualified_type));
+                        self.gen_method(default_fn, &qualified_type);
                     }
                 }
                 Item::Use(use_def) => self.register_use(use_def),
@@ -721,6 +728,18 @@ impl IrGen {
             self.current_module_prefix.clone(),
             Default::default(),
         );
+    }
+
+    /// Lower an impl-block method. Identical to `gen_fn` except it records the
+    /// impl's type name as `current_self_type` for the duration of the body, so
+    /// `Self` literals/paths inside resolve to the concrete struct. `type_prefix`
+    /// is the same value used to qualify the method name (the base type name, or
+    /// its module-qualified form), so the value's struct tag matches what method
+    /// dispatch later looks up.
+    fn gen_method(&mut self, f: &FnDef, type_prefix: &str) {
+        let saved = self.current_self_type.replace(type_prefix.to_string());
+        self.gen_fn(f, Some(type_prefix));
+        self.current_self_type = saved;
     }
 
     /// Lower a function body under an explicit final name, module prefix, and
@@ -1322,8 +1341,21 @@ impl IrGen {
             } => {
                 // For local-variable receivers, use LoadLocalRaw to preserve
                 // Cell wrapping so mutations through method calls are visible.
+                //
+                // A `mut self` method mutates its receiver in place (Oxy has no
+                // ownership, so `mut self` behaves like `&mut self`). Structs are
+                // value types, so a plain copy of the receiver would discard those
+                // mutations once the method returns. Promote a mutable local
+                // receiver to a shared `Value::Cell` first (idempotent per slot via
+                // `celled_slots`, exactly like closure capture): the method then
+                // stores the updated struct back through the cell, which the caller
+                // observes. Non-`mut` receivers and non-mutating methods are
+                // unaffected — they simply never write through the shared cell.
                 let obj_reg = if let Expr::Ident(name, ..) = object.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
+                        if self.mut_slots.contains(&slot) && self.celled_slots.insert(slot) {
+                            self.emit(IrOp::MakeCell(slot));
+                        }
                         let r = self.alloc_reg();
                         self.emit(IrOp::LoadLocalRaw(r, slot));
                         r
@@ -1385,10 +1417,21 @@ impl IrGen {
                 }
                 // Join field names with \0 for the FFI to parse.
                 let names_joined = field_names.join("\0");
-                // Resolve the struct name through use_aliases and module
-                // context so that module-level types get their full path
-                // (e.g. "counter::Counter" instead of just "Counter").
-                let resolved_name = self.resolve_module_path(&[name.clone()]).join("::");
+                // `Self { .. }` inside a method body builds a value of the impl's
+                // concrete type, so dispatch (`v.method()`) resolves against it.
+                // `current_self_type` is already the fully-qualified dispatch key
+                // (the same string used to name the methods), so use it directly.
+                // Otherwise resolve the struct name through use_aliases and module
+                // context so module-level types get their full path (e.g.
+                // "counter::Counter" instead of just "Counter").
+                let resolved_name = if name == "Self" {
+                    match &self.current_self_type {
+                        Some(t) => t.clone(),
+                        None => self.resolve_module_path(&[name.clone()]).join("::"),
+                    }
+                } else {
+                    self.resolve_module_path(&[name.clone()]).join("::")
+                };
                 if let Some(base_expr) = base {
                     // Struct update: Point { x: 1, ..base }
                     let base_reg = self.gen_expr(base_expr);

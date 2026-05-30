@@ -831,6 +831,23 @@ impl Value {
 /// no backend dependency, so it lives here (wasm-safe) rather than in the
 /// Cranelift-gated `jit` module.
 pub(crate) fn format_template(template: &str, args: &[Value]) -> String {
+    // No Display hook: `{}` falls back to each value's default `to_string`. Used
+    // by callers that have no access to the JIT (stdlib `assert`, wasm builds).
+    format_template_with(template, args, |_| None)
+}
+
+/// Like [`format_template`], but a `{}` placeholder first consults `display` to
+/// let a value render through a user-defined `Display::fmt`. `display` returns
+/// `Some(rendered)` to override, or `None` to fall back to the default
+/// `to_string`. `{:?}` placeholders always use Debug and ignore the hook. Keeping
+/// the placeholder-parsing logic here (rather than in the JIT FFI) means there is
+/// one template engine, wasm-safe by default, with Display dispatch layered on
+/// only where a backend can supply it.
+pub(crate) fn format_template_with(
+    template: &str,
+    args: &[Value],
+    mut display: impl FnMut(&Value) -> Option<String>,
+) -> String {
     let mut result = String::new();
     let mut arg_idx = 0;
     let mut chars = template.chars().peekable();
@@ -855,6 +872,8 @@ pub(crate) fn format_template(template: &str, args: &[Value]) -> String {
                 if let Some(v) = args.get(arg_idx) {
                     if is_debug {
                         result.push_str(&v.to_debug_string());
+                    } else if let Some(rendered) = display(v) {
+                        result.push_str(&rendered);
                     } else {
                         result.push_str(&v.to_string());
                     }

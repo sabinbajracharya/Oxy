@@ -227,10 +227,13 @@ impl<'a> Codegen<'a> {
             let ctx = params[0];
 
             // Pop phi values from the operand stack into their pre-allocated slot.
+            // Phi slots are spill slots reused on every loop back-edge, so they use
+            // the raw (transparent-overwrite) store for the same reason as
+            // `spill_result` — never write through a stale cell from a prior pass.
             if let Some(phis) = block_phis.get(&block.id) {
                 for (phi_r, _sources) in phis.iter().rev() {
                     let slot = phi_slot[phi_r];
-                    if let Some(store) = ffi_refs.get("oxy_store_local") {
+                    if let Some(store) = ffi_refs.get("oxy_store_local_raw") {
                         let slot_val = builder.ins().iconst(types::I64, slot as i64);
                         builder.ins().call(*store, &[ctx, slot_val]);
                     }
@@ -400,7 +403,11 @@ fn spill_result(
 ) {
     let slot = *next_spill_slot;
     *next_spill_slot -= 1;
-    if let Some(store) = ffi_refs.get("oxy_store_local") {
+    // Spill via the raw (transparent-overwrite) store: a spill slot reused across
+    // loop iterations may still hold a `Cell` from the prior iteration, and the
+    // cell-aware `oxy_store_local` would write *through* it, nesting cells and
+    // corrupting the spilled value. See `oxy_store_local_raw`.
+    if let Some(store) = ffi_refs.get("oxy_store_local_raw") {
         let slot_val = builder.ins().iconst(types::I64, slot as i64);
         builder.ins().call(*store, &[ctx, slot_val]);
     }
@@ -442,7 +449,14 @@ fn push_reg(
     if let Some(clif_val) = regs.get(&reg).copied() {
         push_int(builder, ctx, ffi_refs, clif_val);
     } else if let Some(slot) = reg_slot.get(&reg).copied() {
-        if let Some(load) = ffi_refs.get("oxy_load_local") {
+        // Spill slots are transient register storage: a reloaded register must be
+        // the *same* value that was spilled. `oxy_load_local` unwraps a `Value::Cell`
+        // (correct for a real variable read, where `x` should yield the value, not
+        // the cell), but that would silently strip the cell from a `LoadLocalRaw`
+        // result that was spilled — severing the shared storage a `mut self` method
+        // receiver or closure capture relies on. Reload raw so the round-trip is
+        // value-transparent; registers never hold a cell unless one was intended.
+        if let Some(load) = ffi_refs.get("oxy_load_local_raw") {
             let slot_val = builder.ins().iconst(types::I64, slot as i64);
             builder.ins().call(*load, &[ctx, slot_val]);
         }
