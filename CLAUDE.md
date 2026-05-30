@@ -246,7 +246,7 @@ None. The whole `examples/features/**` corpus is at parity (`jit_interp_parity`)
 |------|-----------|----------|
 | Runtime tests | `#[test]` fn in `.ox` file | `examples/features/<category>/` |
 | Compile-error tests | `#[compile_error]` fn in `.ox` file | `examples/features/<category>/` |
-| Rust unit tests | `#[test]` in `#[cfg(test)]` modules | `crates/oxy-core/tests/vm_tests.rs` |
+| Rust unit tests | `#[test]` in `#[cfg(test)]` modules | `crates/oxy-core/tests/vm_tests/` (topic submodules under `main.rs`) |
 | Integration test | `feature_examples.rs` globs all `.ox` | `crates/oxy-core/tests/feature_examples.rs` |
 | Leetcode tests | Same as feature examples | `crates/oxy-core/tests/leetcode_solutions.rs` |
 | Symbol consistency | `#[test]` cross-referencing `symbols.rs` vs builtins/lexer/JIT | `crates/oxy-core/tests/symbol_consistency.rs` |

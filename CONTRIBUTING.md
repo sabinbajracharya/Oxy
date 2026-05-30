@@ -227,7 +227,7 @@ For new expressions, statements, or patterns:
 | Type | Location | Run with |
 |------|----------|----------|
 | Rust unit tests | `#[cfg(test)]` in source files | `cargo test -p oxy-core` |
-| VM tests | `tests/vm_tests.rs` | `cargo test -p oxy-core --test vm_tests` |
+| VM tests | `tests/vm_tests/` (topic submodules) | `cargo test -p oxy-core --test vm_tests` |
 | Feature tests | `examples/features/**/*.ox` | `cargo test -p oxy-core -- feature_examples` |
 | Symbol consistency | `tests/symbol_consistency.rs` | `cargo test -p oxy-core --test symbol_consistency` |
 | LSP tests | `oxy-lsp/src/main.rs` | `cargo test -p oxy-lsp` |

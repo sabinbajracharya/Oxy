@@ -155,11 +155,15 @@ and exhaustive).
 **2c. `type_checker/check_expr.rs` (1844, 14 fns).** Identify the oversized fns and
 extract by expr family (calls/paths, operators, literals/collections, match/if).
 
-**2d. `tests/vm_tests.rs` (6130).** Split into `tests/vm/` by category mirroring
-`examples/features/` (numbers, strings, collections, control_flow, …). Cargo treats
-each top-level file in `tests/` as a crate; use a `tests/vm/main.rs` harness with
-`mod` includes, or one integration file per category. Pick whichever keeps compile
-time sane (decision noted below).
+**2d. `tests/vm_tests.rs` (6130). ✅ DONE.** Split into `tests/vm_tests/` with a
+`main.rs` harness (Cargo auto-discovers `tests/<dir>/main.rs` as the single `vm_tests`
+target) plus 14 topic submodules (`basics`, `functions`, `control_flow`, `collections`,
+`strings`, `structs_enums`, `traits_generics`, `error_handling`, `closures`, `modules`,
+`stdlib`, `diagnostics`, `patterns`, `reference_syntax`). `main.rs` keeps the shared
+imports + `run_and_capture`/`run_and_get_value`; submodules reach them via `use super::*`.
+All 406 tests preserved (chunked by the existing `// === Section ===` dividers — no
+brace-counting, since raw-string bodies hold col-0 `}`). One test target = compile time
+unchanged. See `crates/oxy-core/tests/vm_tests/README.md`.
 
 **2e. Stretch (only if they still hurt after 2a–2d):** `parser/mod.rs`,
 `ast/mod.rs` (split node families into `ast/{expr,stmt,item,pattern,ty}.rs`),
