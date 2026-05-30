@@ -400,17 +400,115 @@ impl<'e> Interpreter<'e> {
         immediates: &[usize],
         strings: &[String],
     ) -> Value {
-        // User-function calls have no native pointer to jump to on this path;
-        // they are interpreted recursively. Implemented in a later phase.
-        if matches!(func, "oxy_call" | "oxy_call_closure") {
-            ffi::set_error(
-                ctx,
-                format!("interpreter: user function calls not yet supported ({func})"),
-            );
-            return Value::Unit;
+        // User function/method calls jump to native code in the JIT; on this
+        // path there is none, so we intercept them and interpret the callee
+        // recursively. Everything else (and the async / built-in-method cases,
+        // which never invoke native code) falls through to the shared FFI.
+        match func {
+            "oxy_call_closure" => {
+                if let Some(v) = self.try_call_closure(ctx, args, regs) {
+                    return v;
+                }
+            }
+            "oxy_method_call" => {
+                if let Some(v) = self.try_call_method(ctx, args, regs, strings) {
+                    return v;
+                }
+            }
+            _ => {}
         }
         let arg_vals: Vec<Value> = args.iter().map(|&a| Self::reg_val(regs, a)).collect();
         self.call_collect(ctx, func, &arg_vals, strings, immediates)
+    }
+
+    /// Intercept a synchronous user-function/closure call. Returns `Some(result)`
+    /// when handled here; `None` to fall through to the FFI (async closures build
+    /// a `Future` and non-callables raise the proper error there).
+    fn try_call_closure(
+        &mut self,
+        ctx: &mut JitContext,
+        args: &[Reg],
+        regs: &HashMap<Reg, Value>,
+    ) -> Option<Value> {
+        let callee = Self::reg_val(regs, *args.first()?);
+        let Value::Function(f) = &callee else {
+            return None;
+        };
+        if f.is_async {
+            return None;
+        }
+        let target_ip = match f.target_ip {
+            Some(ip) if ip != usize::MAX => ip,
+            _ => return None,
+        };
+
+        // Frame layout matches oxy_call_closure: captures first, then args.
+        let mut frame: Vec<Value> = f
+            .captured_names
+            .iter()
+            .map(|name| f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit))
+            .collect();
+        frame.extend(args[1..].iter().map(|&a| Self::reg_val(regs, a)));
+
+        let eng = self.engine;
+        let callee_fn = &eng.functions[target_ip];
+        Some(self.invoke(ctx, callee_fn, frame))
+    }
+
+    /// Intercept a call to a user-defined struct/enum method (`Type::method`).
+    /// Returns `None` for built-in receivers (Vec/String/…), letting the FFI's
+    /// built-in method dispatch handle them.
+    fn try_call_method(
+        &mut self,
+        ctx: &mut JitContext,
+        args: &[Reg],
+        regs: &HashMap<Reg, Value>,
+        strings: &[String],
+    ) -> Option<Value> {
+        let method = strings.first()?;
+        let receiver = Self::reg_val(regs, *args.first()?);
+        // A `mut self` receiver arrives Cell-wrapped; dispatch on the inner type
+        // but hand the cell itself to the method (preserving write-back).
+        let dispatch_value = match &receiver {
+            Value::Cell(rc) => rc.borrow().clone(),
+            other => other.clone(),
+        };
+        let lookup = match &dispatch_value {
+            Value::Struct { name, .. } => name.clone(),
+            Value::EnumVariant { enum_name, .. } => enum_name.clone(),
+            other => other.type_name().to_string(),
+        };
+        let qualified = format!("{lookup}::{method}");
+        let &idx = self.engine.name_to_index.get(&qualified)?;
+
+        // Frame layout matches invoke_compiled_method: receiver, then args.
+        let mut frame = vec![receiver];
+        frame.extend(args[1..].iter().map(|&a| Self::reg_val(regs, a)));
+
+        let eng = self.engine;
+        let callee_fn = &eng.functions[idx];
+        Some(self.invoke(ctx, callee_fn, frame))
+    }
+
+    /// Interpret `callee_fn` in a fresh frame whose locals 0.. are `frame_locals`
+    /// (captures/receiver then args), then propagate its error state back to the
+    /// caller and return its result value — mirroring the JIT's callee-frame
+    /// teardown (`CalleeFrame::execute` / `invoke_compiled_method`).
+    fn invoke(
+        &mut self,
+        caller_ctx: &mut JitContext,
+        callee_fn: &'e IrFunction,
+        frame_locals: Vec<Value>,
+    ) -> Value {
+        let local_count = callee_fn.local_count.max(frame_locals.len());
+        let mut callee_ctx = self.fresh_ctx(local_count);
+        for (i, v) in frame_locals.into_iter().enumerate() {
+            unsafe { callee_ctx.local_slot(i).write(v) };
+        }
+        let _disc = self.interpret(&mut callee_ctx, callee_fn);
+        let result = std::mem::replace(&mut callee_ctx.result, Value::Unit);
+        propagate_error(&callee_ctx, caller_ctx);
+        result
     }
 
     /// Call `name` with the given register args + string/immediate ABI metadata,
@@ -492,6 +590,21 @@ fn discriminant(ctx: &JitContext) -> Disc {
         2
     } else {
         0
+    }
+}
+
+/// Propagate a callee's error state to its caller, mirroring `CalleeFrame::execute`.
+/// A real runtime error (non-empty message) bubbles up so the caller's next
+/// `Return`/`Halt` reports it. The empty-message marker is the `?` short-circuit
+/// signal; it has done its job inside the callee (the Err/None is now the return
+/// value), so it is dropped rather than propagated — otherwise the caller's next
+/// `CheckError` would fire spuriously.
+fn propagate_error(callee_ctx: &JitContext, caller_ctx: &mut JitContext) {
+    let is_empty_marker = callee_ctx.error_len == 1 && callee_ctx.error_msg[0] == 0;
+    if callee_ctx.error_len > 0 && !is_empty_marker {
+        let len = callee_ctx.error_len.min(1024);
+        caller_ctx.error_msg[..len].copy_from_slice(&callee_ctx.error_msg[..len]);
+        caller_ctx.error_len = callee_ctx.error_len;
     }
 }
 
@@ -667,5 +780,59 @@ mod tests {
     #[test]
     fn interp_float_arithmetic() {
         assert_parity("fn main() { let x = 3.5; let y = 2.0; println!(\"{}\", x * y); }");
+    }
+
+    #[test]
+    fn interp_function_call() {
+        assert_parity(
+            "fn add(a: int, b: int) -> int { a + b }\nfn main() { println!(\"{}\", add(2, 3)); }",
+        );
+    }
+
+    #[test]
+    fn interp_recursion() {
+        assert_parity(
+            "fn fib(n: int) -> int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { println!(\"{}\", fib(10)); }",
+        );
+    }
+
+    #[test]
+    fn interp_nested_calls() {
+        assert_parity(
+            "fn dbl(x: int) -> int { x * 2 }\nfn inc(x: int) -> int { x + 1 }\nfn main() { println!(\"{}\", dbl(inc(dbl(5)))); }",
+        );
+    }
+
+    #[test]
+    fn interp_struct_method() {
+        assert_parity(
+            "struct Counter { n: int }\nimpl Counter { fn get(self) -> int { self.n } fn bump(mut self) { self.n = self.n + 1; } }\nfn main() { let mut c = Counter { n: 5 }; c.bump(); println!(\"{}\", c.get()); }",
+        );
+    }
+
+    #[test]
+    fn interp_result_ok() {
+        assert_parity(
+            "fn half(n: int) -> Result<int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => println!(\"ok {}\", v), Err(e) => println!(\"err {}\", e) } }",
+        );
+    }
+
+    #[test]
+    fn interp_closure_direct_call() {
+        assert_parity("fn main() { let f = |x| x + 1; println!(\"{}\", f(5)); }");
+    }
+
+    #[test]
+    fn interp_closure_capture() {
+        assert_parity(
+            "fn main() { let base = 100; let add = |x| x + base; println!(\"{}\", add(7)); }",
+        );
+    }
+
+    #[test]
+    fn interp_question_propagation() {
+        assert_parity(
+            "fn parse(n: int) -> Result<int, String> { if n < 0 { Err(\"neg\") } else { Ok(n) } }\nfn run(n: int) -> Result<int, String> { let x = parse(n)?; Ok(x + 1) }\nfn main() { match run(5) { Ok(v) => println!(\"{}\", v), Err(e) => println!(\"{}\", e) } match run(-1) { Ok(v) => println!(\"{}\", v), Err(e) => println!(\"{}\", e) } }",
+        );
     }
 }
