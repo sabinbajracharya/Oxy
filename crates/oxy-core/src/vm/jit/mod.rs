@@ -309,6 +309,16 @@ pub(crate) fn expand_derives(program: &mut crate::ast::Program) {
     program.items.extend(new_impls);
 }
 
+/// Lower a (resolved, type-checked) program to register IR and render the
+/// canonical IR disassembly — the same format the IR snapshot tests use.
+/// Backs `oxy --dump-bytecode` / `tug build`. Lowering only; native codegen is
+/// validated separately by the caller.
+pub(crate) fn dump_ir(program: &crate::ast::Program) -> String {
+    let mut ir = ir_gen::IrGen::new();
+    ir.gen_program(program);
+    ir_snapshot::serialize_program(&ir.functions)
+}
+
 fn has_derive(attrs: &[crate::ast::Attribute], name: &str) -> bool {
     attrs
         .iter()

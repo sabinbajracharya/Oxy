@@ -240,13 +240,31 @@ pub fn run(source: &str) -> Result<Value, crate::errors::FerriError> {
     run_compiled(source)
 }
 
-/// Parse, type-check, and disassemble a source file.
-pub fn disassemble_source(_path: &str, _source: &str) -> Result<String, crate::errors::FerriError> {
-    Err(crate::errors::FerriError::Runtime {
-        message: "disassemble not yet wired for IR path".to_string(),
+/// Parse, type-check, lower to register IR, and render the IR disassembly.
+///
+/// Also verifies the program compiles all the way to native code, so callers
+/// that use this purely as a compile check (e.g. `tug build`) fail on codegen
+/// errors and not just type errors.
+pub fn disassemble_source(path: &str, source: &str) -> Result<String, crate::errors::FerriError> {
+    let runtime_err = |message: String| crate::errors::FerriError::Runtime {
+        message,
         line: 0,
         column: 0,
-    })
+    };
+
+    let mut program = crate::parser::parse(source)?;
+    let source_dir = std::path::Path::new(path).parent().and_then(|p| p.to_str());
+    super::jit::resolve_modules(&mut program.items, source_dir, &HashMap::new())
+        .map_err(runtime_err)?;
+    super::jit::expand_derives(&mut program);
+    crate::type_checker::TypeChecker::new().check_program(&program)?;
+
+    let disassembly = super::jit::dump_ir(&program);
+
+    // Compile end-to-end so a failed lowering/codegen surfaces as an error.
+    super::jit::JitEngine::compile(&program).map_err(runtime_err)?;
+
+    Ok(disassembly)
 }
 
 /// Result of running a test suite.
