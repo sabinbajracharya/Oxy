@@ -19,6 +19,12 @@ use crate::types::Value;
 use cranelift_jit::JITBuilder;
 use std::collections::HashMap;
 
+/// Raw pointer to the run's captured-output buffer (mirrors `JitContext.output`).
+/// A null pointer means "print to stdout"; otherwise printed lines are pushed
+/// into the shared `Vec<String>`. Threaded into child contexts so output capture
+/// follows execution into closures and spawned tasks.
+type OutputPtr = *const std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
 // ── Stack helpers (used by JIT and FFI internally) ──────────────────
 
 unsafe fn push(ctx: &mut JitContext, val: Value) {
@@ -1399,14 +1405,62 @@ extern "C" fn oxy_vec_index(ctx: *mut JitContext) {
     }
 
     let idx = super::runtime::value_to_i64(&index_val) as usize;
+    // Indexing past the end is a runtime error, not a silent `Unit`. Each
+    // sequence type reports its own length so the message is actionable; a
+    // `None` from `.get()` (or `.nth()`) is the out-of-bounds signal.
     let result = match collection {
-        Value::Vec(rc) => rc.borrow().get(idx).cloned().unwrap_or(Value::Unit),
-        Value::Array(ref a) => a.get(idx).cloned().unwrap_or(Value::Unit),
-        Value::String(ref s) => {
-            let c = s.chars().nth(idx).unwrap_or('\0');
-            Value::Char(c)
-        }
-        Value::Tuple(ref t) => t.get(idx).cloned().unwrap_or(Value::Unit),
+        Value::Vec(rc) => match rc.borrow().get(idx).cloned() {
+            Some(v) => v,
+            None => {
+                set_error(
+                    ctx,
+                    format!(
+                        "index out of bounds: the len is {} but the index is {idx}",
+                        rc.borrow().len()
+                    ),
+                );
+                Value::Unit
+            }
+        },
+        Value::Array(ref a) => match a.get(idx).cloned() {
+            Some(v) => v,
+            None => {
+                set_error(
+                    ctx,
+                    format!(
+                        "index out of bounds: the len is {} but the index is {idx}",
+                        a.len()
+                    ),
+                );
+                Value::Unit
+            }
+        },
+        Value::String(ref s) => match s.chars().nth(idx) {
+            Some(c) => Value::Char(c),
+            None => {
+                set_error(
+                    ctx,
+                    format!(
+                        "index out of bounds: the len is {} but the index is {idx}",
+                        s.chars().count()
+                    ),
+                );
+                Value::Unit
+            }
+        },
+        Value::Tuple(ref t) => match t.get(idx).cloned() {
+            Some(v) => v,
+            None => {
+                set_error(
+                    ctx,
+                    format!(
+                        "index out of bounds: the len is {} but the index is {idx}",
+                        t.len()
+                    ),
+                );
+                Value::Unit
+            }
+        },
         _ => {
             set_error(ctx, format!("cannot index {collection:?}"));
             Value::Unit
@@ -1615,7 +1669,25 @@ extern "C" fn oxy_field_access(ctx: *mut JitContext, name_ptr: *const u8, name_l
         Value::Struct { fields, .. } => fields.get(name.as_ref()).cloned().unwrap_or(Value::Unit),
         Value::Tuple(ref elements) => {
             if let Ok(idx) = name.parse::<usize>() {
-                elements.get(idx).cloned().unwrap_or(Value::Unit)
+                match elements.get(idx).cloned() {
+                    Some(v) => v,
+                    None => {
+                        // Out-of-range tuple index is a runtime error, not a
+                        // silent `Unit` — mirrors sequence indexing in
+                        // oxy_vec_index.
+                        set_error(
+                            ctx,
+                            format!(
+                                "index out of bounds: the len is {} but the index is {idx}",
+                                elements.len()
+                            ),
+                        );
+                        unsafe {
+                            push(ctx, Value::Unit);
+                        }
+                        return;
+                    }
+                }
             } else {
                 set_error(ctx, format!("tuple field not an integer: {name}"));
                 unsafe {
@@ -1672,7 +1744,12 @@ extern "C" fn oxy_field_store(ctx: *mut JitContext, name_ptr: *const u8, name_le
 
 /// JIT-compatible closure invoker callback. Matches the signature
 /// `Fn(&Value, &[Value]) -> Result<Value, String>` used by builtins.
-fn jit_closure_invoker(tables: &JitTables, func: &Value, args: &[Value]) -> Result<Value, String> {
+fn jit_closure_invoker(
+    tables: &JitTables,
+    output: OutputPtr,
+    func: &Value,
+    args: &[Value],
+) -> Result<Value, String> {
     let ft = match func {
         Value::Function(f) => f.clone(),
         _ => return Err("not a callable function".into()),
@@ -1688,6 +1765,13 @@ fn jit_closure_invoker(tables: &JitTables, func: &Value, args: &[Value]) -> Resu
     let local_count = actual_local_count.max(min_locals);
     let mut call_ctx = JitContext::new(local_count);
     call_ctx.tables = tables as *const JitTables;
+    // Inherit the parent's capture buffer so `println!` (and other output) from
+    // inside a closure driven by a Rust-side consumer loop (`for_each`, `sort_by`,
+    // Option/Result combinators, …) lands in the captured output rather than
+    // escaping to real stdout. A null `output` means "print to stdout", which is
+    // exactly the parent's behaviour when not capturing — so this is correct
+    // whether or not capture is active.
+    call_ctx.output = output;
     for (i, name) in ft.captured_names.iter().enumerate() {
         let val = ft
             .closure_env
@@ -1878,8 +1962,13 @@ extern "C" fn oxy_method_call(
     // cell-wrapped mutable receivers the user-method path relies on — dispatch on
     // the unwrapped value so a celled mutable local (e.g. `let mut v = vec![]`)
     // still resolves to the underlying collection's methods.
-    let result =
-        dispatch_builtin_method(tables, dispatch_value.clone(), &method_name, args.clone());
+    let result = dispatch_builtin_method(
+        tables,
+        ctx.output,
+        dispatch_value.clone(),
+        &method_name,
+        args.clone(),
+    );
 
     match result {
         Ok(val) => unsafe {
@@ -1959,6 +2048,7 @@ fn regex_method(receiver: &Value, method_name: &str, args: &[Value]) -> Result<V
 
 fn dispatch_builtin_method(
     tables: &JitTables,
+    output: OutputPtr,
     receiver: Value,
     method_name: &str,
     args: Vec<Value>,
@@ -1982,7 +2072,7 @@ fn dispatch_builtin_method(
                 Value::Vec(rc.clone()),
                 method_name,
                 &args,
-                |f, fa| jit_closure_invoker(tables, &f, fa),
+                |f, fa| jit_closure_invoker(tables, output, &f, fa),
             );
             if result.is_ok() {
                 return result;
@@ -1998,7 +2088,7 @@ fn dispatch_builtin_method(
                 crate::types::IteratorState::VecSource { data, index: 0 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, &f, fa)
+                jit_closure_invoker(tables, output, &f, fa)
             })
         }
         Value::String(_) => crate::vm::builtins::string::dispatch(receiver, method_name, &args),
@@ -2032,12 +2122,12 @@ fn dispatch_builtin_method(
         }
         Value::EnumVariant { enum_name, .. } if enum_name == "Option" => {
             crate::vm::builtins::option::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, &f, fa)
+                jit_closure_invoker(tables, output, &f, fa)
             })
         }
         Value::EnumVariant { enum_name, .. } if enum_name == "Result" => {
             crate::vm::builtins::result::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, &f, fa)
+                jit_closure_invoker(tables, output, &f, fa)
             })
         }
         Value::EnumVariant { enum_name, .. } => match method_name {
@@ -2070,7 +2160,7 @@ fn dispatch_builtin_method(
         },
         Value::Iterator(_) => {
             crate::vm::builtins::iterator::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, &f, fa)
+                jit_closure_invoker(tables, output, &f, fa)
             })
         }
         Value::Tuple(ref _t) => match method_name {
@@ -2110,7 +2200,7 @@ fn dispatch_builtin_method(
                 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, &f, fa)
+                jit_closure_invoker(tables, output, &f, fa)
             })
         }
         _ => Err(format!(
@@ -2422,7 +2512,7 @@ extern "C" fn oxy_path_call_builtin(
     };
     if let Some((module, func)) = module_route {
         if let Some(call) = registry::lookup_module(&module) {
-            match call_stdlib_jit(tables, call, &func, &args) {
+            match call_stdlib_jit(tables, ctx.output, call, &func, &args) {
                 Ok(val) => unsafe {
                     push(ctx, val);
                 },
@@ -2466,11 +2556,12 @@ extern "C" fn oxy_path_call_builtin(
 /// Call a stdlib module function with JIT closure support.
 fn call_stdlib_jit(
     tables: &JitTables,
+    output: OutputPtr,
     module_call: crate::stdlib::registry::ModuleCall,
     func: &str,
     args: &[Value],
 ) -> Result<Value, String> {
-    let mut cb = |f: &Value, fargs: &[Value]| jit_closure_invoker(tables, f, fargs);
+    let mut cb = |f: &Value, fargs: &[Value]| jit_closure_invoker(tables, output, f, fargs);
     let span = crate::lexer::Span {
         start: 0,
         end: 0,
@@ -2663,6 +2754,9 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
             let task_result = if let Some(fn_ptr) = tables.fn_ptr(target_ip) {
                 let mut task_ctx = JitContext::new(local_count);
                 task_ctx.tables = tables as *const JitTables;
+                // Spawned tasks inherit the run's capture buffer so output from a
+                // spawned closure is captured like everything else (see OutputPtr).
+                task_ctx.output = ctx.output;
                 task_ctx.local_count = local_count;
                 for (i, name) in f.captured_names.iter().enumerate() {
                     let val = f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);

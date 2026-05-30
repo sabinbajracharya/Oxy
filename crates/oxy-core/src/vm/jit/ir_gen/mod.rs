@@ -1581,6 +1581,36 @@ impl IrGen {
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
                 }
+                // Route enum-variant constructors (e.g. `Color::Red(1)` or the
+                // module-qualified `mymath::Operation::Add(3, 4)`) to
+                // oxy_make_enum_variant with the fully-qualified enum name,
+                // mirroring the Expr::Call path. The last segment is the variant
+                // and the preceding segments are the enum's qualified name; a
+                // match against `variant_to_enum` (which stores the same
+                // qualified name the pattern side uses) confirms it's really a
+                // constructor before we commit. Without this, a multi-segment
+                // path would emit oxy_path_call_builtin, whose positional
+                // fallback only recognizes the bare 2-segment `Enum::Variant`
+                // form and silently mis-handles module-qualified variants.
+                if final_segments.len() >= 2 {
+                    let variant = final_segments[final_segments.len() - 1].clone();
+                    let enum_name = final_segments[..final_segments.len() - 1].join("::");
+                    if self
+                        .variant_to_enum
+                        .get(&variant)
+                        .map_or(false, |e| e == &enum_name)
+                    {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::CallBuiltin {
+                            result: r,
+                            func: "oxy_make_enum_variant",
+                            args: arg_regs,
+                            immediates: vec![args.len()],
+                            strings: vec![enum_name, variant],
+                        });
+                        return r;
+                    }
+                }
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
                     result: r,
