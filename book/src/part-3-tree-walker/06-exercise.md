@@ -80,7 +80,7 @@ fn main() {
 
 ```bash
 OXY_VM_TRACE=1 docker compose run --rm dev bash -c \
-  "cargo run -- run examples/hello.ox" 2>&1 | head -40
+  "cargo run --bin oxy -- run examples/hello.ox" 2>&1 | head -40
 ```
 
 Find the IR instructions that correspond to `let x = 42` and `x + 1`. Questions:

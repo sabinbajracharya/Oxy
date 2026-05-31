@@ -155,16 +155,16 @@ whether the parse error is "unexpected EOF" (more input needed) vs. a real error
 
 ```bash
 # Run
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
+docker compose run --rm dev bash -c "cargo run --bin oxy -- run examples/hello.ox"
 
 # REPL
-docker compose run --rm dev bash -c "cargo run -- repl"
+docker compose run --rm dev bash -c "cargo run --bin oxy -- repl"
 
 # Dump IR
-docker compose run --rm dev bash -c "cargo run -- --dump-ir examples/hello.ox"
+docker compose run --rm dev bash -c "cargo run --bin oxy -- --dump-ir examples/hello.ox"
 
 # With trace
-OXY_VM_TRACE=1 docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
+OXY_VM_TRACE=1 docker compose run --rm dev bash -c "cargo run --bin oxy -- run examples/hello.ox"
 ```
 
 The `--` separates `cargo run` args from Oxy args. `cargo run` builds and runs the CLI;

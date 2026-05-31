@@ -15,7 +15,7 @@ docker compose run --rm dev bash
 # Inside the container
 cargo build
 cargo test -p oxy-core
-cargo run -- run examples/hello.ox
+cargo run --bin oxy -- run examples/hello.ox
 ```
 
 Enable the pre-commit hook:
@@ -261,13 +261,13 @@ No co-author trailers. One logical change per commit.
 
 ```bash
 # Dump the lowered register IR
-cargo run -- --dump-ir examples/hello.ox
+cargo run --bin oxy -- --dump-ir examples/hello.ox
 
 # Dump tokens
-cargo run -- --dump-tokens examples/hello.ox
+cargo run --bin oxy -- --dump-tokens examples/hello.ox
 
 # Dump AST
-cargo run -- --dump-ast examples/hello.ox
+cargo run --bin oxy -- --dump-ast examples/hello.ox
 
 # Dump the register IR for every compiled function (stderr)
 OXY_VM_TRACE=1 cargo test -p oxy-core --test feature_examples 2> ir_dump.txt

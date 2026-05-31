@@ -9,7 +9,7 @@ Set OXY_VM_TRACE=1 and every function's IR dumps to stderr. Let's read one."
 
 ```bash
 OXY_VM_TRACE=1 docker compose run --rm dev bash -c \
-  "cargo run -- run examples/hello.ox" 2>&1 | head -50
+  "cargo run --bin oxy -- run examples/hello.ox" 2>&1 | head -50
 ```
 
 The output goes to stderr. The `2>&1` redirects it to stdout so you can pipe it.

@@ -27,7 +27,7 @@ fn main() {
 Run with trace:
 ```bash
 OXY_VM_TRACE=1 docker compose run --rm dev bash -c \
-  "cargo run -- run /tmp/fib.ox" 2>&1
+  "cargo run --bin oxy -- run /tmp/fib.ox" 2>&1
 ```
 
 Find the IR for `fib`. Answer:

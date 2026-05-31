@@ -85,7 +85,7 @@ fit into a register value.
 Oxy can dump the register IR for any program:
 
 ```bash
-OXY_VM_TRACE=1 cargo run -- run examples/hello.ox 2> ir.txt
+OXY_VM_TRACE=1 cargo run --bin oxy -- run examples/hello.ox 2> ir.txt
 ```
 
 The output looks like:

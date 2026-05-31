@@ -56,7 +56,7 @@ docker compose run --rm dev bash -c "cargo test -p oxy-lsp"         # LSP only
 docker compose run --rm dev bash -c "cargo test -p oxy-tug"         # Tug only
 docker compose run --rm dev bash -c "cargo fmt --all"               # Format
 docker compose run --rm dev bash -c "cargo clippy --all-targets -- -D warnings"   # Lint
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"  # Run
+docker compose run --rm dev bash -c "cargo run --bin oxy -- run examples/hello.ox"  # Run
 docker compose run --rm test                                        # Full CI
 docker compose run --rm setup                                       # npm deps
 docker compose run --rm build-ext                                   # Package .vsix

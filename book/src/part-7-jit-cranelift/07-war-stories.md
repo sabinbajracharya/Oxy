@@ -106,7 +106,7 @@ been made in a previous iteration.
 
 Running `HashMap::new()` in isolation:
 ```bash
-cargo run -- test examples/features/collections/hashmap.ox
+cargo run --bin oxy -- test examples/features/collections/hashmap.ox
 # Output: hashmap::test_new ... FAILED: expected HashMap, got Unit
 ```
 

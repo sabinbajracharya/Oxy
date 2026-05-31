@@ -55,7 +55,7 @@ Now look at the actual register IR for a simpler program. Run:
 
 ```bash
 OXY_VM_TRACE=1 docker compose run --rm dev bash -c \
-  "echo 'fn main() { let x = 2 + 3; println(x); }' > /tmp/t.ox && cargo run -- run /tmp/t.ox" 2>&1
+  "echo 'fn main() { let x = 2 + 3; println(x); }' > /tmp/t.ox && cargo run --bin oxy -- run /tmp/t.ox" 2>&1
 ```
 
 Find the IR for `main`. Compare the IR instructions to what the stack bytecode would look like.

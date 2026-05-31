@@ -25,10 +25,10 @@ cd Oxy
 docker compose run --rm setup
 
 # Run a program
-docker compose run --rm dev bash -c "cargo run -- run examples/hello.ox"
+docker compose run --rm dev bash -c "cargo run --bin oxy -- run examples/hello.ox"
 
 # Start the REPL
-docker compose run --rm dev bash -c "cargo run -- repl"
+docker compose run --rm dev bash -c "cargo run --bin oxy -- repl"
 
 # Run tests
 docker compose run --rm dev bash -c "cargo test -p oxy-core"
