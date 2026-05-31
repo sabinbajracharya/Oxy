@@ -1,20 +1,30 @@
 # It Works! So Why Isn't This Enough?
 
-<!-- OPUS_FILL
-Write a 3-paragraph section that is honest and a little bittersweet.
+Here's the uncomfortable thing: the tree-walker *worked*. Not in a toy, proof-of-concept way — it
+ran a full language. Closures, traits, generics, pattern matching, modules, async/await, HTTP,
+JSON, a standard library. If you'd stopped there and shipped it, you'd have had a perfectly real
+programming language, and you'd be in excellent company. Ruby walked trees before YARV. Python ran
+that way before CPython grew a bytecode compiler. A huge fraction of the scripting languages people
+use every day are, under the hood, doing exactly what we just described. "It's only a tree-walker"
+is not an insult; plenty of beloved languages never became anything else.
 
-The tree-walker worked. It supported closures, traits, generics, async, HTTP — a full language.
-The argument for stopping there is real: lots of useful languages are tree-walkers (Ruby before
-YARV, Python before CPython's bytecode, most scripting languages).
+So why did Oxy move on? Because of what Oxy is trying to be. The performance gap between walking a
+tree and running native code is not a rounding error — it's two or three orders of magnitude on a
+tight loop, as the benchmark below shows. For a scripting language gluing together fast native
+libraries, that gap is invisible and irrelevant. But Oxy's whole identity is *Rust without the
+borrow checker* — it's aimed at the same territory as Rust, where someone might reasonably write a
+compute-heavy inner loop and expect it not to crawl. A language that looks like a systems language
+but runs hundreds of times slower than one is making a promise its surface can't keep. And anyway,
+native code was always the destination; the tree-walker was the scaffolding, not the building.
 
-But then: why did Oxy move on? The performance gap is real but for a general-purpose language
-that targets the same use cases as Rust — systems programming, performance-critical code —
-tree-walking is not acceptable. Also, the goal was always native code.
-
-Frame the retirement as a graduation, not a failure. The tree-walker got the language designed.
-It proved the semantics. It let features be added quickly without worrying about codegen.
-Then it was retired having done its job.
--->
+So think of the retirement as a graduation, not a failure. The tree-walker did the job no other
+stage could have done as cheaply: it let us *design* the language. Every feature got prototyped,
+debugged, and proven correct in an environment where execution was a transparent recursive function
+you could read top to bottom — no codegen to fight, no IR to inspect, just `match` and recurse. By
+the time we were ready to compile to native code, the semantics were already settled and battle-
+tested, which meant the JIT only had to be *fast*, not also *correct from scratch*. The tree-walker
+earned its retirement. It's just that its job is done, and the rest of this book is about what came
+next.
 
 ## The concrete performance problem
 

@@ -1,16 +1,18 @@
 # Environments and Scope
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The key insight: scope is just a stack of dictionaries. When you write `let x = 5` in a
-function, `x` goes into the innermost dictionary. When you read `x`, you look in the
-innermost dictionary, then the next one out, then the next, until you find it or hit the
-top level.
+"Scope" sounds like a deep concept, and the languages-textbook treatment can make it feel like one.
+It isn't. Scope is a stack of dictionaries. When you write `let x = 5` inside a function, the name
+`x` gets dropped into the innermost dictionary — the one for the block you're currently in. When you
+later *read* `x`, you check that innermost dictionary first; if it's not there, you check the one
+enclosing it, and the one enclosing that, climbing outward until you either find `x` or run off the
+top of the program and declare it undefined. That climbing-outward chain is the whole idea.
 
-This model — the "environment chain" — is one of the most elegant ideas in language
-implementation. It handles closures, nested functions, modules, and shadowing all the
-same way. Reference that Lisp discovered this in the 1960s and it has not been improved upon.
--->
+This "environment chain" is one of the genuinely elegant ideas in language implementation, and its
+elegance is that one mechanism handles everything you'd otherwise treat as separate problems.
+Shadowing? The inner dictionary is checked first, so an inner `x` naturally hides an outer one.
+Nested functions, closures, module scopes? All just links in the same chain, searched the same way.
+Lisp implementers worked this out in the 1960s, and in sixty years nobody has found a reason to
+improve on it. We didn't either — Oxy's interpreter uses it almost verbatim.
 
 ## The environment chain model
 

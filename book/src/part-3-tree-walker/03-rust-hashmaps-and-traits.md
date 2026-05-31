@@ -1,10 +1,13 @@
 # Rust Concepts: HashMap, Box<dyn Trait>, and Recursion
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. Frame it as: the tree-walker needs three Rust tools that come
-up everywhere in the codebase: HashMap for environments, trait objects for extensibility,
-and comfortable recursion. These are not exotic features — they are everyday Rust.
--->
+The tree-walker leans on three Rust tools, and none of them is exotic — they're the everyday
+furniture of real Rust code, which is exactly why this is the right moment to meet them. The
+environment chain needs `HashMap` to map names to values. The built-in function registry needs
+trait objects (`Box<dyn Trait>`) to store different kinds of callable behind one interface. And the
+interpreter itself is recursive to its core, so you need to be comfortable with a function that
+calls itself. We'll cover each in the context of where the tree-walker actually uses it, plus the
+`Rc<RefCell<T>>` pattern that makes closures work — you'll see all four again throughout the
+codebase.
 
 ## `HashMap<K, V>`: the environment's backbone
 

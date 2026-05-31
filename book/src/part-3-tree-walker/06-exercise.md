@@ -1,11 +1,12 @@
 # Exercise: Add a Built-In Function
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercises in this part work on the current codebase,
-not the retired tree-walker — because the tree-walker is gone. Instead, the exercises
-illuminate the same *concepts* using the parts of the codebase that still exist.
-Frame it as: "The tree-walker is retired, but the ideas live on. Let's work with what's here."
--->
+A small honesty note before you start: you can't do an exercise on the tree-walker itself, because
+the tree-walker is gone — deleted from `main`, living only in git history. But that's fine, because
+the *ideas* the tree-walker taught us didn't leave with it. Environments, the `Value` enum, builtin
+dispatch, the way variable state has to live *somewhere* at runtime — all of that is still here, just
+relocated into the parts of the codebase that survived. So these exercises work on the current code,
+and where they touch a living component, they ask you to connect it back to the tree-walking concept
+it descends from. Let's work with what's here.
 
 ## Part A: Add a built-in function to Oxy's stdlib
 

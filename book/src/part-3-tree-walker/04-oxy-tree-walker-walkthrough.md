@@ -1,11 +1,16 @@
 # Oxy's Original Interpreter: A Walkthrough
 
-<!-- OPUS_FILL
-Write a 1-2 paragraph intro. Frame it as archaeology — we're looking at retired code.
-Reference commit 3849173 as the birth of the tree-walker, and note it ran Oxy from
-March to May 2026. The code is gone from main but lives in git history.
-Make it feel like reading old letters: valuable, instructive, and a little bittersweet.
--->
+This chapter is a bit of archaeology. The code we're about to read is no longer in `main` — it was
+deleted when the JIT took over — so we're digging it out of git history, where commit `3849173`
+marks its birth in Phase 4. From there it ran Oxy for two months, March through May 2026, quietly
+doing all the work while the language grew closures and traits and async on top of it.
+
+Reading retired code has a particular flavor — a little like reading old letters. It's valuable
+and instructive, and there's a faint bittersweetness to studying something built with care that
+has since been superseded. But this isn't sentiment for its own sake: the patterns here map almost
+one-to-one onto how the current pipeline thinks about execution, and the table at the end of this
+chapter makes that lineage explicit. Understand the tree-walker and you'll recognize its ghost in
+every backend that replaced it.
 
 ## Finding the retired code
 

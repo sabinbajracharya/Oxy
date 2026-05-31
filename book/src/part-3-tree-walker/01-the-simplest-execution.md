@@ -1,19 +1,32 @@
 # The Simplest Way to Run Code
 
-<!-- OPUS_FILL
-Write a 3-4 paragraph hook. This is the chapter where we first make the language *run*.
+This is the moment the whole project stops being a parlor trick. Up to now we've had a lexer that
+chops text into tokens and a parser that arranges those tokens into a tree — both genuinely useful,
+both completely inert. Nothing *runs*. You can feed Oxy a program and it will tell you the program
+is well-formed, and then it will do absolutely nothing with it. This chapter changes that. By the
+end of it, `2 + 2` produces `4`, and the first time you watch that happen with code you wrote
+yourself, it is a little bit magical. You built a thing that computes.
 
-The key emotional beat: this is the moment. You have a parser. You have an AST. Now you
-can actually execute code. For the first time, typing `2 + 2` and getting `4` feels magical.
+And the way it computes is almost insultingly simple. You already have a tree. To run the program,
+you walk the tree: look at a node, recursively evaluate its children, combine the results, return a
+value. An addition node evaluates its two sides and adds them. An `if` node evaluates its condition
+and picks a branch. A variable node looks itself up. There's no compilation step, no intermediate
+format, no machine code — the interpreter's own recursion *is* the program's execution. It's the
+most direct path from "I have a tree" to "the tree did something," and it's where almost every
+language starts.
 
-But also set up the honesty: this approach is retired. We used it, it worked, and then we
-moved on. Reading this chapter is like looking at the foundation of a house that has been
-renovated — it was load-bearing once. Understanding it makes the later chapters make sense.
+It's also where Oxy started, back when it was still called Ferrite. From Phase 4 through Phase 11,
+*everything* ran this way: not just arithmetic, but closures, structs, traits, generics, modules,
+async/await, even HTTP and JSON. A complete, genuinely usable language, implemented as nothing more
+than a big recursive `eval` function. That is a real achievement, and it's worth sitting with how
+much you can accomplish with so little machinery.
 
-Reference the Ferrite era: this was how the language ran from Phase 4 through Phase 11 —
-closures, modules, async, HTTP — all implemented as tree-walking evaluation. That's impressive.
-That's also why it eventually had to go.
--->
+But — and this is the honest part — the tree-walker is retired now. We're not going to pretend
+otherwise or teach it as the destination. Reading this chapter is like studying the original
+foundation of a house that's since been renovated: it was load-bearing once, it held up real weight,
+and you can't understand why the later additions are shaped the way they are without seeing what
+came first. So we walk through it properly, and then, at the end, we'll look at the exact wall it
+ran into — the wall that made everything in Parts 5 through 8 necessary.
 
 ## The idea: walk the tree, evaluate each node
 
