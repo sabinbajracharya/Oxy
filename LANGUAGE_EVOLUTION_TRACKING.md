@@ -32,17 +32,18 @@
 - [x] **Committed:** `ac68659` — refactor: simplify visibility to pub/private only
 
 ### 1.3 Remove `mut` from parameter position
-- [ ] Remove `mut` parsing from function parameter lists
-- [ ] Clean up type checker param handling
-- [ ] Update all `.ox` test files
-- [ ] **Commit:** `refactor: remove mut from function parameters`
+- [x] Remove `is_mut` field from `Param` struct in AST
+- [x] Remove `mut` token consumption from `parse_param_list`
+- [x] Type checker: always pass `true` to `define_mut` for params
+- [x] Remove `immutable self` error check — self always mutable
+- [x] Update error message for `&` rejection
+- [x] Update all `.ox` test files and VM test files
+- [x] **Committed:** `e1f8440` — refactor: remove mut from function parameters
 
-### 1.4 Update test corpus for remaining Phase 1 changes
-- [ ] Strip retired keywords from all 117+ `.ox` test files
-- [ ] Strip `pub(crate)` / `pub(super)` → `pub` or private
-- [ ] Strip `mut` from parameter lists
-- [ ] All tests pass: `cargo test -p oxy-core`
-- [ ] **Commit:** `test: update test corpus for Phase 1 syntax changes`
+### 1.4 Update remaining test corpus
+- [x] All .ox test files updated across commits
+- [x] All VM test files updated across commits
+- [x] All 989+ tests pass with zero failures
 
 ---
 
