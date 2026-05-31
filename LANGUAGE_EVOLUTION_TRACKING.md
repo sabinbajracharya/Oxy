@@ -9,23 +9,20 @@
 ## Phase 1: Surface Cleanup — Remove Rust Baggage
 
 ### 1.1 Retire vestigial keywords from lexer
-- [ ] Remove `ref` keyword and token variant
-- [ ] Remove `dyn` keyword and token variant
-- [ ] Remove `move` keyword and token variant
-- [ ] Remove `where` keyword and token variant
-- [ ] Remove `static` keyword and token variant
-- [ ] Update KEYWORDS constant
-- [ ] **Commit:** `refactor: retire vestigial keywords from lexer (ref, dyn, move, where, static)`
+- [x] Remove `ref` keyword and token variant
+- [x] Remove `dyn` keyword and token variant
+- [x] Remove `move` keyword and token variant
+- [x] Remove `where` keyword and token variant
+- [x] Remove `static` keyword and token variant
+- [x] Update KEYWORDS constant
+- [x] Remove `is_static` from `Item::Const` AST node
+- [x] Clean up parser: remove Move from expr.rs, Static from item dispatch, Where clause parsing
+- [x] Simplify `parse_const_def` to not take `is_static`
+- [x] Update parser tests, symbol consistency tests, VM tests
+- [x] Update all `.ox` example/test files
+- [x] **Committed:** `f5b6518` — refactor: retire vestigial keywords (ref, dyn, move, where, static)
 
-### 1.2 Clean up parser of vestigial keyword handling
-- [ ] Remove `ref` from pattern parsing
-- [ ] Remove `dyn` from type parsing
-- [ ] Remove `move` from closure parsing
-- [ ] Remove `where` from fn parsing (bounds stay inline on generics as `T: Bound`)
-- [ ] Remove `static` from item parsing (keep `const` only)
-- [ ] **Commit:** `refactor: remove vestigial keyword handling from parser`
-
-### 1.3 Simplify visibility system
+### 1.2 Simplify visibility system
 - [ ] Remove `Visibility::PubCrate` from AST
 - [ ] Remove `Visibility::PubSuper` from AST
 - [ ] Simplify visibility parsing (just `pub` or none)
@@ -34,13 +31,13 @@
 - [ ] Remove `super` and `crate` keywords? — evaluate: needed for module navigation?
 - [ ] **Commit:** `refactor: simplify visibility to pub/private only`
 
-### 1.4 Remove `mut` from parameter position
+### 1.3 Remove `mut` from parameter position
 - [ ] Remove `mut` parsing from function parameter lists
 - [ ] Clean up type checker param handling
 - [ ] Update all `.ox` test files
 - [ ] **Commit:** `refactor: remove mut from function parameters`
 
-### 1.5 Update test corpus for Phase 1
+### 1.4 Update test corpus for remaining Phase 1 changes
 - [ ] Strip retired keywords from all 117+ `.ox` test files
 - [ ] Strip `pub(crate)` / `pub(super)` → `pub` or private
 - [ ] Strip `mut` from parameter lists
