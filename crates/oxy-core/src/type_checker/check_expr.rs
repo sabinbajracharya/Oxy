@@ -168,10 +168,13 @@ impl TypeChecker {
                 column: span.column,
             });
         }
-        // Infer arg types first so we can check cross-param generic consistency.
+        // Infer arg types, passing expected param types so that
+        // closures can infer their parameter types from context
+        // (bidirectional type checking).
         let arg_types: Vec<TypeInfo> = args
             .iter()
-            .map(|a| self.infer_expr(a))
+            .zip(effective.iter())
+            .map(|(a, expected_ty)| self.infer_expr_expected(a, Some(expected_ty)))
             .collect::<Result<_, _>>()?;
 
         // Check generic-param consistency across arguments.
@@ -345,7 +348,7 @@ impl TypeChecker {
                 body,
                 is_async,
                 ..
-            } => self.infer_closure(params, return_type, body, is_async),
+            } => self.infer_closure(params, return_type, body, is_async, expected),
             Expr::AsyncBlock { body, .. } => self.infer_async_block(body),
             Expr::Await { expr: inner, .. } => self.infer_await(inner),
             Expr::FString { .. } => Ok(TypeInfo::String),

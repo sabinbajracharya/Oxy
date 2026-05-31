@@ -12,12 +12,24 @@ impl TypeChecker {
         return_type: &Option<TypeAnnotation>,
         body: &Expr,
         is_async: &bool,
+        expected: Option<&TypeInfo>,
     ) -> Result<TypeInfo, PipelineError> {
+        // If the expected type is a function signature, use it to fill in
+        // unannotated closure parameter types (bidirectional inference).
+        let expected_params: Option<&[TypeInfo]> = match expected {
+            Some(TypeInfo::Function { params: eps, .. }) if !eps.is_empty() => Some(eps.as_slice()),
+            _ => None,
+        };
+
         let mut param_types = Vec::with_capacity(params.len());
         let closure_env = TypeEnv::child(&self.env);
-        for p in params {
+        for (i, p) in params.iter().enumerate() {
             let p_ty = if let Some(ref ann) = p.type_ann {
                 self.resolve_annotation(ann)
+            } else if let Some(eps) = expected_params {
+                // Use the expected param type from the function signature
+                // when the closure param is unannotated.
+                eps.get(i).cloned().unwrap_or(TypeInfo::Unknown)
             } else {
                 TypeInfo::Unknown
             };
