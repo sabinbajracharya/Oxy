@@ -16,6 +16,7 @@ parser with precedence levels 0–14. Also the layer that **rejects** non-Oxy sy
 | `stmt.rs` | Statement parsing: `let`, `use`, `if`, `while`, `for`, `return`. |
 | `pattern.rs` | Pattern parsing for match arms and `let` destructuring. |
 | `ty.rs` | Type-annotation parsing (and the reference/lifetime/width rejections). |
+| `tests.rs` | Parser unit tests (extracted from `mod.rs`). |
 
 ## Key types & entry points
 
