@@ -1,21 +1,35 @@
 # Why We Built a Language
 
-<!-- OPUS_FILL
-Write a 4-6 paragraph opening for the entire book. This is the first thing the reader sees.
+Somewhere along the way, somebody convinced you that programming languages are built by a
+different species of programmer. People with PhDs in type theory. People who read papers with
+Greek letters in the titles. People who use words like "denotational semantics" in casual
+conversation and mean it. The compiler, in this telling, is a cathedral — and you are a tourist
+who is allowed to walk through it but never, ever to pick up a tool.
 
-Goals:
-- Shatter the myth that programming languages are built by wizards in ivory towers
-- Make the reader feel "I could do this too" — not intimidated
-- Set up the central thesis: a compiler is just a pipeline of simple transformations
-- End with a hook into the Oxy story: "So we built one. This is that story."
+This is nonsense, and we are going to spend a whole book proving it.
 
-Tone: conversational, slightly irreverent, genuinely excited. Like a friend who just finished
-building something they can't stop talking about. First-person plural ("we built") throughout.
+Here is the secret that the cathedral story hides: a compiler is a pipeline of small, boring
+programs. The first one reads your source text and chops it into labeled pieces. The next one
+arranges those pieces into a tree. The next one walks the tree and checks that you didn't add a
+number to a string. The next one flattens the tree into a list of simple instructions. The last
+one turns those instructions into the ones your CPU actually speaks. Each program in the chain
+does one transformation — takes one representation, hands back another — and then gets out of the
+way. None of them is magic. None of them requires a Greek letter. The hard part isn't any single
+step; it's getting all the steps to agree with each other, and that's a *plumbing* problem, not a
+*genius* problem.
 
-The reader is someone who has written code but never looked at a compiler before. They probably
-think compilers are arcane magic. By the end of this paragraph block, they should be skeptical
-of that belief.
--->
+We know this because we built one. It's called Oxy, and it's a real language — it compiles to
+native machine code, it has a package manager and an editor plugin and a browser playground, and
+it took over 500 commits and a number of debugging sessions that ran past midnight. We are not
+going to pretend it was easy. We *are* going to show you that every single piece of it is
+something you could have written, because none of those pieces is harder than the code you write
+at your day job. It's just code you haven't seen before.
+
+So if you've ever looked at `rustc` or `clang` or the thing that runs your Python and felt a
+small, quiet certainty that *you* could never make one of those — good. Hold onto that feeling.
+We're going to take it apart.
+
+So we built one. This is that story.
 
 ## What a compiler actually is
 

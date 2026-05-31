@@ -1,18 +1,33 @@
 # The Origin Story: Ferrite → Oxide → Oxy
 
-<!-- OPUS_FILL
-Write a 3-4 paragraph narrative intro for this chapter.
+Every project that survives long enough goes through a name it's a little embarrassed about. Oxy
+had three.
 
-The story: a language that started as "Ferrite" (a type of iron, hard), became "Oxide" (a Rust
-play-on-words — Rust oxidizes iron), then became "Oxy" (shorter, cleaner). The name changed but
-the mission didn't: build a language that feels like Rust but without the borrow checker — all
-the ergonomics, none of the ownership ceremony.
+It started life as **Ferrite** — which, if you've never done any metallurgy, is a phase of iron:
+hard, structured, magnetic. It seemed like a serious name for a serious systems language. We
+liked that it sounded solid. We liked less that nobody could tell whether we'd said "Ferrite" or
+"ferret," and a language named after a small angry weasel is not the brand you want. But the
+weasel isn't why the name changed. The name changed because the language was clearly turning into
+*Rust without the lectures*, and there is a much better pun sitting right there.
 
-Tone: origin story energy. Like someone explaining how a band got its name. A little self-deprecating
-about the name changes, but proud of the mission that stayed constant throughout.
+Rust oxidizes iron. So Ferrite became **Oxide** — iron that has rusted, a language that is
+Rust-flavored but softened, weathered, missing the hard ownership edges. The `.fe` files became
+`.ox` files. This felt clever for about two months, until we got tired of typing six letters and
+of explaining that no, it's not the database, and no, it's not the cleaning product. So Oxide
+became **Oxy**: short for oxygen, the element that *causes* oxidation in the first place, and
+mercifully only three characters to type. The `.ox` extension already fit. We stopped renaming
+things after that.
 
-End by setting up the timeline this chapter will walk through.
--->
+Through all three names, the mission never moved an inch: **Rust-like syntax, without the borrow
+checker.** Mutable and immutable bindings, yes. A real type checker, yes. Generics, closures,
+traits, pattern matching — all yes. But no `&T`, no `&mut`, no lifetimes, no ownership ceremony.
+You write code that *looks* like Rust and *reads* like Rust, and the compiler never once lectures
+you about who owns what. We came to call it "dynamic Rust": all the ergonomics, none of the
+ownership tax. That idea was load-bearing from commit one, and it's still load-bearing today.
+
+What *did* change, repeatedly and sometimes painfully, was everything behind the parser — how the
+language actually *runs*. That's the real story this chapter tells, and it comes in three eras.
+Here's the timeline before we walk through it.
 
 ## The timeline
 

@@ -1,11 +1,21 @@
 # How to Read This Book
 
-<!-- OPUS_FILL
-Write a short (2 paragraph) intro.
-First para: this is a book you read with a code editor open next to it.
-Second para: the exercises are not optional — they are the moments where intuition forms.
-Tone: direct, encouraging, slightly insistent about the exercises.
--->
+This is not a book you read on the train with your phone in one hand. It's a book you read with a
+code editor open next to it and the Oxy repository checked out. Every snippet here is pulled from
+real source, with its file path attached, precisely so you can go look at the lines around it. The
+prose tells you what a piece of code does and why; the file tells you how it sits inside the whole.
+Read them together. When we point at `crates/oxy-core/src/lexer/mod.rs`, the most valuable thing
+you can do is actually open `crates/oxy-core/src/lexer/mod.rs` and scroll through it. The book is a
+guided tour, but the codebase is the territory, and you learn the territory by walking it.
+
+And then there are the exercises — one at the end of every part — which we are going to be
+slightly annoying about. Do them. They are not filler, and they are not optional in any sense that
+matters. The chapters can explain a concept to you, but understanding doesn't actually arrive while
+you're reading; it arrives when you change something, watch it break, and figure out why. That
+moment — stuck, then unstuck — is where the intuition forms, and there's no shortcut around it.
+We don't even provide solutions, on purpose: the point was never a correct answer, it was the time
+you spent in the code getting there. Skip the exercises and you'll have read a book about building
+a compiler. Do them and you'll have started building one.
 
 ## Keep the Oxy codebase open
 

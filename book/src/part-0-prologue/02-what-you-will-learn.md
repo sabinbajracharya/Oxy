@@ -1,13 +1,25 @@
 # What You Will Learn
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro that sets expectations honestly.
-First para: what the reader will genuinely be able to do after finishing this book.
-Second para: what this book does NOT teach (theory, formal grammars, optimization passes) and why
-that's fine — those things are in other books. This book teaches you to read and modify a real
-compiler, not to design one from scratch in a vacuum.
-Tone: honest, grounded. Not hyping it up.
--->
+Let's be precise about the deal on offer, because vague promises help nobody. When you finish
+this book, you will be able to open the Oxy source tree and *read it* — not squint at it and hope,
+but actually trace a feature from the text you typed all the way down to the machine code that
+runs it, naming every stage it passes through. You'll be able to add a keyword, a new operator,
+or a new method, and know which files to touch in which order. You'll be able to dump Oxy's
+internal IR for any program and read it like prose. And when a test fails, you'll be able to say
+*which layer* broke — parser, type checker, IR gen, or codegen — instead of staring at a stack
+trace and guessing. That's a real, concrete skill set, and it transfers: once you've seen how one
+compiler is wired, every other compiler stops looking like a cathedral and starts looking like a
+codebase.
+
+What this book will *not* do is turn you into a programming-language theorist, and you should know
+that going in. We don't cover formal grammars, parse tables, or the automata-theory machinery that
+a university course would open with. We don't cover optimization passes, because Oxy mostly doesn't
+have any — it leans on Cranelift for that. We don't cover type theory with Greek letters. This is
+deliberate, not a gap we're embarrassed about: those subjects have excellent books already, and
+none of them is required to understand how a working compiler is actually built. This book teaches
+you to read and modify a *real* compiler — one with all the pragmatic shortcuts and hard-won scars
+that real software has — rather than to design an idealized one in a vacuum. If, after this, you
+want the theory, you'll be in a far better position to appreciate why any of it matters.
 
 ## Concrete skills
 
