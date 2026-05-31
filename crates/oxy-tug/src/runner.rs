@@ -13,13 +13,15 @@ use std::process::Command;
 
 use crate::install;
 use crate::project::Project;
+use crate::tug_err;
+use crate::TugResult;
 
 /// Resolve the entry-point path for every dependency listed in the project's
 /// manifest. Returns the `name → path` map suitable for `oxy --extern`.
 ///
 /// Missing installations are returned as an error listing the offending names
 /// so users get one actionable message.
-pub fn resolve_externs(project: &Project) -> Result<HashMap<String, PathBuf>, String> {
+pub fn resolve_externs(project: &Project) -> TugResult<HashMap<String, PathBuf>> {
     let mut externs = HashMap::new();
     let mut missing = Vec::new();
     for dep in &project.manifest().dependencies {
@@ -31,7 +33,7 @@ pub fn resolve_externs(project: &Project) -> Result<HashMap<String, PathBuf>, St
         }
     }
     if !missing.is_empty() {
-        return Err(format!(
+        return Err(tug_err!(
             "missing installed package(s): {} — run `tug install` first",
             missing.join(", ")
         ));
@@ -40,13 +42,13 @@ pub fn resolve_externs(project: &Project) -> Result<HashMap<String, PathBuf>, St
 }
 
 /// Find the `oxy` binary path. See module docs for the lookup order.
-pub fn locate_oxy() -> Result<PathBuf, String> {
+pub fn locate_oxy() -> TugResult<PathBuf> {
     if let Ok(p) = std::env::var("TUG_OXY_PATH") {
         let path = PathBuf::from(p);
         if path.is_file() {
             return Ok(path);
         }
-        return Err(format!(
+        return Err(tug_err!(
             "TUG_OXY_PATH points to '{}' which is not a file",
             path.display()
         ));
@@ -65,7 +67,7 @@ pub fn locate_oxy() -> Result<PathBuf, String> {
 
 /// Default entry-point file for a project, in priority order:
 ///   `src/main.ox`, then `src/lib.ox`.
-pub fn project_entry(project: &Project) -> Result<PathBuf, String> {
+pub fn project_entry(project: &Project) -> TugResult<PathBuf> {
     let src = project.root().join("src");
     let main = src.join("main.ox");
     if main.is_file() {
@@ -75,7 +77,7 @@ pub fn project_entry(project: &Project) -> Result<PathBuf, String> {
     if lib.is_file() {
         return Ok(lib);
     }
-    Err(format!(
+    Err(tug_err!(
         "no src/main.ox or src/lib.ox in '{}'",
         project.root().display()
     ))
@@ -83,20 +85,20 @@ pub fn project_entry(project: &Project) -> Result<PathBuf, String> {
 
 /// Run the project (or a specific entry file) via `oxy run`, threading
 /// resolved deps as `--extern` flags. Returns the child process exit code.
-pub fn run_project(project: &Project, script_args: &[String]) -> Result<i32, String> {
+pub fn run_project(project: &Project, script_args: &[String]) -> TugResult<i32> {
     invoke_oxy(project, "run", script_args)
 }
 
 /// Run `oxy test` over the project's entry file (or `src/lib.ox` if present),
 /// with the same extern map as `run`.
-pub fn test_project(project: &Project) -> Result<i32, String> {
+pub fn test_project(project: &Project) -> TugResult<i32> {
     invoke_oxy(project, "test", &[])
 }
 
 /// Type-check the entry file by compiling it via `oxy --dump-ir` and
 /// discarding the output. This is the closest equivalent to `cargo build`
 /// for a script-style language with no separate "object file" output.
-pub fn build_project(project: &Project) -> Result<i32, String> {
+pub fn build_project(project: &Project) -> TugResult<i32> {
     let externs = resolve_externs(project)?;
     let entry = project_entry(project)?;
     let oxy = locate_oxy()?;
@@ -116,7 +118,7 @@ pub fn build_project(project: &Project) -> Result<i32, String> {
     Ok(status.code().unwrap_or(1))
 }
 
-fn invoke_oxy(project: &Project, subcmd: &str, extra_args: &[String]) -> Result<i32, String> {
+fn invoke_oxy(project: &Project, subcmd: &str, extra_args: &[String]) -> TugResult<i32> {
     let externs = resolve_externs(project)?;
     let entry = project_entry(project)?;
     let oxy = locate_oxy()?;
@@ -142,7 +144,7 @@ fn invoke_oxy(project: &Project, subcmd: &str, extra_args: &[String]) -> Result<
 /// with a known extern map (e.g. for one-off scripts that don't live in a
 /// project). Not exposed in the CLI yet.
 #[doc(hidden)]
-pub fn raw_oxy(args: &[String], oxy_path: Option<&Path>) -> Result<i32, String> {
+pub fn raw_oxy(args: &[String], oxy_path: Option<&Path>) -> TugResult<i32> {
     let oxy = match oxy_path {
         Some(p) => p.to_path_buf(),
         None => locate_oxy()?,

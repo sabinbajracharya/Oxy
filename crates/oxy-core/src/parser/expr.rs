@@ -103,36 +103,9 @@ impl Parser {
                 let span = self.current_span();
                 self.advance();
 
-                // Check for path: `self::Name::...`
                 if self.check(&TokenKind::ColonColon) {
                     self.advance();
-                    let mut segments = vec!["self".to_string()];
-                    segments.push(self.expect_path_segment()?);
-
-                    while self.check(&TokenKind::ColonColon) {
-                        self.advance();
-                        // Skip turbofish mid-path
-                        if self.check(&TokenKind::Lt) {
-                            let _ = self.parse_turbofish()?;
-                            continue;
-                        }
-                        segments.push(self.expect_path_segment()?);
-                    }
-
-                    if self.check(&TokenKind::LParen) {
-                        self.advance();
-                        let args = self.parse_arg_list()?;
-                        let end_span = self.current_span();
-                        self.expect(TokenKind::RParen)?;
-                        return Ok(Expr::PathCall {
-                            path: segments,
-                            turbofish: None,
-                            args,
-                            span: self.merge_spans(span, end_span),
-                        });
-                    }
-
-                    return Ok(Expr::Ident("self".to_string(), span));
+                    return self.finish_keyword_path("self", span);
                 }
 
                 Ok(Expr::SelfRef(span))
@@ -143,31 +116,7 @@ impl Parser {
                 let span = self.current_span();
                 self.advance();
                 self.expect(TokenKind::ColonColon)?;
-                let mut segments = vec!["super".to_string(), self.expect_path_segment()?];
-
-                while self.check(&TokenKind::ColonColon) {
-                    self.advance();
-                    if self.check(&TokenKind::Lt) {
-                        let _ = self.parse_turbofish()?;
-                        continue;
-                    }
-                    segments.push(self.expect_path_segment()?);
-                }
-
-                if self.check(&TokenKind::LParen) {
-                    self.advance();
-                    let args = self.parse_arg_list()?;
-                    let end_span = self.current_span();
-                    self.expect(TokenKind::RParen)?;
-                    return Ok(Expr::PathCall {
-                        path: segments,
-                        turbofish: None,
-                        args,
-                        span: self.merge_spans(span, end_span),
-                    });
-                }
-
-                Ok(Expr::Ident("super".to_string(), span))
+                self.finish_keyword_path("super", span)
             }
 
             // `crate` keyword — `crate::path` in expression position
@@ -175,31 +124,7 @@ impl Parser {
                 let span = self.current_span();
                 self.advance();
                 self.expect(TokenKind::ColonColon)?;
-                let mut segments = vec!["crate".to_string(), self.expect_path_segment()?];
-
-                while self.check(&TokenKind::ColonColon) {
-                    self.advance();
-                    if self.check(&TokenKind::Lt) {
-                        let _ = self.parse_turbofish()?;
-                        continue;
-                    }
-                    segments.push(self.expect_path_segment()?);
-                }
-
-                if self.check(&TokenKind::LParen) {
-                    self.advance();
-                    let args = self.parse_arg_list()?;
-                    let end_span = self.current_span();
-                    self.expect(TokenKind::RParen)?;
-                    return Ok(Expr::PathCall {
-                        path: segments,
-                        turbofish: None,
-                        args,
-                        span: self.merge_spans(span, end_span),
-                    });
-                }
-
-                Ok(Expr::Ident("crate".to_string(), span))
+                self.finish_keyword_path("crate", span)
             }
 
             // Identifiers (could be followed by `!` for macro, `::` for path, `{` for struct init)
@@ -275,16 +200,7 @@ impl Parser {
                         segments.push(self.expect_path_segment()?);
                     }
 
-                    // Continue collecting path segments
-                    while self.check(&TokenKind::ColonColon) {
-                        self.advance();
-                        // Check for turbofish mid-path: `Vec::<i64>::new()`
-                        if self.check(&TokenKind::Lt) {
-                            let _ = self.parse_turbofish()?;
-                            continue;
-                        }
-                        segments.push(self.expect_path_segment()?);
-                    }
+                    self.parse_path_segments(&mut segments)?;
 
                     // Check if followed by `(` → PathCall
                     if self.check(&TokenKind::LParen) {
@@ -1093,6 +1009,44 @@ impl Parser {
             }
         }
         Ok(types)
+    }
+
+    /// Parse `::`-separated path segments into `segments`, skipping any mid-path
+    /// turbofish (`::<T>`). Caller must already have consumed the leading `::`
+    /// (if any) and pushed the first segment into `segments`.
+    fn parse_path_segments(&mut self, segments: &mut Vec<String>) -> Result<(), PipelineError> {
+        while self.check(&TokenKind::ColonColon) {
+            self.advance();
+            if self.check(&TokenKind::Lt) {
+                let _ = self.parse_turbofish()?;
+                continue;
+            }
+            segments.push(self.expect_path_segment()?);
+        }
+        Ok(())
+    }
+
+    /// Finish parsing a keyword-rooted path (`self::...`, `super::...`, or
+    /// `crate::...`). Caller must already have consumed the leading `::` after
+    /// the keyword. Returns a `PathCall` when the path is followed by `(args)`,
+    /// or `Ident(keyword, span)` otherwise.
+    fn finish_keyword_path(&mut self, keyword: &str, span: Span) -> Result<Expr, PipelineError> {
+        let mut segments = vec![keyword.to_string(), self.expect_path_segment()?];
+        self.parse_path_segments(&mut segments)?;
+
+        if self.check(&TokenKind::LParen) {
+            self.advance();
+            let args = self.parse_arg_list()?;
+            let end_span = self.current_span();
+            self.expect(TokenKind::RParen)?;
+            return Ok(Expr::PathCall {
+                path: segments,
+                turbofish: None,
+                args,
+                span: self.merge_spans(span, end_span),
+            });
+        }
+        Ok(Expr::Ident(keyword.to_string(), span))
     }
 
     fn token_to_binop(kind: &TokenKind) -> Option<BinOp> {

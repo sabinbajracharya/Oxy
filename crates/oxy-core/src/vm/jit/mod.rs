@@ -600,6 +600,8 @@ impl JitVm {
             ctx.output = output_rc as *const _;
         }
 
+        // Safety: ptr was registered in the JIT symbol table with the correct
+        // `extern "C" fn(*mut JitContext) -> u64` C ABI signature.
         let fn_ptr: extern "C" fn(*mut context::JitContext) -> u64 =
             unsafe { std::mem::transmute(ptr) };
         let disc = fn_ptr(&mut ctx as *mut context::JitContext);

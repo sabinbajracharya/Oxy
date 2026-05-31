@@ -18,6 +18,7 @@ pub mod runner;
 pub mod scaffold;
 
 use std::fmt;
+use std::ops::Deref;
 
 pub use install::{packages_dir, InstalledPackage};
 pub use lockfile::{LockedPackage, TugLock};
@@ -35,6 +36,14 @@ impl fmt::Display for TugError {
     }
 }
 
+impl Deref for TugError {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl From<String> for TugError {
     fn from(s: String) -> Self {
         Self(s)
@@ -49,3 +58,15 @@ impl From<std::io::Error> for TugError {
 
 /// Convenience alias for `Result<T, TugError>`.
 pub type TugResult<T> = Result<T, TugError>;
+
+/// Construct a `TugError` via `format!`-style arguments.
+///
+/// ```ignore
+/// return Err(tug_err!("no tug.toml found in {}", path.display()));
+/// ```
+#[macro_export]
+macro_rules! tug_err {
+    ($($arg:tt)*) => {
+        $crate::TugError(format!($($arg)*))
+    };
+}

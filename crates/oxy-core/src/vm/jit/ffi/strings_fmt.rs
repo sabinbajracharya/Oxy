@@ -1,10 +1,19 @@
 //! String conversion and formatting FFI — part of the shared oxy_* runtime. See `mod.rs`
 //! for the core machinery (push/pop, call stack, ffi_symbols).
+//!
+//! # Safety
+//!
+//! All functions are `extern "C"` entry points called from Cranelift JIT code.
+//! `ctx` is a valid, non-aliased `*mut JitContext`. `pop`/`push` operate on a
+//! pre-allocated operand stack. `display_via_user_fmt` dereferences `ctx.tables`
+//! and `ctx.output`, both guaranteed non-null by `JitVm::call_fn`.
 
 use super::*;
 
 pub(super) extern "C" fn oxy_to_string(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack; value is guaranteed present.
     let val = unsafe { pop(ctx) };
     let s = val.to_string();
     unsafe {
@@ -13,9 +22,11 @@ pub(super) extern "C" fn oxy_to_string(ctx: *mut JitContext) {
 }
 
 pub(super) extern "C" fn oxy_fstring_concat(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
     let mut parts = Vec::with_capacity(count);
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         parts.push(unsafe { pop(ctx) });
     }
     parts.reverse();
@@ -26,9 +37,11 @@ pub(super) extern "C" fn oxy_fstring_concat(ctx: *mut JitContext, count: usize) 
 }
 
 pub(super) extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
     let mut vals = Vec::with_capacity(count);
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         vals.push(unsafe { pop(ctx) });
     }
     vals.reverse();
@@ -45,6 +58,8 @@ pub(super) extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
         }
         return;
     }
+    // Safety: display_via_user_fmt dereferences ctx.tables and ctx.output,
+    // both guaranteed non-null by the JIT engine during execution.
     let result = format_template_with(&template, &vals[1..], |v| unsafe {
         display_via_user_fmt(ctx, v)
     });
@@ -58,9 +73,11 @@ pub(super) extern "C" fn oxy_format(ctx: *mut JitContext, count: usize) {
 /// value is left on the operand stack so `let x = dbg!(v)` binds it. Output
 /// goes to the run's capture buffer when present, else stdout.
 pub(super) extern "C" fn oxy_dbg(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
     let mut vals = Vec::with_capacity(count);
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         vals.push(unsafe { pop(ctx) });
     }
     vals.reverse();
@@ -71,6 +88,8 @@ pub(super) extern "C" fn oxy_dbg(ctx: *mut JitContext, count: usize) {
     };
     let line = value.to_debug_string();
     if !ctx.output.is_null() {
+        // Safety: ctx.output is non-null only when set by JitVm::call_fn to a
+        // valid Rc<RefCell<Vec<String>>> that outlives the call.
         let output = unsafe { &*ctx.output };
         output.borrow_mut().push(format!("{line}\n"));
     } else {

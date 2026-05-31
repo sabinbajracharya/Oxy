@@ -18,6 +18,9 @@
 
 use toml::Value;
 
+use crate::tug_err;
+use crate::TugResult;
+
 /// A parsed `tug.toml`.
 #[derive(Debug, Clone)]
 pub struct TugManifest {
@@ -66,7 +69,7 @@ impl TugManifest {
 
     /// Parse a `tug.toml` source string. Returns a human-readable error on
     /// malformed input or missing required fields.
-    pub fn parse(source: &str) -> Result<Self, String> {
+    pub fn parse(source: &str) -> TugResult<Self> {
         let value: Value = source
             .parse::<Value>()
             .map_err(|e| format!("invalid TOML: {e}"))?;
@@ -209,7 +212,7 @@ impl Dependency {
     }
 }
 
-fn parse_dependency(name: &str, value: &Value) -> Result<Dependency, String> {
+fn parse_dependency(name: &str, value: &Value) -> TugResult<Dependency> {
     match value {
         Value::String(s) => Ok(Dependency {
             name: name.to_string(),
@@ -218,14 +221,14 @@ fn parse_dependency(name: &str, value: &Value) -> Result<Dependency, String> {
         // The `toml` 0.8 crate parses inline tables (`{ k = "v" }`) as
         // `Value::Table` too, so a single arm covers both forms.
         Value::Table(t) => parse_table_dep(name, t),
-        other => Err(format!(
+        other => Err(tug_err!(
             "dependency `{name}` must be a version string or inline table, got {}",
             other.type_str()
         )),
     }
 }
 
-fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> Result<Dependency, String> {
+fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> TugResult<Dependency> {
     let has_git = t.contains_key("git");
     let has_path = t.contains_key("path");
     let has_version = t.contains_key("version");
@@ -235,12 +238,12 @@ fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> Result<Depe
         .filter(|b| **b)
         .count();
     if source_count == 0 {
-        return Err(format!(
+        return Err(tug_err!(
             "dependency `{name}` needs a source: one of `git`, `path`, or `version`"
         ));
     }
     if source_count > 1 {
-        return Err(format!(
+        return Err(tug_err!(
             "dependency `{name}` can only specify one source (git, path, or version)"
         ));
     }
@@ -249,7 +252,7 @@ fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> Result<Depe
         let url = t
             .get("git")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| format!("dependency `{name}`: `git` must be a string"))?
+            .ok_or_else(|| tug_err!("dependency `{name}`: `git` must be a string"))?
             .to_string();
 
         let tag = t.get("tag").and_then(|v| v.as_str());
@@ -258,7 +261,7 @@ fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> Result<Depe
 
         let refs_count = [tag, rev, branch].iter().filter(|o| o.is_some()).count();
         if refs_count > 1 {
-            return Err(format!(
+            return Err(tug_err!(
                 "dependency `{name}`: only one of `tag`, `rev`, or `branch` allowed"
             ));
         }
@@ -303,13 +306,13 @@ fn parse_table_dep(name: &str, t: &toml::map::Map<String, Value>) -> Result<Depe
 
 /// A dependency name must be a non-empty identifier-like string:
 /// letters, digits, `-`, `_`. (No spaces, no path separators.)
-fn validate_dep_name(name: &str) -> Result<(), String> {
+fn validate_dep_name(name: &str) -> TugResult<()> {
     if name.is_empty() {
-        return Err("dependency name must not be empty".to_string());
+        return Err(tug_err!("dependency name must not be empty"));
     }
     for c in name.chars() {
         if !(c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return Err(format!(
+            return Err(tug_err!(
                 "invalid dependency name `{name}`: must be an identifier (letters, digits, `-`, `_`)"
             ));
         }

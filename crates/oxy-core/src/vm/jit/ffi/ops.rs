@@ -1,6 +1,17 @@
 //! Arithmetic, bitwise, comparison, and unary operator FFI functions.
 //!
 //! Extracted from [`super`] to keep mod.rs under ~900 lines.
+//!
+//! # Safety
+//!
+//! All functions are `extern "C"` entry points from Cranelift JIT code. `ctx` is a
+//! valid, non-aliased `*mut JitContext`. `pop`/`push` operate on a pre-allocated
+//! operand stack. Raw pointer access via `ctx.buffer.add(i)` is bounds-checked by
+//! the IR compiler. The operator-overload path (`invoke_binary_op_method` /
+//! `invoke_unary_op_method`) allocates a fresh callee buffer and swaps it into ctx
+//! for the duration of the call, restoring the caller's buffer afterwards — this is
+//! safe because ctx.buffer/ctx.capacity/ctx.local_count/ctx.sp are saved and restored
+//! as a unit, and the callee buffer is independently allocated with a known layout.
 
 use super::*;
 use crate::types::Value;
@@ -17,6 +28,8 @@ fn lookup_op_method(ctx: &JitContext, lhs: &Value, method: &str) -> Option<(usiz
         Value::EnumVariant { enum_name, .. } => enum_name.clone(),
         _ => return None,
     };
+    // Safety: ctx.tables is set to a valid, non-null JitTables pointer by
+    // JitVm::call_fn before any compiled code executes.
     let tables = unsafe { &*ctx.tables };
     let qualified = format!("{lookup_name}::{method}");
     let fn_index = tables.name_to_index(&qualified)?;
@@ -32,13 +45,17 @@ fn invoke_binary_op_method(
     fn_index: usize,
     fp: usize,
 ) -> Value {
+    // Safety: ctx.tables is valid and non-null during execution.
     let tables = unsafe { &*ctx.tables };
     let fn_local_count = tables.local_count(fn_index);
     let total_frame = fn_local_count.max(2);
     const STACK_CAP: usize = 2048;
     let callee_cap = total_frame + STACK_CAP;
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+    // Safety: alloc_zeroed with a valid layout produces a valid, zero-initialized
+    // buffer sized for total_frame locals + STACK_CAP operand stack.
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
+    // Safety: callee_buf is valid; slots 0 and 1 are within the allocated capacity.
     unsafe {
         callee_buf.add(0).write(lhs);
     }
@@ -53,9 +70,13 @@ fn invoke_binary_op_method(
     ctx.capacity = callee_cap;
     ctx.local_count = total_frame;
     ctx.sp = 0;
+    // Safety: fp was obtained from the JIT symbol table and is a valid
+    // `extern "C" fn(*mut JitContext) -> u64` entry point.
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fp as *const ()) };
     let _disc = fn_ptr(ctx);
+    // Safety: each local/stack slot holds a valid initialized Value. Dropping
+    // them cleans up the callee frame without double-frees.
     for i in 0..ctx.local_count {
         unsafe {
             std::ptr::drop_in_place(ctx.buffer.add(i));
@@ -66,10 +87,12 @@ fn invoke_binary_op_method(
             std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
         }
     }
+    // Safety: callee_buf was allocated with callee_layout above; dealloc matches.
     unsafe {
         std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
     }
     let result = std::mem::replace(&mut ctx.result, Value::Unit);
+    // Restore caller's buffer and stack state.
     ctx.buffer = saved_buffer;
     ctx.capacity = saved_capacity;
     ctx.local_count = saved_local_count;
@@ -78,14 +101,22 @@ fn invoke_binary_op_method(
 }
 
 /// Invoke a trait method for a unary operator (neg, not). Consumes val.
+///
+/// Same buffer-swap pattern as `invoke_binary_op_method` but for single-argument ops.
+/// Safety invariants are identical: ctx.tables is valid, fp is a valid JIT entry point,
+/// the callee buffer is independently allocated and deallocated, and the caller's
+/// buffer/stack state is fully restored.
 fn invoke_unary_op_method(ctx: &mut JitContext, val: Value, fn_index: usize, fp: usize) -> Value {
+    // Safety: ctx.tables is valid and non-null during execution.
     let tables = unsafe { &*ctx.tables };
     let fn_local_count = tables.local_count(fn_index);
     let total_frame = fn_local_count.max(1);
     const STACK_CAP: usize = 2048;
     let callee_cap = total_frame + STACK_CAP;
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+    // Safety: alloc_zeroed with valid layout produces a valid buffer.
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
+    // Safety: callee_buf is valid; slot 0 is within capacity.
     unsafe {
         callee_buf.add(0).write(val);
     }
@@ -97,9 +128,11 @@ fn invoke_unary_op_method(ctx: &mut JitContext, val: Value, fn_index: usize, fp:
     ctx.capacity = callee_cap;
     ctx.local_count = total_frame;
     ctx.sp = 0;
+    // Safety: fp is a valid `extern "C" fn(*mut JitContext) -> u64` from the JIT symbol table.
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fp as *const ()) };
     let _disc = fn_ptr(ctx);
+    // Safety: drop callee locals and operand stack values.
     for i in 0..ctx.local_count {
         unsafe {
             std::ptr::drop_in_place(ctx.buffer.add(i));
@@ -110,10 +143,12 @@ fn invoke_unary_op_method(ctx: &mut JitContext, val: Value, fn_index: usize, fp:
             std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
         }
     }
+    // Safety: callee_buf was allocated with callee_layout; dealloc matches.
     unsafe {
         std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
     }
     let result = std::mem::replace(&mut ctx.result, Value::Unit);
+    // Restore caller's buffer and stack state.
     ctx.buffer = saved_buffer;
     ctx.capacity = saved_capacity;
     ctx.local_count = saved_local_count;
@@ -123,10 +158,19 @@ fn invoke_unary_op_method(ctx: &mut JitContext, val: Value, fn_index: usize, fp:
 
 // ── Macros ───────────────────────────────────────────────────────────────
 
+// Safety note for the macro-generated functions below:
+// Each generated `extern "C" fn` receives a valid, non-aliased `*mut JitContext`
+// from Cranelift. `pop`/`push` are unsafe because they manipulate the raw
+// operand-stack buffer; the stack has sufficient capacity and the IR guarantees
+// the right number of operands. `lookup_op_method` dereferences `ctx.tables`
+// which is guaranteed non-null by the JIT engine.
+
 macro_rules! binary_op {
     ($name:ident, $func:path, $method:expr) => {
         pub(super) extern "C" fn $name(ctx: *mut JitContext) {
+            // Safety: ctx is a valid JitContext pointer from JIT codegen.
             let ctx = unsafe { &mut *ctx };
+            // Safety: pop two operands from the valid, capacity-guaranteed operand stack.
             let rhs = unsafe { pop(ctx) };
             let lhs = unsafe { pop(ctx) };
             // Try trait method dispatch for struct/enum operands (non-consuming check)
@@ -155,7 +199,9 @@ macro_rules! binary_op {
 macro_rules! binary_op_val {
     ($name:ident, $func:expr) => {
         pub(super) extern "C" fn $name(ctx: *mut JitContext) {
+            // Safety: ctx is a valid JitContext pointer from JIT codegen.
             let ctx = unsafe { &mut *ctx };
+            // Safety: pop two operands from the valid operand stack.
             let rhs = unsafe { pop(ctx) };
             let lhs = unsafe { pop(ctx) };
             let result = $func(lhs, rhs);
@@ -258,7 +304,9 @@ binary_op!(oxy_shr, crate::vm::jit::runtime::vm_shr, "shr");
 // ── Unary ────────────────────────────────────────────────────────────────
 
 pub(super) extern "C" fn oxy_neg(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop operand from valid operand stack.
     let val = unsafe { pop(ctx) };
     if matches!(&val, Value::Struct { .. } | Value::EnumVariant { .. }) {
         if let Some((fn_index, fp)) = lookup_op_method(ctx, &val, "neg") {
@@ -274,7 +322,9 @@ pub(super) extern "C" fn oxy_neg(ctx: *mut JitContext) {
 }
 
 pub(super) extern "C" fn oxy_not(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop operand from valid operand stack.
     let val = unsafe { pop(ctx) };
     if matches!(&val, Value::Struct { .. } | Value::EnumVariant { .. }) {
         if let Some((fn_index, fp)) = lookup_op_method(ctx, &val, "not") {
@@ -289,7 +339,9 @@ pub(super) extern "C" fn oxy_not(ctx: *mut JitContext) {
 }
 
 pub(super) extern "C" fn oxy_bitnot(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop operand from valid operand stack.
     let val = unsafe { pop(ctx) };
     if matches!(&val, Value::Struct { .. } | Value::EnumVariant { .. }) {
         if let Some((fn_index, fp)) = lookup_op_method(ctx, &val, "bitnot") {

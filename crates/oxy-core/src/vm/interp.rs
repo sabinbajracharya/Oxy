@@ -384,10 +384,13 @@ impl<'e> Interpreter<'e> {
     // ── Operand-stack helpers (shared push/pop preserve move safety) ─────────
 
     fn push(&self, ctx: &mut JitContext, v: Value) {
+        // Safety: ctx is always a valid, non-aliased JitContext allocated by fresh_ctx.
+        // The operand stack has sufficient capacity.
         unsafe { ffi::push(ctx, v) }
     }
 
     fn pop(&self, ctx: &mut JitContext) -> Value {
+        // Safety: ctx is valid and the operand stack has the correct depth per the IR.
         unsafe { ffi::pop(ctx) }
     }
 
@@ -473,6 +476,7 @@ impl<'e> Interpreter<'e> {
             self.push(ctx, Value::Unit);
         }
         let (ptr, _) = self.engine.ffi_table["oxy_is_truthy"];
+        // Safety: ptr is a valid oxy_* entry point from ffi_symbols; ctx is valid.
         let raw = unsafe { call_raw(ptr, ctx, &[], FfiRet::I8) };
         raw.unwrap_or(0) != 0
     }
@@ -627,6 +631,8 @@ impl<'e> Interpreter<'e> {
         let local_count = callee_fn.local_count.max(frame_locals.len());
         let mut callee_ctx = self.fresh_ctx(local_count);
         for (i, v) in frame_locals.into_iter().enumerate() {
+            // Safety: i < local_count (guaranteed by callee_ctx construction);
+            // local_slot asserts bounds. The slot holds a valid, initialized Value.
             unsafe { callee_ctx.local_slot(i).write(v) };
         }
         let _disc = self.interpret(&mut callee_ctx, callee_fn);
@@ -654,6 +660,7 @@ impl<'e> Interpreter<'e> {
         let local_count = callee_fn.local_count.max(frame_locals.len());
         let mut ctx = self.fresh_ctx(local_count);
         for (i, v) in frame_locals.into_iter().enumerate() {
+            // Safety: i < local_count; local_slot asserts bounds.
             unsafe { ctx.local_slot(i).write(v) };
         }
         let disc = self.interpret(&mut ctx, callee_fn);
@@ -735,6 +742,8 @@ impl<'e> Interpreter<'e> {
             raw.push(*imm);
         }
 
+        // Safety: ptr is a valid oxy_* FFI entry point from ffi_symbols; ctx is
+        // valid; raw args match the function's expected parameter count and types.
         let scalar = unsafe { call_raw(ptr, ctx, &raw, ret) };
 
         // The function consumed its args. If it also pushed a result, sp now
@@ -765,6 +774,10 @@ fn interp_invoke_trampoline(
     target_ip: usize,
     frame: Vec<Value>,
 ) -> Result<Value, String> {
+    // Safety: `data` is the opaque pointer installed by install_invoker(),
+    // which derives from `&self` on the Interpreter. InvokerGuard clears the
+    // hook before the Interpreter (and its `engine` borrow) is dropped, so
+    // the pointer never dangles while the hook is live.
     let interp = unsafe { &*(data as *const Interpreter<'_>) };
     interp.invoke_target(target_ip, frame)
 }

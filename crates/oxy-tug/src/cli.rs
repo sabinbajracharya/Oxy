@@ -73,7 +73,7 @@ fn cmd_install(args: &[String]) -> i32 {
         if path.exists() && path.is_dir() {
             install::install_from_path(path)
         } else {
-            Err(format!("package source not found: '{target}'"))
+            Err(oxy_tug::tug_err!("package source not found: '{target}'"))
         }
     };
     match result {

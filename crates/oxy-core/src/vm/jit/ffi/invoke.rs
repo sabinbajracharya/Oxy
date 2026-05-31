@@ -2,6 +2,17 @@
 //! return, panic, and the interpreter call-back hook (wasm backend).
 //!
 //! Extracted from [`super`] to keep mod.rs under ~900 lines.
+//!
+//! # Safety
+//!
+//! `CalleeFrame` encapsulates the buffer-swap pattern: allocate a fresh buffer,
+//! swap it into ctx for the callee's duration, then restore the caller's state.
+//! The raw pointer manipulations are safe because the buffer is independently
+//! allocated with a known layout, and the caller's buffer/sp/capacity/local_count
+//! are atomically saved and restored. `transmute` of fn pointers is safe because
+//! the pointers come from the JIT symbol table and have the correct C ABI signature.
+//! `extern "C"` functions receive a valid `*mut JitContext` from Cranelift; string
+//! pointers from the JIT are valid for the call's duration.
 
 use std::cell::Cell;
 
@@ -28,6 +39,8 @@ impl CalleeFrame {
     pub(crate) fn new(min_locals: usize) -> Self {
         let capacity = min_locals + STACK_CAP;
         let layout = std::alloc::Layout::array::<Value>(capacity).unwrap();
+        // Safety: layout is computed from a known Value size and valid capacity.
+        // The resulting buffer is zero-initialized and valid for `capacity` Values.
         let buf = unsafe { std::alloc::alloc_zeroed(layout) as *mut Value };
         Self {
             buf,
@@ -118,10 +131,13 @@ pub(crate) fn invoke_jit_fn(
     let result_sp = ctx.sp;
     let mut frame = CalleeFrame::new(local_count);
     for (i, arg) in args.into_iter().enumerate() {
+        // Safety: frame.buf_mut() returns a valid buffer; i < local_count ≤ capacity.
         unsafe { frame.buf_mut().add(i).write(arg) };
     }
 
     let saved_local_count = ctx.local_count;
+    // Safety: execute() swaps the callee's buffer into ctx, calls fn_ptr
+    // (a valid JIT entry point), and restores the caller's state.
     unsafe {
         frame.execute(ctx, fn_ptr, saved_local_count, result_sp);
     }
@@ -135,14 +151,17 @@ pub(super) extern "C" fn oxy_push_closure(
     name_len: usize,
     meta_idx: usize,
 ) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
 
+    // Safety: name_ptr/name_len describe a valid JIT-owned string buffer.
     let name = unsafe {
         let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
 
     // Look up captures metadata.
+    // Safety: ctx.tables is set to a valid JitTables pointer by the JIT engine.
     let tables = unsafe { &*ctx.tables };
     let meta = tables.closure_meta(meta_idx).cloned();
     let (param_names, captured, is_async) = meta
@@ -154,6 +173,9 @@ pub(super) extern "C" fn oxy_push_closure(
     // are visible in both the closure and the outer function.
     let closure_env = crate::env::Environment::new();
     for (captured_name, outer_slot, is_mut) in &captured {
+        // Safety: outer_slot is a compile-time constant within local_count;
+        // the slot holds an initialized Value. We forget the shallow copy
+        // so its Drop doesn't double-free the original's heap data.
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
             Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
@@ -216,11 +238,14 @@ pub(super) extern "C" fn oxy_push_named_fn(
     name_ptr: *const u8,
     name_len: usize,
 ) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: JIT-guaranteed valid string buffer.
     let name = unsafe {
         let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
+    // Safety: ctx.tables is valid and non-null during execution.
     let tables = unsafe { &*ctx.tables };
     let fn_index = match tables.name_to_index(&name) {
         Some(idx) => idx,
@@ -260,13 +285,16 @@ pub(super) extern "C" fn oxy_push_async_block(
     name_len: usize,
     meta_idx: usize,
 ) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
 
+    // Safety: JIT-guaranteed valid string buffer.
     let name = unsafe {
         let bytes = std::slice::from_raw_parts(name_ptr, name_len);
         String::from_utf8_lossy(bytes).into_owned()
     };
 
+    // Safety: ctx.tables is valid and non-null during execution.
     let tables = unsafe { &*ctx.tables };
     let fn_index = tables.name_to_index(&name).unwrap_or(usize::MAX);
 
@@ -275,6 +303,8 @@ pub(super) extern "C" fn oxy_push_async_block(
 
     let closure_env = crate::env::Environment::new();
     for (captured_name, outer_slot, is_mut) in &captured {
+        // Safety: outer_slot is within local_count; slot holds an initialized Value.
+        // forget() prevents double-free of the shallow copy's heap data.
         let shallow = unsafe { ctx.buffer.add(*outer_slot).read() };
         let val = match &shallow {
             Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
@@ -311,9 +341,12 @@ pub(super) extern "C" fn oxy_push_async_block(
 }
 
 pub(super) extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
 
-    // Pop closure value (receiver) from below the args
+    // Pop closure value (receiver) from below the args.
+    // Safety: closure_idx is computed from ctx.sp and arg_count; the IR guarantees
+    // sufficient stack depth. We forget() the shallow read to avoid double-free.
     let closure_idx = ctx.sp - arg_count - 1;
     let closure_val = unsafe { ctx.buffer.add(ctx.local_count + closure_idx).read() };
 
@@ -407,13 +440,15 @@ pub(super) extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize
     let drain_start = ctx.sp - arg_count - 1;
 
     // Move args off the caller's stack, clearing each source slot.
+    // Safety: drain_start is within the allocated buffer; each src.read() moves
+    // one Value, and src.write(Value::Unit) prevents double-free of the original.
     let mut args_vals = Vec::with_capacity(arg_count);
     for i in 0..arg_count {
         let src = unsafe { ctx.buffer.add(ctx.local_count + drain_start + 1 + i) };
         args_vals.push(unsafe { src.read() });
         unsafe { src.write(Value::Unit) };
     }
-    // Clear the closure slot
+    // Safety: clear the closure slot to prevent double-free.
     unsafe {
         ctx.buffer
             .add(ctx.local_count + drain_start)
@@ -426,16 +461,20 @@ pub(super) extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize
     let mut frame = CalleeFrame::new(total_frame);
     for (i, name) in captured_names.iter().enumerate() {
         let val = closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
+        // Safety: frame.buf_mut() returns a valid buffer; i < total_frame ≤ capacity.
         unsafe {
             frame.buf_mut().add(i).write(val);
         }
     }
     for (i, arg) in args_vals.into_iter().enumerate() {
+        // Safety: captures_end + i < total_frame ≤ capacity.
         unsafe {
             frame.buf_mut().add(captures_end + i).write(arg);
         }
     }
 
+    // Safety: frame.execute swaps in the callee buffer, calls fn_ptr (valid JIT
+    // entry point), and restores the caller's state atomically.
     unsafe {
         frame.execute(ctx, fn_ptr, saved_local_count, ctx.sp);
     }
@@ -444,6 +483,8 @@ pub(super) extern "C" fn oxy_call_closure(ctx: *mut JitContext, arg_count: usize
 // ── Return / panic ──────────────────────────────────────────────────────
 
 pub(super) extern "C" fn oxy_error_discriminant(ctx: *const JitContext) -> u64 {
+    // Safety: ctx is a valid, non-null JitContext pointer from JIT codegen.
+    // This is a read-only access to the error flag.
     let ctx = unsafe { &*ctx };
     if ctx.error_len > 0 {
         2
@@ -453,17 +494,21 @@ pub(super) extern "C" fn oxy_error_discriminant(ctx: *const JitContext) -> u64 {
 }
 
 pub(super) extern "C" fn oxy_return(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
     let result = if ctx.sp == 0 {
         Value::Unit
     } else {
+        // Safety: pop from valid operand stack with at least one value.
         unsafe { pop(ctx) }
     };
     ctx.result = result;
 }
 
 pub(super) extern "C" fn oxy_panic(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from the JIT.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop the panic message from the valid operand stack.
     let msg_val = unsafe { pop(ctx) };
     let msg = format!("{msg_val:?}");
     let len = msg.len().min(1023);

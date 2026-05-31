@@ -18,10 +18,12 @@
 use std::path::Path;
 
 use crate::manifest::TugManifest;
+use crate::tug_err;
+use crate::TugResult;
 
 /// Create a brand-new project at `target`. The directory must either not exist
 /// or be empty.
-pub fn new_project(target: &Path, name: &str) -> Result<(), String> {
+pub fn new_project(target: &Path, name: &str) -> TugResult<()> {
     validate_package_name(name)?;
 
     if target.exists() {
@@ -30,7 +32,7 @@ pub fn new_project(target: &Path, name: &str) -> Result<(), String> {
             .next()
             .is_some();
         if nonempty {
-            return Err(format!(
+            return Err(tug_err!(
                 "target '{}' already exists and is not empty",
                 target.display()
             ));
@@ -47,12 +49,12 @@ pub fn new_project(target: &Path, name: &str) -> Result<(), String> {
 /// Preserves existing files except that `tug.toml` must not already exist.
 ///
 /// If `name` is empty, the project name defaults to the basename of `target`.
-pub fn init_project(target: &Path, name: &str) -> Result<(), String> {
+pub fn init_project(target: &Path, name: &str) -> TugResult<()> {
     if !target.exists() {
-        return Err(format!("target '{}' does not exist", target.display()));
+        return Err(tug_err!("target '{}' does not exist", target.display()));
     }
     if !target.is_dir() {
-        return Err(format!("target '{}' is not a directory", target.display()));
+        return Err(tug_err!("target '{}' is not a directory", target.display()));
     }
 
     let resolved_name = if name.is_empty() {
@@ -67,7 +69,7 @@ pub fn init_project(target: &Path, name: &str) -> Result<(), String> {
     validate_package_name(&resolved_name)?;
 
     if target.join("tug.toml").exists() {
-        return Err(format!(
+        return Err(tug_err!(
             "'{}/tug.toml' already exists \u{2014} project already initialized",
             target.display()
         ));
@@ -80,7 +82,7 @@ pub fn init_project(target: &Path, name: &str) -> Result<(), String> {
 ///
 /// Idempotent only at the level of writing — caller must have checked
 /// pre-existing state.
-fn write_layout(root: &Path, name: &str) -> Result<(), String> {
+fn write_layout(root: &Path, name: &str) -> TugResult<()> {
     let manifest = TugManifest::new(name, "0.1.0");
     std::fs::write(root.join("tug.toml"), manifest.to_string())
         .map_err(|e| format!("failed to write tug.toml: {e}"))?;
@@ -98,13 +100,13 @@ fn write_layout(root: &Path, name: &str) -> Result<(), String> {
 
 /// A dependency-style name validation, applied to project names as well so
 /// that they round-trip cleanly through `tug.toml`.
-fn validate_package_name(name: &str) -> Result<(), String> {
+fn validate_package_name(name: &str) -> TugResult<()> {
     if name.is_empty() {
-        return Err("package name must not be empty".to_string());
+        return Err(tug_err!("package name must not be empty"));
     }
     for c in name.chars() {
         if !(c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return Err(format!(
+            return Err(tug_err!(
                 "invalid package name `{name}`: must be an identifier (letters, digits, `-`, `_`)"
             ));
         }

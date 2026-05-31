@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 
 use crate::lockfile::{LockedPackage, TugLock};
 use crate::manifest::{Dependency, GitRef, Source, TugManifest};
+use crate::tug_err;
+use crate::TugResult;
 
 const MANIFEST_NAME: &str = "tug.toml";
 const LOCK_NAME: &str = "tug.lock";
@@ -23,7 +25,7 @@ pub struct Project {
 impl Project {
     /// Walk up from `start` until a `tug.toml` is found. Returns an error
     /// when no ancestor contains one.
-    pub fn find(start: &Path) -> Result<Self, String> {
+    pub fn find(start: &Path) -> TugResult<Self> {
         let mut cur: Option<&Path> = Some(start);
         while let Some(dir) = cur {
             let candidate = dir.join(MANIFEST_NAME);
@@ -32,14 +34,14 @@ impl Project {
             }
             cur = dir.parent();
         }
-        Err(format!(
+        Err(tug_err!(
             "no {MANIFEST_NAME} found in '{}' or any parent directory",
             start.display()
         ))
     }
 
     /// Load a project whose manifest lives directly under `root`.
-    pub fn load(root: &Path) -> Result<Self, String> {
+    pub fn load(root: &Path) -> TugResult<Self> {
         let manifest_path = root.join(MANIFEST_NAME);
         let manifest_src = std::fs::read_to_string(&manifest_path)
             .map_err(|e| format!("failed to read {}: {e}", manifest_path.display()))?;
@@ -74,7 +76,7 @@ impl Project {
     }
 
     /// Add or replace a dependency. Writes `tug.toml` and `tug.lock` to disk.
-    pub fn add_dependency(&mut self, dep: Dependency) -> Result<(), String> {
+    pub fn add_dependency(&mut self, dep: Dependency) -> TugResult<()> {
         validate_dep_name(&dep.name)?;
 
         // Sync lockfile: record a pending entry that `tug install` will fill in.
@@ -91,7 +93,7 @@ impl Project {
 
     /// Remove a dependency by name. Writes manifest + lockfile.
     /// Returns `true` if something was removed.
-    pub fn remove_dependency(&mut self, name: &str) -> Result<bool, String> {
+    pub fn remove_dependency(&mut self, name: &str) -> TugResult<bool> {
         let removed_manifest = self.manifest.remove_dependency(name);
         let removed_lock = self.lock.remove(name);
         if removed_manifest || removed_lock {
@@ -101,7 +103,7 @@ impl Project {
     }
 
     /// Persist manifest + lockfile to disk.
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(&self) -> TugResult<()> {
         std::fs::write(self.root.join(MANIFEST_NAME), self.manifest.to_string())
             .map_err(|e| format!("failed to write {MANIFEST_NAME}: {e}"))?;
         std::fs::write(self.root.join(LOCK_NAME), self.lock.to_string())
@@ -120,7 +122,7 @@ pub fn parse_dep_spec(
     tag: Option<String>,
     rev: Option<String>,
     path: Option<String>,
-) -> Result<Dependency, String> {
+) -> TugResult<Dependency> {
     let (name, version_in_spec) = match spec.split_once('@') {
         Some((n, v)) => (n.to_string(), Some(v.to_string())),
         None => (spec.to_string(), None),
@@ -132,12 +134,12 @@ pub fn parse_dep_spec(
         .filter(|b| **b)
         .count();
     if sources == 0 {
-        return Err(format!(
+        return Err(tug_err!(
             "no source for `{name}`: pass --git <url>, --path <p>, or `{name}@<version>`"
         ));
     }
     if sources > 1 {
-        return Err(format!(
+        return Err(tug_err!(
             "conflicting sources for `{name}`: pick one of --git, --path, or version"
         ));
     }
@@ -148,7 +150,7 @@ pub fn parse_dep_spec(
             .filter(|b| **b)
             .count();
         if refs > 1 {
-            return Err(format!("`{name}`: pick only one of --tag or --rev"));
+            return Err(tug_err!("`{name}`: pick only one of --tag or --rev"));
         }
         let reference = if let Some(t) = tag {
             GitRef::Tag(t)
@@ -174,13 +176,13 @@ pub fn parse_dep_spec(
     })
 }
 
-fn validate_dep_name(name: &str) -> Result<(), String> {
+fn validate_dep_name(name: &str) -> TugResult<()> {
     if name.is_empty() {
-        return Err("dependency name must not be empty".to_string());
+        return Err(tug_err!("dependency name must not be empty"));
     }
     for c in name.chars() {
         if !(c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return Err(format!(
+            return Err(tug_err!(
                 "invalid dependency name `{name}`: must be an identifier (letters, digits, `-`, `_`)"
             ));
         }

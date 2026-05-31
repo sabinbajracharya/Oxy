@@ -14,6 +14,9 @@
 
 use toml::Value;
 
+use crate::tug_err;
+use crate::TugResult;
+
 /// Supported lockfile schema version. Bumped when the format changes
 /// incompatibly. Older lockfiles are rejected with a clear error.
 pub const LOCKFILE_VERSION: u64 = 1;
@@ -49,7 +52,7 @@ impl TugLock {
         Self::default()
     }
 
-    pub fn parse(source: &str) -> Result<Self, String> {
+    pub fn parse(source: &str) -> TugResult<Self> {
         let value: Value = source
             .parse::<Value>()
             .map_err(|e| format!("invalid TOML in tug.lock: {e}"))?;
@@ -59,11 +62,11 @@ impl TugLock {
             .and_then(|v| v.as_integer())
             .ok_or_else(|| "tug.lock is missing required field `version`".to_string())?;
         if version < 0 {
-            return Err(format!("invalid lockfile version: {version}"));
+            return Err(tug_err!("invalid lockfile version: {version}"));
         }
         let version = version as u64;
         if version != LOCKFILE_VERSION {
-            return Err(format!(
+            return Err(tug_err!(
                 "unsupported lockfile version {version} (this tug supports version {LOCKFILE_VERSION})"
             ));
         }

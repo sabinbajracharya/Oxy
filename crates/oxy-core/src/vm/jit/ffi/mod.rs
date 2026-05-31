@@ -6,30 +6,75 @@
 //! ```text
 //! [locals: local_count × Value] [operand stack: sp × Value]
 //! ```
+//!
+//! # Safety
+//!
+//! Every `extern "C"` function in this module is called exclusively from
+//! Cranelift-generated JIT code. The following invariants are guaranteed by the
+//! JIT engine (`JitVm::call_fn`) and the IR compiler (`ir_gen`):
+//!
+//! - **`ctx` pointer**: `*mut JitContext` is always a valid, non-aliased pointer
+//!   to a `JitContext` allocated by `JitContext::new`. Its `buffer` field points
+//!   to a heap allocation with sufficient capacity for `local_count` locals plus
+//!   the operand stack.
+//! - **`pop`/`push`**: These manipulate the operand stack via raw pointer
+//!   arithmetic (`ctx.buffer.add(local_count + sp)`). They are `unsafe fn`
+//!   because the caller must ensure the stack has the right depth; the IR
+//!   compiler guarantees this — every `pop` corresponds to a previously-emitted
+//!   `push` or constant load.
+//! - **String arguments** (`*const u8` + `usize`): Pointers and lengths describe
+//!   string constants embedded in the compiled code. They are valid, initialized
+//!   UTF-8 for the duration of the call.
+//! - **`ctx.tables`**: Set to a valid `*const JitTables` by `JitVm::call_fn`
+//!   before any compiled code executes. Never null during execution.
+//! - **`ctx.output`**: Either null (print to stdout) or a valid
+//!   `*const Rc<RefCell<Vec<String>>>` owned by the `JitVm`, outliving the call.
+//! - **Buffer slot access** (`ctx.buffer.add(i)`): Indices are compile-time
+//!   constants from the IR compiler that stay within `local_count`. When used for
+//!   operand stack access (`local_count + sp`), `sp` is maintained correctly.
+//! - **`ptr::read`/`ptr::write`/`ptr::drop_in_place`**: Each buffer slot either
+//!   holds a valid, initialized `Value` or is zeroed. `ptr::read` paired with
+//!   `std::mem::forget` creates a shallow copy without double-free. `drop_in_place`
+//!   before `write` correctly drops the old occupant before installing a new one.
+//! - **`transmute` of fn pointers**: Every function pointer in `fn_table` was
+//!   registered by the JIT engine with the correct `extern "C" fn(*mut JitContext)`
+//!   (or `-> u64`) signature. The transmute target matches the ABI.",
+//! - **Thread-local scheduler access** (`scheduler_ref()`): `SchedulerGuard::new()`
+//!   is installed by `JitVm::call_fn` and `Interpreter::run_function` before any
+//!   compiled code runs; the raw pointer in the thread-local is always valid when
+//!   these FFI functions are reached.
 
 /// Set ctx.result directly — bypasses operand-stack round-trip for plain returns.
+///
+/// # Safety
+/// Called from JIT code with a valid `*mut JitContext`.
 #[no_mangle]
 extern "C" fn oxy_set_result_i64(ctx: *mut super::JitContext, val: i64) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::I64(val);
 }
 
 extern "C" fn oxy_set_result_bool(ctx: *mut super::JitContext, val: u8) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::Bool(val != 0);
 }
 
 extern "C" fn oxy_set_result_char(ctx: *mut super::JitContext, val: u32) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::Char(char::from_u32(val).unwrap_or('\0'));
 }
 
 extern "C" fn oxy_set_result_float(ctx: *mut super::JitContext, val: f64) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::F64(val);
 }
 
 extern "C" fn oxy_set_result_unit(ctx: *mut super::JitContext) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::Unit;
 }
@@ -37,13 +82,15 @@ extern "C" fn oxy_set_result_unit(ctx: *mut super::JitContext) {
 /// Set ctx.result from a local buffer slot — bypasses operand-stack round-trip
 /// for spill-slot returns (equivalent to oxy_load_local followed by oxy_return).
 extern "C" fn oxy_set_result_local(ctx: *mut super::JitContext, slot: usize) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: slot is a compile-time constant within local_count; the slot holds
+    // an initialized Value. forget() prevents double-free of the shallow copy.
     let val = unsafe { ctx.buffer.add(slot).read() };
     let result = match &val {
         crate::types::Value::Cell(rc) => rc.borrow().clone(),
         other => other.clone(),
     };
-    // val is a shallow bitwise copy — forget it to prevent a double-free.
     std::mem::forget(val);
     ctx.result = result;
 }
@@ -90,8 +137,13 @@ pub(crate) unsafe fn pop(ctx: &mut JitContext) -> Value {
 }
 
 // ── Constants ────────────────────────────────────────────────────────
+//
+// Each function below receives a valid `*mut JitContext` from Cranelift JIT code.
+// `push` is unsafe because it writes to the raw operand-stack buffer; the buffer
+// has sufficient pre-allocated capacity (see module-level Safety docs).
 
 extern "C" fn oxy_push_unit(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     unsafe {
         push(ctx, Value::Unit);
@@ -99,6 +151,7 @@ extern "C" fn oxy_push_unit(ctx: *mut JitContext) {
 }
 
 extern "C" fn oxy_push_bool(ctx: *mut JitContext, val: u8) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     unsafe {
         push(ctx, Value::Bool(val != 0));
@@ -106,6 +159,7 @@ extern "C" fn oxy_push_bool(ctx: *mut JitContext, val: u8) {
 }
 
 extern "C" fn oxy_push_int(ctx: *mut JitContext, val: i64) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     unsafe {
         push(ctx, Value::I64(val));
@@ -113,6 +167,7 @@ extern "C" fn oxy_push_int(ctx: *mut JitContext, val: i64) {
 }
 
 extern "C" fn oxy_push_float(ctx: *mut JitContext, val: f64) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     unsafe {
         push(ctx, Value::F64(val));
@@ -120,6 +175,7 @@ extern "C" fn oxy_push_float(ctx: *mut JitContext, val: f64) {
 }
 
 extern "C" fn oxy_push_char(ctx: *mut JitContext, val: u32) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     unsafe {
         let c = char::from_u32(val).unwrap_or('\u{FFFD}');
@@ -128,7 +184,9 @@ extern "C" fn oxy_push_char(ctx: *mut JitContext, val: u32) {
 }
 
 extern "C" fn oxy_push_string(ctx: *mut JitContext, ptr: *const u8, len: usize) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: ptr/len describe a valid JIT-owned string buffer for this call.
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
     let s = String::from_utf8_lossy(bytes).into_owned();
     unsafe {
@@ -139,19 +197,23 @@ extern "C" fn oxy_push_string(ctx: *mut JitContext, ptr: *const u8, len: usize) 
 // ── Stack manipulation ───────────────────────────────────────────────
 
 extern "C" fn oxy_pop(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let _ = unsafe { pop(ctx) };
 }
 
 extern "C" fn oxy_dup(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     if ctx.sp == 0 {
         set_error(ctx, "JIT stack underflow on dup".to_string());
         return;
     }
+    // Safety: stack top slot holds a valid initialized Value. We read a shallow
+    // copy, clone it, and forget the shallow copy to prevent double-free.
     let val = unsafe { ctx.buffer.add(ctx.local_count + ctx.sp - 1).read() };
     let val_clone = val.clone();
-    // Prevent double-free: val is a shallow copy sharing heap pointers with the original
     std::mem::forget(val);
     unsafe {
         push(ctx, val_clone);
@@ -159,9 +221,17 @@ extern "C" fn oxy_dup(ctx: *mut JitContext) {
 }
 
 // ── Variables ────────────────────────────────────────────────────────
+//
+// These functions read/write local variable slots through raw pointer access.
+// `index` is always a compile-time constant from the IR compiler, within the
+// function's `local_count`. `ptr::read` + `std::mem::forget` is the standard
+// pattern for moving a Value out of a raw buffer without double-free.
 
 extern "C" fn oxy_load_local(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: index is a valid local slot holding an initialized Value.
+    // forget() prevents the shallow copy from double-freeing heap data.
     let val = unsafe { ctx.buffer.add(index).read() };
     // If it's a Cell, load through it; otherwise clone
     let to_push = match &val {
@@ -179,7 +249,9 @@ extern "C" fn oxy_load_local(ctx: *mut JitContext, index: usize) {
 
 /// Load a local WITHOUT Cell unwrapping — preserves Cell for mutable receivers.
 extern "C" fn oxy_load_local_raw(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: slot holds an initialized Value; forget() prevents double-free.
     let val = unsafe { ctx.buffer.add(index).read() };
     let to_push = match &val {
         Value::Cell(rc) => Value::Cell(std::rc::Rc::clone(rc)),
@@ -192,16 +264,23 @@ extern "C" fn oxy_load_local_raw(ctx: *mut JitContext, index: usize) {
 }
 
 extern "C" fn oxy_store_local(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
     // If the target is a Cell, write through it
+    // Safety: index is within the allocated buffer.
     let target = unsafe { ctx.buffer.add(index) };
+    // Safety: target points to a valid, initialized Value.
     let is_cell = unsafe { matches!(&*target, Value::Cell(_)) };
     if is_cell {
+        // Safety: target is a valid Cell; borrow_mut writes through the Rc.
         if let Value::Cell(rc) = unsafe { &*target } {
             *rc.borrow_mut() = val;
         }
     } else {
+        // Safety: target is valid; write() overwrites the slot without dropping
+        // the old value (which was moved out or is being replaced).
         unsafe {
             target.write(val);
         }
@@ -221,9 +300,15 @@ extern "C" fn oxy_store_local(ctx: *mut JitContext, index: usize) {
 /// spilled cell is replaced rather than nested. The slot is either zeroed
 /// (`I64(0)`, a no-op drop) or a prior valid value, so `drop_in_place` is sound.
 extern "C" fn oxy_store_local_raw(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
+    // Safety: index is within the allocated buffer.
     let target = unsafe { ctx.buffer.add(index) };
+    // Safety: target holds a valid Value (or zeroed slot). drop_in_place frees
+    // the old occupant; write() installs the new value. This is the standard
+    // replace-in-place pattern and is sound because the slot was initialized.
     unsafe {
         std::ptr::drop_in_place(target);
         target.write(val);
@@ -233,7 +318,9 @@ extern "C" fn oxy_store_local_raw(ctx: *mut JitContext, index: usize) {
 /// Read a local slot and return its raw i64 representation.
 /// Returns 0 for non-integer types (they always flow through the FFI stack).
 extern "C" fn oxy_read_local_i64(ctx: *mut JitContext, index: usize) -> i64 {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: slot holds a valid, initialized Value.
     let slot = unsafe { &*ctx.buffer.add(index) };
     match slot {
         Value::I64(n) => *n,
@@ -245,7 +332,9 @@ extern "C" fn oxy_read_local_i64(ctx: *mut JitContext, index: usize) -> i64 {
 }
 
 extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: slot holds an initialized Value; shallow read with forget().
     let val = unsafe { ctx.buffer.add(index).read() };
     // Idempotent: a slot that already holds a `Cell` is left untouched. The
     // compile-time `celled_slots` guard only stops the op being *emitted* twice;
@@ -263,6 +352,7 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
     // val was a shallow copy; it has been moved into the Rc so it won't Drop.
     // The original in the buffer is overwritten by write() below (write does
     // not drop the old value, so no double-free).
+    // Safety: index is within local_count; write() replaces the slot contents.
     unsafe {
         ctx.buffer.add(index).write(cell);
     }
@@ -277,9 +367,11 @@ extern "C" fn oxy_make_cell(ctx: *mut JitContext, index: usize) {
 use crate::types::format_template_with;
 
 extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     let mut vals = Vec::with_capacity(count);
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         vals.push(unsafe { pop(ctx) });
     }
     vals.reverse();
@@ -291,6 +383,8 @@ extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
         print!("{template}");
         return;
     }
+    // Safety: display_via_user_fmt dereferences ctx.tables and ctx.output,
+    // both guaranteed non-null by the JIT engine during execution.
     let result = format_template_with(&template, &vals[1..], |v| unsafe {
         display_via_user_fmt(ctx, v)
     });
@@ -298,9 +392,11 @@ extern "C" fn oxy_print_val(ctx: *mut JitContext, count: usize) {
 }
 
 extern "C" fn oxy_println_val(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     let mut vals = Vec::with_capacity(count);
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         vals.push(unsafe { pop(ctx) });
     }
     vals.reverse();
@@ -310,11 +406,14 @@ extern "C" fn oxy_println_val(ctx: *mut JitContext, count: usize) {
         vals[0].to_string()
     } else {
         let template = vals[0].to_string();
+        // Safety: display_via_user_fmt dereferences valid, non-null pointers.
         format_template_with(&template, &vals[1..], |v| unsafe {
             display_via_user_fmt(ctx, v)
         })
     };
     if !ctx.output.is_null() {
+        // Safety: ctx.output is non-null, set by JitVm::call_fn to a valid
+        // Rc<RefCell<Vec<String>>> that outlives the call.
         let output = unsafe { &*ctx.output };
         output.borrow_mut().push(format!("{line}\n"));
     } else {
@@ -327,7 +426,9 @@ mod ops;
 // ── Control flow helpers ─────────────────────────────────────────────
 
 extern "C" fn oxy_is_falsy(ctx: *mut JitContext) -> u8 {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
     if val.is_truthy() {
         0
@@ -337,7 +438,9 @@ extern "C" fn oxy_is_falsy(ctx: *mut JitContext) -> u8 {
 }
 
 extern "C" fn oxy_is_truthy(ctx: *mut JitContext) -> u8 {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
     if val.is_truthy() {
         1
@@ -417,17 +520,21 @@ fn jit_closure_invoker(
             .get(name)
             .ok()
             .unwrap_or(Value::Unit);
+        // Safety: call_ctx.buffer is valid; i < local_count ≤ capacity.
         unsafe {
             call_ctx.buffer.add(i).write(val);
         }
     }
     for (i, arg) in args.iter().enumerate() {
+        // Safety: captures_end + i < local_count ≤ capacity.
         unsafe {
             call_ctx.buffer.add(captures_end + i).write(arg.clone());
         }
     }
     call_ctx.local_count = local_count;
 
+    // Safety: fn_ptr was registered in the JIT symbol table with the correct
+    // `extern "C" fn(*mut JitContext) -> u64` C ABI signature.
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fn_ptr as *const ()) };
     let disc = fn_ptr(&mut call_ctx as *mut JitContext);
@@ -467,8 +574,10 @@ unsafe fn invoke_compiled_method(
     const STACK_CAP2: usize = 2048;
     let callee_cap = total_frame + STACK_CAP2;
     let callee_layout = std::alloc::Layout::array::<Value>(callee_cap).unwrap();
+    // Safety: alloc_zeroed with a valid layout produces a valid, zeroed buffer.
     let callee_buf = unsafe { std::alloc::alloc_zeroed(callee_layout) as *mut Value };
 
+    // Safety: callee_buf is valid; slots 0..1+arg_count are within capacity.
     unsafe {
         callee_buf.add(0).write(receiver);
     }
@@ -487,10 +596,14 @@ unsafe fn invoke_compiled_method(
     ctx.local_count = total_frame;
     ctx.sp = 0;
 
+    // Safety: fp was obtained from the JIT symbol table and matches the
+    // `extern "C" fn(*mut JitContext) -> u64` signature.
     let fn_ptr: extern "C" fn(*mut JitContext) -> u64 =
         unsafe { std::mem::transmute(fp as *const ()) };
     let _disc = fn_ptr(ctx);
 
+    // Safety: callee locals and stack slots hold valid Values. Dropping them
+    // properly frees heap resources before deallocating the buffer.
     for i in 0..ctx.local_count {
         unsafe {
             std::ptr::drop_in_place(ctx.buffer.add(i));
@@ -501,6 +614,7 @@ unsafe fn invoke_compiled_method(
             std::ptr::drop_in_place(ctx.buffer.add(ctx.local_count + i));
         }
     }
+    // Safety: callee_buf was allocated with callee_layout; dealloc matches.
     unsafe {
         std::alloc::dealloc(ctx.buffer as *mut u8, callee_layout);
     }
@@ -561,16 +675,20 @@ extern "C" fn oxy_method_call(
     name_len: usize,
     arg_count: usize,
 ) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: JIT-guaranteed valid string buffer for method name.
     let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
     let method_name = String::from_utf8_lossy(name_bytes);
 
     // Drain args and receiver
     let mut args = Vec::with_capacity(arg_count);
     for _ in 0..arg_count {
+        // Safety: arg_count matches operand stack depth per IR codegen.
         args.push(unsafe { pop(ctx) });
     }
     args.reverse();
+    // Safety: pop receiver from valid operand stack.
     let receiver = unsafe { pop(ctx) };
 
     // A mutable local receiver arrives wrapped in a `Value::Cell` so a `mut self`
@@ -593,6 +711,7 @@ extern "C" fn oxy_method_call(
     };
 
     // JIT name-based lookup for user-defined struct/enum methods.
+    // Safety: ctx.tables is set to a valid JitTables pointer by the JIT engine.
     let tables = unsafe { &*ctx.tables };
     // The old method_ips table is bytecode-only; JIT-compiled methods are
     // registered by qualified name (e.g. "Counter::inc") in the fn table.
@@ -863,7 +982,9 @@ fn dispatch_builtin_method(
 // ── Try ─────────────────────────────────────────────────────────────
 
 extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
     match &val {
         Value::EnumVariant {
@@ -899,8 +1020,11 @@ extern "C" fn oxy_try_pop(ctx: *mut JitContext) {
 }
 
 extern "C" fn oxy_bind_ident(ctx: *mut JitContext, index: usize) {
+    // Safety: ctx is valid; index is within local_count.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
+    // Safety: index is within the allocated buffer; write() stores the value.
     unsafe {
         ctx.buffer.add(index).write(val);
     }
@@ -912,7 +1036,9 @@ extern "C" fn oxy_path_call_builtin(
     path_len: usize,
     arg_count: usize,
 ) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: JIT-guaranteed valid NUL-separated path string buffer.
     let path_bytes = unsafe { std::slice::from_raw_parts(path_ptr, path_len) };
     let segments: Vec<String> = path_bytes
         .split(|b| *b == 0)
@@ -922,6 +1048,7 @@ extern "C" fn oxy_path_call_builtin(
 
     let mut args = Vec::with_capacity(arg_count);
     for _ in 0..arg_count {
+        // Safety: arg_count matches operand stack depth per IR codegen.
         args.push(unsafe { pop(ctx) });
     }
     args.reverse();
@@ -953,6 +1080,7 @@ extern "C" fn oxy_path_call_builtin(
     // user-defined modules (e.g. `mod math { fn double }`) take priority
     // over stdlib modules with the same name (e.g. math::sqrt).
     let fn_name = seg_refs.join("::");
+    // Safety: ctx.tables is valid and non-null during execution.
     let tables = unsafe { &*ctx.tables };
     if let Some(fn_idx) = tables.name_to_index(&fn_name) {
         if let Some(fn_ptr) = tables.fn_ptr(fn_idx) {
@@ -1034,7 +1162,9 @@ fn call_stdlib_jit(
 // ── Display trait ─────────────────────────────────────────────────────
 
 extern "C" fn oxy_display_arg(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
     // Push the display string via the to_string convention
     unsafe {
@@ -1091,6 +1221,9 @@ impl Drop for SchedulerGuard {
 fn scheduler_ref() -> &'static mut crate::vm::scheduler::Scheduler {
     let ptr = CURRENT_SCHEDULER.with(|c| c.get());
     debug_assert!(!ptr.is_null(), "scheduler not installed for this thread");
+    // Safety: SchedulerGuard::new() installs a valid Box<Scheduler> into the
+    // thread-local before any async FFI function can be reached. The guard
+    // outlives the execution, so the pointer is always valid when accessed.
     unsafe { &mut *ptr }
 }
 
@@ -1103,12 +1236,15 @@ thread_local! {
 }
 
 extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let val = unsafe { pop(ctx) };
 
     match val {
         Value::Future(fut) => {
             let target_ip = fut.target_ip;
+            // Safety: ctx.tables is valid and non-null during execution.
             let tables = unsafe { &*ctx.tables };
             let fn_ptr = match tables.fn_ptr(target_ip) {
                 Some(p) => p,
@@ -1152,17 +1288,21 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
                     .get(name)
                     .ok()
                     .unwrap_or(Value::Unit);
+                // Safety: frame buffer is valid; i < total_frame ≤ capacity.
                 unsafe {
                     frame.buf_mut().add(i).write(v);
                 }
             }
             for (i, arg) in fut.args.iter().enumerate() {
+                // Safety: captures_end + i < total_frame ≤ capacity.
                 unsafe {
                     frame.buf_mut().add(captures_end + i).write(arg.clone());
                 }
             }
 
             let saved_sp = ctx.sp;
+            // Safety: frame.execute swaps in the callee buffer, calls fn_ptr,
+            // and restores the caller's state.
             unsafe {
                 frame.execute(ctx, fn_ptr, ctx.local_count, saved_sp);
             }
@@ -1181,12 +1321,15 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
 }
 
 extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let closure = unsafe { pop(ctx) };
 
     match closure {
         Value::Function(f) => {
             let target_ip = f.target_ip.unwrap_or(0);
+            // Safety: ctx.tables is valid and non-null during execution.
             let tables = unsafe { &*ctx.tables };
             let capture_count = f.captured_names.len();
             let local_count = tables.local_count(target_ip).max(capture_count);
@@ -1209,10 +1352,12 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
                 task_ctx.local_count = local_count;
                 for (i, name) in f.captured_names.iter().enumerate() {
                     let val = f.closure_env.borrow().get(name).ok().unwrap_or(Value::Unit);
+                    // Safety: task_ctx.buffer is valid; i < local_count ≤ capacity.
                     unsafe {
                         task_ctx.buffer.add(i).write(val);
                     }
                 }
+                // Safety: fn_ptr is a valid JIT entry point with the correct C ABI.
                 let task_fn: extern "C" fn(*mut JitContext) -> u64 =
                     unsafe { std::mem::transmute(fn_ptr as *const ()) };
                 let disc = task_fn(&mut task_ctx as *mut JitContext);
@@ -1256,7 +1401,9 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
 }
 
 extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack.
     let ms_val = unsafe { pop(ctx) };
     let ms = match ms_val {
         Value::I64(n) => n as u64,
@@ -1274,9 +1421,11 @@ extern "C" fn oxy_sleep_ffi(ctx: *mut JitContext) {
 }
 
 extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
+    // Safety: ctx is a valid JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
     let mut task_ids = Vec::new();
     for _ in 0..count {
+        // Safety: count matches operand stack depth per IR codegen.
         let val = unsafe { pop(ctx) };
         if let Value::JoinHandle { task_id } = val {
             task_ids.push(task_id);

@@ -32,6 +32,8 @@ impl HomeGuard {
                 .unwrap_or(0),
         ));
         std::fs::create_dir_all(&dir).unwrap();
+        // Safety: tests are serialized via HOME_LOCK mutex; temp dirs are
+        // per-test and cleaned up in Drop. No concurrent access to HOME.
         unsafe {
             std::env::set_var("HOME", &dir);
         }
@@ -46,6 +48,8 @@ impl HomeGuard {
 impl Drop for HomeGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.dir);
+        // Safety: restoring the previous HOME value. Tests are serialized
+        // via HOME_LOCK mutex, so no concurrent access to the environment.
         unsafe {
             match &self.prev {
                 Some(v) => std::env::set_var("HOME", v),

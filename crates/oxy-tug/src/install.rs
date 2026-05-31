@@ -9,6 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::manifest::TugManifest;
+use crate::tug_err;
+use crate::TugResult;
 
 /// Metadata returned after a successful install.
 #[derive(Debug, Clone)]
@@ -28,10 +30,10 @@ pub fn packages_dir() -> PathBuf {
 /// Install a package from a local directory. The directory must contain a
 /// valid `tug.toml`. Any existing installation with the same package name is
 /// replaced.
-pub fn install_from_path(source: &Path) -> Result<InstalledPackage, String> {
+pub fn install_from_path(source: &Path) -> TugResult<InstalledPackage> {
     let manifest_path = source.join("tug.toml");
     if !manifest_path.exists() {
-        return Err(format!("no tug.toml found in {}", source.display()));
+        return Err(tug_err!("no tug.toml found in {}", source.display()));
     }
     let manifest_src = std::fs::read_to_string(&manifest_path)
         .map_err(|e| format!("failed to read tug.toml: {e}"))?;
@@ -40,9 +42,9 @@ pub fn install_from_path(source: &Path) -> Result<InstalledPackage, String> {
     let dest = packages_dir().join(&manifest.name);
     if dest.exists() {
         std::fs::remove_dir_all(&dest)
-            .map_err(|e| format!("failed to remove existing install: {e}"))?;
+            .map_err(|e| tug_err!("failed to remove existing install: {e}"))?;
     }
-    copy_dir(source, &dest).map_err(|e| format!("failed to copy package: {e}"))?;
+    copy_dir(source, &dest).map_err(|e| tug_err!("failed to copy package: {e}"))?;
 
     Ok(InstalledPackage {
         manifest,
@@ -52,7 +54,7 @@ pub fn install_from_path(source: &Path) -> Result<InstalledPackage, String> {
 
 /// Install a package from a git URL by shelling out to `git clone` and then
 /// running [`install_from_path`] against the clone.
-pub fn install_from_url(url: &str) -> Result<InstalledPackage, String> {
+pub fn install_from_url(url: &str) -> TugResult<InstalledPackage> {
     let tmp = std::env::temp_dir().join(format!(
         "tug-clone-{}-{}",
         std::process::id(),
@@ -70,7 +72,7 @@ pub fn install_from_url(url: &str) -> Result<InstalledPackage, String> {
         .map_err(|e| format!("git not available: {e}"))?;
     if !status.success() {
         let _ = std::fs::remove_dir_all(&tmp);
-        return Err(format!("git clone failed with exit code: {status}"));
+        return Err(tug_err!("git clone failed with exit code: {status}"));
     }
 
     let result = install_from_path(&tmp);
@@ -79,17 +81,17 @@ pub fn install_from_url(url: &str) -> Result<InstalledPackage, String> {
 }
 
 /// Remove an installed package by name. Returns the removed path on success.
-pub fn uninstall(name: &str) -> Result<PathBuf, String> {
+pub fn uninstall(name: &str) -> TugResult<PathBuf> {
     let dir = packages_dir().join(name);
     if !dir.exists() {
-        return Err(format!("package not installed: '{name}'"));
+        return Err(tug_err!("package not installed: '{name}'"));
     }
     std::fs::remove_dir_all(&dir).map_err(|e| format!("failed to remove package: {e}"))?;
     Ok(dir)
 }
 
 /// List every installed package (those with a parseable `tug.toml`).
-pub fn list_installed() -> Result<Vec<InstalledPackage>, String> {
+pub fn list_installed() -> TugResult<Vec<InstalledPackage>> {
     let dir = packages_dir();
     if !dir.exists() {
         return Ok(Vec::new());

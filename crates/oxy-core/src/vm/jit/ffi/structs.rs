@@ -1,5 +1,12 @@
 //! Struct construction and field access FFI — part of the shared oxy_* runtime. See `mod.rs`
 //! for the core machinery (push/pop, call stack, ffi_symbols).
+//!
+//! # Safety
+//!
+//! All functions are `extern "C"` entry points from Cranelift JIT code. `ctx` is a
+//! valid, non-aliased `*mut JitContext`. String pointers from the JIT reference
+//! valid memory for the call's duration. `pop`/`push` operate on a pre-allocated
+//! operand stack whose capacity is guaranteed.
 
 use super::*;
 
@@ -11,9 +18,12 @@ pub(super) extern "C" fn oxy_struct_init(
     field_names_len: usize,
     field_count: usize,
 ) {
+    // Safety: ctx is a valid, non-aliased JitContext from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: JIT-guaranteed valid string buffer for the call's duration.
     let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
     let name = String::from_utf8_lossy(name_bytes).into_owned();
+    // Safety: field_names_ptr/len describe a NUL-separated buffer from the JIT, valid for this call.
     let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
     let field_names: Vec<&str> = fn_bytes
         .split(|b| *b == 0)
@@ -21,6 +31,8 @@ pub(super) extern "C" fn oxy_struct_init(
         .collect();
     let mut fields = HashMap::new();
     for i in (0..field_count).rev() {
+        // Safety: each pop drains one field value from the operand stack; field_count
+        // is guaranteed by IR codegen to match the number of pushed fields.
         let val = unsafe { pop(ctx) };
         let fname = field_names
             .get(i)
@@ -39,8 +51,11 @@ pub(super) extern "C" fn oxy_struct_update(
     field_names_len: usize,
     field_count: usize,
 ) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop from valid operand stack; base struct is guaranteed present.
     let base = unsafe { pop(ctx) };
+    // Safety: JIT-guaranteed valid NUL-separated field name buffer.
     let fn_bytes = unsafe { std::slice::from_raw_parts(field_names_ptr, field_names_len) };
     let field_names: Vec<&str> = fn_bytes
         .split(|b| *b == 0)
@@ -48,6 +63,7 @@ pub(super) extern "C" fn oxy_struct_update(
         .collect();
     let mut overrides = Vec::with_capacity(field_count);
     for _ in 0..field_count {
+        // Safety: field_count matches operand stack depth per IR codegen.
         overrides.push(unsafe { pop(ctx) });
     }
     overrides.reverse();
@@ -85,8 +101,11 @@ pub(super) extern "C" fn oxy_field_access(
     name_ptr: *const u8,
     name_len: usize,
 ) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop the struct/tuple value from the valid operand stack.
     let obj = unsafe { pop(ctx) };
+    // Safety: name_ptr/name_len describe a valid JIT-owned string buffer.
     let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
     let name = String::from_utf8_lossy(name_bytes);
     let result = match &obj {
@@ -138,9 +157,12 @@ pub(super) extern "C" fn oxy_field_store(
     name_ptr: *const u8,
     name_len: usize,
 ) {
+    // Safety: ctx is a valid JitContext pointer from JIT codegen.
     let ctx = unsafe { &mut *ctx };
+    // Safety: pop value and struct from the valid operand stack in IR-guaranteed order.
     let value = unsafe { pop(ctx) };
     let obj = unsafe { pop(ctx) };
+    // Safety: JIT-guaranteed valid string buffer for the field name.
     let name_bytes = unsafe { std::slice::from_raw_parts(name_ptr, name_len) };
     let name = String::from_utf8_lossy(name_bytes);
     match obj {

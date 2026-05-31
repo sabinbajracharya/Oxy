@@ -106,6 +106,8 @@ impl JitContext {
         let capacity = local_count + DEFAULT_STACK_CAP;
         let layout =
             std::alloc::Layout::array::<Value>(capacity).expect("JitContext buffer layout");
+        // Safety: layout is computed from known Value size and valid capacity.
+        // The resulting buffer is zero-initialized and valid for `capacity` Values.
         let buffer = unsafe { std::alloc::alloc_zeroed(layout) as *mut Value };
 
         Self {
@@ -130,6 +132,8 @@ impl JitContext {
         if self.local_count + self.sp >= self.capacity {
             self.grow();
         }
+        // Safety: local_count + sp is within capacity (possibly after grow).
+        // The caller writes directly to the returned slot.
         let slot = unsafe { self.buffer.add(self.local_count + self.sp) };
         self.sp += 1;
         slot
@@ -138,6 +142,7 @@ impl JitContext {
     /// Get a pointer to a local variable slot.
     pub fn local_slot(&self, index: usize) -> *mut Value {
         assert!(index < self.local_count);
+        // Safety: index < local_count ≤ capacity; the slot is within bounds.
         unsafe { self.buffer.add(index) }
     }
 
@@ -146,7 +151,10 @@ impl JitContext {
         let new_capacity = self.capacity * 2;
         let new_layout =
             std::alloc::Layout::array::<Value>(new_capacity).expect("JitContext grow layout");
+        // Safety: new_layout is computed from known sizes; the buffer is valid.
         let new_buffer = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
+        // Safety: both buffers are valid for self.capacity elements; non-overlapping
+        // because new_buffer is freshly allocated. Dealloc matches the original layout.
         unsafe {
             std::ptr::copy_nonoverlapping(self.buffer, new_buffer, self.capacity);
             std::alloc::dealloc(
@@ -161,19 +169,21 @@ impl JitContext {
 
 impl Drop for JitContext {
     fn drop(&mut self) {
-        // Drop locals
+        // Safety: each local slot 0..local_count holds a valid, initialized Value.
+        // Dropping them frees heap resources before deallocating the buffer.
         for i in 0..self.local_count {
             unsafe {
                 std::ptr::drop_in_place(self.buffer.add(i));
             }
         }
-        // Drop stack values
+        // Safety: each stack slot holds a valid Value pushed during execution.
         for i in 0..self.sp {
             unsafe {
                 std::ptr::drop_in_place(self.buffer.add(self.local_count + i));
             }
         }
-        // Free buffer
+        // Safety: buffer was allocated with a Layout matching self.capacity
+        // in JitContext::new. Dealloc matches.
         unsafe {
             let layout = std::alloc::Layout::array::<Value>(self.capacity).unwrap();
             std::alloc::dealloc(self.buffer as *mut u8, layout);
