@@ -178,7 +178,7 @@ impl IrGen {
                         if self
                             .variant_to_enum
                             .get(variant)
-                            .map_or(false, |e| e == enum_name)
+                            .is_some_and(|e| e == enum_name)
                         {
                             break 'ctor Some((enum_name.to_string(), variant.to_string()));
                         }
@@ -417,7 +417,7 @@ impl IrGen {
                             if self
                                 .variant_to_enum
                                 .get(variant)
-                                .map_or(false, |e| e == enum_name)
+                                .is_some_and(|e| e == enum_name)
                             {
                                 break 'ctor Some((enum_name.to_string(), variant.to_string()));
                             }
@@ -505,11 +505,7 @@ impl IrGen {
                 if final_segments.len() >= 2 {
                     let variant = final_segments[final_segments.len() - 1].clone();
                     let enum_name = final_segments[..final_segments.len() - 1].join("::");
-                    if self
-                        .variant_to_enum
-                        .get(&variant)
-                        .map_or(false, |e| e == &enum_name)
-                    {
+                    if self.variant_to_enum.get(&variant) == Some(&enum_name) {
                         let r = self.alloc_reg();
                         self.emit(IrOp::CallBuiltin {
                             result: r,
@@ -657,8 +653,7 @@ impl IrGen {
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
-                        let coerced = if self.local_types.get(&slot).map_or(false, |t| t == "byte")
-                        {
+                        let coerced = if self.local_types.get(&slot).is_some_and(|t| t == "byte") {
                             let cr = self.alloc_reg();
                             self.emit(IrOp::CallBuiltin {
                                 result: cr,
@@ -726,10 +721,7 @@ impl IrGen {
                 let r = self.alloc_reg();
                 if resolved.len() > 1 {
                     let enum_name = resolved[..resolved.len() - 1].join("::");
-                    let is_enum_variant = self
-                        .variant_to_enum
-                        .get(&variant)
-                        .map_or(false, |e| e == &enum_name);
+                    let is_enum_variant = self.variant_to_enum.get(&variant) == Some(&enum_name);
                     if is_enum_variant {
                         self.emit(IrOp::CallBuiltin {
                             result: r,

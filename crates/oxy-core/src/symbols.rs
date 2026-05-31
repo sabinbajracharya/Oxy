@@ -24,8 +24,10 @@ pub struct MethodInfo {
     pub hover_text: &'static str,
 }
 
-/// A built-in type with its methods.
-pub struct TypeInfo {
+/// Documentation metadata for a built-in type (name, description, methods).
+/// Used by the LSP for completions and hover text.  Not to be confused with
+/// `type_checker::TypeInfo` which is the semantic type representation.
+pub struct TypeDoc {
     pub name: &'static str,
     /// One-line description for completions.
     pub detail: &'static str,
@@ -465,81 +467,81 @@ pub const GENERIC_METHODS: &[MethodInfo] = methods![
 // methods. Order matters for completions: common types first.
 // ---------------------------------------------------------------------------
 
-pub const ALL_TYPES: &[TypeInfo] = &[
-    TypeInfo {
+pub const ALL_TYPES: &[TypeDoc] = &[
+    TypeDoc {
         name: "Vec",
         detail: "Growable array type",
         hover_text:
             "**Vec\\<T\\>** — Growable array\n\n```oxy\nlet v: Vec<i64> = vec![1, 2, 3];\n```",
         methods: VEC_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "String",
         detail: "Owned UTF-8 string",
         hover_text: "**String** — Owned, heap-allocated UTF-8 string",
         methods: STRING_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "HashMap",
         detail: "Hash map collection",
         hover_text: "**HashMap\\<K, V\\>** — Hash map collection",
         methods: HASHMAP_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "HashSet",
         detail: "Hash set collection",
         hover_text: "**HashSet\\<T\\>** — Hash set collection",
         methods: HASHSET_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "BTreeMap",
         detail: "Ordered map collection",
         hover_text: "**BTreeMap\\<K, V\\>** — Sorted key-value map",
         methods: BTREEMAP_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "BTreeSet",
         detail: "Ordered set collection",
         hover_text: "**BTreeSet\\<T\\>** — Sorted unique set",
         methods: BTREESET_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "BinaryHeap",
         detail: "Priority queue (max-heap)",
         hover_text: "**BinaryHeap\\<T\\>** — Max-heap priority queue",
         methods: BINARYHEAP_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "VecDeque",
         detail: "Double-ended queue",
         hover_text: "**VecDeque\\<T\\>** — Growable ring buffer",
         methods: VECDEQUE_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "Option",
         detail: "Optional value: Some(T) or None",
         hover_text: "**Option\\<T\\>** — `Some(value)` or `None`",
         methods: OPTION_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "Result",
         detail: "Result type: Ok(T) or Err(E)",
         hover_text: "**Result\\<T, E\\>** — `Ok(value)` or `Err(error)`",
         methods: RESULT_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "Iterator",
         detail: "Lazy iterator over elements",
         hover_text: "**Iterator\\<T\\>** — Iterator over elements",
         methods: ITERATOR_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "numeric",
         detail: "Integer and float methods",
         hover_text: "**i64 / f64** — Numeric methods common to all integer and float types",
         methods: NUMERIC_METHODS,
     },
-    TypeInfo {
+    TypeDoc {
         name: "char",
         detail: "Unicode character methods",
         hover_text: "**char** — Unicode scalar value",

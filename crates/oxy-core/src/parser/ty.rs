@@ -61,7 +61,7 @@ impl Parser {
             if self.match_token(&TokenKind::Arrow) {
                 let ret = self.parse_type_annotation()?;
                 name.push_str(" -> ");
-                name.push_str(&ret.name());
+                name.push_str(ret.name());
             }
             return Ok(TypeAnnotation::Named {
                 name,

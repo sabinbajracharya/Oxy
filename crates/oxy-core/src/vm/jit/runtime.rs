@@ -148,7 +148,7 @@ pub(crate) fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() & b.as_i64(), &a))
     } else {
-        Err(format!("bitwise AND requires integers"))
+        Err("bitwise AND requires integers".to_string())
     }
 }
 
@@ -157,7 +157,7 @@ pub(crate) fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() | b.as_i64(), &a))
     } else {
-        Err(format!("bitwise OR requires integers"))
+        Err("bitwise OR requires integers".to_string())
     }
 }
 
@@ -166,7 +166,7 @@ pub(crate) fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
         let (a, b) = promote_ints(a, b);
         Ok(wrap_to(a.as_i64() ^ b.as_i64(), &a))
     } else {
-        Err(format!("bitwise XOR requires integers"))
+        Err("bitwise XOR requires integers".to_string())
     }
 }
 
@@ -175,7 +175,7 @@ pub(crate) fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
         let shift = b.as_u64() as u32;
         Ok(wrap_to(a.as_i64().wrapping_shl(shift), &a))
     } else {
-        Err(format!("shift left requires integers"))
+        Err("shift left requires integers".to_string())
     }
 }
 
@@ -184,7 +184,7 @@ pub(crate) fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
         let shift = b.as_u64() as u32;
         Ok(wrap_to(a.as_i64().wrapping_shr(shift), &a))
     } else {
-        Err(format!("shift right requires integers"))
+        Err("shift right requires integers".to_string())
     }
 }
 

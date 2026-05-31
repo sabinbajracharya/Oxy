@@ -6,20 +6,14 @@
 // Value contains Rc<RefCell<...>> for shared mutable state (no borrow checker).
 // We use Value as HashMap keys intentionally — keys are never mutated while in a map.
 #![allow(clippy::mutable_key_type)]
+// The Value enum and type system are inherently type-complex.
 #![allow(clippy::type_complexity)]
-#![allow(clippy::useless_format)]
-#![allow(clippy::needless_borrow)]
-#![allow(clippy::unnecessary_map_or)]
-#![allow(clippy::for_kv_map)]
-#![allow(clippy::borrowed_box)]
-#![allow(clippy::single_match)]
-#![allow(clippy::wildcard_in_or_patterns)]
-#![allow(clippy::collapsible_match)]
-#![allow(clippy::map_clone)]
-#![allow(clippy::useless_asref)]
+// `std::slice::from_ref(&x)` is more verbose than `&[x.clone()]` for single-
+// element slices passed to call_fn, and the clone cost is negligible here.
 #![allow(clippy::cloned_ref_to_slice_refs)]
-#![allow(clippy::needless_late_init)]
-#![allow(clippy::assigning_clones)]
+// Collapsed match/if-let patterns are sometimes less readable than the
+// two-level form, especially in the ir_gen match dispatcher.
+#![allow(clippy::collapsible_match)]
 
 /// Abstract syntax tree node definitions.
 pub mod ast;

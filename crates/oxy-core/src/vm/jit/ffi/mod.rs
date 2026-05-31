@@ -1521,7 +1521,7 @@ fn dispatch_builtin_method(
                 crate::types::IteratorState::VecSource { data, index: 0 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, output, &f, fa)
+                jit_closure_invoker(tables, output, f, fa)
             })
         }
         Value::String(_) => crate::vm::builtins::string::dispatch(receiver, method_name, &args),
@@ -1593,7 +1593,7 @@ fn dispatch_builtin_method(
         },
         Value::Iterator(_) => {
             crate::vm::builtins::iterator::dispatch(receiver, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, output, &f, fa)
+                jit_closure_invoker(tables, output, f, fa)
             })
         }
         Value::Tuple(ref _t) => match method_name {
@@ -1633,7 +1633,7 @@ fn dispatch_builtin_method(
                 },
             )));
             crate::vm::builtins::iterator::dispatch(iter, method_name, &args, |f, fa| {
-                jit_closure_invoker(tables, output, &f, fa)
+                jit_closure_invoker(tables, output, f, fa)
             })
         }
         _ => Err(format!(

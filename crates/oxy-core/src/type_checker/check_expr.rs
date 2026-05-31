@@ -35,42 +35,40 @@ fn bind_generic_params(
     bindings: &mut HashMap<String, TypeInfo>,
     pos: usize,
 ) -> Result<(), (usize, String)> {
-    match ann {
-        TypeAnnotation::Named {
-            name, generic_args, ..
-        } => {
-            let arg_inner = type_args_of(arg_ty);
-            for (i, ga) in generic_args.iter().enumerate() {
-                if i < arg_inner.len() {
-                    bind_generic_params(ga, &arg_inner[i], generic_names, bindings, pos)?;
-                }
-            }
-            if generic_names.contains(name) && generic_args.is_empty() {
-                if *arg_ty == TypeInfo::Unknown {
-                    return Ok(());
-                }
-                if let Some(existing) = bindings.get(name) {
-                    // If the existing binding is an unresolved generic param
-                    // (e.g. `Cell<T>` returned T → UserStruct { name: "T" }),
-                    // replace it with the concrete type.
-                    if is_generic_placeholder(existing, generic_names) {
-                        bindings.insert(name.clone(), arg_ty.clone());
-                    } else if !existing.accepts(arg_ty) && !arg_ty.accepts(existing) {
-                        return Err((
-                            pos,
-                            format!(
-                                "generic parameter `{name}` bound to `{}` is incompatible with `{}`",
-                                existing.name(),
-                                arg_ty.name()
-                            ),
-                        ));
-                    }
-                } else {
-                    bindings.insert(name.clone(), arg_ty.clone());
-                }
+    if let TypeAnnotation::Named {
+        name, generic_args, ..
+    } = ann
+    {
+        let arg_inner = type_args_of(arg_ty);
+        for (i, ga) in generic_args.iter().enumerate() {
+            if i < arg_inner.len() {
+                bind_generic_params(ga, &arg_inner[i], generic_names, bindings, pos)?;
             }
         }
-        _ => {}
+        if generic_names.contains(name) && generic_args.is_empty() {
+            if *arg_ty == TypeInfo::Unknown {
+                return Ok(());
+            }
+            if let Some(existing) = bindings.get(name) {
+                // If the existing binding is an unresolved generic param
+                // (e.g. `Cell<T>` returned T → UserStruct { name: "T" }),
+                // replace it with the concrete type.
+                if is_generic_placeholder(existing, generic_names) {
+                    bindings.insert(name.clone(), arg_ty.clone());
+                } else if !existing.accepts(arg_ty) && !arg_ty.accepts(existing) {
+                    return Err((
+                        pos,
+                        format!(
+                            "generic parameter `{name}` bound to `{}` is incompatible with `{}`",
+                            existing.name(),
+                            arg_ty.name()
+                        ),
+                    ));
+                }
+            } else {
+                bindings.insert(name.clone(), arg_ty.clone());
+            }
+        }
     }
     Ok(())
 }
