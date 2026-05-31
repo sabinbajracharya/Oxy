@@ -24,34 +24,34 @@
 // - BFS: push all 0 in-degree nodes, process, decrement neighbors
 
 fn main() {
-    let prereqs = [[1, 0], [2, 1], [3, 2]];
+    val prereqs = [[1, 0], [2, 1], [3, 2]];
     println("{}", can_finish(4, prereqs));
 }
 
 fn can_finish(num_courses: Int, prerequisites: List) -> bool {
     // Build adjacency list and in-degree array
-    let n = num_courses;
-    let mut graph = [];
-    let mut indegree = [];
+    val n = num_courses;
+    var graph = [];
+    var indegree = [];
     for _i in 0..n {
         graph.push([]);
         indegree.push(0);
     }
     for pr in prerequisites {
-        let course = pr[0];
-        let prereq = pr[1];
+        val course = pr[0];
+        val prereq = pr[1];
         graph[prereq].push(course);
         indegree[course] = indegree[course] + 1;
     }
     // BFS: start with all 0 in-degree nodes
-    let mut queue = VecDeque::new();
+    var queue = VecDeque::new();
     for j in 0..n {
         if indegree[j] == 0 {
             queue.push_back(j);
         }
     }
-    let mut processed = 0;
-    while let Some(node) = queue.pop_front() {
+    var processed = 0;
+    while val Some(node) = queue.pop_front() {
         processed = processed + 1;
         for neighbor in graph[node] {
             indegree[neighbor] = indegree[neighbor] - 1;
@@ -65,13 +65,13 @@ fn can_finish(num_courses: Int, prerequisites: List) -> bool {
 
 #[test]
 fn test_possible() {
-    let prereqs = [[1, 0], [2, 1], [3, 2]];
+    val prereqs = [[1, 0], [2, 1], [3, 2]];
     assert(can_finish(4, prereqs));
 }
 
 #[test]
 fn test_cycle() {
-    let prereqs = [[0, 1], [1, 0]];
+    val prereqs = [[0, 1], [1, 0]];
     assert(!can_finish(2, prereqs));
 }
 

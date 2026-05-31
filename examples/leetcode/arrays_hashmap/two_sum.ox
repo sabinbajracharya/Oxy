@@ -25,8 +25,8 @@
 // - The map stores value → index so we can retrieve positions directly
 
 fn main() {
-    let nums = [2, 7, 11, 15];
-    let target = 9;
+    val nums = [2, 7, 11, 15];
+    val target = 9;
     match two_sum(nums, target) {
         Some((i, j)) => println("Found: indices {} and {}", i, j),
         None => println("No solution"),
@@ -34,10 +34,10 @@ fn main() {
 }
 
 fn two_sum(nums: List, target: Int) -> Option {
-    let mut seen = Map::new();
+    var seen = Map::new();
     for (i, num) in nums.iter().enumerate() {
-        let complement = target - num;
-        if let Some(j) = seen.get(complement) {
+        val complement = target - num;
+        if val Some(j) = seen.get(complement) {
             return Some((j, i));
         }
         seen.insert(num, i);
@@ -49,28 +49,28 @@ fn two_sum(nums: List, target: Int) -> Option {
 
 #[test]
 fn test_basic_case() {
-    let nums = [2, 7, 11, 15];
-    let result = two_sum(nums, 9);
+    val nums = [2, 7, 11, 15];
+    val result = two_sum(nums, 9);
     assert_eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_reversed_order() {
-    let nums = [3, 3, 4, 1];
-    let result = two_sum(nums, 6);
+    val nums = [3, 3, 4, 1];
+    val result = two_sum(nums, 6);
     assert_eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_no_solution() {
-    let nums = [1, 2, 3];
-    let result = two_sum(nums, 10);
+    val nums = [1, 2, 3];
+    val result = two_sum(nums, 10);
     assert(result.is_none());
 }
 
 #[test]
 fn test_negative_numbers() {
-    let nums = [-3, 4, 3, 90];
-    let result = two_sum(nums, 0);
+    val nums = [-3, 4, 3, 90];
+    val result = two_sum(nums, 0);
     assert_eq(result, Some((0, 2)));
 }

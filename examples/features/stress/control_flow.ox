@@ -3,24 +3,24 @@
 // --- if/else as expression ---
 #[test]
 fn test_if_else_expr() {
-    let n = if true { 1 } else { 2 };
+    val n = if true { 1 } else { 2 };
     assert_eq(n, 1);
 }
 #[test]
 fn test_if_else_expr_false() {
-    let n = if false { 1 } else { 2 };
+    val n = if false { 1 } else { 2 };
     assert_eq(n, 2);
 }
 #[test]
 fn test_if_no_else_unit() {
-    let mut x = 0;
+    var x = 0;
     if true { x = 5; }
     assert_eq(x, 5);
 }
 #[test]
 fn test_if_else_if_chain() {
-    let n = 5;
-    let s = if n < 0 { "neg" }
+    val n = 5;
+    val s = if n < 0 { "neg" }
         else if n == 0 { "zero" }
         else if n < 10 { "small" }
         else { "big" };
@@ -28,7 +28,7 @@ fn test_if_else_if_chain() {
 }
 #[test]
 fn test_nested_if_in_branch() {
-    let r = if true {
+    val r = if true {
         if false { 1 } else { 2 }
     } else {
         if true { 3 } else { 4 }
@@ -39,8 +39,8 @@ fn test_nested_if_in_branch() {
 // --- while loops ---
 #[test]
 fn test_while_counter() {
-    let mut i = 0;
-    let mut sum = 0;
+    var i = 0;
+    var sum = 0;
     while i < 5 {
         sum = sum + i;
         i = i + 1;
@@ -49,7 +49,7 @@ fn test_while_counter() {
 }
 #[test]
 fn test_while_break() {
-    let mut i = 0;
+    var i = 0;
     while i < 100 {
         if i == 5 { break; }
         i = i + 1;
@@ -58,8 +58,8 @@ fn test_while_break() {
 }
 #[test]
 fn test_while_continue() {
-    let mut acc = 0;
-    let mut i = 0;
+    var acc = 0;
+    var i = 0;
     while i < 10 {
         i = i + 1;
         if i % 2 == 0 { continue; }
@@ -69,7 +69,7 @@ fn test_while_continue() {
 }
 #[test]
 fn test_while_false_runs_zero_times() {
-    let mut x = 0;
+    var x = 0;
     while false { x = 99; }
     assert_eq(x, 0);
 }
@@ -77,7 +77,7 @@ fn test_while_false_runs_zero_times() {
 // --- for-in ---
 #[test]
 fn test_for_in_range() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..5 {
         sum = sum + i;
     }
@@ -85,7 +85,7 @@ fn test_for_in_range() {
 }
 #[test]
 fn test_for_in_inclusive_range() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 1..=4 {
         sum = sum + i;
     }
@@ -93,8 +93,8 @@ fn test_for_in_inclusive_range() {
 }
 #[test]
 fn test_for_in_list() {
-    let v = [10, 20, 30, 40];
-    let mut sum = 0;
+    val v = [10, 20, 30, 40];
+    var sum = 0;
     for x in v {
         sum = sum + x;
     }
@@ -102,7 +102,7 @@ fn test_for_in_list() {
 }
 #[test]
 fn test_for_in_array_literal() {
-    let mut sum = 0;
+    var sum = 0;
     for x in [1, 2, 3] {
         sum = sum + x;
     }
@@ -110,7 +110,7 @@ fn test_for_in_array_literal() {
 }
 #[test]
 fn test_for_in_string_chars() {
-    let mut count = 0;
+    var count = 0;
     for _c in "hello".chars() {
         count = count + 1;
     }
@@ -118,7 +118,7 @@ fn test_for_in_string_chars() {
 }
 #[test]
 fn test_for_in_break() {
-    let mut hit = 0;
+    var hit = 0;
     for i in 0..10 {
         if i == 3 { break; }
         hit = hit + 1;
@@ -127,7 +127,7 @@ fn test_for_in_break() {
 }
 #[test]
 fn test_for_in_continue() {
-    let mut count = 0;
+    var count = 0;
     for i in 0..10 {
         if i % 3 == 0 { continue; }
         count = count + 1;
@@ -138,8 +138,8 @@ fn test_for_in_continue() {
 // --- loop with break-value ---
 #[test]
 fn test_loop_break_value() {
-    let mut i = 0;
-    let r = loop {
+    var i = 0;
+    val r = loop {
         if i == 7 { break i * 10; }
         i = i + 1;
     };
@@ -147,7 +147,7 @@ fn test_loop_break_value() {
 }
 #[test]
 fn test_loop_no_value_break() {
-    let mut i = 0;
+    var i = 0;
     loop {
         if i == 3 { break; }
         i = i + 1;
@@ -158,7 +158,7 @@ fn test_loop_no_value_break() {
 // --- nested loops ---
 #[test]
 fn test_nested_loops_double_count() {
-    let mut total = 0;
+    var total = 0;
     for _i in 0..3 {
         for _j in 0..4 {
             total = total + 1;
@@ -168,7 +168,7 @@ fn test_nested_loops_double_count() {
 }
 #[test]
 fn test_break_only_breaks_inner() {
-    let mut total = 0;
+    var total = 0;
     for _i in 0..3 {
         for j in 0..10 {
             if j == 2 { break; }
@@ -181,7 +181,7 @@ fn test_break_only_breaks_inner() {
 // --- labeled break ---
 #[test]
 fn test_labeled_break_outer() {
-    let mut total = 0;
+    var total = 0;
     'outer: for i in 0..5 {
         for j in 0..5 {
             if i == 2 && j == 2 { break 'outer; }
@@ -192,7 +192,7 @@ fn test_labeled_break_outer() {
 }
 #[test]
 fn test_labeled_continue_outer() {
-    let mut total = 0;
+    var total = 0;
     'outer: for i in 0..3 {
         for j in 0..3 {
             if j == 1 { continue 'outer; }
@@ -202,38 +202,38 @@ fn test_labeled_continue_outer() {
     assert_eq(total, 3);  // i=0,j=0 → 0; i=1,j=0 → 1; i=2,j=0 → 2
 }
 
-// --- if-let ---
+// --- if-val ---
 #[test]
 fn test_if_let_some() {
-    let x: Option<Int> = Some(7);
-    let mut got = 0;
-    if let Some(v) = x {
+    val x: Option<Int> = Some(7);
+    var got = 0;
+    if val Some(v) = x {
         got = v;
     }
     assert_eq(got, 7);
 }
 #[test]
 fn test_if_let_none_skips() {
-    let x: Option<Int> = None;
-    let mut got = -1;
-    if let Some(v) = x {
+    val x: Option<Int> = None;
+    var got = -1;
+    if val Some(v) = x {
         got = v;
     }
     assert_eq(got, -1);
 }
 #[test]
 fn test_if_let_else() {
-    let x: Option<Int> = None;
-    let n = if let Some(v) = x { v } else { 99 };
+    val x: Option<Int> = None;
+    val n = if val Some(v) = x { v } else { 99 };
     assert_eq(n, 99);
 }
 
-// --- while-let with List.pop ---
+// --- while-val with List.pop ---
 #[test]
 fn test_while_let_pops_list() {
-    let mut v = [1, 2, 3, 4];
-    let mut sum = 0;
-    while let Some(x) = v.pop() {
+    var v = [1, 2, 3, 4];
+    var sum = 0;
+    while val Some(x) = v.pop() {
         sum = sum + x;
     }
     assert_eq(sum, 10);
@@ -246,12 +246,12 @@ fn test_and_short_circuits() {
     // Nested fn declared inside a test body — Oxy hoists nested items to
     // top-level with a mangled name and aliases them locally.
     fn always_false(_c: Int) -> bool { false }
-    let r = always_false(99) && (true || true);
+    val r = always_false(99) && (true || true);
     assert_eq(r, false);
 }
 #[test]
 fn test_or_short_circuits() {
-    let r = true || false;
+    val r = true || false;
     assert_eq(r, true);
 }
 
@@ -275,7 +275,7 @@ fn early_return_in_loop() -> Int {
 fn test_return_from_for() { assert_eq(early_return_in_loop(), 10); }
 
 fn return_from_while() -> Int {
-    let mut i = 0;
+    var i = 0;
     while i < 100 {
         if i == 7 { return i; }
         i = i + 1;
@@ -288,17 +288,17 @@ fn test_return_from_while() { assert_eq(return_from_while(), 7); }
 // --- block as expression ---
 #[test]
 fn test_block_as_expr() {
-    let n = {
-        let a = 5;
-        let b = 10;
+    val n = {
+        val a = 5;
+        val b = 10;
         a + b
     };
     assert_eq(n, 15);
 }
 #[test]
 fn test_nested_block_expr() {
-    let n = {
-        let x = { let y = 2; y * y };
+    val n = {
+        val x = { val y = 2; y * y };
         x + 1
     };
     assert_eq(n, 5);

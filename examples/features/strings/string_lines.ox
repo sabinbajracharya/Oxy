@@ -2,8 +2,8 @@
 
 #[test]
 fn test_lines_basic() {
-    let s = "foo\nbar\nbaz";
-    let lines = s.lines();
+    val s = "foo\nbar\nbaz";
+    val lines = s.lines();
     assert_eq(lines.len(), 3);
     assert_eq(lines[0], "foo");
     assert_eq(lines[1], "bar");
@@ -13,8 +13,8 @@ fn test_lines_basic() {
 #[test]
 fn test_lines_trailing_newline_ignored() {
     // Rust's lines() does not produce a trailing empty element
-    let s = "foo\nbar\n";
-    let lines = s.lines();
+    val s = "foo\nbar\n";
+    val lines = s.lines();
     assert_eq(lines.len(), 2);
     assert_eq(lines[0], "foo");
     assert_eq(lines[1], "bar");
@@ -22,8 +22,8 @@ fn test_lines_trailing_newline_ignored() {
 
 #[test]
 fn test_lines_crlf() {
-    let s = "foo\r\nbar\r\nbaz";
-    let lines = s.lines();
+    val s = "foo\r\nbar\r\nbaz";
+    val lines = s.lines();
     assert_eq(lines.len(), 3);
     assert_eq(lines[0], "foo");
     assert_eq(lines[1], "bar");
@@ -32,25 +32,25 @@ fn test_lines_crlf() {
 
 #[test]
 fn test_lines_single_line() {
-    let s = "hello";
-    let lines = s.lines();
+    val s = "hello";
+    val lines = s.lines();
     assert_eq(lines.len(), 1);
     assert_eq(lines[0], "hello");
 }
 
 #[test]
 fn test_lines_empty_string() {
-    let s = "";
-    let lines = s.lines();
+    val s = "";
+    val lines = s.lines();
     assert_eq(lines.len(), 0);
 }
 
 #[test]
 fn test_lines_parse_numbers() {
-    let s = "42\n7\n100";
-    let lines = s.lines();
-    let a = lines[0].parse_int().unwrap();
-    let b = lines[1].parse_int().unwrap();
-    let c = lines[2].parse_int().unwrap();
+    val s = "42\n7\n100";
+    val lines = s.lines();
+    val a = lines[0].parse_int().unwrap();
+    val b = lines[1].parse_int().unwrap();
+    val c = lines[2].parse_int().unwrap();
     assert_eq(a + b + c, 149);
 }

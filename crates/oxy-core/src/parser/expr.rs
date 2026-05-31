@@ -669,8 +669,8 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::If)?;
 
-        // Check for `if let` pattern
-        if self.check(&TokenKind::Let) {
+        // Check for `if val` / `if var` pattern
+        if self.check(&TokenKind::Val) || self.check(&TokenKind::Var) {
             return self.parse_if_let_expr(start_span);
         }
 
@@ -704,7 +704,12 @@ impl Parser {
     }
 
     fn parse_if_let_expr(&mut self, start_span: Span) -> Result<Expr, PipelineError> {
-        self.expect(TokenKind::Let)?;
+        let mutable = if self.match_token(&TokenKind::Var) {
+            true
+        } else {
+            self.expect(TokenKind::Val)?;
+            false
+        };
         let pattern = self.parse_pattern()?;
         self.expect(TokenKind::Eq)?;
         // Stop at `&&` so it can separate scrutinee from optional guard condition.
@@ -741,6 +746,7 @@ impl Parser {
             guard,
             then_block,
             else_block,
+            mutable,
             span: self.merge_spans(start_span, end_span),
         })
     }

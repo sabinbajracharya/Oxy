@@ -72,17 +72,17 @@ impl Mul for Vec2 {
 
 fn main() {
     // Trait methods
-    let p = Person::new(String::from("Alice"), 30);
+    val p = Person::new(String::from("Alice"), 30);
     println("{}", p.greet());
     println("{}", p.describe());
 
     // format function
-    let msg = format("{}! You are {} years old.", p.name, p.age);
+    val msg = format("{}! You are {} years old.", p.name, p.age);
     println("{}", msg);
 
     // Generics
-    let x = identity(42);
-    let s = identity("hello");
+    val x = identity(42);
+    val s = identity("hello");
     println("identity: {} {}", x, s);
 
     // Generic with bounds
@@ -90,17 +90,17 @@ fn main() {
     print_value("world");
 
     // Operator overloading
-    let a = Vec2::new(1.0, 2.0);
-    let b = Vec2::new(3.0, 4.0);
-    let c = a + b;
+    val a = Vec2::new(1.0, 2.0);
+    val b = Vec2::new(3.0, 4.0);
+    val c = a + b;
     println("add: ({}, {})", c.x, c.y);
 
-    let d = Vec2::new(2.0, 3.0);
-    let e = Vec2::new(4.0, 5.0);
-    let f = d * e;
+    val d = Vec2::new(2.0, 3.0);
+    val e = Vec2::new(4.0, 5.0);
+    val f = d * e;
     println("mul: ({}, {})", f.x, f.y);
 
     // String::from
-    let greeting = String::from("Hello, Oxy!");
+    val greeting = String::from("Hello, Oxy!");
     println("{}", greeting);
 }

@@ -20,9 +20,9 @@ impl Add for Vec2 {
 
 #[test]
 fn test_add_operator() {
-    let a = Vec2 { x: 1.5, y: 2.5 };
-    let b = Vec2 { x: 3.0, y: 1.0 };
-    let c = a + b;
+    val a = Vec2 { x: 1.5, y: 2.5 };
+    val b = Vec2 { x: 3.0, y: 1.0 };
+    val c = a + b;
     assert_eq(c.x, 4.5);
     assert_eq(c.y, 3.5);
 }
@@ -40,9 +40,9 @@ impl Sub for Vec2 {
 
 #[test]
 fn test_sub_operator() {
-    let a = Vec2 { x: 5.0, y: 3.0 };
-    let b = Vec2 { x: 2.0, y: 1.0 };
-    let c = a - b;
+    val a = Vec2 { x: 5.0, y: 3.0 };
+    val b = Vec2 { x: 2.0, y: 1.0 };
+    val c = a - b;
     assert_eq(c.x, 3.0);
     assert_eq(c.y, 2.0);
 }
@@ -60,9 +60,9 @@ impl Mul for Vec2 {
 
 #[test]
 fn test_mul_operator() {
-    let a = Vec2 { x: 2.0, y: 3.0 };
-    let b = Vec2 { x: 4.0, y: 5.0 };
-    let c = a * b;
+    val a = Vec2 { x: 2.0, y: 3.0 };
+    val b = Vec2 { x: 4.0, y: 5.0 };
+    val c = a * b;
     assert_eq(c.x, 8.0);
     assert_eq(c.y, 15.0);
 }
@@ -80,8 +80,8 @@ impl Neg for Vec2 {
 
 #[test]
 fn test_neg_operator() {
-    let v = Vec2 { x: 3.0, y: -4.0 };
-    let n = -v;
+    val v = Vec2 { x: 3.0, y: -4.0 };
+    val n = -v;
     assert_eq(n.x, -3.0);
     assert_eq(n.y, 4.0);
 }
@@ -98,9 +98,9 @@ impl Rem for WrappedInt {
 
 #[test]
 fn test_rem_operator() {
-    let a = WrappedInt(17);
-    let b = WrappedInt(5);
-    let c = a % b;
+    val a = WrappedInt(17);
+    val b = WrappedInt(5);
+    val c = a % b;
     assert_eq(c.0, 2);
 }
 
@@ -114,9 +114,9 @@ impl Div for WrappedInt {
 
 #[test]
 fn test_div_operator() {
-    let a = WrappedInt(20);
-    let b = WrappedInt(4);
-    let c = a / b;
+    val a = WrappedInt(20);
+    val b = WrappedInt(4);
+    val c = a / b;
     assert_eq(c.0, 5);
 }
 
@@ -134,9 +134,9 @@ impl Add for BoxedInt {
 
 #[test]
 fn test_operator_on_enum() {
-    let a = BoxedInt { val: 10 };
-    let b = BoxedInt { val: 20 };
-    let c = a + b;
+    val a = BoxedInt { val: 10 };
+    val b = BoxedInt { val: 20 };
+    val c = a + b;
     assert_eq(c.val, 30);
 }
 
@@ -146,10 +146,10 @@ fn test_operator_on_enum() {
 
 #[test]
 fn test_operator_chaining() {
-    let a = Vec2 { x: 2.0, y: 1.0 };
-    let b = Vec2 { x: 3.0, y: 4.0 };
-    let c = Vec2 { x: 1.0, y: 1.0 };
-    let result = a + b - c;
+    val a = Vec2 { x: 2.0, y: 1.0 };
+    val b = Vec2 { x: 3.0, y: 4.0 };
+    val c = Vec2 { x: 1.0, y: 1.0 };
+    val result = a + b - c;
     assert_eq(result.x, 4.0);
     assert_eq(result.y, 4.0);
 }

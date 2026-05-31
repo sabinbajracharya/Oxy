@@ -7,14 +7,14 @@
 
 #[test]
 fn test_some_construction() {
-    let x = Some(42);
+    val x = Some(42);
     assert(x.is_some());
     assert(!x.is_none());
 }
 
 #[test]
 fn test_none_construction() {
-    let x = None;
+    val x = None;
     assert(!x.is_some());
     assert(x.is_none());
 }
@@ -37,13 +37,13 @@ fn test_is_none() {
 
 #[test]
 fn test_unwrap_some() {
-    let x = Some(42);
+    val x = Some(42);
     assert_eq(x.unwrap(), 42);
 }
 
 #[test]
 fn test_unwrap_some_string() {
-    let x = Some("hello");
+    val x = Some("hello");
     assert_eq(x.unwrap(), "hello");
 }
 
@@ -54,7 +54,7 @@ fn test_unwrap_some_string() {
 
 #[test]
 fn test_expect_some() {
-    let x = Some(100);
+    val x = Some(100);
     assert_eq(x.expect("should have value"), 100);
 }
 
@@ -64,19 +64,19 @@ fn test_expect_some() {
 
 #[test]
 fn test_unwrap_or_some() {
-    let x = Some(10);
+    val x = Some(10);
     assert_eq(x.unwrap_or(99), 10);
 }
 
 #[test]
 fn test_unwrap_or_none() {
-    let x = None;
+    val x = None;
     assert_eq(x.unwrap_or(42), 42);
 }
 
 #[test]
 fn test_unwrap_or_string() {
-    let x = None;
+    val x = None;
     assert_eq(x.unwrap_or("default"), "default");
 }
 
@@ -84,15 +84,15 @@ fn test_unwrap_or_string() {
 
 #[test]
 fn test_unwrap_or_else_some() {
-    let x = Some(10);
-    let result = x.unwrap_or_else(|| 99);
+    val x = Some(10);
+    val result = x.unwrap_or_else(|| 99);
     assert_eq(result, 10);
 }
 
 #[test]
 fn test_unwrap_or_else_none() {
-    let x = None;
-    let result = x.unwrap_or_else(|| 42);
+    val x = None;
+    val result = x.unwrap_or_else(|| 42);
     assert_eq(result, 42);
 }
 
@@ -100,8 +100,8 @@ fn test_unwrap_or_else_none() {
 
 #[test]
 fn test_option_in_condition() {
-    let x = Some(42);
-    let mut found = false;
+    val x = Some(42);
+    var found = false;
     if x.is_some() {
         found = true;
     }
@@ -120,9 +120,9 @@ fn safe_divide(a: Int, b: Int) -> Option<Int> {
 
 #[test]
 fn test_option_return() {
-    let r = safe_divide(10, 2);
+    val r = safe_divide(10, 2);
     assert_eq(r.unwrap(), 5);
 
-    let r2 = safe_divide(10, 0);
+    val r2 = safe_divide(10, 0);
     assert(r2.is_none());
 }

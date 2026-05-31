@@ -8,14 +8,14 @@ fn take_int(x: Int) -> Int { x }
 
 #[test]
 fn test_async_closure_basic() {
-    let f = async || { 42 };
-    let fut = f();
+    val f = async || { 42 };
+    val fut = f();
     assert_eq(fut.await, 42);
 }
 
 #[test]
 fn test_async_closure_single_expr_body() {
-    let f = async || 99;
+    val f = async || 99;
     assert_eq(f().await, 99);
 }
 
@@ -23,13 +23,13 @@ fn test_async_closure_single_expr_body() {
 
 #[test]
 fn test_async_closure_with_params() {
-    let f = async |x: Int, y: Int| { x + y };
+    val f = async |x: Int, y: Int| { x + y };
     assert_eq(f(10, 20).await, 30);
 }
 
 #[test]
 fn test_async_closure_single_param() {
-    let f = async |x: Int| { x * 3 };
+    val f = async |x: Int| { x * 3 };
     assert_eq(f(7).await, 21);
 }
 
@@ -37,15 +37,15 @@ fn test_async_closure_single_param() {
 
 #[test]
 fn test_async_closure_capture() {
-    let x = 21;
-    let f = async || { x * 2 };
+    val x = 21;
+    val f = async || { x * 2 };
     assert_eq(f().await, 42);
 }
 
 #[test]
 fn test_async_closure_capture_with_param() {
-    let base = 10;
-    let f = async |x: Int| { x + base };
+    val base = 10;
+    val f = async |x: Int| { x + base };
     assert_eq(f(32).await, 42);
 }
 
@@ -53,7 +53,7 @@ fn test_async_closure_capture_with_param() {
 
 #[test]
 fn test_async_closure_string() {
-    let f = async || { "hello".to_string() };
+    val f = async || { "hello".to_string() };
     assert_eq(f().await, "hello");
 }
 
@@ -61,15 +61,15 @@ fn test_async_closure_string() {
 
 #[test]
 fn test_async_block_basic() {
-    let fut = async { 42 };
+    val fut = async { 42 };
     assert_eq(fut.await, 42);
 }
 
 #[test]
 fn test_async_block_multiple_stmts() {
-    let fut = async {
-        let x = 10;
-        let y = 32;
+    val fut = async {
+        val x = 10;
+        val y = 32;
         x + y
     };
     assert_eq(fut.await, 42);
@@ -79,8 +79,8 @@ fn test_async_block_multiple_stmts() {
 
 #[test]
 fn test_async_block_capture() {
-    let x = 21;
-    let fut = async { x * 2 };
+    val x = 21;
+    val fut = async { x * 2 };
     assert_eq(fut.await, 42);
 }
 
@@ -88,33 +88,33 @@ fn test_async_block_capture() {
 
 #[test]
 fn test_async_closure_type_flows() {
-    let f = async || { 42 };
-    let fut = f();        // Future<Int>
-    let v = fut.await;    // Int
-    let _ = take_int(v);  // OK: Int -> Int
+    val f = async || { 42 };
+    val fut = f();        // Future<Int>
+    val v = fut.await;    // Int
+    val _ = take_int(v);  // OK: Int -> Int
 }
 
 #[test]
 fn test_async_block_type_flows() {
-    let fut = async { 42 };  // Future<Int>
-    let v = fut.await;       // Int
-    let _ = take_int(v);     // OK
+    val fut = async { 42 };  // Future<Int>
+    val v = fut.await;       // Int
+    val _ = take_int(v);     // OK
 }
 
 // --- compile_error: type mismatch across async closure .await ---
 
 #[compile_error]
 fn async_closure_wrong_type() {
-    let f = async || { "hi".to_string() };
-    let fut = f();           // Future<String>
-    let v = fut.await;       // String
-    let _ = take_int(v);     // ERROR: String != Int
+    val f = async || { "hi".to_string() };
+    val fut = f();           // Future<String>
+    val v = fut.await;       // String
+    val _ = take_int(v);     // ERROR: String != Int
 }
 
 #[compile_error]
 fn async_block_wrong_type() {
-    let fut = async { "hi".to_string() };  // Future<String>
-    let v = fut.await;                     // String
-    let _ = take_int(v);                   // ERROR
+    val fut = async { "hi".to_string() };  // Future<String>
+    val v = fut.await;                     // String
+    val _ = take_int(v);                   // ERROR
 }
 

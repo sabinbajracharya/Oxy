@@ -63,8 +63,8 @@ pub use crate::lexer::KEYWORDS;
 /// Markdown hover text for each keyword. Only includes keywords with useful docs.
 pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
     match kw {
-        "let" => Some("Bind a value to a variable.\n\n```oxy\nlet x = 42;\nlet mut y = 0;\n```"),
-        "mut" => Some("Mark a variable as mutable."),
+        "val" => Some("Declare an immutable binding (binding and contents are frozen).\n\n```oxy\nval x = 42;\n```"),
+        "var" => Some("Declare a mutable binding (binding and contents can change).\n\n```oxy\nvar x = 0;\nx = 1;\n```"),
         "fn" => Some("Declare a function.\n\n```oxy\nfn add(a: i64, b: i64) -> i64 { a + b }\n```"),
         "struct" => Some("Define a struct type.\n\n```oxy\nstruct PoInt { x: f64, y: f64 }\n```"),
         "enum" => Some("Define an enum type.\n\n```oxy\nenum Color { Red, Green, Blue }\n```"),

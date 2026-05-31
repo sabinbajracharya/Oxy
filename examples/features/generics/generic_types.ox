@@ -10,9 +10,9 @@ struct Box<T> {
 
 #[test]
 fn test_generic_struct_single() {
-    let b = Box { value: 42 };
+    val b = Box { value: 42 };
     assert_eq(b.value, 42);
-    let s = Box { value: "hello".to_string() };
+    val s = Box { value: "hello".to_string() };
     assert_eq(s.value, "hello");
 }
 
@@ -25,7 +25,7 @@ struct Pair<A, B> {
 
 #[test]
 fn test_generic_struct_multi() {
-    let p = Pair { first: 10, second: "ten".to_string() };
+    val p = Pair { first: 10, second: "ten".to_string() };
     assert_eq(p.first, 10);
     assert_eq(p.second, "ten");
 }
@@ -34,8 +34,8 @@ fn test_generic_struct_multi() {
 
 #[test]
 fn test_generic_struct_same_type() {
-    let b1 = Box { value: 100 };
-    let b2 = Box { value: 200 };
+    val b1 = Box { value: 100 };
+    val b2 = Box { value: 200 };
     assert_eq(b1.value, 100);
 }
 
@@ -48,8 +48,8 @@ enum MyOption<T> {
 
 #[test]
 fn test_generic_enum_some() {
-    let x = MyOption::Some(42);
-    let is_some = match x {
+    val x = MyOption::Some(42);
+    val is_some = match x {
         MyOption::Some(_) => true,
         MyOption::None => false,
     };
@@ -76,7 +76,7 @@ fn make_pair<A, B>(a: A, b: B) -> Pair<A, B> {
 
 #[test]
 fn test_generic_function_multi() {
-    let p = make_pair(42, true);
+    val p = make_pair(42, true);
     assert_eq(p.first, 42);
     assert_eq(p.second, true);
 }
@@ -98,6 +98,6 @@ impl Wrapper {
 
 #[test]
 fn test_generic_struct_method() {
-    let w = Wrapper::new(42);
+    val w = Wrapper::new(42);
     assert_eq(w.get(), 42);
 }

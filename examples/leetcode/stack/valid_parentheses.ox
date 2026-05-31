@@ -28,13 +28,13 @@ fn main() {
 }
 
 fn is_valid(s: String) -> bool {
-    let mut stack = [];
+    var stack = [];
     for ch in s {
         if ch == '(' || ch == '[' || ch == '{' {
             stack.push(ch);
         } else {
-            let popped = stack.pop();
-            let ok = match ch {
+            val popped = stack.pop();
+            val ok = match ch {
                 ')' => popped == Some('('),
                 ']' => popped == Some('['),
                 '}' => popped == Some('{'),

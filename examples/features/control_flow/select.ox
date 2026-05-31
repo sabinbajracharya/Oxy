@@ -9,31 +9,31 @@ fn main() {}
 
 #[test]
 fn test_select_first_of_two() {
-    let a = spawn(|| 42);
-    let b = spawn(|| 99);
-    let result = select(a, b);
+    val a = spawn(|| 42);
+    val b = spawn(|| 99);
+    val result = select(a, b);
     assert_eq(result == 42 || result == 99, true);
 }
 
 #[test]
 fn test_select_with_sleep_faster() {
-    let fast = spawn(|| "fast");
-    let slow = spawn(|| {
+    val fast = spawn(|| "fast");
+    val slow = spawn(|| {
         sleep(1000);
         "slow"
     });
-    let result = select(fast, slow);
+    val result = select(fast, slow);
     assert_eq(result, "fast");
 }
 
 #[test]
 fn test_select_slow_wins_when_fast_yields() {
-    let a = spawn(|| {
+    val a = spawn(|| {
         sleep(1000);
         "a"
     });
-    let b = spawn(|| "b");
-    let result = select(a, b);
+    val b = spawn(|| "b");
+    val result = select(a, b);
     assert_eq(result, "b");
 }
 
@@ -41,16 +41,16 @@ fn test_select_slow_wins_when_fast_yields() {
 
 #[test]
 fn test_select_three_handles() {
-    let a = spawn(|| {
+    val a = spawn(|| {
         sleep(500);
         "a"
     });
-    let b = spawn(|| "b");
-    let c = spawn(|| {
+    val b = spawn(|| "b");
+    val c = spawn(|| {
         sleep(1000);
         "c"
     });
-    let result = select(a, b, c);
+    val result = select(a, b, c);
     assert_eq(result, "b");
 }
 
@@ -58,15 +58,15 @@ fn test_select_three_handles() {
 
 #[test]
 fn test_select_timeout_pattern() {
-    let work = spawn(|| {
+    val work = spawn(|| {
         sleep(100);
         "done"
     });
-    let timeout = spawn(|| {
+    val timeout = spawn(|| {
         sleep(5000);
         "timeout"
     });
-    let result = select(work, timeout);
+    val result = select(work, timeout);
     assert_eq(result, "done");
 }
 
@@ -74,9 +74,9 @@ fn test_select_timeout_pattern() {
 
 #[test]
 fn test_select_both_ready() {
-    let x = spawn(|| 1);
-    let y = spawn(|| 2);
-    let result = select(x, y);
+    val x = spawn(|| 1);
+    val y = spawn(|| 2);
+    val result = select(x, y);
     assert_eq(result == 1 || result == 2, true);
 }
 
@@ -84,9 +84,9 @@ fn test_select_both_ready() {
 
 #[test]
 fn test_select_inside_spawn() {
-    let outer = spawn(|| {
-        let a = spawn(|| "inner_a");
-        let b = spawn(|| {
+    val outer = spawn(|| {
+        val a = spawn(|| "inner_a");
+        val b = spawn(|| {
             sleep(100);
             "inner_b"
         });
@@ -99,11 +99,11 @@ fn test_select_inside_spawn() {
 
 #[test]
 fn test_select_with_captures() {
-    let x = 10;
-    let y = 20;
-    let a = spawn(|| x * 2);
-    let b = spawn(|| y * 3);
-    let result = select(a, b);
+    val x = 10;
+    val y = 20;
+    val a = spawn(|| x * 2);
+    val b = spawn(|| y * 3);
+    val result = select(a, b);
     assert_eq(result == 20 || result == 60, true);
 }
 
@@ -118,6 +118,6 @@ fn select_zero_args() {
 
 #[compile_error]
 fn select_one_arg() {
-    let h = spawn(|| 42);
+    val h = spawn(|| 42);
     select(h);
 }

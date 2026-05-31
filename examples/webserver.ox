@@ -4,7 +4,7 @@
 // Then visit http://127.0.0.1:8080 in your browser
 
 fn main() {
-    let app = std::server::new();
+    val app = std::server::new();
 
     // Home page
     std::server::get(app, "/", |req| {
@@ -18,7 +18,7 @@ fn main() {
 
     // Path parameters
     std::server::get(app, "/users/:id", |req| {
-        let id = req.params.get("id").unwrap_or("unknown");
+        val id = req.params.get("id").unwrap_or("unknown");
         std::server::json(format("{{\"id\": \"{}\"}}", id))
     });
 

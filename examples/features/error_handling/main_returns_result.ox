@@ -1,5 +1,5 @@
 // === Feature: `fn main() -> Result<(), E>` propagates `?` to exit code ===
-// With this, the user can write `let v = thing()?;` directly in main.
+// With this, the user can write `val v = thing()?;` directly in main.
 // If main returns `Err(_)`, the CLI prints the error and exits 1.
 // (The CLI-level reporting is verified out-of-band; here we just verify
 // that the type checker / compiler accept the pattern.)
@@ -13,12 +13,12 @@ fn ok_value() -> Result<Int, String> {
 }
 
 fn imitate_main_ok() -> Result<(), String> {
-    let _ = ok_value()?;
+    val _ = ok_value()?;
     Ok(())
 }
 
 fn imitate_main_err() -> Result<(), String> {
-    let _ = fails()?;
+    val _ = fails()?;
     Ok(())
 }
 

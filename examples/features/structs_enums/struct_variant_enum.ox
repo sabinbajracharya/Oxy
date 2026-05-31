@@ -27,8 +27,8 @@ fn area(s: Shape) -> Float {
 fn test_struct_variant_initializer_types_as_enum() {
     // Passes the type checker only if `Shape::Rectangle { ... }`'s
     // inferred type is `Shape`, not `Shape::Rectangle`.
-    let r: Shape = Shape::Rectangle { w: 4.0, h: 6.0 };
-    let _ = area(r);
+    val r: Shape = Shape::Rectangle { w: 4.0, h: 6.0 };
+    val _ = area(r);
 }
 
 #[test]
@@ -37,13 +37,13 @@ fn test_match_after_struct_variant_no_underflow() {
     // second `println` panics with VM stack underflow because the
     // EnumVariant arm consumed the scrutinee and the next iter's Pop
     // ate from the caller's frame.
-    let c = Shape::Circle(5.0);
-    let ac = area(c);
+    val c = Shape::Circle(5.0);
+    val ac = area(c);
     assert(ac > 78.0 && ac < 79.0);
 
-    let r = Shape::Rectangle { w: 4.0, h: 6.0 };
+    val r = Shape::Rectangle { w: 4.0, h: 6.0 };
     assert_eq(area(r) as Int, 24);
 
-    let n = Shape::Nothing;
+    val n = Shape::Nothing;
     assert_eq(area(n), 0.0);
 }

@@ -137,7 +137,7 @@ pub enum Expr {
     Path { segments: Vec<String>, span: Span },
     /// `self` keyword in methods
     SelfRef(Span),
-    /// `if let` expression: `if let Some(x) = expr { ... } [else { ... }]`
+    /// `if val` / `if var` expression: `if let Some(x) = expr { ... } else { ... }`
     IfLet {
         pattern: Box<Pattern>,
         expr: Box<Expr>,
@@ -145,6 +145,7 @@ pub enum Expr {
         guard: Option<Box<Expr>>,
         then_block: Block,
         else_block: Option<Box<Expr>>,
+        mutable: bool,
         span: Span,
     },
     /// Type cast: `expr as Type`
@@ -514,10 +515,11 @@ impl Expr {
                 expr,
                 then_block,
                 else_block,
+                mutable,
                 ..
             } => {
                 let pad = "  ".repeat(indent);
-                out.push_str(&format!("{pad}if let "));
+                out.push_str(&format!("{pad}if {} ", if *mutable { "var" } else { "val" }));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 expr.pretty_print(out, 0);

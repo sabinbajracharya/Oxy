@@ -22,22 +22,22 @@
 // - Base: empty → 0, single → nums[0]
 
 fn main() {
-    let nums = [1, 2, 3, 1];
+    val nums = [1, 2, 3, 1];
     println("{}", rob(nums));
 }
 
 fn rob(nums: List) -> Int {
-    let n = nums.len();
+    val n = nums.len();
     if n == 0 {
         return 0;
     }
     if n == 1 {
         return nums[0];
     }
-    let mut prev2 = nums[0];
-    let mut prev1 = if nums[0] > nums[1] { nums[0] } else { nums[1] };
+    var prev2 = nums[0];
+    var prev1 = if nums[0] > nums[1] { nums[0] } else { nums[1] };
     for i in 2..n {
-        let current = if prev1 > (prev2 + nums[i]) { prev1 } else { prev2 + nums[i] };
+        val current = if prev1 > (prev2 + nums[i]) { prev1 } else { prev2 + nums[i] };
         prev2 = prev1;
         prev1 = current;
     }

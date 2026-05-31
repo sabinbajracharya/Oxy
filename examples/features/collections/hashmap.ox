@@ -6,7 +6,7 @@
 
 #[test]
 fn test_new_empty() {
-    let m = Map::new();
+    val m = Map::new();
     assert_eq(m.len(), 0);
     assert(m.is_empty());
 }
@@ -15,7 +15,7 @@ fn test_new_empty() {
 
 #[test]
 fn test_insert() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
     m.insert("c", 3);
@@ -25,7 +25,7 @@ fn test_insert() {
 
 #[test]
 fn test_insert_overwrite() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("key", 1);
     m.insert("key", 99);
     assert_eq(m.len(), 1);
@@ -35,17 +35,17 @@ fn test_insert_overwrite() {
 
 #[test]
 fn test_get_existing() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("hello", 42);
-    let v = m.get("hello");
+    val v = m.get("hello");
     assert(v.is_some());
 }
 
 #[test]
 fn test_get_missing() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
-    let v = m.get("nonexistent");
+    val v = m.get("nonexistent");
     assert(v.is_none());
 }
 
@@ -53,16 +53,16 @@ fn test_get_missing() {
 
 #[test]
 fn test_get_or_existing() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("x", 10);
-    let v = m.get_or("x", 99);
+    val v = m.get_or("x", 99);
     assert_eq(v, 10);
 }
 
 #[test]
 fn test_get_or_missing() {
-    let mut m = Map::new();
-    let v = m.get_or("missing", 42);
+    var m = Map::new();
+    val v = m.get_or("missing", 42);
     assert_eq(v, 42);
 }
 
@@ -70,7 +70,7 @@ fn test_get_or_missing() {
 
 #[test]
 fn test_remove_existing() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
     m.remove("a");
@@ -80,7 +80,7 @@ fn test_remove_existing() {
 
 #[test]
 fn test_remove_missing() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
     m.remove("nope");
     assert_eq(m.len(), 1);
@@ -90,7 +90,7 @@ fn test_remove_missing() {
 
 #[test]
 fn test_contains_key() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("hello", "world");
     assert(m.contains_key("hello"));
     assert(!m.contains_key("missing"));
@@ -100,19 +100,19 @@ fn test_contains_key() {
 
 #[test]
 fn test_keys() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
-    let keys = m.keys();
+    val keys = m.keys();
     assert_eq(keys.len(), 2);
 }
 
 #[test]
 fn test_values() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
-    let vals = m.values();
+    val vals = m.values();
     assert_eq(vals.len(), 2);
 }
 
@@ -120,7 +120,7 @@ fn test_values() {
 
 #[test]
 fn test_bracket_get() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("key", 42);
     assert_eq(m["key"], 42);
 }
@@ -129,10 +129,10 @@ fn test_bracket_get() {
 
 #[test]
 fn test_iteration() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("x", 10);
     m.insert("y", 20);
-    let mut count = 0;
+    var count = 0;
     for pair in m {
         count = count + 1;
     }
@@ -143,8 +143,8 @@ fn test_iteration() {
 
 #[test]
 fn test_clone() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("a", 1);
-    let m2 = m.clone();
+    val m2 = m.clone();
     assert_eq(m2.len(), 1);
 }

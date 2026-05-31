@@ -29,18 +29,18 @@ fn main() {
 }
 
 fn length_of_longest_substring(s: String) -> Int {
-    let mut seen = Map::new();
-    let mut left = 0;
-    let mut max_len = 0;
-    let mut right = 0;
-    let n = s.len();
+    var seen = Map::new();
+    var left = 0;
+    var max_len = 0;
+    var right = 0;
+    val n = s.len();
     while right < n {
-        let ch = s.char_at(right);
-        if let Some(prev_idx) = seen.get(ch) && prev_idx >= left {
+        val ch = s.char_at(right);
+        if val Some(prev_idx) = seen.get(ch) && prev_idx >= left {
             left = prev_idx + 1;
         }
         seen.insert(ch, right);
-        let len = right - left + 1;
+        val len = right - left + 1;
         if len > max_len {
             max_len = len;
         }

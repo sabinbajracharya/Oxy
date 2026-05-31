@@ -7,26 +7,26 @@
 
 #[test]
 fn test_index_first() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[0], 'h');
 }
 
 #[test]
 fn test_index_middle() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[1], 'e');
     assert_eq(s[3], 'l');
 }
 
 #[test]
 fn test_index_last() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[4], 'o');
 }
 
 #[test]
 fn test_index_zero_len_one() {
-    let s = "x";
+    val s = "x";
     assert_eq(s[0], 'x');
 }
 
@@ -34,31 +34,31 @@ fn test_index_zero_len_one() {
 
 #[test]
 fn test_slice_full_range() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[0..5], "hello");
 }
 
 #[test]
 fn test_slice_partial_front() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[0..2], "he");
 }
 
 #[test]
 fn test_slice_partial_middle() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[1..4], "ell");
 }
 
 #[test]
 fn test_slice_partial_end() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[2..5], "llo");
 }
 
 #[test]
 fn test_slice_empty_result() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[2..2], "");
     assert_eq(s[0..0], "");
     assert_eq(s[5..5], "");
@@ -66,7 +66,7 @@ fn test_slice_empty_result() {
 
 #[test]
 fn test_slice_single_char() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[0..1], "h");
     assert_eq(s[4..5], "o");
 }
@@ -75,7 +75,7 @@ fn test_slice_single_char() {
 
 #[test]
 fn test_slice_from_start() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[..3], "hel");
     assert_eq(s[..1], "h");
     assert_eq(s[..5], "hello");
@@ -86,7 +86,7 @@ fn test_slice_from_start() {
 
 #[test]
 fn test_slice_to_end() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[2..], "llo");
     assert_eq(s[0..], "hello");
     assert_eq(s[4..], "o");
@@ -97,7 +97,7 @@ fn test_slice_to_end() {
 
 #[test]
 fn test_slice_full_shorthand() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s[..], "hello");
 }
 
@@ -105,7 +105,7 @@ fn test_slice_full_shorthand() {
 
 #[test]
 fn test_slice_empty_string() {
-    let s = "";
+    val s = "";
     assert_eq(s[..], "");
     assert_eq(s[0..0], "");
     assert_eq(s[..0], "");
@@ -116,15 +116,15 @@ fn test_slice_empty_string() {
 
 #[test]
 fn test_index_unicode() {
-    let s = "héllo";
+    val s = "héllo";
     assert_eq(s[0], 'h');
     assert_eq(s[1], 'é');
 }
 
 #[test]
 fn test_slice_unicode() {
-    let s = "héllo世界";
-    let slice = s[1..6];
+    val s = "héllo世界";
+    val slice = s[1..6];
     assert_eq(slice.len(), 5);
     assert_eq(slice.chars()[0], 'é');
 }

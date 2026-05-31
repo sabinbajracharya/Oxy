@@ -92,7 +92,7 @@ mod geometry {
 }
 use geometry::PoInt;
 fn main() {
-    let p = PoInt::new(1.0, 2.0);
+    val p = PoInt::new(1.0, 2.0);
     println("{}", p.to_string());
 }"#,
     );
@@ -108,7 +108,7 @@ mod colors {
 }
 use colors::Color;
 fn main() {
-    let c = Color::Red;
+    val c = Color::Red;
     match c {
         Color::Red => println("red"),
         Color::Green => println("green"),
@@ -312,7 +312,7 @@ mod geom {
 }
 use geom::PoInt;
 fn main() {
-    let p = PoInt { x: 1.5, y: 2.5 };
+    val p = PoInt { x: 1.5, y: 2.5 };
     println("({}, {})", p.x, p.y);
 }"#,
     );
@@ -508,7 +508,7 @@ fn test_integer_type_annotation_accepts_unsuffixed_literal() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x: Int = 123123;
+    val x: Int = 123123;
     println("{}", x);
 }"#,
     );
@@ -524,14 +524,14 @@ fn test_pub_fn() {
 #[test]
 fn test_pub_struct() {
     run_compiled_capturing(
-        "pub struct PoInt { pub x: Int, pub y: Int } fn main() { let p = PoInt { x: 1, y: 2 }; }",
+        "pub struct PoInt { pub x: Int, pub y: Int } fn main() { val p = PoInt { x: 1, y: 2 }; }",
     )
     .unwrap();
 }
 
 #[test]
 fn test_pub_enum() {
-    run_compiled_capturing("pub enum Color { Red, Blue } fn main() { let c = Color::Red; }")
+    run_compiled_capturing("pub enum Color { Red, Blue } fn main() { val c = Color::Red; }")
         .unwrap();
 }
 
@@ -549,8 +549,8 @@ mod database {
     }
 }
 fn main() {
-    let r = database::make_record();
-    let k = r.secret_key;
+    val r = database::make_record();
+    val k = r.secret_key;
     println("{}", k);
 }"#,
     );
@@ -573,7 +573,7 @@ mod database {
     }
 }
 fn main() {
-    let r = database::Record { name: "x".to_string(), secret_key: 99 };
+    val r = database::Record { name: "x".to_string(), secret_key: 99 };
     println("{}", r.name);
 }"#,
     );
@@ -605,7 +605,7 @@ mod database {
     }
 }
 fn main() {
-    let r = database::make_record();
+    val r = database::make_record();
     println("{}", database::get_key(r));
 }"#,
     );
@@ -623,7 +623,7 @@ mod shapes {
     }
 }
 fn main() {
-    let p = shapes::PoInt { x: 1.0, y: 2.0 };
+    val p = shapes::PoInt { x: 1.0, y: 2.0 };
     println("{}", p.x);
     println("{}", p.y);
 }"#,
@@ -643,7 +643,7 @@ fn test_for_loop_with_range_pattern() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut hits = 0;
+    var hits = 0;
     for n in 0..20 {
         match n {
             3..=9 => { hits = hits + 1; },
@@ -663,8 +663,8 @@ fn test_nested_match_in_closure() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let xs = [Some(1), None, Some(3), None, Some(5)];
-    let doubled = xs.iter().map(|x| match x {
+    val xs = [Some(1), None, Some(3), None, Some(5)];
+    val doubled = xs.iter().map(|x| match x {
         Some(n) => n * 2,
         None => 0,
     }).collect::<List<Int>>();
@@ -683,8 +683,8 @@ fn test_closure_mutating_captured_in_loop() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut total = 0;
-    let add = |x: Int| { total = total + x; };
+    var total = 0;
+    val add = |x: Int| { total = total + x; };
     for n in [1, 2, 3, 4, 5] {
         add(n);
     }
@@ -701,7 +701,7 @@ fn test_deeply_nested_pattern_destructure() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let pairs = [(1, 2), (3, 4), (5, 6)];
+    val pairs = [(1, 2), (3, 4), (5, 6)];
     for (a, b) in pairs {
         match (a, b) {
             (1, y) => println("one {}", y),
@@ -725,7 +725,7 @@ fn fib(n: Int) -> Int {
     fib(n - 1) + fib(n - 2)
 }
 fn main() {
-    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<List<Int>>();
+    val results = [5, 6, 7].iter().map(|x| fib(x)).collect::<List<Int>>();
     for v in results {
         println("{}", v);
     }

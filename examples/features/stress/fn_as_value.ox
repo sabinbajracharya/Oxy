@@ -41,16 +41,16 @@ fn make_adder(n: Int) -> fn(Int) -> Int {
 
 #[test]
 fn test_fn_returns_closure() {
-    let add5 = make_adder(5);
+    val add5 = make_adder(5);
     assert_eq(add5(3), 8);
 }
 
 // --- fn stored in a List ---
 #[test]
 fn test_fns_in_list() {
-    let ops: List<fn(Int) -> Int> = [square, neg];
-    let r0 = ops[0](6);
-    let r1 = ops[1](6);
+    val ops: List<fn(Int) -> Int> = [square, neg];
+    val r0 = ops[0](6);
+    val r1 = ops[1](6);
     assert_eq(r0, 36);
     assert_eq(r1, -6);
 }

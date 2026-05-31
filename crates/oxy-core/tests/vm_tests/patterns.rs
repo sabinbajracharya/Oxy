@@ -9,7 +9,7 @@ fn test_for_destructure_vec_of_tuples() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let pairs = [(1, "a"), (2, "b")];
+    val pairs = [(1, "a"), (2, "b")];
     for (num, letter) in pairs {
         println("{} {}", num, letter);
     }
@@ -23,8 +23,8 @@ fn main() {
 fn test_let_tuple_destructure() {
     let output = run_and_capture(
         r#"fn main() {
-            let t = (1, 2, 3);
-            let (a, b, c) = t;
+            val t = (1, 2, 3);
+            val (a, b, c) = t;
             println("{} {} {}", a, b, c);
             }"#,
     );
@@ -35,8 +35,8 @@ fn test_let_tuple_destructure() {
 fn test_let_slice_destructure() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = [10, 20];
-            let [x, y] = v;
+            val v = [10, 20];
+            val [x, y] = v;
             println("{} {}", x, y);
             }"#,
     );
@@ -48,7 +48,7 @@ fn test_vec_empty_macro() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut v = [];
+                var v = [];
                 println("{}", v.len());
                 v.push(42);
                 println("{}", v.len());
@@ -64,7 +64,7 @@ fn test_use_import_shortcut() {
         r#"
             use std::env;
             fn main() {
-                let vars = env::vars();
+                val vars = env::vars();
                 println("{}", vars.len() >= 0);
             }
             "#,
@@ -77,12 +77,12 @@ fn test_range_slicing_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = [10, 20, 30, 40, 50];
-                let a = v[1..4];
+                val v = [10, 20, 30, 40, 50];
+                val a = v[1..4];
                 println("{} {} {}", a[0], a[1], a[2]);
-                let b = v[..2];
+                val b = v[..2];
                 println("{} {}", b[0], b[1]);
-                let c = v[3..];
+                val c = v[3..];
                 println("{} {}", c[0], c[1]);
             }
             "#,
@@ -95,7 +95,7 @@ fn test_range_slicing_string() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let s = "hello world";
+                val s = "hello world";
                 println("{}", s[..5]);
                 println("{}", s[6..]);
                 println("{}", s[2..8]);
@@ -110,8 +110,8 @@ fn test_clone_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = [1, 2, 3];
-                let mut b = a.clone();
+                val a = [1, 2, 3];
+                var b = a.clone();
                 b.push(4);
                 // .clone() is a deep copy — mutations don't propagate
                 println("{} {}", a.len(), b.len());
@@ -126,8 +126,8 @@ fn test_vec_shared_mutation() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = [1, 2, 3];
-                let mut b = a;        // shared via Rc — no deep copy
+                val a = [1, 2, 3];
+                var b = a;        // shared via Rc — no deep copy
                 b.push(4);            // mutation visible through both
                 println("{} {}", a.len(), b.len());
             }
@@ -141,8 +141,8 @@ fn test_clone_tuple() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let t = (1, "hello", true);
-                let t2 = t.clone();
+                val t = (1, "hello", true);
+                val t2 = t.clone();
                 println("{} {}", t.0, t2.1);
             }
             "#,
@@ -155,7 +155,7 @@ fn test_hashmap_index_access() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut m = Map::new();
+                var m = Map::new();
                 m.insert("name", "Oxy");
                 m.insert("version", "0.1");
                 println("{}", m["name"]);
@@ -172,7 +172,7 @@ fn test_use_group_std() {
         r#"
             use std::{env, fs};
             fn main() {
-                let vars = env::vars();
+                val vars = env::vars();
                 println("{}", vars.len() > 0);
             }
             "#,
@@ -185,8 +185,8 @@ fn test_match_guard() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let x = 5;
-                let result = match x {
+                val x = 5;
+                val result = match x {
                     n if n < 0 => "negative",
                     n if n == 0 => "zero",
                     n if n > 0 => "positive",
@@ -204,9 +204,9 @@ fn test_match_guard_with_binding() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let values = [1, -2, 3, -4, 5];
-                let mut pos = 0;
-                let mut neg = 0;
+                val values = [1, -2, 3, -4, 5];
+                var pos = 0;
+                var neg = 0;
                 for v in values {
                     match v {
                         n if n > 0 => pos = pos + n,
@@ -238,9 +238,9 @@ fn test_operator_overload_add() {
             }
 
             fn main() {
-                let a = PoInt { x: 1, y: 2 };
-                let b = PoInt { x: 3, y: 4 };
-                let c = a + b;
+                val a = PoInt { x: 1, y: 2 };
+                val b = PoInt { x: 3, y: 4 };
+                val c = a + b;
                 println("{} {}", c.x, c.y);
             }
             "#,
@@ -265,7 +265,7 @@ fn test_impl_display() {
             }
 
             fn main() {
-                let p = PoInt { x: 3, y: 4 };
+                val p = PoInt { x: 3, y: 4 };
                 println("PoInt is: {}", p);
             }
             "#,
@@ -295,9 +295,9 @@ fn test_enum_methods() {
             }
 
             fn main() {
-                let d = Direction::East;
+                val d = Direction::East;
                 println("{}", d.is_horizontal());
-                let d2 = Direction::North;
+                val d2 = Direction::North;
                 println("{}", d2.is_horizontal());
             }
             "#,

@@ -18,7 +18,7 @@ pub struct Block {
 /// A statement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    /// `let [mut] name [: type] [= expr];`
+    /// `val name [: type] [= expr];` or `var name [: type] [= expr];`
     Let {
         name: String,
         mutable: bool,
@@ -60,12 +60,13 @@ pub enum Stmt {
     },
     /// `continue [label];`
     Continue { label: Option<String>, span: Span },
-    /// `[label:] while let pattern = expr { body }`
+    /// `[label:] while let pattern = expr { body }` or `while var pattern = expr { body }`
     WhileLet {
         label: Option<String>,
         pattern: Box<Pattern>,
         expr: Box<Expr>,
         body: Block,
+        mutable: bool,
         span: Span,
     },
     /// `[label:] for (a, b) in iterable { body }` — tuple destructuring
@@ -76,7 +77,7 @@ pub enum Stmt {
         body: Block,
         span: Span,
     },
-    /// `let pattern = expr;` — destructuring let binding
+    /// `val pattern = expr;` or `var pattern = expr;` — destructuring binding
     LetPattern {
         pattern: Box<Pattern>,
         mutable: bool,
@@ -125,8 +126,8 @@ impl Stmt {
                 ..
             } => {
                 out.push_str(&format!(
-                    "{pad}let {}{name}",
-                    if *mutable { "mut " } else { "" }
+                    "{pad}{} {name}",
+                    if *mutable { "var" } else { "val" }
                 ));
                 if let Some(t) = type_ann {
                     out.push_str(&format!(": {}", t.name()));
@@ -224,12 +225,16 @@ impl Stmt {
                 pattern,
                 expr,
                 body,
+                mutable,
                 ..
             } => {
                 if let Some(l) = label {
                     out.push_str(&format!("{pad}'{l}: "));
                 }
-                out.push_str(&format!("{pad}while let "));
+                out.push_str(&format!(
+                    "{pad}while {} ",
+                    if *mutable { "var" } else { "val" }
+                ));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 expr.pretty_print(out, 0);
@@ -263,7 +268,10 @@ impl Stmt {
                 value,
                 ..
             } => {
-                out.push_str(&format!("{pad}let {}", if *mutable { "mut " } else { "" }));
+                out.push_str(&format!(
+                    "{pad}{} ",
+                    if *mutable { "var" } else { "val" }
+                ));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 value.pretty_print(out, 0);

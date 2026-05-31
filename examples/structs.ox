@@ -37,20 +37,20 @@ impl Shape {
 }
 
 fn main() {
-    let p1 = Point::new(0.0, 0.0);
-    let p2 = Point::new(3.0, 4.0);
+    val p1 = Point::new(0.0, 0.0);
+    val p2 = Point::new(3.0, 4.0);
     p1.display();
     p2.display();
 
     // Field access
-    let dx = p1.x - p2.x;
-    let dy = p1.y - p2.y;
-    let dist_sq = dx * dx + dy * dy;
+    val dx = p1.x - p2.x;
+    val dy = p1.y - p2.y;
+    val dist_sq = dx * dx + dy * dy;
     println("Distance squared: {}", dist_sq);
 
     // Enum variants
-    let circle = Shape::Circle(5.0);
-    let rect = Shape::Rectangle(4.0, 3.0);
+    val circle = Shape::Circle(5.0);
+    val rect = Shape::Rectangle(4.0, 3.0);
 
     circle.describe();
     println("Area: {}", circle.area());

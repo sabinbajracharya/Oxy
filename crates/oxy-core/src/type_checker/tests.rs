@@ -9,9 +9,9 @@ mod tests {
             r#"
             fn add(x: Int, y: Int) -> Int { x + y }
             fn main() {
-                let a: Int = 42;
-                let b: Int = add(a, 10);
-                let c: String = "hello";
+                val a: Int = 42;
+                val b: Int = add(a, 10);
+                val c: String = "hello";
             }
             "#,
         );
@@ -23,7 +23,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x: Int = "not a number";
+                val x: Int = "not a number";
             }
             "#,
         );
@@ -55,9 +55,9 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x = 42;
-                let y = x + 1;
-                let z = "hello";
+                val x = 42;
+                val y = x + 1;
+                val z = "hello";
             }
             "#,
         );
@@ -90,7 +90,7 @@ mod tests {
             r#"
             fn apply_Int(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
             fn main() {
-                let _ = apply_Int(|x| x * 2, 21);
+                val _ = apply_Int(|x| x * 2, 21);
             }
             "#,
         );
@@ -106,7 +106,7 @@ mod tests {
             fn apply_Int(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
             fn main() {
                 // |x: Float| ... produces fn(Float) -> ?, not fn(Int) -> Int
-                let _ = apply_Int(|x: Float| x * 2.0, 21);
+                val _ = apply_Int(|x: Float| x * 2.0, 21);
             }
             "#,
         );
@@ -125,7 +125,7 @@ mod tests {
             r#"
             fn fold_two(a: Int, b: Int, f: fn(Int, Int) -> Int) -> Int { f(a, b) }
             fn main() {
-                let _ = fold_two(10, 32, |acc, x| acc + x);
+                val _ = fold_two(10, 32, |acc, x| acc + x);
             }
             "#,
         );
@@ -140,8 +140,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x: Float = 42;
-                let y: Float = 0;
+                val x: Float = 42;
+                val y: Float = 0;
             }
             "#,
         );
@@ -154,8 +154,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let a: Byte = 0;
-                let b: Byte = 255;
+                val a: Byte = 0;
+                val b: Byte = 255;
             }
             "#,
         );
@@ -168,8 +168,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v: List<String> = [];
-                let w: List<Int> = [];
+                val v: List<String> = [];
+                val w: List<Int> = [];
             }
             "#,
         );
@@ -182,8 +182,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x = 42;
-                let y = x + 1;
+                val x = 42;
+                val y = x + 1;
             }
             "#,
         );
@@ -202,9 +202,9 @@ mod tests {
                 if v.len() == 0 { None } else { Some(v[0]) }
             }
             fn main() {
-                let x = first_elem([1, 2, 3]);
+                val x = first_elem([1, 2, 3]);
                 // x should be Option<Int>
-                let _ = x.unwrap() + 1;
+                val _ = x.unwrap() + 1;
             }
             "#,
         );
@@ -219,9 +219,9 @@ mod tests {
             r#"
             fn main() {
                 // Expected type fn(Int) -> Int flows into closure via
-                // bidirectional inference from the let annotation.
-                let f: fn(Int) -> Int = |x| x * 2;
-                let _ = f(21);
+                // bidirectional inference from the val annotation.
+                val f: fn(Int) -> Int = |x| x * 2;
+                val _ = f(21);
             }
             "#,
         );
@@ -236,10 +236,10 @@ mod tests {
             r#"
             fn map_list(v: List<Int>, f: fn(Int) -> Int) -> List<Int> { v.map(f) }
             fn main() {
-                let v = [1, 2, 3];
+                val v = [1, 2, 3];
                 // Closure |x| x + 1: x inferred as Int from fn(Int) -> Int
-                let result = map_list(v, |x| x + 1);
-                let _ = result;
+                val result = map_list(v, |x| x + 1);
+                val _ = result;
             }
             "#,
         );
@@ -255,8 +255,8 @@ mod tests {
             r#"
             fn double(x: Int) -> Int { x * 2 }
             fn main() {
-                let r = 5 |> double();
-                let _ = r;
+                val r = 5 |> double();
+                val _ = r;
             }
             "#,
         );
@@ -270,8 +270,8 @@ mod tests {
             r#"
             fn add(a: Int, b: Int) -> Int { a + b }
             fn main() {
-                let r = 5 |> add(3);
-                let _ = r;
+                val r = 5 |> add(3);
+                val _ = r;
             }
             "#,
         );
@@ -286,8 +286,8 @@ mod tests {
             fn double(x: Int) -> Int { x * 2 }
             fn add(a: Int, b: Int) -> Int { a + b }
             fn main() {
-                let r = 5 |> double() |> add(3);
-                let _ = r;
+                val r = 5 |> double() |> add(3);
+                val _ = r;
             }
             "#,
         );
@@ -301,8 +301,8 @@ mod tests {
             r#"
             fn double(x: Int) -> Int { x * 2 }
             fn main() {
-                let r = 21 |> double;
-                let _ = r;
+                val r = 21 |> double;
+                val _ = r;
             }
             "#,
         );
@@ -316,8 +316,8 @@ mod tests {
             r#"
             fn doubler(x: Int) -> Int { x * 2 }
             fn main() {
-                let s = "hello";
-                let _ = s |> doubler;
+                val s = "hello";
+                val _ = s |> doubler;
             }
             "#,
         );
@@ -337,7 +337,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn double(x: Int) -> Int = x * 2
-            fn main() { let _ = double(21); }
+            fn main() { val _ = double(21); }
             "#,
         );
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
@@ -349,7 +349,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn add(x: Int, y: Int) = x + y
-            fn main() { let _ = add(10, 32); }
+            fn main() { val _ = add(10, 32); }
             "#,
         );
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
@@ -363,8 +363,8 @@ mod tests {
             fn first<T>(v: List<T>) -> Option<T> =
                 if v.len() == 0 { None } else { Some(v[0]) }
             fn main() {
-                let v = [1, 2, 3];
-                let _ = first(v);
+                val v = [1, 2, 3];
+                val _ = first(v);
             }
             "#,
         );
@@ -379,7 +379,7 @@ mod tests {
             fn double(x: Int) -> Int = x * 2
             fn add(a: Int, b: Int) -> Int = a + b
             fn main() {
-                let _ = 5 |> double() |> add(3);
+                val _ = 5 |> double() |> add(3);
             }
             "#,
         );
@@ -392,7 +392,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn bad(x: Int) -> Int = "wrong"
-            fn main() { let _ = bad(1); }
+            fn main() { val _ = bad(1); }
             "#,
         );
         assert!(result.is_err(), "expected type mismatch, got Ok");
@@ -410,8 +410,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3];
-                let _ = map(v, |x| x * 2);
+                val v = [1, 2, 3];
+                val _ = map(v, |x| x * 2);
             }
             "#,
         );
@@ -423,8 +423,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3, 4];
-                let _ = filter(v, |x| x > 2);
+                val v = [1, 2, 3, 4];
+                val _ = filter(v, |x| x > 2);
             }
             "#,
         );
@@ -436,8 +436,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3];
-                let _ = fold(v, 0, |acc, x| acc + x);
+                val v = [1, 2, 3];
+                val _ = fold(v, 0, |acc, x| acc + x);
             }
             "#,
         );
@@ -449,9 +449,9 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3];
-                let _ = any(v, |x| x > 2);
-                let _ = all(v, |x| x > 0);
+                val v = [1, 2, 3];
+                val _ = any(v, |x| x > 2);
+                val _ = all(v, |x| x > 0);
             }
             "#,
         );
@@ -463,8 +463,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3];
-                let _ = find(v, |x| x > 1);
+                val v = [1, 2, 3];
+                val _ = find(v, |x| x > 1);
             }
             "#,
         );
@@ -476,8 +476,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [1, 2, 3];
-                let _ = collect(v);
+                val v = [1, 2, 3];
+                val _ = collect(v);
             }
             "#,
         );
@@ -489,8 +489,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = [3, 1, 2];
-                let _ = sort(v);
+                val v = [3, 1, 2];
+                val _ = sort(v);
             }
             "#,
         );
@@ -504,9 +504,9 @@ mod tests {
             fn double(x: Int) -> Int = x * 2
             fn is_positive(x: Int) -> bool = x > 0
             fn main() {
-                let v = [1, 2, 3];
+                val v = [1, 2, 3];
                 // Pipeline chain using free functions
-                let _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
+                val _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
             }
             "#,
         );
@@ -517,7 +517,7 @@ mod tests {
     fn test_free_fn_wrong_arg_count_fails() {
         let result = run_compiled(
             r#"
-            fn main() { let _ = map([1]); }
+            fn main() { val _ = map([1]); }
             "#,
         );
         assert!(result.is_err(), "expected error (wrong arg count), got Ok");

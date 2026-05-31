@@ -30,8 +30,8 @@ mod geometry {
         }
 
         fn distance(self, other: Point) -> Float {
-            let dx = self.x - other.x;
-            let dy = self.y - other.y;
+            val dx = self.x - other.x;
+            val dy = self.y - other.y;
             (dx * dx + dy * dy).sqrt()
         }
     }
@@ -65,13 +65,13 @@ fn main() {
     println("5! = {}", math::factorial(5));
 
     // Using imported struct
-    let p1 = Point::new(0.0, 0.0);
-    let p2 = Point::new(3.0, 4.0);
+    val p1 = Point::new(0.0, 0.0);
+    val p2 = Point::new(3.0, 4.0);
     println("Distance: {}", p1.distance(p2));
 
     // Using imported enum
-    let circle = Shape::Circle(5.0);
-    let rect = Shape::Rectangle(3.0, 4.0);
+    val circle = Shape::Circle(5.0);
+    val rect = Shape::Rectangle(3.0, 4.0);
     println("Circle area: {}", circle.area());
     println("Rectangle area: {}", rect.area());
 }

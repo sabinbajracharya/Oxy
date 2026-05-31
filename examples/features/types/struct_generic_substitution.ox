@@ -13,19 +13,19 @@ struct Pair<A, B> {
 
 #[test]
 fn test_generic_struct_init_ok() {
-    let b: Box<Int> = Box { value: 5 };
+    val b: Box<Int> = Box { value: 5 };
     assert_eq(b.value, 5);
 }
 
 #[test]
 fn test_generic_struct_string_field_ok() {
-    let b: Box<String> = Box { value: "hi".to_string() };
+    val b: Box<String> = Box { value: "hi".to_string() };
     assert_eq(b.value, "hi");
 }
 
 #[test]
 fn test_two_param_generic_ok() {
-    let p: Pair<Int, String> = Pair { first: 1, second: "x".to_string() };
+    val p: Pair<Int, String> = Pair { first: 1, second: "x".to_string() };
     assert_eq(p.first, 1);
     assert_eq(p.second, "x");
 }
@@ -33,18 +33,18 @@ fn test_two_param_generic_ok() {
 #[compile_error]
 fn test_generic_struct_field_wrong_type_in_init() {
     // Box<Int> can't be initialized with a String value.
-    let _b: Box<Int> = Box { value: "hello".to_string() };
+    val _b: Box<Int> = Box { value: "hello".to_string() };
 }
 
 #[compile_error]
 fn test_generic_pair_field_wrong_type() {
-    let _p: Pair<Int, String> = Pair { first: "wrong".to_string(), second: "ok".to_string() };
+    val _p: Pair<Int, String> = Pair { first: "wrong".to_string(), second: "ok".to_string() };
 }
 
 #[compile_error]
 fn test_substituted_field_use_wrong_type() {
     // `b.value` is now `Int` (substituted from T), so assigning to a
     // String binding must fail.
-    let b: Box<Int> = Box { value: 5 };
-    let _s: String = b.value;
+    val b: Box<Int> = Box { value: 5 };
+    val _s: String = b.value;
 }

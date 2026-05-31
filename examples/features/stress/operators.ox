@@ -12,9 +12,9 @@ impl Add for V2 {
 
 #[test]
 fn test_add_for_struct() {
-    let a = V2 { x: 1, y: 2 };
-    let b = V2 { x: 10, y: 20 };
-    let c = a + b;
+    val a = V2 { x: 1, y: 2 };
+    val b = V2 { x: 10, y: 20 };
+    val c = a + b;
     assert_eq(c.x, 11);
     assert_eq(c.y, 22);
 }
@@ -28,9 +28,9 @@ impl Sub for V2 {
 
 #[test]
 fn test_sub_for_struct() {
-    let a = V2 { x: 10, y: 20 };
-    let b = V2 { x: 1, y: 2 };
-    let c = a - b;
+    val a = V2 { x: 10, y: 20 };
+    val b = V2 { x: 1, y: 2 };
+    val c = a - b;
     assert_eq(c.x, 9);
     assert_eq(c.y, 18);
 }
@@ -45,9 +45,9 @@ impl Mul for V2 {
 
 #[test]
 fn test_mul_for_struct() {
-    let a = V2 { x: 2, y: 3 };
-    let b = V2 { x: 4, y: 5 };
-    let c = a * b;
+    val a = V2 { x: 2, y: 3 };
+    val b = V2 { x: 4, y: 5 };
+    val c = a * b;
     assert_eq(c.x, 8);
     assert_eq(c.y, 15);
 }
@@ -55,15 +55,15 @@ fn test_mul_for_struct() {
 // --- PartialEq from derive ---
 #[test]
 fn test_partial_eq_derived() {
-    let a = V2 { x: 1, y: 2 };
-    let b = V2 { x: 1, y: 2 };
+    val a = V2 { x: 1, y: 2 };
+    val b = V2 { x: 1, y: 2 };
     assert_eq(a, b);
 }
 
 #[test]
 fn test_partial_eq_inequality() {
-    let a = V2 { x: 1, y: 2 };
-    let b = V2 { x: 1, y: 3 };
+    val a = V2 { x: 1, y: 2 };
+    val b = V2 { x: 1, y: 3 };
     assert(a != b);
 }
 
@@ -79,17 +79,17 @@ impl Named {
 
 #[test]
 fn test_custom_display() {
-    let n = Named { name: "test".to_string() };
+    val n = Named { name: "test".to_string() };
     assert_eq(n.fmt(), "Named(test)");
 }
 
 // --- Chained operator with custom struct ---
 #[test]
 fn test_chained_add() {
-    let a = V2 { x: 1, y: 1 };
-    let b = V2 { x: 2, y: 2 };
-    let c = V2 { x: 3, y: 3 };
-    let r = a + b + c;
+    val a = V2 { x: 1, y: 1 };
+    val b = V2 { x: 2, y: 2 };
+    val c = V2 { x: 3, y: 3 };
+    val r = a + b + c;
     assert_eq(r.x, 6);
     assert_eq(r.y, 6);
 }
@@ -104,9 +104,9 @@ impl Counter1 {
 
 #[test]
 fn test_self_in_impl() {
-    let c = Counter1::new();
-    let c2 = c.bumped();
-    let c3 = c2.bumped();
+    val c = Counter1::new();
+    val c2 = c.bumped();
+    val c3 = c2.bumped();
     assert_eq(c3.val, 2);
 }
 
@@ -124,10 +124,10 @@ impl Bag {
 
 #[test]
 fn test_mut_self_in_method() {
-    let b = Bag::new();
-    let b = b.add(1);
-    let b = b.add(2);
-    let b = b.add(3);
+    val b = Bag::new();
+    val b = b.add(1);
+    val b = b.add(2);
+    val b = b.add(3);
     assert_eq(b.count(), 3);
 }
 
@@ -156,7 +156,7 @@ impl Config {
 
 #[test]
 fn test_builder_pattern() {
-    let c = Config::new().name("foo".to_string()).retries(3);
+    val c = Config::new().name("foo".to_string()).retries(3);
     assert_eq(c.name, "foo");
     assert_eq(c.retries, 3);
 }
@@ -164,7 +164,7 @@ fn test_builder_pattern() {
 // --- ordering — comparisons on i64 ---
 #[test]
 fn test_int_ordering_in_data() {
-    let mut v = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5];
+    var v = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5];
     v.sort();
     assert_eq(v[0], 1);
     assert_eq(v[v.len() - 1], 9);
@@ -173,7 +173,7 @@ fn test_int_ordering_in_data() {
 // --- ordering on String ---
 #[test]
 fn test_string_ordering() {
-    let mut v = ["banana".to_string(), "apple".to_string(), "cherry".to_string()];
+    var v = ["banana".to_string(), "apple".to_string(), "cherry".to_string()];
     v.sort();
     assert_eq(v[0], "apple");
     assert_eq(v[1], "banana");

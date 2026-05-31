@@ -29,10 +29,10 @@ fn climb_stairs(n: Int) -> Int {
     if n <= 2 {
         return n;
     }
-    let mut prev2 = 1;
-    let mut prev1 = 2;
+    var prev2 = 1;
+    var prev1 = 2;
     for _i in 3..=n {
-        let current = prev1 + prev2;
+        val current = prev1 + prev2;
         prev2 = prev1;
         prev1 = current;
     }

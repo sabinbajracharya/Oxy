@@ -7,15 +7,15 @@
 
 #[test]
 fn test_spawn_streams_stdout_lines_in_order() {
-    let mut lines = [];
-    let result = std::process::spawn(
+    var lines = [];
+    val result = std::process::spawn(
         "printf",
         ["%s\n%s\n", "alpha", "beta"],
         |line, stream| {
             lines.push(stream + ":" + line);
         },
     );
-    if let Ok(output) = result {
+    if val Ok(output) = result {
         assert_eq(output.success, true);
         assert_eq(output.status, 0);
         assert_eq(lines.len(), 2);
@@ -30,8 +30,8 @@ fn test_spawn_streams_stdout_lines_in_order() {
 fn test_spawn_tags_stderr_separately_from_stdout() {
     // `sh -c` lets us deterministically write to both streams. Interleaving
     // between streams is racy, so we sort before asserting.
-    let mut tagged = [];
-    let result = std::process::spawn(
+    var tagged = [];
+    val result = std::process::spawn(
         "sh",
         ["-c", "echo out1; echo err1 1>&2; echo out2"],
         |line, stream| {
@@ -48,11 +48,11 @@ fn test_spawn_tags_stderr_separately_from_stdout() {
 
 #[test]
 fn test_spawn_reports_nonzero_exit_status() {
-    let mut count = 0;
-    let result = std::process::spawn("false", [], |_line, _stream| {
+    var count = 0;
+    val result = std::process::spawn("false", [], |_line, _stream| {
         count = count + 1;
     });
-    if let Ok(output) = result {
+    if val Ok(output) = result {
         assert_eq(output.success, false);
         assert_eq(output.status, 1);
         assert_eq(count, 0);
@@ -63,7 +63,7 @@ fn test_spawn_reports_nonzero_exit_status() {
 
 #[test]
 fn test_spawn_returns_err_for_nonexistent_program() {
-    let result = std::process::spawn(
+    val result = std::process::spawn(
         "definitely_not_a_real_program_xyz_98765",
         [],
         |_line, _stream| {},
@@ -75,9 +75,9 @@ fn test_spawn_returns_err_for_nonexistent_program() {
 fn test_spawn_handles_many_lines() {
     // seq emits N lines on stdout — covers the streaming case where output
     // is larger than a single pipe buffer might hold.
-    let mut received = 0;
-    let mut last = String::from("");
-    let result = std::process::spawn("seq", ["1", "50"], |line, _stream| {
+    var received = 0;
+    var last = String::from("");
+    val result = std::process::spawn("seq", ["1", "50"], |line, _stream| {
         received = received + 1;
         last = line;
     });

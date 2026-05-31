@@ -147,7 +147,7 @@ fn run_tests_with_externs() {
     std::fs::write(&ext_file, "pub fn answer() -> Int { 42 }\n").unwrap();
 
     let main = dir.join("main.ox");
-    let source = "mod helper;\n#[test]\nfn t() { let x = helper::answer(); }\n";
+    let source = "mod helper;\n#[test]\nfn t() { val x = helper::answer(); }\n";
     std::fs::write(&main, source).unwrap();
 
     let mut externs = HashMap::new();

@@ -3,54 +3,54 @@
 // --- nullary closure ---
 #[test]
 fn test_closure_no_args() {
-    let f = || 42;
+    val f = || 42;
     assert_eq(f(), 42);
 }
 
 // --- closure capturing local by value ---
 #[test]
 fn test_closure_capture_int() {
-    let n = 10;
-    let f = || n * 2;
+    val n = 10;
+    val f = || n * 2;
     assert_eq(f(), 20);
 }
 
 // --- closure capturing String ---
 #[test]
 fn test_closure_capture_string() {
-    let greeting = "hello".to_string();
-    let f = || format("{}, world", greeting);
+    val greeting = "hello".to_string();
+    val f = || format("{}, world", greeting);
     assert_eq(f(), "hello, world");
 }
 
 // --- closure with one arg ---
 #[test]
 fn test_closure_one_arg() {
-    let inc = |x: Int| x + 1;
+    val inc = |x: Int| x + 1;
     assert_eq(inc(4), 5);
 }
 
 // --- closure with two args ---
 #[test]
 fn test_closure_two_args() {
-    let add = |a: Int, b: Int| a + b;
+    val add = |a: Int, b: Int| a + b;
     assert_eq(add(3, 4), 7);
 }
 
 // --- closure capturing & taking arg ---
 #[test]
 fn test_closure_capture_plus_arg() {
-    let base = 100;
-    let add_base = |x: Int| x + base;
+    val base = 100;
+    val add_base = |x: Int| x + base;
     assert_eq(add_base(5), 105);
 }
 
 // --- closure with multi-statement body ---
 #[test]
 fn test_closure_block_body() {
-    let f = |x: Int| {
-        let doubled = x * 2;
-        let plus_one = doubled + 1;
+    val f = |x: Int| {
+        val doubled = x * 2;
+        val plus_one = doubled + 1;
         plus_one
     };
     assert_eq(f(7), 15);
@@ -59,8 +59,8 @@ fn test_closure_block_body() {
 // --- closure (explicit) ---
 #[test]
 fn test_closure() {
-    let v = [1, 2, 3];
-    let f = || v.len();
+    val v = [1, 2, 3];
+    val f = || v.len();
     assert_eq(f(), 3);
 }
 
@@ -69,7 +69,7 @@ fn apply_int(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
 
 #[test]
 fn test_closure_passed_to_fn() {
-    let r = apply_int(|x| x * x, 5);
+    val r = apply_int(|x| x * x, 5);
     assert_eq(r, 25);
 }
 
@@ -78,50 +78,50 @@ fn make_adder() -> fn(Int, Int) -> Int { |a, b| a + b }
 
 #[test]
 fn test_closure_returned_no_captures() {
-    let add = make_adder();
+    val add = make_adder();
     assert_eq(add(2, 3), 5);
 }
 
 // --- closure with explicit return type ---
 #[test]
 fn test_closure_explicit_return_type() {
-    let f = |x: Int| -> Int { x + 10 };
+    val f = |x: Int| -> Int { x + 10 };
     assert_eq(f(5), 15);
 }
 
 // --- closure inside an if branch ---
 #[test]
 fn test_closure_in_if_branch() {
-    let n = 5;
-    let f = if n > 0 { |x: Int| x + 1 } else { |x: Int| x - 1 };
+    val n = 5;
+    val f = if n > 0 { |x: Int| x + 1 } else { |x: Int| x - 1 };
     assert_eq(f(10), 11);
 }
 
 // --- closure in vec.map ---
 #[test]
 fn test_closure_in_vec_map() {
-    let r: List<Int> = [1, 2, 3].iter().map(|x| x * x).collect();
+    val r: List<Int> = [1, 2, 3].iter().map(|x| x * x).collect();
     assert_eq(r, [1, 4, 9]);
 }
 
 // --- closure in vec.filter ---
 #[test]
 fn test_closure_in_vec_filter() {
-    let r: List<Int> = [1, 2, 3, 4, 5].iter().filter(|x| x % 2 == 0).collect();
+    val r: List<Int> = [1, 2, 3, 4, 5].iter().filter(|x| x % 2 == 0).collect();
     assert_eq(r, [2, 4]);
 }
 
 // --- closure in vec.fold ---
 #[test]
 fn test_closure_in_vec_fold() {
-    let r = [1, 2, 3, 4].iter().fold(0, |acc, x| acc + x);
+    val r = [1, 2, 3, 4].iter().fold(0, |acc, x| acc + x);
     assert_eq(r, 10);
 }
 
 // --- chained map+filter+collect ---
 #[test]
 fn test_closure_chained_iter() {
-    let r: List<Int> = [1, 2, 3, 4, 5, 6]
+    val r: List<Int> = [1, 2, 3, 4, 5, 6]
         .iter()
         .map(|x| x * 2)
         .filter(|x| x > 4)
@@ -132,8 +132,8 @@ fn test_closure_chained_iter() {
 // --- closure capturing mutable ---
 #[test]
 fn test_closure_modifies_capture() {
-    let mut count = 0;
-    let mut inc = || { count = count + 1; };
+    var count = 0;
+    var inc = || { count = count + 1; };
     inc();
     inc();
     inc();
@@ -143,7 +143,7 @@ fn test_closure_modifies_capture() {
 // --- closure returning Option ---
 #[test]
 fn test_closure_returning_option() {
-    let safe_div = |a: Int, b: Int| -> Option<Int> {
+    val safe_div = |a: Int, b: Int| -> Option<Int> {
         if b == 0 { None } else { Some(a / b) }
     };
     assert_eq(safe_div(10, 2), Some(5));
@@ -153,8 +153,8 @@ fn test_closure_returning_option() {
 // --- closure inside closure ---
 #[test]
 fn test_nested_closure() {
-    let outer = |x: Int| {
-        let inner = |y: Int| y + 1;
+    val outer = |x: Int| {
+        val inner = |y: Int| y + 1;
         inner(x) * 2
     };
     assert_eq(outer(3), 8);  // (3+1)*2
@@ -163,7 +163,7 @@ fn test_nested_closure() {
 // --- closure used twice with different args ---
 #[test]
 fn test_closure_called_twice() {
-    let sq = |x: Int| x * x;
+    val sq = |x: Int| x * x;
     assert_eq(sq(3), 9);
     assert_eq(sq(7), 49);
 }
@@ -173,7 +173,7 @@ struct Counter { count: Int }
 
 #[test]
 fn test_closure_capturing_struct() {
-    let c = Counter { count: 42 };
-    let f = || c.count + 1;
+    val c = Counter { count: 42 };
+    val f = || c.count + 1;
     assert_eq(f(), 43);
 }

@@ -20,7 +20,7 @@ impl Speak for Dog {
 
 #[test]
 fn test_basic_trait() {
-    let d = Dog { name: "Rex" };
+    val d = Dog { name: "Rex" };
     assert_eq(d.speak(), "Woof! I'm Rex");
 }
 
@@ -46,8 +46,8 @@ impl Area for Shape {
 
 #[test]
 fn test_trait_on_enum() {
-    let c = Shape::Circle(10.0);
-    let r = Shape::Rectangle(4.0, 5.0);
+    val c = Shape::Circle(10.0);
+    val r = Shape::Rectangle(4.0, 5.0);
     assert_eq(c.area(), 314.0);
     assert_eq(r.area(), 20.0);
 }
@@ -73,11 +73,11 @@ impl Calculator for Num {
 
 #[test]
 fn test_multiple_trait_methods() {
-    let a = Num(10);
-    let b = Num(3);
+    val a = Num(10);
+    val b = Num(3);
     assert_eq(a.add(b).0, 13);
-    let c = Num(10);
-    let d = Num(3);
+    val c = Num(10);
+    val d = Num(3);
     assert_eq(c.sub(d).0, 7);
 }
 
@@ -104,7 +104,7 @@ impl Describe for Book {
 
 #[test]
 fn test_self_receiver() {
-    let b = Book { title: "Oxy Guide", year: 2025 };
+    val b = Book { title: "Oxy Guide", year: 2025 };
     assert_eq(b.describe(), "Oxy Guide (2025)");
     assert_eq(b.tag_line(), "A great read: Oxy Guide (2025)");
 }
@@ -127,7 +127,7 @@ impl Chain for Int {
 
 #[test]
 fn test_trait_method_chain() {
-    let x: Int = 5;
+    val x: Int = 5;
     assert_eq(x.double().add_ten(), 20);
     assert_eq(x.add_ten().double(), 30);
 }

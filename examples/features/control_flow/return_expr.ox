@@ -28,7 +28,7 @@ fn return_unit(x: Int) {
     if x == 0 {
         return;
     }
-    let unused = x;
+    val unused = x;
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn find_first_even(nums: List<Int>) -> Int {
 
 #[test]
 fn test_return_from_loop() {
-    let nums = [1, 3, 5, 8, 9];
+    val nums = [1, 3, 5, 8, 9];
     assert_eq(find_first_even(nums), 8);
 }
 
@@ -118,8 +118,8 @@ fn test_nested_returns() {
 // Return from while loop
 
 fn sum_until_limit(limit: Int) -> Int {
-    let mut sum = 0;
-    let mut i = 0;
+    var sum = 0;
+    var i = 0;
     while i < 100 {
         i = i + 1;
         sum = sum + i;

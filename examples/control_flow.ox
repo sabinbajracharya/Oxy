@@ -10,8 +10,8 @@ fn classify(n: Int) -> Int {
 
 fn main() {
     // While loop
-    let mut i = 1;
-    let mut factorial = 1;
+    var i = 1;
+    var factorial = 1;
     while i <= 5 {
         factorial *= i;
         i += 1;
@@ -19,15 +19,15 @@ fn main() {
     println("5! = {}", factorial);
 
     // For loop with range
-    let mut sum = 0;
+    var sum = 0;
     for i in 1..=100 {
         sum += i;
     }
     println("Sum 1..=100 = {}", sum);
 
     // Loop with break value
-    let mut x = 1;
-    let result = loop {
+    var x = 1;
+    val result = loop {
         x *= 2;
         if x > 100 {
             break x;

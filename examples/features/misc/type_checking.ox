@@ -19,15 +19,15 @@ use data::Entry;
 
 #[test]
 fn test_field_access_returns_string() {
-    let e = data::make_entry();
-    let n: String = e.name;
+    val e = data::make_entry();
+    val n: String = e.name;
     assert_eq(n, "test");
 }
 
 #[test]
 fn test_field_access_returns_i64() {
-    let e = data::make_entry();
-    let c: Int = e.count;
+    val e = data::make_entry();
+    val c: Int = e.count;
     assert_eq(c, 42);
 }
 
@@ -54,7 +54,7 @@ use shapes::Rect;
 
 #[test]
 fn test_self_in_impl_block() {
-    let r = Rect::new(5, 10);
+    val r = Rect::new(5, 10);
     assert_eq(r.area(), 50);
 }
 
@@ -74,7 +74,7 @@ use lib::Widget;
 
 #[test]
 fn test_struct_via_use_alias() {
-    let w: Widget = lib::create();
+    val w: Widget = lib::create();
     assert_eq(w.label, "ok");
 }
 
@@ -82,8 +82,8 @@ fn test_struct_via_use_alias() {
 
 #[test]
 fn test_string_index_type() {
-    let s = "hello".to_string();
-    let c: char = s[0];
+    val s = "hello".to_string();
+    val c: char = s[0];
     assert_eq(c, 'h');
 }
 
@@ -97,7 +97,7 @@ mod calc {
 
 #[test]
 fn test_path_call_return_type() {
-    let v: Int = calc::value();
+    val v: Int = calc::value();
     assert_eq(v, 100);
 }
 
@@ -121,7 +121,7 @@ use outer_mod::Outer;
 
 #[test]
 fn test_nested_field_access() {
-    let o = outer_mod::make();
-    let v: Int = o.inner.val;
+    val o = outer_mod::make();
+    val v: Int = o.inner.val;
     assert_eq(v, 99);
 }

@@ -18,33 +18,33 @@ fn test_println_string() {
 
 #[test]
 fn test_println_format() {
-    let output = run_and_capture(r#"fn main() { let x = 42; println("x = {}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 42; println("x = {}", x); }"#);
     assert_eq!(output, vec!["x = 42\n"]);
 }
 
 #[test]
 fn test_println_multiple_args() {
     let output = run_and_capture(
-        r#"fn main() { let a = 1; let b = 2; println("{} + {} = {}", a, b, a + b); }"#,
+        r#"fn main() { val a = 1; val b = 2; println("{} + {} = {}", a, b, a + b); }"#,
     );
     assert_eq!(output, vec!["1 + 2 = 3\n"]);
 }
 
 #[test]
 fn test_let_binding() {
-    let output = run_and_capture(r#"fn main() { let x = 10; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 10; println("{}", x); }"#);
     assert_eq!(output, vec!["10\n"]);
 }
 
 #[test]
 fn test_let_mut_and_assign() {
-    let output = run_and_capture(r#"fn main() { let mut x = 1; x = 2; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { var x = 1; x = 2; println("{}", x); }"#);
     assert_eq!(output, vec!["2\n"]);
 }
 
 #[test]
 fn test_immutable_assign_error() {
-    let result = run_compiled(r#"fn main() { let x = 1; x = 2; }"#);
+    let result = run_compiled(r#"fn main() { val x = 1; x = 2; }"#);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -64,7 +64,7 @@ fn test_undefined_variable_error() {
 
 #[test]
 fn test_shadowing() {
-    let output = run_and_capture(r#"fn main() { let x = 1; let x = "hello"; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 1; val x = "hello"; println("{}", x); }"#);
     assert_eq!(output, vec!["hello\n"]);
 }
 
@@ -82,7 +82,7 @@ fn test_float_arithmetic() {
 
 #[test]
 fn test_division_by_zero() {
-    let result = run_compiled(r#"fn main() { let x = 1 / 0; }"#);
+    let result = run_compiled(r#"fn main() { val x = 1 / 0; }"#);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("division by zero"));
 }
@@ -90,13 +90,13 @@ fn test_division_by_zero() {
 #[test]
 fn test_string_concatenation() {
     let output =
-        run_and_capture(r#"fn main() { let s = "hello" + " " + "world"; println("{}", s); }"#);
+        run_and_capture(r#"fn main() { val s = "hello" + " " + "world"; println("{}", s); }"#);
     assert_eq!(output, vec!["hello world\n"]);
 }
 
 #[test]
 fn test_negation() {
-    let output = run_and_capture(r#"fn main() { let x = 5; println("{}", -x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 5; println("{}", -x); }"#);
     assert_eq!(output, vec!["-5\n"]);
 }
 
@@ -123,14 +123,14 @@ fn test_logical_not() {
 #[test]
 fn test_block_value() {
     let output =
-        run_and_capture(r#"fn main() { let x = { let y = 10; y + 1 }; println("{}", x); }"#);
+        run_and_capture(r#"fn main() { val x = { val y = 10; y + 1 }; println("{}", x); }"#);
     assert_eq!(output, vec!["11\n"]);
 }
 
 #[test]
 fn test_compound_assignment() {
     let output =
-        run_and_capture(r#"fn main() { let mut x = 10; x += 5; x -= 3; println("{}", x); }"#);
+        run_and_capture(r#"fn main() { var x = 10; x += 5; x -= 3; println("{}", x); }"#);
     assert_eq!(output, vec!["12\n"]);
 }
 
@@ -201,12 +201,12 @@ fn test_type_annotation_narrowing() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: Int = 127;
-    let b: Int = 32767;
-    let c: Int = 100000;
-    let d: Byte = 255;
-    let e: Int = 60000;
-    let f: Int = 3000000000;
+    val a: Int = 127;
+    val b: Int = 32767;
+    val c: Int = 100000;
+    val d: Byte = 255;
+    val e: Int = 60000;
+    val f: Int = 3000000000;
     println("{} {} {} {} {} {}", a, b, c, d, e, f);
 }"#,
     );
@@ -226,11 +226,11 @@ fn test_byte_wraps_modulo_256() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: Byte = 255;
-    let r1: Byte = a + 1;     // 256 -> wraps to 0 on store
-    let r2: Byte = a + 45;    // 300 -> wraps to 44 on store
-    let b: Byte = 0;
-    let r3: Byte = b - 1;     // -1 -> wraps to 255 on store
+    val a: Byte = 255;
+    val r1: Byte = a + 1;     // 256 -> wraps to 0 on store
+    val r2: Byte = a + 45;    // 300 -> wraps to 44 on store
+    val b: Byte = 0;
+    val r3: Byte = b - 1;     // -1 -> wraps to 255 on store
     println("{}", r1);
     println("{}", r2);
     println("{}", r3);
@@ -257,7 +257,7 @@ fn test_as_cast_widening_byte_to_int() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let b: Byte = 200;
+    val b: Byte = 200;
     println("{}", b as Int);
     println("{}", (b as Int) * 100);
 }"#,
@@ -271,15 +271,15 @@ fn test_literal_coercion_to_all_types() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: Int = 42;
-    let b: Int = 42;
-    let c: Int = 42;
-    let d: Int = 42;
-    let e: Byte = 42;
-    let f: Int = 42;
-    let g: Int = 42;
-    let h: Int = 42;
-    let sum = a as Int + b as Int + c as Int + d + e as Int + f as Int + g as Int + h as Int;
+    val a: Int = 42;
+    val b: Int = 42;
+    val c: Int = 42;
+    val d: Int = 42;
+    val e: Byte = 42;
+    val f: Int = 42;
+    val g: Int = 42;
+    val h: Int = 42;
+    val sum = a as Int + b as Int + c as Int + d + e as Int + f as Int + g as Int + h as Int;
     println("{}", sum);
 }"#,
     );
@@ -288,24 +288,24 @@ fn main() {
 
 #[test]
 fn test_as_cast_int_to_float() {
-    let output = run_and_capture(r#"fn main() { let x = 42 as Float; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 42 as Float; println("{}", x); }"#);
     assert_eq!(output, vec!["42.0\n"]);
 }
 
 #[test]
 fn test_as_cast_float_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 3.9 as Int; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 3.9 as Int; println("{}", x); }"#);
     assert_eq!(output, vec!["3\n"]);
 }
 
 #[test]
 fn test_as_cast_char_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 'a' as Int; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 'a' as Int; println("{}", x); }"#);
     assert_eq!(output, vec!["97\n"]);
 }
 
 #[test]
 fn test_as_cast_int_to_char() {
-    let output = run_and_capture(r#"fn main() { let x = 65 as char; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { val x = 65 as char; println("{}", x); }"#);
     assert_eq!(output, vec!["A\n"]);
 }

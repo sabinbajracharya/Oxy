@@ -39,7 +39,7 @@ fn fib_match(n: Int) -> Int {
 
 fn label(n: Int) -> String {
     if n <= 0 { return "done".to_string(); }
-    let _ = format("{}", n);
+    val _ = format("{}", n);
     label(n - 1)
 }
 

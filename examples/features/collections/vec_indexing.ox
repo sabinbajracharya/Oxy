@@ -6,19 +6,19 @@
 
 #[test]
 fn test_index_first() {
-    let v = [10, 20, 30];
+    val v = [10, 20, 30];
     assert_eq(v[0], 10);
 }
 
 #[test]
 fn test_index_middle() {
-    let v = [10, 20, 30];
+    val v = [10, 20, 30];
     assert_eq(v[1], 20);
 }
 
 #[test]
 fn test_index_last() {
-    let v = [10, 20, 30];
+    val v = [10, 20, 30];
     assert_eq(v[2], 30);
 }
 
@@ -26,14 +26,14 @@ fn test_index_last() {
 
 #[test]
 fn test_index_assign() {
-    let mut v = [10, 20, 30];
+    var v = [10, 20, 30];
     v[0] = 100;
     assert_eq(v[0], 100);
 }
 
 #[test]
 fn test_index_assign_multiple() {
-    let mut v = [1, 2, 3];
+    var v = [1, 2, 3];
     v[0] = 10;
     v[1] = 20;
     v[2] = 30;
@@ -46,28 +46,28 @@ fn test_index_assign_multiple() {
 
 #[test]
 fn test_slice_full() {
-    let v = [10, 20, 30];
-    let s = v[0..3];
+    val v = [10, 20, 30];
+    val s = v[0..3];
     assert_eq(s.len(), 3);
 }
 
 #[test]
 fn test_slice_partial() {
-    let v = [10, 20, 30, 40];
-    let s = v[1..3];
+    val v = [10, 20, 30, 40];
+    val s = v[1..3];
     assert_eq(s.len(), 2);
 }
 
 #[test]
 fn test_slice_empty() {
-    let v = [10, 20, 30];
-    let s = v[1..1];
+    val v = [10, 20, 30];
+    val s = v[1..1];
     assert_eq(s.len(), 0);
 }
 
 #[test]
 fn test_slice_from_start() {
-    let v = [10, 20, 30];
-    let s = v[..2];
+    val v = [10, 20, 30];
+    val s = v[..2];
     assert_eq(s.len(), 2);
 }

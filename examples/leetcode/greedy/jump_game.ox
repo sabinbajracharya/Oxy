@@ -27,14 +27,14 @@ fn main() {
 }
 
 fn can_jump(nums: List) -> bool {
-    let mut farthest = 0;
-    let n = nums.len();
-    let mut i = 0;
+    var farthest = 0;
+    val n = nums.len();
+    var i = 0;
     while i < n {
         if i > farthest {
             return false;
         }
-        let reach = i + nums[i];
+        val reach = i + nums[i];
         if reach > farthest {
             farthest = reach;
         }

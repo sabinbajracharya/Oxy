@@ -13,7 +13,7 @@ fn add(a: Int, b: Int) -> Int {
 }
 
 fn main() {
-    let result = add(3, 4);
+    val result = add(3, 4);
     println("{}", result);
 }
 "#,

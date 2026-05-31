@@ -37,7 +37,7 @@ fn test_cli_args() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let args = std::env::args();
+    val args = std::env::args();
     println("{}", args.len());
 }
 "#,
@@ -50,10 +50,10 @@ fn main() {
 fn test_json_serialize_primitives() {
     let output = run_and_capture(
         r#"fn main() {
-    let a = json::serialize(42).unwrap();
-    let b = json::serialize(3.14).unwrap();
-    let c = json::serialize(true).unwrap();
-    let d = json::serialize("hello").unwrap();
+    val a = json::serialize(42).unwrap();
+    val b = json::serialize(3.14).unwrap();
+    val c = json::serialize(true).unwrap();
+    val d = json::serialize("hello").unwrap();
     println("{}", a);
     println("{}", b);
     println("{}", c);
@@ -67,7 +67,7 @@ fn test_json_serialize_primitives() {
 fn test_json_serialize_string_escapes() {
     let output = run_and_capture(
         r#"fn main() {
-    let s = json::serialize("hello\nworld\t\"quoted\"").unwrap();
+    val s = json::serialize("hello\nworld\t\"quoted\"").unwrap();
     println("{}", s);
 }"#,
     );
@@ -78,8 +78,8 @@ fn test_json_serialize_string_escapes() {
 fn test_json_serialize_list() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = [1, 2, 3];
-    let j = json::serialize(v).unwrap();
+    val v = [1, 2, 3];
+    val j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
     );
@@ -90,10 +90,10 @@ fn test_json_serialize_list() {
 fn test_json_serialize_hashmap() {
     let output = run_and_capture(
         r#"fn main() {
-    let mut m = Map::new();
+    var m = Map::new();
     m.insert("alpha", 1);
     m.insert("beta", 2);
-    let j = json::serialize(m).unwrap();
+    val j = json::serialize(m).unwrap();
     println("{}", j);
 }"#,
     );
@@ -109,8 +109,8 @@ struct PoInt {
     y: Int,
 }
 fn main() {
-    let p = PoInt { x: 10, y: 20 };
-    let j = json::serialize(p).unwrap();
+    val p = PoInt { x: 10, y: 20 };
+    val j = json::serialize(p).unwrap();
     println("{}", j);
 }"#,
     );
@@ -128,8 +128,8 @@ enum Color {
     Rgb(Int, Int, Int),
 }
 fn main() {
-    let a = json::serialize(Color::Red).unwrap();
-    let b = json::serialize(Color::Rgb(255, 128, 0)).unwrap();
+    val a = json::serialize(Color::Red).unwrap();
+    val b = json::serialize(Color::Rgb(255, 128, 0)).unwrap();
     println("{}", a);
     println("{}", b);
 }"#,
@@ -147,10 +147,10 @@ fn main() {
 fn test_json_serialize_option_result() {
     let output = run_and_capture(
         r#"fn main() {
-    let a = json::serialize(Some(42)).unwrap();
-    let b = json::serialize(None).unwrap();
-    let c = json::serialize(Ok("yes")).unwrap();
-    let d = json::serialize(Err("no")).unwrap();
+    val a = json::serialize(Some(42)).unwrap();
+    val b = json::serialize(None).unwrap();
+    val c = json::serialize(Ok("yes")).unwrap();
+    val d = json::serialize(Err("no")).unwrap();
     println("{}", a);
     println("{}", b);
     println("{}", c);
@@ -172,8 +172,8 @@ fn test_json_serialize_option_result() {
 fn test_json_serialize_nested() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = [[1, 2], [3, 4]];
-    let j = json::serialize(v).unwrap();
+    val v = [[1, 2], [3, 4]];
+    val j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
     );
@@ -184,8 +184,8 @@ fn test_json_serialize_nested() {
 fn test_json_serialize_pretty() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = [1, 2, 3];
-    let j = json::to_string_pretty(v).unwrap();
+    val v = [1, 2, 3];
+    val j = json::to_string_pretty(v).unwrap();
     println("{}", j);
 }"#,
     );
@@ -196,11 +196,11 @@ fn test_json_serialize_pretty() {
 fn test_json_deserialize_primitives() {
     let output = run_and_capture(
         r#"fn main() {
-    let a = json::deserialize("42").unwrap();
-    let b = json::deserialize("3.14").unwrap();
-    let c = json::deserialize("true").unwrap();
-    let d = json::deserialize("\"hello\"").unwrap();
-    let e = json::deserialize("null").unwrap();
+    val a = json::deserialize("42").unwrap();
+    val b = json::deserialize("3.14").unwrap();
+    val c = json::deserialize("true").unwrap();
+    val d = json::deserialize("\"hello\"").unwrap();
+    val e = json::deserialize("null").unwrap();
     println("{:?}", a);
     println("{:?}", b);
     println("{:?}", c);
@@ -215,9 +215,9 @@ fn test_json_deserialize_primitives() {
 fn test_json_deserialize_object() {
     let output = run_and_capture(
         r#"fn main() {
-    let obj = json::parse("{\"name\": \"Alice\", \"age\": 30}").unwrap();
-    let name = obj.get("name").unwrap();
-    let age = obj.get("age").unwrap();
+    val obj = json::parse("{\"name\": \"Alice\", \"age\": 30}").unwrap();
+    val name = obj.get("name").unwrap();
+    val age = obj.get("age").unwrap();
     println("{}", name);
     println("{:?}", age);
 }"#,
@@ -229,7 +229,7 @@ fn test_json_deserialize_object() {
 fn test_json_deserialize_array() {
     let output = run_and_capture(
         r#"fn main() {
-    let arr = json::from_str("[1, 2, 3]").unwrap();
+    val arr = json::from_str("[1, 2, 3]").unwrap();
     println("{:?}", arr);
 }"#,
     );
@@ -240,9 +240,9 @@ fn test_json_deserialize_array() {
 fn test_json_deserialize_nested() {
     let output = run_and_capture(
         r#"fn main() {
-    let data = json::deserialize("{\"items\": [1, 2, 3], \"ok\": true}").unwrap();
-    let items = data.get("items").unwrap();
-    let ok = data.get("ok").unwrap();
+    val data = json::deserialize("{\"items\": [1, 2, 3], \"ok\": true}").unwrap();
+    val items = data.get("items").unwrap();
+    val ok = data.get("ok").unwrap();
     println("{:?}", items);
     println("{:?}", ok);
 }"#,
@@ -254,9 +254,9 @@ fn test_json_deserialize_nested() {
 fn test_json_roundtrip() {
     let output = run_and_capture(
         r#"fn main() {
-    let original = [1, 2, 3];
-    let json_str = json::serialize(original).unwrap();
-    let parsed = json::deserialize(json_str).unwrap();
+    val original = [1, 2, 3];
+    val json_str = json::serialize(original).unwrap();
+    val parsed = json::deserialize(json_str).unwrap();
     println("{:?}", parsed);
 }"#,
     );
@@ -267,11 +267,11 @@ fn test_json_roundtrip() {
 fn test_json_to_json_method() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = [1, 2, 3];
-    let j = v.to_json().unwrap();
+    val v = [1, 2, 3];
+    val j = v.to_json().unwrap();
     println("{}", j);
-    let n = 42;
-    let j2 = n.to_json().unwrap();
+    val n = 42;
+    val j2 = n.to_json().unwrap();
     println("{}", j2);
 }"#,
     );
@@ -282,7 +282,7 @@ fn test_json_to_json_method() {
 fn test_json_error_cases() {
     let output = run_and_capture(
         r#"fn main() {
-    let r = json::deserialize("invalid");
+    val r = json::deserialize("invalid");
     match r {
         Result::Ok(_) => println("unexpected ok"),
         Result::Err(e) => println("error: {}", e),
@@ -301,8 +301,8 @@ struct Person {
     age: Int,
 }
 fn main() {
-    let json_str = "{\"name\": \"Alice\", \"age\": 30}";
-    let p = json::from_struct(json_str, "Person").unwrap();
+    val json_str = "{\"name\": \"Alice\", \"age\": 30}";
+    val p = json::from_struct(json_str, "Person").unwrap();
     println("{:?}", p);
 }"#,
     );
@@ -315,7 +315,7 @@ fn test_http_get_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let result = http::get("not-a-valid-url");
+    val result = http::get("not-a-valid-url");
     match result {
         Ok(_) => println("unexpected ok"),
         Err(e) => println("got error"),
@@ -330,7 +330,7 @@ fn test_http_post_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let result = http::post("http://invalid.test.localhost:1", "body");
+    val result = http::post("http://invalid.test.localhost:1", "body");
     match result {
         Ok(_) => println("unexpected ok"),
         Err(e) => println("got error"),
@@ -345,7 +345,7 @@ fn test_http_delete_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let result = http::delete("not-a-valid-url");
+    val result = http::delete("not-a-valid-url");
     match result {
         Ok(_) => println("unexpected ok"),
         Err(e) => println("got error"),
@@ -360,7 +360,7 @@ fn test_http_get_json_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let result = http::get_json("not-a-valid-url");
+    val result = http::get_json("not-a-valid-url");
     match result {
         Ok(_) => println("unexpected ok"),
         Err(e) => println("got error"),
@@ -375,9 +375,9 @@ fn test_http_post_json_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut data = Map::new();
+    var data = Map::new();
     data.insert("key", "value");
-    let result = http::post_json("not-a-valid-url", data);
+    val result = http::post_json("not-a-valid-url", data);
     match result {
         Ok(_) => println("unexpected ok"),
         Err(_) => println("got error"),
@@ -392,9 +392,9 @@ fn test_http_put_json_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut data = Map::new();
+    var data = Map::new();
     data.insert("key", "value");
-    let result = http::put_json("not-a-valid-url", data);
+    val result = http::put_json("not-a-valid-url", data);
     match result {
         Ok(_) => println("unexpected ok"),
         Err(_) => println("got error"),
@@ -411,7 +411,7 @@ fn test_http_response_status_ok_logic() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let result = http::get("not-a-valid-url");
+    val result = http::get("not-a-valid-url");
     match result {
         Ok(resp) => {
             println("status_ok: {}", resp.status_ok());
@@ -428,7 +428,7 @@ fn test_http_unknown_function() {
     let result = run_compiled_capturing(
         r#"
 fn main() {
-    let r = http::unknown_func("test");
+    val r = http::unknown_func("test");
 }"#,
     );
     assert!(result.is_err());
@@ -508,11 +508,11 @@ fn test_math_log2_log10() {
 fn test_f64_methods() {
     let out = run_and_capture(
         r#"fn main() {
-    let x = 16.0;
+    val x = 16.0;
     println("{}", x.sqrt());
-    let y = -5;
+    val y = -5;
     println("{}", y.abs());
-    let z = 3.7;
+    val z = 3.7;
     println("{}", z.floor());
 }"#,
     );
@@ -521,7 +521,7 @@ fn test_f64_methods() {
 
 #[test]
 fn test_f64_clamp() {
-    let out = run_and_capture("fn main() { let x = 15; println(\"{}\", x.clamp(0, 10)); }");
+    let out = run_and_capture("fn main() { val x = 15; println(\"{}\", x.clamp(0, 10)); }");
     assert_eq!(out, vec!["10\n"]);
 }
 
@@ -529,8 +529,8 @@ fn test_f64_clamp() {
 fn test_f64_min_max_method() {
     let out = run_and_capture(
         r#"fn main() {
-    let a = 3;
-    let b = 7;
+    val a = 3;
+    val b = 7;
     println("{}", a.min(b));
     println("{}", a.max(b));
 }"#,
@@ -540,7 +540,7 @@ fn test_f64_min_max_method() {
 
 #[test]
 fn test_f64_pow_method() {
-    let out = run_and_capture("fn main() { let x = 2.0; println(\"{}\", x.pow(10.0)); }");
+    let out = run_and_capture("fn main() { val x = 2.0; println(\"{}\", x.pow(10.0)); }");
     assert_eq!(out, vec!["1024.0\n"]);
 }
 
@@ -548,7 +548,7 @@ fn test_f64_pow_method() {
 fn test_f64_trig_methods() {
     let out = run_and_capture(
         r#"fn main() {
-    let x = 0.0;
+    val x = 0.0;
     println("{}", x.sin());
     println("{}", x.cos());
 }"#,
@@ -559,7 +559,7 @@ fn test_f64_trig_methods() {
 #[test]
 fn test_rand_random() {
     let out = run_and_capture(
-        "fn main() { let x = rand::random(); println(\"{}\", x >= 0.0 && x < 1.0); }",
+        "fn main() { val x = rand::random(); println(\"{}\", x >= 0.0 && x < 1.0); }",
     );
     assert_eq!(out, vec!["true\n"]);
 }
@@ -567,7 +567,7 @@ fn test_rand_random() {
 #[test]
 fn test_rand_range() {
     let out = run_and_capture(
-        "fn main() { let x = rand::range(1, 10); println(\"{}\", x >= 1 && x < 10); }",
+        "fn main() { val x = rand::range(1, 10); println(\"{}\", x >= 1 && x < 10); }",
     );
     assert_eq!(out, vec!["true\n"]);
 }
@@ -576,7 +576,7 @@ fn test_rand_range() {
 fn test_rand_bool() {
     let out = run_and_capture(
         r#"fn main() {
-    let b = rand::bool();
+    val b = rand::bool();
     println("{}", b == true || b == false);
 }"#,
     );
@@ -585,20 +585,20 @@ fn test_rand_bool() {
 
 #[test]
 fn test_time_now() {
-    let out = run_and_capture("fn main() { let t = time::now(); println(\"{}\", t > 0.0); }");
+    let out = run_and_capture("fn main() { val t = time::now(); println(\"{}\", t > 0.0); }");
     assert_eq!(out, vec!["true\n"]);
 }
 
 #[test]
 fn test_time_millis() {
-    let out = run_and_capture("fn main() { let t = time::millis(); println(\"{}\", t > 0); }");
+    let out = run_and_capture("fn main() { val t = time::millis(); println(\"{}\", t > 0); }");
     assert_eq!(out, vec!["true\n"]);
 }
 
 #[test]
 fn test_time_elapsed() {
     let out = run_and_capture(
-            "fn main() { let start = time::now(); let elapsed = time::elapsed(start); println(\"{}\", elapsed >= 0.0); }",
+            "fn main() { val start = time::now(); val elapsed = time::elapsed(start); println(\"{}\", elapsed >= 0.0); }",
         );
     assert_eq!(out, vec!["true\n"]);
 }

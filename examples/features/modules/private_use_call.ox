@@ -66,12 +66,12 @@ mod warehouse {
 #[test]
 fn test_public_struct_via_use() {
     use warehouse::PublicItem;
-    let item = PublicItem { name: "test".to_string() };
+    val item = PublicItem { name: "test".to_string() };
     assert_eq(item.name, "test");
 }
 
 #[compile_error]
 fn test_private_struct_via_use() {
     use warehouse::PrivateItem;
-    let _ = PrivateItem { id: 1 }; // ERROR: use of private struct
+    val _ = PrivateItem { id: 1 }; // ERROR: use of private struct
 }

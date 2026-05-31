@@ -23,20 +23,20 @@
 // - The while loop runs at most n times total across all iterations
 
 fn main() {
-    let nums = [100, 4, 200, 1, 3, 2];
+    val nums = [100, 4, 200, 1, 3, 2];
     println("{}", longest_consecutive(nums));
 }
 
 fn longest_consecutive(nums: List) -> Int {
-    let mut set = Set::new();
+    var set = Set::new();
     for n in nums {
         set.insert(n);
     }
-    let mut longest = 0;
+    var longest = 0;
     for n in set.to_vec() {
         if !set.contains(n - 1) {
-            let mut current = n;
-            let mut streak = 1;
+            var current = n;
+            var streak = 1;
             while set.contains(current + 1) {
                 current = current + 1;
                 streak = streak + 1;
@@ -51,7 +51,7 @@ fn longest_consecutive(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    let nums = [100, 4, 200, 1, 3, 2];
+    val nums = [100, 4, 200, 1, 3, 2];
     assert_eq(longest_consecutive(nums), 4);
 }
 
@@ -67,6 +67,6 @@ fn test_single() {
 
 #[test]
 fn test_duplicates() {
-    let nums = [1, 2, 0, 1, 3];
+    val nums = [1, 2, 0, 1, 3];
     assert_eq(longest_consecutive(nums), 4);
 }

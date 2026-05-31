@@ -31,7 +31,7 @@ fn test_pub_use_simple_reexport() {
 #[test]
 fn test_pub_use_reexport_struct() {
     use public_api::Data;
-    let d = Data { value: 99 };
+    val d = Data { value: 99 };
     assert_eq(d.value, 99);
 }
 

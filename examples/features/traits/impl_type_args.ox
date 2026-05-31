@@ -21,7 +21,7 @@ impl Pair<Int, Int> {
 
 #[test]
 fn test_inherent_impl_with_type_args() {
-    let p = Pair::<Int, Int>::make(10, 20);
+    val p = Pair::<Int, Int>::make(10, 20);
     assert_eq(p.sum(), 30);
 }
 
@@ -40,7 +40,7 @@ impl Point {
 
 #[test]
 fn test_regular_impl_still_works() {
-    let p = Point::origin();
+    val p = Point::origin();
     assert_eq(p.x, 0.0);
     assert_eq(p.y, 0.0);
 }

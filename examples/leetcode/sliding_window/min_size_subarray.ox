@@ -23,20 +23,20 @@
 // - Return 0 if min_len was never updated
 
 fn main() {
-    let nums = [2, 3, 1, 2, 4, 3];
+    val nums = [2, 3, 1, 2, 4, 3];
     println("{}", min_sub_array_len(7, nums));
 }
 
 fn min_sub_array_len(target: Int, nums: List) -> Int {
-    let n = nums.len();
-    let mut left = 0;
-    let mut sum = 0;
-    let mut min_len = n + 1; // sentinel
-    let mut right = 0;
+    val n = nums.len();
+    var left = 0;
+    var sum = 0;
+    var min_len = n + 1; // sentinel
+    var right = 0;
     while right < n {
         sum = sum + nums[right];
         while sum >= target {
-            let len = right - left + 1;
+            val len = right - left + 1;
             if len < min_len {
                 min_len = len;
             }

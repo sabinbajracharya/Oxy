@@ -26,9 +26,9 @@ struct TreeNode {
 }
 
 fn main() {
-    let mut root = TreeNode::new(3);
-    let l = TreeNode::new(9);
-    let mut r = TreeNode::new(20);
+    var root = TreeNode::new(3);
+    val l = TreeNode::new(9);
+    var r = TreeNode::new(20);
     r.left = Some(TreeNode::new(15));
     r.right = Some(TreeNode::new(7));
     root.left = Some(l);
@@ -37,9 +37,9 @@ fn main() {
 }
 
 fn max_depth(root: Option) -> Int {
-    if let Some(node) = root {
-        let left = max_depth(node.left);
-        let right = max_depth(node.right);
+    if val Some(node) = root {
+        val left = max_depth(node.left);
+        val right = max_depth(node.right);
         1 + (if left > right { left } else { right })
     } else {
         0
@@ -48,9 +48,9 @@ fn max_depth(root: Option) -> Int {
 
 #[test]
 fn test_example() {
-    let mut root = TreeNode::new(3);
-    let l = TreeNode::new(9);
-    let mut r = TreeNode::new(20);
+    var root = TreeNode::new(3);
+    val l = TreeNode::new(9);
+    var r = TreeNode::new(20);
     r.left = Some(TreeNode::new(15));
     r.right = Some(TreeNode::new(7));
     root.left = Some(l);

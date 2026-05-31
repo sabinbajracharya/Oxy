@@ -22,12 +22,12 @@
 // - Works for any number of duplicates as long as count is even
 
 fn main() {
-    let nums = [4, 1, 2, 1, 2];
+    val nums = [4, 1, 2, 1, 2];
     println("{}", single_number(nums));
 }
 
 fn single_number(nums: List) -> Int {
-    let mut result = 0;
+    var result = 0;
     for num in nums {
         result = result ^ num;
     }

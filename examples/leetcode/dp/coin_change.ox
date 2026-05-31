@@ -23,22 +23,22 @@
 // - Return -1 if dp[amount] is still the sentinel
 
 fn main() {
-    let coins = [1, 2, 5];
+    val coins = [1, 2, 5];
     println("{}", coin_change(coins, 11));
 }
 
 fn coin_change(coins: List, amount: Int) -> Int {
-    let inf = amount + 1;
-    let mut dp = [0];
+    val inf = amount + 1;
+    var dp = [0];
     for _i in 0..amount {
         dp.push(inf);
     }
     for a in 1..=amount {
         for coin in coins {
             if coin <= a {
-                let prev = dp[a - coin];
+                val prev = dp[a - coin];
                 if prev != inf {
-                    let candidate = prev + 1;
+                    val candidate = prev + 1;
                     if candidate < dp[a] {
                         dp[a] = candidate;
                     }

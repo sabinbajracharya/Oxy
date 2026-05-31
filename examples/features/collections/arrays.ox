@@ -4,7 +4,7 @@
 
 #[test]
 fn test_array_repeat() {
-    let arr = [0; 5];
+    val arr = [0; 5];
     assert_eq(arr.len(), 5);
     assert_eq(arr[0], 0);
     assert_eq(arr[4], 0);
@@ -12,7 +12,7 @@ fn test_array_repeat() {
 
 #[test]
 fn test_array_repeat_with_expression() {
-    let arr = [42; 3];
+    val arr = [42; 3];
     assert_eq(arr.len(), 3);
     assert_eq(arr[0], 42);
     assert_eq(arr[1], 42);
@@ -23,7 +23,7 @@ fn test_array_repeat_with_expression() {
 
 #[test]
 fn test_array_type_annotation() {
-    let arr: [Int; 3] = [10, 20, 30];
+    val arr: [Int; 3] = [10, 20, 30];
     assert_eq(arr.len(), 3);
     assert_eq(arr[0], 10);
     assert_eq(arr[1], 20);
@@ -34,7 +34,7 @@ fn test_array_type_annotation() {
 
 #[test]
 fn test_array_indexing() {
-    let arr = [100, 200, 300];
+    val arr = [100, 200, 300];
     assert_eq(arr[0], 100);
     assert_eq(arr[2], 300);
 }
@@ -43,9 +43,9 @@ fn test_array_indexing() {
 
 #[test]
 fn test_array_equality() {
-    let a = [1, 2, 3];
-    let b = [1, 2, 3];
-    let c = [4, 5, 6];
+    val a = [1, 2, 3];
+    val b = [1, 2, 3];
+    val c = [4, 5, 6];
     assert_eq(a, b);
     assert_ne(a, c);
 }
@@ -54,7 +54,7 @@ fn test_array_equality() {
 
 #[test]
 fn test_nested_array() {
-    let matrix: [[Int; 2]; 2] = [[1, 2], [3, 4]];
+    val matrix: [[Int; 2]; 2] = [[1, 2], [3, 4]];
     assert_eq(matrix[0][0], 1);
     assert_eq(matrix[0][1], 2);
     assert_eq(matrix[1][0], 3);
@@ -65,8 +65,8 @@ fn test_nested_array() {
 
 #[test]
 fn test_array_iteration() {
-    let arr = [1, 2, 3];
-    let mut sum = 0;
+    val arr = [1, 2, 3];
+    var sum = 0;
     for v in arr {
         sum = sum + v;
     }
@@ -77,7 +77,7 @@ fn test_array_iteration() {
 
 #[test]
 fn test_array_display() {
-    let arr = [1, 2, 3];
+    val arr = [1, 2, 3];
     assert_eq(format("{}", arr), "[1, 2, 3]");
 }
 
@@ -85,7 +85,7 @@ fn test_array_display() {
 
 #[test]
 fn test_string_array() {
-    let arr: [String; 2] = ["hello".to_string(), "world".to_string()];
+    val arr: [String; 2] = ["hello".to_string(), "world".to_string()];
     assert_eq(arr[0], "hello");
     assert_eq(arr[1], "world");
 }
@@ -94,7 +94,7 @@ fn test_string_array() {
 
 #[test]
 fn test_bool_array() {
-    let arr = [true, false, true];
+    val arr = [true, false, true];
     assert(arr[0]);
     assert(!arr[1]);
     assert(arr[2]);
@@ -105,6 +105,6 @@ fn test_bool_array() {
 #[compile_error]
 fn test_array_repeat_non_constant_count() {
     // Repeat count must be a compile-time constant
-    let n = 5;
-    let arr = [0; n];
+    val n = 5;
+    val arr = [0; n];
 }

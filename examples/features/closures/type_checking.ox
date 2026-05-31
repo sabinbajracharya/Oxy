@@ -6,7 +6,7 @@
 
 #[test]
 fn test_closure_no_annotations() {
-    let add = |x, y| x + y;
+    val add = |x, y| x + y;
     assert_eq(add(10, 20), 30);
 }
 
@@ -14,8 +14,8 @@ fn test_closure_no_annotations() {
 
 #[test]
 fn test_closure_empty_body() {
-    let mut called = false;
-    let set = || { called = true; };
+    var called = false;
+    val set = || { called = true; };
     set();
     assert(called);
 }
@@ -28,7 +28,7 @@ fn make_increment() -> fn(Int) -> Int {
 
 #[test]
 fn test_closure_with_matching_return_annotation() {
-    let inc = make_increment();
+    val inc = make_increment();
     assert_eq(inc(5), 6);
 }
 
@@ -36,7 +36,7 @@ fn test_closure_with_matching_return_annotation() {
 
 #[test]
 fn test_closure_with_param_type_annotations() {
-    let mul = |x: Int, y: Int| x * y;
+    val mul = |x: Int, y: Int| x * y;
     assert_eq(mul(3, 4), 12);
 }
 
@@ -48,7 +48,7 @@ fn make_doubler() -> fn(Int) -> Int {
 
 #[test]
 fn test_closure_with_both_annotations() {
-    let double = make_doubler();
+    val double = make_doubler();
     assert_eq(double(7), 14);
 }
 
@@ -56,8 +56,8 @@ fn test_closure_with_both_annotations() {
 
 #[test]
 fn test_nested_closure() {
-    let outer = |x: Int| {
-        let inner = |y: Int| x + y;
+    val outer = |x: Int| {
+        val inner = |y: Int| x + y;
         inner(x)
     };
     assert_eq(outer(5), 10);
@@ -67,7 +67,7 @@ fn test_nested_closure() {
 
 #[test]
 fn test_store_in_variable_with_fn_annotation() {
-    let op: Fn = |x: Int| -> Int { x + 10 };
+    val op: Fn = |x: Int| -> Int { x + 10 };
     assert_eq(op(3), 13);
 }
 
@@ -76,11 +76,11 @@ fn test_store_in_variable_with_fn_annotation() {
 #[compile_error]
 fn test_closure_return_type_mismatch_on_variable() {
     // Variable declared as fn(Int) -> bool, but closure returns Int
-    let f: fn(Int) -> bool = |x: Int| x + 1;
+    val f: fn(Int) -> bool = |x: Int| x + 1;
 }
 
 #[compile_error]
 fn test_closure_own_return_type_mismatch() {
     // Closure declares -> bool but body returns Int
-    let _ = || -> bool { 42 };
+    val _ = || -> bool { 42 };
 }

@@ -6,7 +6,7 @@
 
 #[test]
 fn test_sort() {
-    let mut v = [3, 1, 4, 1, 5];
+    var v = [3, 1, 4, 1, 5];
     v.sort();
     assert_eq(v[0], 1);
     assert_eq(v[4], 5);
@@ -14,14 +14,14 @@ fn test_sort() {
 
 #[test]
 fn test_sort_empty() {
-    let mut v = [];
+    var v = [];
     v.sort();
     assert_eq(v.len(), 0);
 }
 
 #[test]
 fn test_sort_single() {
-    let mut v = [42];
+    var v = [42];
     v.sort();
     assert_eq(v.len(), 1);
 }
@@ -30,7 +30,7 @@ fn test_sort_single() {
 
 #[test]
 fn test_sort_by_descending() {
-    let mut v = [1, 3, 2];
+    var v = [1, 3, 2];
     v.sort_by(|a, b| b - a);
     assert_eq(v[0], 3);
     assert_eq(v[2], 1);
@@ -40,7 +40,7 @@ fn test_sort_by_descending() {
 
 #[test]
 fn test_sort_by_key() {
-    let mut v = ["bb", "a", "ccc"];
+    var v = ["bb", "a", "ccc"];
     v.sort_by_key(|s| s.len());
     assert_eq(v[0], "a");
 }
@@ -49,7 +49,7 @@ fn test_sort_by_key() {
 
 #[test]
 fn test_reverse() {
-    let mut v = [1, 2, 3];
+    var v = [1, 2, 3];
     v.reverse();
     assert_eq(v[0], 3);
     assert_eq(v[2], 1);
@@ -59,7 +59,7 @@ fn test_reverse() {
 
 #[test]
 fn test_dedup() {
-    let mut v = [1, 1, 2, 2, 3];
+    var v = [1, 1, 2, 2, 3];
     v.dedup();
     assert(v.len() <= 3);
 }
@@ -68,22 +68,22 @@ fn test_dedup() {
 
 #[test]
 fn test_join() {
-    let v = ["a", "b", "c"];
-    let s = v.join(", ");
+    val v = ["a", "b", "c"];
+    val s = v.join(", ");
     assert(s.contains(","));
 }
 
 #[test]
 fn test_join_single() {
-    let v = ["hello"];
-    let s = v.join(", ");
+    val v = ["hello"];
+    val s = v.join(", ");
     assert_eq(s, "hello");
 }
 
 #[test]
 fn test_join_empty() {
-    let v = [];
-    let s = v.join(",");
+    val v = [];
+    val s = v.join(",");
     assert_eq(s, "");
 }
 
@@ -91,22 +91,22 @@ fn test_join_empty() {
 
 #[test]
 fn test_min() {
-    let v = [5, 3, 8, 1, 4];
-    let m = v.min();
+    val v = [5, 3, 8, 1, 4];
+    val m = v.min();
     assert(m.is_some());
 }
 
 #[test]
 fn test_min_empty() {
-    let v = [];
-    let m = v.min();
+    val v = [];
+    val m = v.min();
     assert(m.is_none());
 }
 
 #[test]
 fn test_max() {
-    let v = [5, 3, 8, 1, 4];
-    let m = v.max();
+    val v = [5, 3, 8, 1, 4];
+    val m = v.max();
     assert(m.is_some());
 }
 
@@ -114,8 +114,8 @@ fn test_max() {
 
 #[test]
 fn test_chunks() {
-    let v = [1, 2, 3, 4, 5];
-    let c = v.chunks(2);
+    val v = [1, 2, 3, 4, 5];
+    val c = v.chunks(2);
     assert(c.len() > 1);
 }
 
@@ -123,8 +123,8 @@ fn test_chunks() {
 
 #[test]
 fn test_windows() {
-    let v = [1, 2, 3, 4];
-    let w = v.windows(2);
+    val v = [1, 2, 3, 4];
+    val w = v.windows(2);
     assert_eq(w.len(), 3);
 }
 
@@ -132,8 +132,8 @@ fn test_windows() {
 
 #[test]
 fn test_clone() {
-    let v = [1, 2, 3];
-    let v2 = v.clone();
+    val v = [1, 2, 3];
+    val v2 = v.clone();
     assert_eq(v2.len(), 3);
 }
 
@@ -141,7 +141,7 @@ fn test_clone() {
 
 #[test]
 fn test_extend() {
-    let mut v = [1, 2];
+    var v = [1, 2];
     v.extend([3, 4]);
     assert_eq(v.len(), 4);
 }
@@ -150,8 +150,8 @@ fn test_extend() {
 
 #[test]
 fn test_shared_mutation() {
-    let a = [1, 2, 3];
-    let b = a;
+    val a = [1, 2, 3];
+    val b = a;
     b.push(4);
     // a and b share the same data
     assert_eq(a.len(), 4);
@@ -159,8 +159,8 @@ fn test_shared_mutation() {
 
 #[test]
 fn test_clone_deep_copy() {
-    let a = [1, 2, 3];
-    let b = a.clone();
+    val a = [1, 2, 3];
+    val b = a.clone();
     b.push(4);
     // clone creates independent copy
     assert_eq(a.len(), 3);

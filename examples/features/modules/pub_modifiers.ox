@@ -24,7 +24,7 @@ fn test_pub_crate_fn_accessible_from_root() {
 
 #[test]
 fn test_pub_crate_struct_accessible_from_root() {
-    let d = crate_lib::make_data(10);
+    val d = crate_lib::make_data(10);
     assert_eq(d.x, 10);
 }
 
@@ -66,7 +66,7 @@ fn test_pub_super_accessible_from_parent() {
 
 #[test]
 fn test_pub_super_struct_from_parent() {
-    let s = parent_lib::SuperInfo { val: 77 };
+    val s = parent_lib::SuperInfo { val: 77 };
     assert_eq(s.val, 77);
 }
 

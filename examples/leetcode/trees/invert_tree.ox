@@ -28,21 +28,21 @@ struct TreeNode {
 }
 
 fn main() {
-    let mut root = TreeNode::new(4);
-    let mut l = TreeNode::new(2);
+    var root = TreeNode::new(4);
+    var l = TreeNode::new(2);
     l.left = Some(TreeNode::new(1));
     l.right = Some(TreeNode::new(3));
-    let mut r = TreeNode::new(7);
+    var r = TreeNode::new(7);
     r.left = Some(TreeNode::new(6));
     r.right = Some(TreeNode::new(9));
     root.left = Some(l);
     root.right = Some(r);
-    let inverted = invert_tree(Some(root));
+    val inverted = invert_tree(Some(root));
     print_tree(inverted);
 }
 
 fn print_tree(root: Option) {
-    if let Some(node) = root {
+    if val Some(node) = root {
         print("{} ", node.val);
         print_tree(node.left);
         print_tree(node.right);
@@ -50,10 +50,10 @@ fn print_tree(root: Option) {
 }
 
 fn invert_tree(root: Option) -> Option {
-    if let Some(node) = root {
-        let mut node = node;
-        let left = node.left;
-        let right = node.right;
+    if val Some(node) = root {
+        var node = node;
+        val left = node.left;
+        val right = node.right;
         node.left = invert_tree(right);
         node.right = invert_tree(left);
         Some(node)
@@ -64,17 +64,17 @@ fn invert_tree(root: Option) -> Option {
 
 #[test]
 fn test_invert() {
-    let mut root = TreeNode::new(4);
-    let mut l = TreeNode::new(2);
+    var root = TreeNode::new(4);
+    var l = TreeNode::new(2);
     l.left = Some(TreeNode::new(1));
     l.right = Some(TreeNode::new(3));
-    let mut r = TreeNode::new(7);
+    var r = TreeNode::new(7);
     r.left = Some(TreeNode::new(6));
     r.right = Some(TreeNode::new(9));
     root.left = Some(l);
     root.right = Some(r);
-    let result = invert_tree(Some(root));
-    let node = result.unwrap();
+    val result = invert_tree(Some(root));
+    val node = result.unwrap();
     assert_eq(node.val, 4);
     assert_eq(node.left.unwrap().val, 7);
     assert_eq(node.right.unwrap().val, 2);

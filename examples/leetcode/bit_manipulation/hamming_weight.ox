@@ -27,8 +27,8 @@ fn main() {
 }
 
 fn hamming_weight(n: Int) -> Int {
-    let mut count = 0;
-    let mut x = n;
+    var count = 0;
+    var x = n;
     while x != 0 {
         count = count + (x & 1);
         x = x >> 1;

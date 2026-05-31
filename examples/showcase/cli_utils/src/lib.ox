@@ -5,7 +5,7 @@
 //   cli_utils = { path = "../cli_utils" }
 
 pub fn header(text: String) {
-    let bar = "=".repeat(text.len() + 4);
+    val bar = "=".repeat(text.len() + 4);
     println(bar);
     println("  " + text);
     println(bar);

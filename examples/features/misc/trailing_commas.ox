@@ -14,7 +14,7 @@ fn test_trailing_comma_in_function_call() {
 
 #[test]
 fn test_trailing_comma_in_enum_variant_constructor() {
-    let t = E::Tri(10, 20, 30,);
+    val t = E::Tri(10, 20, 30,);
     match t {
         E::Tri(a, b, c) => {
             assert_eq(a, 10);
@@ -26,19 +26,19 @@ fn test_trailing_comma_in_enum_variant_constructor() {
 
 #[test]
 fn test_trailing_comma_in_struct_init() {
-    let p = Point { x: 1, y: 2, };
+    val p = Point { x: 1, y: 2, };
     assert_eq(p.x, 1);
     assert_eq(p.y, 2);
 }
 
 #[test]
 fn test_trailing_comma_in_vec_macro() {
-    let v = [1, 2, 3,];
+    val v = [1, 2, 3,];
     assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_trailing_comma_in_array_literal() {
-    let arr = [4, 5, 6,];
+    val arr = [4, 5, 6,];
     assert_eq(arr.len(), 3);
 }

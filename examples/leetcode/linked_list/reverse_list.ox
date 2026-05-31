@@ -27,19 +27,19 @@ struct ListNode {
 }
 
 fn main() {
-    let mut n1 = ListNode::new(1);
-    let mut n2 = ListNode::new(2);
-    let n3 = ListNode::new(3);
+    var n1 = ListNode::new(1);
+    var n2 = ListNode::new(2);
+    val n3 = ListNode::new(3);
     n2.next = Some(n3);
     n1.next = Some(n2);
 
-    let head = reverse_list(Some(n1));
+    val head = reverse_list(Some(n1));
     print_list(head);
 }
 
 fn print_list(head: Option) {
-    let mut curr = head;
-    while let Some(node) = curr {
+    var curr = head;
+    while val Some(node) = curr {
         print("{} ", node.val);
         curr = node.next;
     }
@@ -47,11 +47,11 @@ fn print_list(head: Option) {
 }
 
 fn reverse_list(head: Option) -> Option {
-    let mut prev = None;
-    let mut curr = head;
-    while let Some(node) = curr {
-        let mut node = node;
-        let next = node.next;
+    var prev = None;
+    var curr = head;
+    while val Some(node) = curr {
+        var node = node;
+        val next = node.next;
         node.next = prev;
         prev = Some(node);
         curr = next;
@@ -66,21 +66,21 @@ fn test_reverse_empty() {
 
 #[test]
 fn test_reverse_single() {
-    let n = ListNode::new(42);
-    let result = reverse_list(Some(n));
+    val n = ListNode::new(42);
+    val result = reverse_list(Some(n));
     assert_eq(result.unwrap().val, 42);
     assert(result.unwrap().next.is_none());
 }
 
 #[test]
 fn test_reverse_multiple() {
-    let mut n1 = ListNode::new(1);
-    let mut n2 = ListNode::new(2);
-    let n3 = ListNode::new(3);
+    var n1 = ListNode::new(1);
+    var n2 = ListNode::new(2);
+    val n3 = ListNode::new(3);
     n2.next = Some(n3);
     n1.next = Some(n2);
-    let result = reverse_list(Some(n1));
+    val result = reverse_list(Some(n1));
     assert_eq(result.unwrap().val, 3);
-    let r2 = result.unwrap().next.unwrap();
+    val r2 = result.unwrap().next.unwrap();
     assert_eq(r2.val, 2);
 }

@@ -115,7 +115,7 @@ fn test_string_char_at() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let s = "hello";
+    val s = "hello";
     println("{}", s.char_at(0));
     println("{}", s.char_at(4));
 }
@@ -129,7 +129,7 @@ fn test_string_substring() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let s = "hello world";
+    val s = "hello world";
     println("{}", s.substring(0, 5));
     println("{}", s.substring(6, 11));
 }
@@ -143,7 +143,7 @@ fn test_string_index_bracket() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let s = "abc";
+    val s = "abc";
     println("{}", s[0]);
     println("{}", s[2]);
 }
@@ -155,20 +155,20 @@ fn main() {
 #[test]
 fn test_fstring_basic() {
     let out =
-        run_and_capture(r#"fn main() { let name = "World"; println("{}", f"Hello {name}!"); }"#);
+        run_and_capture(r#"fn main() { val name = "World"; println("{}", f"Hello {name}!"); }"#);
     assert_eq!(out, vec!["Hello World!\n"]);
 }
 
 #[test]
 fn test_fstring_expression() {
-    let out = run_and_capture(r#"fn main() { let x = 10; println("{}", f"x + 5 = {x + 5}"); }"#);
+    let out = run_and_capture(r#"fn main() { val x = 10; println("{}", f"x + 5 = {x + 5}"); }"#);
     assert_eq!(out, vec!["x + 5 = 15\n"]);
 }
 
 #[test]
 fn test_fstring_multiple_interpolations() {
     let out = run_and_capture(
-        r#"fn main() { let a = 1; let b = 2; println("{}", f"{a} + {b} = {a + b}"); }"#,
+        r#"fn main() { val a = 1; val b = 2; println("{}", f"{a} + {b} = {a + b}"); }"#,
     );
     assert_eq!(out, vec!["1 + 2 = 3\n"]);
 }
@@ -188,7 +188,7 @@ fn test_fstring_escaped_braces() {
 #[test]
 fn test_fstring_method_call() {
     let out =
-        run_and_capture(r#"fn main() { let v = [1, 2, 3]; println("{}", f"len = {v.len()}"); }"#);
+        run_and_capture(r#"fn main() { val v = [1, 2, 3]; println("{}", f"len = {v.len()}"); }"#);
     assert_eq!(out, vec!["len = 3\n"]);
 }
 
@@ -203,6 +203,6 @@ fn test_fstring_nested_function() {
 #[test]
 fn test_fstring_in_variable() {
     let out =
-        run_and_capture(r#"fn main() { let greeting = f"Hi {1 + 1}"; println("{}", greeting); }"#);
+        run_and_capture(r#"fn main() { val greeting = f"Hi {1 + 1}"; println("{}", greeting); }"#);
     assert_eq!(out, vec!["Hi 2\n"]);
 }

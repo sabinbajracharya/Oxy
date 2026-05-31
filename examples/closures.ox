@@ -11,54 +11,54 @@ fn make_adder(n: Int) -> Fn {
 
 fn main() {
     // Basic closure
-    let double = |x| x * 2;
+    val double = |x| x * 2;
     println("double(5) = {}", double(5));
 
     // Closure with type annotations
-    let add = |a: Int, b: Int| -> Int { a + b };
+    val add = |a: Int, b: Int| -> Int { a + b };
     println("add(3, 4) = {}", add(3, 4));
 
     // No-param closure
-    let greet = || "hello!";
+    val greet = || "hello!";
     println("{}", greet());
 
     // Closure captures variables from enclosing scope
-    let factor = 3;
-    let multiply = |x| x * factor;
+    val factor = 3;
+    val multiply = |x| x * factor;
     println("multiply(5) = {}", multiply(5));
 
     // Passing closure as argument
-    let result = apply(|x| x * x, 7);
+    val result = apply(|x| x * x, 7);
     println("apply(|x| x*x, 7) = {}", result);
 
     // Returning closure from function
-    let add5 = make_adder(5);
+    val add5 = make_adder(5);
     println("add5(10) = {}", add5(10));
 
     // closure
-    let name = "world";
-    let greet2 = || format("hello {}", name);
+    val name = "world";
+    val greet2 = || format("hello {}", name);
     println("{}", greet2());
 
     // List iterator methods
     println("\n=== Iterator Methods ===");
 
-    let numbers = [1, 2, 3, 4, 5];
+    val numbers = [1, 2, 3, 4, 5];
 
     // map
-    let doubled = numbers.map(|x| x * 2);
+    val doubled = numbers.map(|x| x * 2);
     println("map(*2): {:?}", doubled);
 
     // filter
-    let evens = numbers.filter(|x| x % 2 == 0);
+    val evens = numbers.filter(|x| x % 2 == 0);
     println("filter(even): {:?}", evens);
 
     // chaining map + filter
-    let result = numbers.map(|x| x * 2).filter(|x| x > 4);
+    val result = numbers.map(|x| x * 2).filter(|x| x > 4);
     println("map(*2).filter(>4): {:?}", result);
 
     // fold
-    let sum = numbers.fold(0, |acc, x| acc + x);
+    val sum = numbers.fold(0, |acc, x| acc + x);
     println("fold(sum): {}", sum);
 
     // any / all
@@ -66,12 +66,12 @@ fn main() {
     println("all(>0): {}", numbers.all(|x| x > 0));
 
     // find
-    let found = numbers.find(|x| x > 3);
+    val found = numbers.find(|x| x > 3);
     println("find(>3): {:?}", found);
 
     // enumerate
-    let words = ["foo", "bar", "baz"];
-    let indexed = words.enumerate();
+    val words = ["foo", "bar", "baz"];
+    val indexed = words.enumerate();
     println("enumerate: {:?}", indexed);
 
     // for_each
@@ -80,8 +80,8 @@ fn main() {
     println("");
 
     // flat_map
-    let nested = [1, 2, 3];
-    let flat = nested.flat_map(|x| [x, x * 10]);
+    val nested = [1, 2, 3];
+    val flat = nested.flat_map(|x| [x, x * 10]);
     println("flat_map: {:?}", flat);
 
     // position

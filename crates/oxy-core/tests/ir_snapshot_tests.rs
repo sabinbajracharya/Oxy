@@ -158,7 +158,7 @@ mod expressions {
 
     #[test]
     fn const_str() {
-        assert_ir_snapshot("expressions/const_str", r#"let x = "hello";"#);
+        assert_ir_snapshot("expressions/const_str", r#"val x = "hello";"#);
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod calls {
     fn call_user_fn() {
         assert_ir_snapshot_raw(
             "calls/call_user_fn",
-            "fn double(x: Int) -> Int { x * 2 }\nfn main() {\n    let r = double(5);\n}",
+            "fn double(x: Int) -> Int { x * 2 }\nfn main() {\n    val r = double(5);\n}",
         );
     }
 
@@ -564,7 +564,7 @@ mod calls {
     fn call_with_args() {
         assert_ir_snapshot_raw(
             "calls/call_with_args",
-            "fn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    let r = add(3, 4);\n}",
+            "fn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    val r = add(3, 4);\n}",
         );
     }
 
@@ -594,7 +594,7 @@ mod calls {
         // Arg registers: double(1) and double(2) are fully resolved before add() is called.
         assert_ir_snapshot_raw(
             "calls/call_nested_args",
-            "fn double(x: Int) -> Int { x * 2 }\nfn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    let r = add(double(1), double(2));\n}",
+            "fn double(x: Int) -> Int { x * 2 }\nfn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    val r = add(double(1), double(2));\n}",
         );
     }
 
@@ -603,7 +603,7 @@ mod calls {
         // Variant constructor call routes to oxy_make_enum_variant, not oxy_call.
         assert_ir_snapshot_raw(
             "calls/call_enum_variant_ctor",
-            "enum Direction { North, South }\nfn main() {\n    let d = Direction::North;\n}",
+            "enum Direction { North, South }\nfn main() {\n    val d = Direction::North;\n}",
         );
     }
 
@@ -639,7 +639,7 @@ mod assignment {
         // Field assignment lowers to oxy_field_store, not StoreLocal.
         assert_ir_snapshot_raw(
             "assignment/assign_field",
-            "struct PoInt { x: Int, y: Int }\nfn main() {\n    let mut p = PoInt { x: 1, y: 2 };\n    p.x = 10;\n}",
+            "struct PoInt { x: Int, y: Int }\nfn main() {\n    var p = PoInt { x: 1, y: 2 };\n    p.x = 10;\n}",
         );
     }
 
@@ -664,7 +664,7 @@ mod assignment {
         // This is ir_gen/mod.rs:1207-1208: val_reg = gen_expr(value) then target_reg = gen_expr(target).
         assert_ir_snapshot_raw(
             "assignment/compound_assign_eval_order",
-            "fn get() -> Int { 42 }\nfn main() {\n    let mut x = 0;\n    x += get();\n}",
+            "fn get() -> Int { 42 }\nfn main() {\n    var x = 0;\n    x += get();\n}",
         );
     }
 }
@@ -689,7 +689,7 @@ mod returns {
         // no back-edge Jump follows (the block is already terminated).
         assert_ir_snapshot_raw(
             "returns/return_early_in_loop",
-            "fn find(n: Int) -> Int {\n    let mut i = 0;\n    while i < n {\n        if i == 3 { return i; }\n        i = i + 1;\n    }\n    -1\n}\nfn main() {}",
+            "fn find(n: Int) -> Int {\n    var i = 0;\n    while i < n {\n        if i == 3 { return i; }\n        i = i + 1;\n    }\n    -1\n}\nfn main() {}",
         );
     }
 
@@ -714,7 +714,7 @@ mod edge_cases {
         // inc(x) result reg + dbl(x) result reg * const.int 2.
         assert_ir_snapshot_raw(
             "edge_cases/nested_arith_calls",
-            "fn inc(x: Int) -> Int { x + 1 }\nfn dbl(x: Int) -> Int { x * 2 }\nfn main() {\n    let x = 3;\n    let y = inc(x) + dbl(x) * 2;\n}",
+            "fn inc(x: Int) -> Int { x + 1 }\nfn dbl(x: Int) -> Int { x * 2 }\nfn main() {\n    val x = 3;\n    val y = inc(x) + dbl(x) * 2;\n}",
         );
     }
 
@@ -723,7 +723,7 @@ mod edge_cases {
         // f() and g() are both called before the add: left arg materialised first.
         assert_ir_snapshot_raw(
             "edge_cases/side_effect_order_in_args",
-            "fn f() -> Int { 1 }\nfn g() -> Int { 2 }\nfn main() {\n    let x = f() + g();\n}",
+            "fn f() -> Int { 1 }\nfn g() -> Int { 2 }\nfn main() {\n    val x = f() + g();\n}",
         );
     }
 
@@ -791,7 +791,7 @@ mod boolean {
         // The surprising case: no lazy evaluation in Oxy's &&.
         assert_ir_snapshot_raw(
             "boolean/bool_and_with_call",
-            "fn f() -> bool { true }\nfn main() {\n    let a = true;\n    let x = a && f();\n}",
+            "fn f() -> bool { true }\nfn main() {\n    val a = true;\n    val x = a && f();\n}",
         );
     }
 

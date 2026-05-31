@@ -23,15 +23,15 @@
 // - Loop until left == right
 
 fn main() {
-    let nums = [3, 4, 5, 1, 2];
+    val nums = [3, 4, 5, 1, 2];
     println("{}", find_min(nums));
 }
 
 fn find_min(nums: List) -> Int {
-    let mut left = 0;
-    let mut right = nums.len() - 1;
+    var left = 0;
+    var right = nums.len() - 1;
     while left < right {
-        let mid = left + (right - left) / 2;
+        val mid = left + (right - left) / 2;
         if nums[mid] > nums[right] {
             left = mid + 1;
         } else {

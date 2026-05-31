@@ -26,14 +26,14 @@ struct ListNode {
 }
 
 fn main() {
-    let n1 = ListNode::new(1);
+    val n1 = ListNode::new(1);
     println("{}", has_cycle(Some(n1)));
 }
 
 fn has_cycle(head: Option) -> bool {
-    let mut slow = head;
-    let mut fast = head;
-    while let Some(fast_node) = fast {
+    var slow = head;
+    var fast = head;
+    while val Some(fast_node) = fast {
         if fast_node.next.is_none() {
             return false;
         }
@@ -48,15 +48,15 @@ fn has_cycle(head: Option) -> bool {
 
 #[test]
 fn test_no_cycle_single() {
-    let n = ListNode::new(1);
+    val n = ListNode::new(1);
     assert(!has_cycle(Some(n)));
 }
 
 #[test]
 fn test_no_cycle_multiple() {
-    let mut n1 = ListNode::new(1);
-    let mut n2 = ListNode::new(2);
-    let n3 = ListNode::new(3);
+    var n1 = ListNode::new(1);
+    var n2 = ListNode::new(2);
+    val n3 = ListNode::new(3);
     n2.next = Some(n3);
     n1.next = Some(n2);
     assert(!has_cycle(Some(n1)));

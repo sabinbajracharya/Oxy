@@ -45,7 +45,7 @@ fn test_private_fn_not_directly_accessible() {
 
 #[test]
 fn test_private_struct_via_wrapper() {
-    let s = api::make_private_struct();
+    val s = api::make_private_struct();
     assert_eq(api::get_private_x(s), 7);
 }
 
@@ -104,7 +104,7 @@ mod store {
 
 #[test]
 fn test_pub_struct_with_private_fields() {
-    let item = store::Item::new("widget".to_string(), 100);
+    val item = store::Item::new("widget".to_string(), 100);
     assert_eq(item.name, "widget");
     assert_eq(item.get_price(), 100);
 }
@@ -113,21 +113,21 @@ fn test_pub_struct_with_private_fields() {
 
 #[compile_error]
 fn test_cannot_call_private_function() {
-    let _ = api::private_fn(); // ERROR: private function
+    val _ = api::private_fn(); // ERROR: private function
 }
 
 #[compile_error]
 fn test_cannot_use_private_struct() {
-    let _ = api::PrivateStruct { x: 1 }; // ERROR: private struct
+    val _ = api::PrivateStruct { x: 1 }; // ERROR: private struct
 }
 
 #[compile_error]
 fn test_cannot_access_private_module() {
-    let _ = parent::private_child::hidden_fn(); // ERROR: private module
+    val _ = parent::private_child::hidden_fn(); // ERROR: private module
 }
 
 #[compile_error]
 fn test_cannot_init_struct_with_private_field() {
     use store::Item;
-    let _ = Item { name: "x".to_string(), price: 50 }; // ERROR: private field
+    val _ = Item { name: "x".to_string(), price: 50 }; // ERROR: private field
 }

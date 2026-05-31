@@ -17,7 +17,7 @@ async fn greet(name: String) -> String { "Hello, ".to_string() + name }
 async fn inner(x: Int) -> Int { x + 1 }
 
 async fn outer(x: Int) -> Int {
-    let f = inner(x);
+    val f = inner(x);
     f.await * 2
 }
 
@@ -33,27 +33,27 @@ fn sync_double(x: Int) -> Int { x * 2 }
 
 #[test]
 fn test_async_fn_returns_future() {
-    let f = answer();
+    val f = answer();
     assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_fn_with_params() {
-    let f = add(3, 4);
+    val f = add(3, 4);
     assert_eq(f.await, 7);
 }
 
 #[test]
 fn test_async_fn_multiple_calls() {
-    let a = double(5);
-    let b = double(10);
+    val a = double(5);
+    val b = double(10);
     assert_eq(a.await, 10);
     assert_eq(b.await, 20);
 }
 
 #[test]
 fn test_async_fn_string_return() {
-    let f = greet("World".to_string());
+    val f = greet("World".to_string());
     assert_eq(f.await, "Hello, World");
 }
 
@@ -61,13 +61,13 @@ fn test_async_fn_string_return() {
 
 #[test]
 fn test_await_on_plain_value_passes_through() {
-    let x = 42;
+    val x = 42;
     assert_eq(x.await, 42);
 }
 
 #[test]
 fn test_await_on_string_passes_through() {
-    let s = "hello".to_string();
+    val s = "hello".to_string();
     assert_eq(s.await, "hello");
 }
 
@@ -75,21 +75,21 @@ fn test_await_on_string_passes_through() {
 
 #[test]
 fn test_spawn_returns_join_handle() {
-    let h = spawn(|| 42);
+    val h = spawn(|| 42);
     assert_eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_capture() {
-    let x = 10;
-    let h = spawn(|| x * 2);
+    val x = 10;
+    val h = spawn(|| x * 2);
     assert_eq(h.await, 20);
 }
 
 #[test]
 fn test_spawn_multiple() {
-    let a = spawn(|| 100);
-    let b = spawn(|| 200);
+    val a = spawn(|| 100);
+    val b = spawn(|| 200);
     assert_eq(a.await, 100);
     assert_eq(b.await, 200);
 }
@@ -98,14 +98,14 @@ fn test_spawn_multiple() {
 
 #[test]
 fn test_sleep_runs_without_error() {
-    let _ = sleep(10);
+    val _ = sleep(10);
 }
 
 // --- nested async ---
 
 #[test]
 fn test_nested_async_calls() {
-    let f = outer(5);
+    val f = outer(5);
     assert_eq(f.await, 12);
 }
 
@@ -118,7 +118,7 @@ fn test_async_fn_chain() {
 
 #[test]
 fn test_await_on_sync_fn_result() {
-    let v = sync_double(21);
+    val v = sync_double(21);
     assert_eq(v.await, 42);
 }
 
@@ -161,61 +161,61 @@ fn take_string(s: String) -> String { s }
 
 #[test]
 fn test_await_future_type_flows_to_callee() {
-    let f = answer();          // Future<Int>
-    let v = f.await;           // Int (unwrapped by type checker)
-    let _ = take_int(v);       // OK: Int → Int
+    val f = answer();          // Future<Int>
+    val v = f.await;           // Int (unwrapped by type checker)
+    val _ = take_int(v);       // OK: Int → Int
 }
 
 #[test]
 fn test_await_spawn_type_flows_to_callee() {
-    let h = spawn(|| 42);      // JoinHandle<Int>
-    let v = h.await;           // Int
-    let _ = take_int(v);       // OK
+    val h = spawn(|| 42);      // JoinHandle<Int>
+    val v = h.await;           // Int
+    val _ = take_int(v);       // OK
 }
 
 #[test]
 fn test_await_plain_value_passthrough() {
-    let x = 42;
-    let v = x.await;           // passthrough: Int
-    let _ = take_int(v);       // OK
+    val x = 42;
+    val v = x.await;           // passthrough: Int
+    val _ = take_int(v);       // OK
 }
 
 // --- compile_error: type mismatch across .await ---
 
 #[compile_error]
 fn await_future_wrong_type() {
-    let f = answer();          // Future<Int>
-    let v = f.await;           // Int
-    let _ = take_string(v);    // ERROR: Int does not match String
+    val f = answer();          // Future<Int>
+    val v = f.await;           // Int
+    val _ = take_string(v);    // ERROR: Int does not match String
 }
 
 #[compile_error]
 fn await_spawn_wrong_type() {
-    let h = spawn(|| 42);      // JoinHandle<Int>
-    let v = h.await;           // Int
-    let _ = take_string(v);    // ERROR: Int does not match String
+    val h = spawn(|| 42);      // JoinHandle<Int>
+    val v = h.await;           // Int
+    val _ = take_string(v);    // ERROR: Int does not match String
 }
 
 // --- event-loop spawn: correctness ---
 
 #[test]
 fn test_spawn_basic() {
-    let h = spawn(|| 42);
+    val h = spawn(|| 42);
     assert_eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_captured_var() {
-    let x = 10;
-    let h = spawn(|| x * 3);
+    val x = 10;
+    val h = spawn(|| x * 3);
     assert_eq(h.await, 30);
 }
 
 #[test]
 fn test_spawn_multiple_independent() {
-    let a = spawn(|| 100);
-    let b = spawn(|| 200);
-    let c = spawn(|| 300);
+    val a = spawn(|| 100);
+    val b = spawn(|| 200);
+    val c = spawn(|| 300);
     // Results are collected in any order
     assert_eq(a.await, 100);
     assert_eq(b.await, 200);
@@ -224,10 +224,10 @@ fn test_spawn_multiple_independent() {
 
 #[test]
 fn test_spawn_sequential_await() {
-    let a = spawn(|| 1);
-    let r1 = a.await;
-    let b = spawn(|| r1 + 1);
-    let r2 = b.await;
+    val a = spawn(|| 1);
+    val r1 = a.await;
+    val b = spawn(|| r1 + 1);
+    val r2 = b.await;
     assert_eq(r2, 2);
 }
 
@@ -235,7 +235,7 @@ fn test_spawn_sequential_await() {
 
 #[test]
 fn test_sleep_inside_spawn() {
-    let h = spawn(|| {
+    val h = spawn(|| {
         sleep(0);
         99
     });
@@ -244,11 +244,11 @@ fn test_sleep_inside_spawn() {
 
 #[test]
 fn test_sleep_multiple_spawns() {
-    let a = spawn(|| {
+    val a = spawn(|| {
         sleep(0);
         "a"
     });
-    let b = spawn(|| {
+    val b = spawn(|| {
         sleep(0);
         "b"
     });
@@ -260,8 +260,8 @@ fn test_sleep_multiple_spawns() {
 
 #[test]
 fn test_nested_spawn() {
-    let outer = spawn(|| {
-        let inner = spawn(|| 42);
+    val outer = spawn(|| {
+        val inner = spawn(|| 42);
         inner.await
     });
     assert_eq(outer.await, 42);
@@ -269,8 +269,8 @@ fn test_nested_spawn() {
 
 #[test]
 fn test_spawn_chain() {
-    let h = spawn(|| {
-        let inner = spawn(|| 7);
+    val h = spawn(|| {
+        val inner = spawn(|| 7);
         inner.await * 6
     });
     assert_eq(h.await, 42);
@@ -280,8 +280,8 @@ fn test_spawn_chain() {
 
 #[test]
 fn test_await_passthrough_inside_spawn() {
-    let h = spawn(|| {
-        let x = 42;
+    val h = spawn(|| {
+        val x = 42;
         x.await
     });
     assert_eq(h.await, 42);
@@ -291,8 +291,8 @@ fn test_await_passthrough_inside_spawn() {
 
 #[test]
 fn test_async_fn_inside_spawn() {
-    let h = spawn(|| {
-        let f = answer();
+    val h = spawn(|| {
+        val f = answer();
         f.await
     });
     assert_eq(h.await, 42);
@@ -302,7 +302,7 @@ fn test_async_fn_inside_spawn() {
 
 #[test]
 fn test_spawn_string_result() {
-    let h = spawn(|| "hello".to_string());
+    val h = spawn(|| "hello".to_string());
     assert_eq(h.await, "hello");
 }
 
@@ -336,47 +336,47 @@ impl Greeter {
 
 #[test]
 fn test_async_method_basic() {
-    let c = Calculator::new(21);
-    let f = c.compute();
+    val c = Calculator::new(21);
+    val f = c.compute();
     assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_with_param() {
-    let c = Calculator::new(40);
-    let f = c.add(2);
+    val c = Calculator::new(40);
+    val f = c.add(2);
     assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_string_return() {
-    let g = Greeter { name: "World".to_string() };
-    let f = g.greet();
+    val g = Greeter { name: "World".to_string() };
+    val f = g.greet();
     assert_eq(f.await, "Hello, World");
 }
 
 #[test]
 fn test_async_method_multiple_calls() {
-    let c1 = Calculator::new(10);
-    let c2 = Calculator::new(20);
-    let a = c1.compute();
-    let b = c2.compute();
+    val c1 = Calculator::new(10);
+    val c2 = Calculator::new(20);
+    val a = c1.compute();
+    val b = c2.compute();
     assert_eq(a.await, 20);
     assert_eq(b.await, 40);
 }
 
 #[test]
 fn test_async_method_with_formal_param() {
-    let g = Greeter { name: "Smith".to_string() };
-    let f = g.greet_formal("Dr.".to_string());
+    val g = Greeter { name: "Smith".to_string() };
+    val f = g.greet_formal("Dr.".to_string());
     assert_eq(f.await, "Dr. Smith");
 }
 
 #[test]
 fn test_async_method_chain_with_sync() {
-    let c = Calculator::new(21);
+    val c = Calculator::new(21);
     assert_eq(c.sync_get(), 21);
-    let f = c.compute();
+    val f = c.compute();
     assert_eq(f.await, 42);
 }
 
@@ -384,18 +384,18 @@ fn test_async_method_chain_with_sync() {
 
 #[test]
 fn test_async_method_type_flows_to_callee() {
-    let c = Calculator::new(42);
-    let f = c.compute();       // Future<Int>
-    let v = f.await;           // Int
-    let _ = take_int(v);       // OK: Int → Int
+    val c = Calculator::new(42);
+    val f = c.compute();       // Future<Int>
+    val v = f.await;           // Int
+    val _ = take_int(v);       // OK: Int → Int
 }
 
 // --- compile_error: type mismatch across async method .await ---
 
 #[compile_error]
 fn async_method_wrong_type() {
-    let g = Greeter { name: "Test".to_string() };
-    let f = g.greet();         // Future<String>
-    let v = f.await;           // String
-    let _ = take_int(v);       // ERROR: String does not match Int
+    val g = Greeter { name: "Test".to_string() };
+    val f = g.greet();         // Future<String>
+    val v = f.await;           // String
+    val _ = take_int(v);       // ERROR: String does not match Int
 }

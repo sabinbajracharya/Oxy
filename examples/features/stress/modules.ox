@@ -66,7 +66,7 @@ mod data {
 
 #[test]
 fn test_pub_struct_pub_field() {
-    let b = data::new(42);
+    val b = data::new(42);
     assert_eq(b.value, 42);
 }
 
@@ -87,9 +87,9 @@ mod hidden_fields {
 
 #[test]
 fn test_field_visibility_pub() {
-    let c = hidden_fields::new();
+    val c = hidden_fields::new();
     assert_eq(c.visible, 0);
-    let c2 = hidden_fields::bump(c);
+    val c2 = hidden_fields::bump(c);
     assert_eq(c2.visible, 1);
     assert_eq(hidden_fields::count(c2), 1);
 }
@@ -120,7 +120,7 @@ mod shapes {
 
 #[test]
 fn test_enum_in_module() {
-    let c = shapes::Color::Green;
+    val c = shapes::Color::Green;
     assert_eq(shapes::name(c), "green");
 }
 
@@ -129,6 +129,6 @@ use shapes::Color;
 
 #[test]
 fn test_enum_via_use() {
-    let c = Color::Red;
+    val c = Color::Red;
     assert_eq(shapes::name(c), "red");
 }

@@ -9,8 +9,8 @@ fn test_option_some_none() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
-    let y = None;
+    val x = Some(42);
+    val y = None;
     println("{:?} {:?}", x, y);
 }
 "#,
@@ -23,7 +23,7 @@ fn test_option_unwrap() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
+    val x = Some(42);
     println("{}", x.unwrap());
 }
 "#,
@@ -36,8 +36,8 @@ fn test_option_is_some_is_none() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
-    let y = None;
+    val x = Some(42);
+    val y = None;
     println("{} {} {} {}", x.is_some(), x.is_none(), y.is_some(), y.is_none());
 }
 "#,
@@ -50,8 +50,8 @@ fn test_option_unwrap_or() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
-    let y = None;
+    val x = Some(42);
+    val y = None;
     println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
 }
 "#,
@@ -64,8 +64,8 @@ fn test_result_ok_err() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
-    let y = Err("failed");
+    val x = Ok(42);
+    val y = Err("failed");
     println("{:?} {:?}", x, y);
 }
 "#,
@@ -78,7 +78,7 @@ fn test_result_unwrap() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
+    val x = Ok(42);
     println("{}", x.unwrap());
 }
 "#,
@@ -91,8 +91,8 @@ fn test_result_is_ok_is_err() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
-    let y = Err("oops");
+    val x = Ok(42);
+    val y = Err("oops");
     println("{} {} {} {}", x.is_ok(), x.is_err(), y.is_ok(), y.is_err());
 }
 "#,
@@ -105,8 +105,8 @@ fn test_result_unwrap_or() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
-    let y = Err("oops");
+    val x = Ok(42);
+    val y = Err("oops");
     println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
 }
 "#,
@@ -119,7 +119,7 @@ fn test_result_unwrap_err() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let y = Err("oops");
+    val y = Err("oops");
     println("{}", y.unwrap_err());
 }
 "#,
@@ -132,8 +132,8 @@ fn test_if_let_some() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
-    if let Some(val) = x {
+    val x = Some(42);
+    if val Some(val) = x {
         println("got {}", val);
     } else {
         println("nothing");
@@ -149,8 +149,8 @@ fn test_if_let_none() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = None;
-    if let Some(val) = x {
+    val x = None;
+    if val Some(val) = x {
         println("got {}", val);
     } else {
         println("nothing");
@@ -166,8 +166,8 @@ fn test_while_let() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let mut v = [1, 2, 3];
-    while let Some(val) = v.pop() {
+    var v = [1, 2, 3];
+    while val Some(val) = v.pop() {
         println("{}", val);
     }
 }
@@ -181,7 +181,7 @@ fn test_match_option() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Some(42);
+    val x = Some(42);
     match x {
         Some(val) => println("value: {}", val),
         None => println("nothing"),
@@ -197,7 +197,7 @@ fn test_match_result() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Err("problem");
+    val x = Err("problem");
     match x {
         Ok(val) => println("ok: {}", val),
         Err(e) => println("err: {}", e),
@@ -221,12 +221,12 @@ fn parse_num(s: String) -> Result {
 }
 
 fn do_work() -> Result {
-    let n = parse_num("42")?;
+    val n = parse_num("42")?;
     Ok(n + 1)
 }
 
 fn main() {
-    let result = do_work();
+    val result = do_work();
     println("{:?}", result);
 }
 "#,
@@ -247,12 +247,12 @@ fn parse_num(s: String) -> Result {
 }
 
 fn do_work() -> Result {
-    let n = parse_num("bad")?;
+    val n = parse_num("bad")?;
     Ok(n + 1)
 }
 
 fn main() {
-    let result = do_work();
+    val result = do_work();
     println("{:?}", result);
 }
 "#,
@@ -280,7 +280,7 @@ fn test_dbg_macro() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = dbg(42);
+    val x = dbg(42);
     println("{}", x);
 }
 "#,
@@ -295,12 +295,12 @@ fn test_option_map() {
 fn double(x: Int) -> Int { x * 2 }
 
 fn main() {
-    let x = Some(21);
-    let y = x.map(double);
+    val x = Some(21);
+    val y = x.map(double);
     println("{:?}", y);
 
-    let z = None;
-    let w = z.map(double);
+    val z = None;
+    val w = z.map(double);
     println("{:?}", w);
 }
 "#,
@@ -315,8 +315,8 @@ fn test_result_map() {
 fn double(x: Int) -> Int { x * 2 }
 
 fn main() {
-    let x = Ok(21);
-    let y = x.map(double);
+    val x = Ok(21);
+    val y = x.map(double);
     println("{:?}", y);
 }
 "#,
@@ -329,8 +329,8 @@ fn test_result_ok_to_option() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
-    let y = Err("bad");
+    val x = Ok(42);
+    val y = Err("bad");
     println("{:?} {:?}", x.ok(), y.ok());
 }
 "#,
@@ -343,8 +343,8 @@ fn test_if_let_result() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let x = Ok(42);
-    if let Ok(val) = x {
+    val x = Ok(42);
+    if val Ok(val) = x {
         println("ok: {}", val);
     } else {
         println("err");
@@ -369,8 +369,8 @@ fn find_item(items: List, target: Int) -> Option {
 }
 
 fn main() {
-    let items = [10, 20, 30, 40];
-    let result = find_item(items, 30);
+    val items = [10, 20, 30, 40];
+    val result = find_item(items, 30);
     match result {
         Some(idx) => println("found at {}", idx),
         None => println("not found"),
@@ -394,13 +394,13 @@ fn get_first(v: List) -> Option {
 }
 
 fn process() -> Option {
-    let v = [10, 20, 30];
-    let first = get_first(v)?;
+    val v = [10, 20, 30];
+    val first = get_first(v)?;
     Some(first * 2)
 }
 
 fn main() {
-    let result = process();
+    val result = process();
     println("{:?}", result);
 }
 "#,
@@ -412,7 +412,7 @@ fn main() {
 fn test_option_unwrap_none_panics() {
     let src = r#"
 fn main() {
-    let x = None;
+    val x = None;
     x.unwrap();
 }
 "#;
@@ -428,7 +428,7 @@ fn main() {
 fn test_result_unwrap_err_panics() {
     let src = r#"
 fn main() {
-    let x = Err("bad");
+    val x = Err("bad");
     x.unwrap();
 }
 "#;
@@ -445,7 +445,7 @@ fn test_int_parse() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = Int::parse("42");
+    val r = Int::parse("42");
     println("{}", r.unwrap());
 }
 "#,
@@ -458,7 +458,7 @@ fn test_int_parse_invalid() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = Int::parse("abc");
+    val r = Int::parse("abc");
     println("{}", r.is_err());
 }
 "#,
@@ -471,7 +471,7 @@ fn test_float_parse() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = Float::parse("3.14");
+    val r = Float::parse("3.14");
     println("{}", r.unwrap());
 }
 "#,
@@ -497,7 +497,7 @@ fn test_string_parse_int_method() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = "42".parse_int();
+    val r = "42".parse_int();
     println("{}", r.unwrap());
 }
 "#,
@@ -510,7 +510,7 @@ fn test_string_parse_float_method() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = "3.14".parse_float();
+    val r = "3.14".parse_float();
     println("{}", r.unwrap());
 }
 "#,

@@ -16,14 +16,14 @@ fn greet(name: String) -> String {
 
 #[test]
 fn test_call_matching_arg_types() {
-    let a: Int = 21;
+    val a: Int = 21;
     assert_eq(sum(a), 42);
 }
 
 #[test]
 fn test_call_int_promotion_ok() {
     // Any-integer-accepts-any-integer is allowed (wrapping at runtime).
-    let n: Int = 10;
+    val n: Int = 10;
     assert_eq(add(n, 5), 15);
 }
 
@@ -36,26 +36,26 @@ fn test_call_string_arg_ok() {
 fn test_call_string_for_int_param_rejected() {
     // The original bug: sum expects Int but got a String → "stringstring".
     // After the fix this must be a compile-time TypeError.
-    let _ = sum("string");
+    val _ = sum("string");
 }
 
 #[compile_error]
 fn test_call_string_for_int_param_via_let_rejected() {
-    let s = "string".to_string();
-    let _ = sum(s);
+    val s = "string".to_string();
+    val _ = sum(s);
 }
 
 #[compile_error]
 fn test_call_int_for_string_param_rejected() {
-    let _ = greet(42);
+    val _ = greet(42);
 }
 
 #[compile_error]
 fn test_call_too_few_args_rejected() {
-    let _ = add(1);
+    val _ = add(1);
 }
 
 #[compile_error]
 fn test_call_too_many_args_rejected() {
-    let _ = add(1, 2, 3);
+    val _ = add(1, 2, 3);
 }

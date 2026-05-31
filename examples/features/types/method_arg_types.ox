@@ -20,44 +20,44 @@ impl Counter {
 
 #[test]
 fn test_method_call_matching_arg() {
-    let c = Counter::new();
+    val c = Counter::new();
     assert_eq(c.add(5), 5);
 }
 
 #[test]
 fn test_method_call_string_arg() {
-    let c = Counter::new();
+    val c = Counter::new();
     assert_eq(c.label("count".to_string()), "count: 0".to_string());
 }
 
 #[test]
 fn test_path_call_with_correct_types() {
-    let c = Counter::new();
+    val c = Counter::new();
     assert_eq(c.add(10), 10);
 }
 
 #[compile_error]
 fn test_method_call_string_for_int_param_rejected() {
-    let c = Counter::new();
-    let _ = c.add("five".to_string());
+    val c = Counter::new();
+    val _ = c.add("five".to_string());
 }
 
 #[compile_error]
 fn test_method_call_int_for_string_param_rejected() {
-    let c = Counter::new();
-    let _ = c.label(42);
+    val c = Counter::new();
+    val _ = c.label(42);
 }
 
 #[compile_error]
 fn test_method_call_too_few_args_rejected() {
-    let c = Counter::new();
-    let _ = c.add();
+    val c = Counter::new();
+    val _ = c.add();
 }
 
 #[compile_error]
 fn test_method_call_too_many_args_rejected() {
-    let c = Counter::new();
-    let _ = c.add(1, 2);
+    val c = Counter::new();
+    val _ = c.add(1, 2);
 }
 
 // Path-call variant: Counter::add(c, 5) doesn't compile in Oxy since
@@ -77,10 +77,10 @@ fn test_path_call_matching_args() {
 
 #[compile_error]
 fn test_path_call_string_for_int_rejected() {
-    let _ = math::scale("3".to_string(), 4);
+    val _ = math::scale("3".to_string(), 4);
 }
 
 #[compile_error]
 fn test_path_call_arity_mismatch_rejected() {
-    let _ = math::scale(3);
+    val _ = math::scale(3);
 }

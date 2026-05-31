@@ -17,7 +17,7 @@
 // - "Islands" → DFS + grid modification
 
 fn main() {
-    let grid = [
+    val grid = [
         ['1', '1', '1', '1', '0'],
         ['1', '1', '0', '1', '0'],
         ['1', '1', '0', '0', '0'],
@@ -27,8 +27,8 @@ fn main() {
 }
 
 fn dfs(grid: List, i: Int, j: Int) -> List {
-    let rows = grid.len();
-    let cols = grid[0].len();
+    val rows = grid.len();
+    val cols = grid[0].len();
     if i < 0 || i >= rows || j < 0 || j >= cols {
         return grid;
     }
@@ -36,11 +36,11 @@ fn dfs(grid: List, i: Int, j: Int) -> List {
         return grid;
     }
     // Mark as visited by setting to '0'
-    let mut row = grid[i];
+    var row = grid[i];
     row[j] = '0';
     grid[i] = row;
     // Recurse in 4 directions
-    let mut g = dfs(grid, i + 1, j);
+    var g = dfs(grid, i + 1, j);
     g = dfs(g, i - 1, j);
     g = dfs(g, i, j + 1);
     g = dfs(g, i, j - 1);
@@ -51,10 +51,10 @@ fn num_islands(grid: List) -> Int {
     if grid.len() == 0 {
         return 0;
     }
-    let rows = grid.len();
-    let cols = grid[0].len();
-    let mut count = 0;
-    let mut g = grid;
+    val rows = grid.len();
+    val cols = grid[0].len();
+    var count = 0;
+    var g = grid;
     for i in 0..rows {
         for j in 0..cols {
             if g[i][j] == '1' {
@@ -68,7 +68,7 @@ fn num_islands(grid: List) -> Int {
 
 #[test]
 fn test_example() {
-    let grid = [
+    val grid = [
         ['1', '1', '1', '1', '0'],
         ['1', '1', '0', '1', '0'],
         ['1', '1', '0', '0', '0'],
@@ -79,7 +79,7 @@ fn test_example() {
 
 #[test]
 fn test_multiple() {
-    let grid = [
+    val grid = [
         ['1', '1', '0', '0', '0'],
         ['1', '1', '0', '0', '0'],
         ['0', '0', '1', '0', '0'],

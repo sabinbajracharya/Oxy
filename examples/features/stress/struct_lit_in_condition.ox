@@ -7,8 +7,8 @@ const THRESHOLD: Int = 50;
 
 #[test]
 fn test_const_in_if_condition() {
-    let score = 95;
-    let mut got = "above".to_string();
+    val score = 95;
+    var got = "above".to_string();
     if score < MAX_SIZE {
         got = "below".to_string();
     }
@@ -17,8 +17,8 @@ fn test_const_in_if_condition() {
 
 #[test]
 fn test_const_in_else_if_condition() {
-    let n = 25;
-    let label = if n > MAX_SIZE {
+    val n = 25;
+    val label = if n > MAX_SIZE {
         "big".to_string()
     } else if n > THRESHOLD {
         "med".to_string()
@@ -30,7 +30,7 @@ fn test_const_in_else_if_condition() {
 
 #[test]
 fn test_const_in_while_condition() {
-    let mut i = 0;
+    var i = 0;
     while i < MAX_SIZE {
         i = i + 1;
         if i > 5 { break; }
@@ -42,7 +42,7 @@ const LIMIT: Int = 5;
 
 #[test]
 fn test_uppercase_const_in_for_range() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..LIMIT {
         sum = sum + i;
     }
@@ -53,6 +53,6 @@ fn test_uppercase_const_in_for_range() {
 struct Pt { x: Int, y: Int }
 #[test]
 fn test_struct_init_still_works_outside_headers() {
-    let p = Pt { x: 1, y: 2 };
+    val p = Pt { x: 1, y: 2 };
     assert_eq(p.x + p.y, 3);
 }

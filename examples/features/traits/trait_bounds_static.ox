@@ -18,6 +18,6 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_trait_static_method_bound() {
-    let z = make_zero::<Int>();
+    val z = make_zero::<Int>();
     assert_eq(z, 0);
 }

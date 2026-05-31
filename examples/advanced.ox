@@ -12,7 +12,7 @@ fn main() {
     println("Version: {}", VERSION);
 
     // Map
-    let mut scores = Map::new();
+    var scores = Map::new();
     scores.insert("alice", 95);
     scores.insert("bob", 87);
     scores.insert("carol", 92);
@@ -29,12 +29,12 @@ fn main() {
     }
 
     // Tuple destructuring in for loops
-    let pairs = [(1, "one"), (2, "two"), (3, "three")];
+    val pairs = [(1, "one"), (2, "two"), (3, "three")];
     for (num, word) in pairs {
         println("{} = {}", num, word);
     }
 
     // CLI args
-    let args = std::env::args();
+    val args = std::env::args();
     println("Program args: {:?}", args);
 }

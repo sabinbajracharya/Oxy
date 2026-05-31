@@ -23,20 +23,20 @@
 // - O(n) time, O(n) space
 
 fn main() {
-    let nums = [1, 1, 1];
+    val nums = [1, 1, 1];
     println("{}", subarray_sum(nums, 2));
 }
 
 fn subarray_sum(nums: List, k: Int) -> Int {
-    let mut count = 0;
-    let mut sum = 0;
-    let mut seen = Map::new();
+    var count = 0;
+    var sum = 0;
+    var seen = Map::new();
     seen.insert(0, 1);
     for num in nums {
         sum = sum + num;
-        let target = sum - k;
+        val target = sum - k;
         count = count + seen.get(target).unwrap_or(0);
-        let existing = seen.get(sum).unwrap_or(0);
+        val existing = seen.get(sum).unwrap_or(0);
         seen.insert(sum, existing + 1);
     }
     count

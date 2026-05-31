@@ -23,31 +23,31 @@
 // - Map for counting: .get_or(key, 0) pattern
 
 fn main() {
-    let nums = [1, 1, 1, 2, 2, 3];
+    val nums = [1, 1, 1, 2, 2, 3];
     println("{:?}", top_k_frequent(nums, 2));
 }
 
 fn top_k_frequent(nums: List, k: Int) -> List {
     // Count frequencies
-    let mut counts = Map::new();
+    var counts = Map::new();
     for num in nums {
-        let count = counts.get(num).unwrap_or(0);
+        val count = counts.get(num).unwrap_or(0);
         counts.insert(num, count + 1);
     }
     // Collect as (freq, num) pairs and sort by frequency descending
-    let mut pairs = [];
+    var pairs = [];
     for (num, freq) in counts {
         pairs.push((freq, num));
     }
     pairs.sort_by(|a, b| {
-        let (fa, _) = a;
-        let (fb, _) = b;
+        val (fa, _) = a;
+        val (fb, _) = b;
         if fa > fb { -1 } else if fa < fb { 1 } else { 0 }
     });
-    let mut result = [];
-    let limit = if k < pairs.len() { k } else { pairs.len() };
+    var result = [];
+    val limit = if k < pairs.len() { k } else { pairs.len() };
     for i in 0..limit {
-        let (_, num) = pairs[i];
+        val (_, num) = pairs[i];
         result.push(num);
     }
     result
@@ -55,8 +55,8 @@ fn top_k_frequent(nums: List, k: Int) -> List {
 
 #[test]
 fn test_example() {
-    let nums = [1, 1, 1, 2, 2, 3];
-    let result = top_k_frequent(nums, 2);
+    val nums = [1, 1, 1, 2, 2, 3];
+    val result = top_k_frequent(nums, 2);
     assert_eq(result.len(), 2);
     assert(result.contains(1));
     assert(result.contains(2));

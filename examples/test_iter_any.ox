@@ -1,6 +1,6 @@
 fn main() {
-    let v = [1, 2, 3, 4, 5];
+    val v = [1, 2, 3, 4, 5];
     println("before any");
-    let result = v.iter().any(|x| x % 2 == 0);
+    val result = v.iter().any(|x| x % 2 == 0);
     println("{}", result);
 }

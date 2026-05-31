@@ -59,14 +59,14 @@ mod shapes {
 #[test]
 fn test_struct_in_module() {
     use shapes::Point;
-    let p = Point { x: 1.0, y: 2.0 };
+    val p = Point { x: 1.0, y: 2.0 };
     assert_eq(p.x, 1.0);
     assert_eq(p.y, 2.0);
 }
 
 #[test]
 fn test_struct_via_qualified_path() {
-    let p = shapes::make_point(3.0, 4.0);
+    val p = shapes::make_point(3.0, 4.0);
     assert_eq(p.x, 3.0);
     assert_eq(p.y, 4.0);
 }
@@ -91,7 +91,7 @@ mod colors {
 #[test]
 fn test_enum_in_module() {
     use colors::Color;
-    let c = Color::Red;
+    val c = Color::Red;
     assert_eq(colors::is_red(c), true);
 }
 
@@ -137,7 +137,7 @@ mod counter {
 #[test]
 fn test_impl_in_module() {
     use counter::Counter;
-    let c = Counter::new();
-    let c2 = c.inc();
+    val c = Counter::new();
+    val c2 = c.inc();
     assert_eq(c2.count, 1);
 }

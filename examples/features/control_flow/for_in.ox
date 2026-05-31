@@ -6,7 +6,7 @@
 
 #[test]
 fn test_for_range() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..5 {
         sum = sum + i;
     }
@@ -15,7 +15,7 @@ fn test_for_range() {
 
 #[test]
 fn test_for_range_empty() {
-    let mut count = 0;
+    var count = 0;
     for i in 0..0 {
         count = count + 1;
     }
@@ -24,7 +24,7 @@ fn test_for_range_empty() {
 
 #[test]
 fn test_for_range_single() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 5..6 {
         sum = sum + i;
     }
@@ -33,7 +33,7 @@ fn test_for_range_single() {
 
 #[test]
 fn test_for_range_large() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..100 {
         sum = sum + i;
     }
@@ -44,7 +44,7 @@ fn test_for_range_large() {
 
 #[test]
 fn test_for_string() {
-    let mut chars = "";
+    var chars = "";
     for c in "abc" {
         chars = chars + c;
     }
@@ -56,8 +56,8 @@ fn test_for_string() {
 
 #[test]
 fn test_for_list() {
-    let items = "a,b,c".split(",");
-    let mut count = 0;
+    val items = "a,b,c".split(",");
+    var count = 0;
     for item in items {
         count = count + 1;
     }
@@ -68,7 +68,7 @@ fn test_for_list() {
 
 #[test]
 fn test_for_break() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..10 {
         if i == 5 {
             break;
@@ -82,7 +82,7 @@ fn test_for_break() {
 
 #[test]
 fn test_for_continue() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..10 {
         if i % 2 == 0 {
             continue;
@@ -96,7 +96,7 @@ fn test_for_continue() {
 
 #[test]
 fn test_for_labeled_break() {
-    let mut count = 0;
+    var count = 0;
     'outer: for i in 0..5 {
         for j in 0..5 {
             count = count + 1;
@@ -112,7 +112,7 @@ fn test_for_labeled_break() {
 
 #[test]
 fn test_nested_for() {
-    let mut pairs = 0;
+    var pairs = 0;
     for i in 0..3 {
         for j in 0..3 {
             pairs = pairs + 1;
@@ -125,7 +125,7 @@ fn test_nested_for() {
 
 #[test]
 fn test_for_reversed_range() {
-    let mut count = 0;
+    var count = 0;
     for i in 5..0 {
         count = count + 1;
     }

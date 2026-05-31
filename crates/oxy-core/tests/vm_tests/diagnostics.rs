@@ -24,7 +24,7 @@ fn test_did_you_mean_suggestion() {
     let result = run_compiled(
         r#"
 fn main() {
-    let name = "Alice";
+    val name = "Alice";
     println("{}", nme);
 }
 "#,
@@ -39,7 +39,7 @@ fn test_no_suggestion_for_distant_name() {
     let result = run_compiled(
         r#"
 fn main() {
-    let x = 1;
+    val x = 1;
     println("{}", completely_different);
 }
 "#,
@@ -53,7 +53,7 @@ fn main() {
 fn test_stack_trace_on_runtime_error() {
     let source = r#"
 fn inner() {
-    let x = 1 / 0;
+    val x = 1 / 0;
 }
 fn outer() {
     inner();

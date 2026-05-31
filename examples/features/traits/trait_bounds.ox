@@ -20,7 +20,7 @@ fn print_val<T: AsText>(x: T) -> String {
 
 #[test]
 fn test_basic_trait_bound() {
-    let s = print_val(42);
+    val s = print_val(42);
     assert_eq(s, "42");
 }
 
@@ -42,7 +42,7 @@ fn double_and_print<T: AsText + Doublable>(x: T) -> String {
 
 #[test]
 fn test_multiple_bounds() {
-    let s = double_and_print(10);
+    val s = double_and_print(10);
     assert_eq(s, "20");
 }
 
@@ -55,7 +55,7 @@ fn add_str<T: AsText>(x: T) -> String
 
 #[test]
 fn test_where_clause() {
-    let s = add_str(99);
+    val s = add_str(99);
     assert_eq(s, "99");
 }
 
@@ -68,7 +68,7 @@ fn transform<T: AsText + Doublable>(x: T) -> String
 
 #[test]
 fn test_where_clause_multi() {
-    let s = transform(5);
+    val s = transform(5);
     assert_eq(s, "10");
 }
 
@@ -84,7 +84,7 @@ fn show_wrapper<T: AsText>(w: Wrapper<T>) -> String {
 
 #[test]
 fn test_trait_bound_on_struct() {
-    let w = Wrapper { inner: 7 };
-    let s = show_wrapper(w);
+    val w = Wrapper { inner: 7 };
+    val s = show_wrapper(w);
     assert_eq(s, "7");
 }

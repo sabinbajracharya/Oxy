@@ -12,7 +12,7 @@ fn greet(name: String) {
     println("Hello, {}!", name);
 }
 fn main() {
-    let name = "Oxy";
+    val name = "Oxy";
     greet(name);
 }
 "#,
@@ -54,7 +54,7 @@ fn main() {}
 
 #[test]
 fn test_reject_amp_prefix_expression() {
-    let result = run_compiled(r#"fn main() { let x = 5; let r = &x; println("{}", r); }"#);
+    let result = run_compiled(r#"fn main() { val x = 5; val r = &x; println("{}", r); }"#);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -76,7 +76,7 @@ impl Counter {
     }
 }
 fn main() {
-    let c = Counter { n: 5 };
+    val c = Counter { n: 5 };
     println("{}", c.bump());
 }"#,
     );
@@ -111,7 +111,7 @@ impl Counter {
     }
 }
 fn main() {
-    let c = Counter { n: 5 };
+    val c = Counter { n: 5 };
     println("{}", c.try_bump());
 }"#,
     );
@@ -125,7 +125,7 @@ fn test_immutable_let_field_assign_rejected() {
         r#"
 struct PoInt { x: Int }
 fn main() {
-    let p = PoInt { x: 1 };
+    val p = PoInt { x: 1 };
     p.x = 42;
 }"#,
     );
@@ -145,7 +145,7 @@ fn test_mut_let_field_assign_works() {
         r#"
 struct PoInt { x: Int }
 fn main() {
-    let mut p = PoInt { x: 1 };
+    var p = PoInt { x: 1 };
     p.x = 42;
     println("{}", p.x);
 }"#,

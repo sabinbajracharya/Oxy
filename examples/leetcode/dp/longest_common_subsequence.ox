@@ -28,21 +28,21 @@ fn main() {
 }
 
 fn longest_common_subsequence(text1: String, text2: String) -> Int {
-    let m = text1.len();
-    let n = text2.len();
+    val m = text1.len();
+    val n = text2.len();
     // Use two rows for O(n) space
-    let mut prev = [];
-    let mut cur = [];
-    let mut j = 0;
+    var prev = [];
+    var cur = [];
+    var j = 0;
     while j <= n {
         prev.push(0);
         cur.push(0);
         j = j + 1;
     }
-    let mut i = 1;
+    var i = 1;
     while i <= m {
         cur[0] = 0;
-        let mut j = 1;
+        var j = 1;
         while j <= n {
             if text1.char_at(i - 1) == text2.char_at(j - 1) {
                 cur[j] = prev[j - 1] + 1;
@@ -52,7 +52,7 @@ fn longest_common_subsequence(text1: String, text2: String) -> Int {
             j = j + 1;
         }
         // Swap rows
-        let tmp = prev;
+        val tmp = prev;
         prev = cur;
         cur = tmp;
         i = i + 1;

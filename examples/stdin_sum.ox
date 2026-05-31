@@ -4,10 +4,10 @@
 // Typical Advent-of-Code pattern: slurp stdin, iterate lines, parse, sum.
 
 fn main() {
-    let input = std::io::read_to_string().unwrap();
-    let mut total = 0;
+    val input = std::io::read_to_string().unwrap();
+    var total = 0;
     for line in input.lines() {
-        let trimmed = line.trim();
+        val trimmed = line.trim();
         if trimmed.len() == 0 {
             continue;
         }

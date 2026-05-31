@@ -29,15 +29,15 @@ fn main() {
 }
 
 fn is_palindrome(s: String) -> bool {
-    let mut left = 0;
-    let mut right = s.len() - 1;
+    var left = 0;
+    var right = s.len() - 1;
     while left < right {
-        let lch = s.char_at(left);
+        val lch = s.char_at(left);
         if !lch.is_alphanumeric() {
             left = left + 1;
             continue;
         }
-        let rch = s.char_at(right);
+        val rch = s.char_at(right);
         if !rch.is_alphanumeric() {
             right = right - 1;
             continue;

@@ -21,19 +21,19 @@ fn main() {
 
     // --- Serialize a List ---
     println("\n=== List ===");
-    let numbers = [1, 2, 3, 4, 5];
+    val numbers = [1, 2, 3, 4, 5];
     println("{}", json::serialize(numbers).unwrap());
 
     // --- Serialize a Map ---
     println("\n=== Map ===");
-    let mut config = Map::new();
+    var config = Map::new();
     config.insert("host", "localhost");
     config.insert("port", "8080");
     println("{}", json::serialize(config).unwrap());
 
     // --- Serialize a Struct ---
     println("\n=== Struct ===");
-    let alice = Person { name: "Alice".to_string(), age: 30 };
+    val alice = Person { name: "Alice".to_string(), age: 30 };
     println("{}", json::serialize(alice).unwrap());
 
     // --- Serialize Enums ---
@@ -42,36 +42,36 @@ fn main() {
 
     // --- Pretty printing ---
     println("\n=== Pretty Print ===");
-    let data = [1, 2, 3];
+    val data = [1, 2, 3];
     println("{}", json::to_string_pretty(data).unwrap());
 
     // --- Deserialize JSON ---
     println("\n=== Deserialize ===");
-    let parsed = json::deserialize("{\"name\": \"Bob\", \"age\": 25}").unwrap();
-    let name = parsed.get("name").unwrap();
-    let age = parsed.get("age").unwrap();
+    val parsed = json::deserialize("{\"name\": \"Bob\", \"age\": 25}").unwrap();
+    val name = parsed.get("name").unwrap();
+    val age = parsed.get("age").unwrap();
     println("Name: {}, Age: {:?}", name, age);
 
-    let arr = json::parse("[10, 20, 30]").unwrap();
+    val arr = json::parse("[10, 20, 30]").unwrap();
     println("Array: {:?}", arr);
 
     // --- Round-trip ---
     println("\n=== Round-trip ===");
-    let original = [100, 200, 300];
-    let json_str = json::serialize(original).unwrap();
+    val original = [100, 200, 300];
+    val json_str = json::serialize(original).unwrap();
     println("JSON:   {}", json_str);
-    let restored = json::deserialize(json_str).unwrap();
+    val restored = json::deserialize(json_str).unwrap();
     println("Parsed: {:?}", restored);
 
     // --- .to_json() method ---
     println("\n=== .to_json() method ===");
-    let v = [1, 2, 3];
+    val v = [1, 2, 3];
     println("{}", v.to_json().unwrap());
 
     // --- Typed deserialization ---
     println("\n=== Typed Deserialization ===");
-    let json_str = "{\"name\": \"Charlie\", \"age\": 40}";
-    let person = json::from_struct(json_str, "Person").unwrap();
+    val json_str = "{\"name\": \"Charlie\", \"age\": 40}";
+    val person = json::from_struct(json_str, "Person").unwrap();
     println("{:?}", person);
 
     println("\nDone!");

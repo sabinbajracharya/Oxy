@@ -23,7 +23,7 @@ impl Greet for Person {
 }
 
 fn main() {
-    let p = Person { name: String::from("Alice") };
+    val p = Person { name: String::from("Alice") };
     println("{}", p.greet());
 }
 "#,
@@ -55,7 +55,7 @@ impl Shape for Circle {
 }
 
 fn main() {
-    let c = Circle { radius: 5.0 };
+    val c = Circle { radius: 5.0 };
     println("{}: {}", c.name(), c.area());
 }
 "#,
@@ -85,7 +85,7 @@ impl Describable for Dog {
 }
 
 fn main() {
-    let d = Dog { breed: String::from("Labrador") };
+    val d = Dog { breed: String::from("Labrador") };
     println("{}", d.describe());
 }
 "#,
@@ -98,10 +98,10 @@ fn test_format_macro() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let s = format("Hello, {}!", "world");
+    val s = format("Hello, {}!", "world");
     println("{}", s);
-    let n = 42;
-    let msg = format("The answer is {}", n);
+    val n = 42;
+    val msg = format("The answer is {}", n);
     println("{}", msg);
 }
 "#,
@@ -131,9 +131,9 @@ impl Add for Vec2 {
 }
 
 fn main() {
-    let a = Vec2::new(1.0, 2.0);
-    let b = Vec2::new(3.0, 4.0);
-    let c = a + b;
+    val a = Vec2::new(1.0, 2.0);
+    val b = Vec2::new(3.0, 4.0);
+    val c = a + b;
     println("{} {}", c.x, c.y);
 }
 "#,
@@ -157,9 +157,9 @@ impl Mul for Vec2 {
 }
 
 fn main() {
-    let a = Vec2 { x: 2.0, y: 3.0 };
-    let b = Vec2 { x: 4.0, y: 5.0 };
-    let c = a * b;
+    val a = Vec2 { x: 2.0, y: 3.0 };
+    val b = Vec2 { x: 4.0, y: 5.0 };
+    val c = a * b;
     println("{} {}", c.x, c.y);
 }
 "#,
@@ -176,8 +176,8 @@ fn identity<T>(x: T) -> T {
 }
 
 fn main() {
-    let a = identity(42);
-    let b = identity("hello");
+    val a = identity(42);
+    val b = identity("hello");
     println("{} {}", a, b);
 }
 "#,
@@ -228,7 +228,7 @@ impl Summary for Article {
 }
 
 fn main() {
-    let a = Article::new(String::from("Oxy"), String::from("A Rust-like language"));
+    val a = Article::new(String::from("Oxy"), String::from("A Rust-like language"));
     println("{}", a.summarize());
 }
 "#,
@@ -265,7 +265,7 @@ impl Farewell for Person {
 }
 
 fn main() {
-    let p = Person { name: String::from("Bob") };
+    val p = Person { name: String::from("Bob") };
     println("{}", p.greet());
     println("{}", p.farewell());
 }
@@ -279,7 +279,7 @@ fn test_string_from() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let s = String::from("hello");
+    val s = String::from("hello");
     println("{}", s);
 }
 "#,
@@ -312,7 +312,7 @@ impl Describe for Color {
 }
 
 fn main() {
-    let c = Color::Green;
+    val c = Color::Green;
     println("{}", c.describe());
 }
 "#,
@@ -325,8 +325,8 @@ fn test_clone_method_on_string() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let s = String::from("hello");
-    let s2 = s.clone();
+    val s = String::from("hello");
+    val s2 = s.clone();
     println("{} {}", s, s2);
 }
 "#,
@@ -340,7 +340,7 @@ fn test_type_alias() {
         r#"
 type Meters = Float;
 fn main() {
-    let d: Meters = 42.0;
+    val d: Meters = 42.0;
     println("{}", d);
 }
 "#,
@@ -411,7 +411,7 @@ fn test_derive_debug() {
 struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let p = PoInt { x: 1.0, y: 2.0 };
+    val p = PoInt { x: 1.0, y: 2.0 };
     println("{:?}", p);
 }
 "#,
@@ -427,8 +427,8 @@ fn test_derive_clone() {
 struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let p = PoInt { x: 1.0, y: 2.0 };
-    let p2 = p.clone();
+    val p = PoInt { x: 1.0, y: 2.0 };
+    val p2 = p.clone();
     println("{} {}", p2.x, p2.y);
 }
 "#,
@@ -444,9 +444,9 @@ fn test_derive_partial_eq() {
 struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let a = PoInt { x: 1.0, y: 2.0 };
-    let b = PoInt { x: 1.0, y: 2.0 };
-    let c = PoInt { x: 3.0, y: 4.0 };
+    val a = PoInt { x: 1.0, y: 2.0 };
+    val b = PoInt { x: 1.0, y: 2.0 };
+    val c = PoInt { x: 3.0, y: 4.0 };
     println("{}", a == b);
     println("{}", a == c);
 }
@@ -463,8 +463,8 @@ fn test_derive_multiple() {
 struct Color { r: Int, g: Int, b: Int }
 
 fn main() {
-    let c1 = Color { r: 255, g: 0, b: 0 };
-    let c2 = c1.clone();
+    val c1 = Color { r: 255, g: 0, b: 0 };
+    val c2 = c1.clone();
     println("{:?}", c1);
     println("{}", c1 == c2);
 }
@@ -481,7 +481,7 @@ fn test_derive_default() {
 struct Config { width: Int, height: Int, title: String }
 
 fn main() {
-    let c = Config::default();
+    val c = Config::default();
     println("{:?}", c);
 }
 "#,
@@ -531,8 +531,8 @@ fn test_no_derive_clone_error() {
 struct Foo { x: Int }
 
 fn main() {
-    let f = Foo { x: 1 };
-    let f2 = f.clone();
+    val f = Foo { x: 1 };
+    val f2 = f.clone();
     println("{}", f2.x);
 }
 "#,
@@ -548,7 +548,7 @@ fn test_attribute_ignored_unknown() {
 struct Foo { x: Int }
 
 fn main() {
-    let f = Foo { x: 42 };
+    val f = Foo { x: 42 };
     println("{}", f.x);
 }
 "#,
@@ -564,8 +564,8 @@ fn test_derive_enum_clone() {
 enum Shape { Circle(Float), Square(Float) }
 
 fn main() {
-    let s = Shape::Circle(5.0);
-    let s2 = s.clone();
+    val s = Shape::Circle(5.0);
+    val s2 = s.clone();
     println("{:?}", s2);
 }
 "#,
@@ -580,7 +580,7 @@ fn test_type_alias_struct() {
             struct PoInt { x: Float, y: Float }
             type Pos = PoInt;
             fn main() {
-                let p = Pos { x: 1.0, y: 2.0 };
+                val p = Pos { x: 1.0, y: 2.0 };
                 println("{} {}", p.x, p.y);
             }
             "#,
@@ -594,7 +594,7 @@ fn test_type_alias_enum() {
         r#"
             enum Dir { Up, Down }
             type Direction = Dir;
-            fn main() { let d = Direction::Up; }
+            fn main() { val d = Direction::Up; }
             "#,
     )
     .unwrap();
@@ -608,7 +608,7 @@ fn test_type_alias_associated_fn() {
             impl PoInt { fn origin() -> PoInt { PoInt { x: 0.0, y: 0.0 } } }
             type P = PoInt;
             fn main() {
-                let p = P::origin();
+                val p = P::origin();
                 println("{} {}", p.x, p.y);
             }
             "#,

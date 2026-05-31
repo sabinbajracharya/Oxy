@@ -20,7 +20,7 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_mono_single_impl() {
-    let z = make_zero::<Int>();
+    val z = make_zero::<Int>();
     assert_eq(z, 0);
 }
 
@@ -34,8 +34,8 @@ impl Zero for Float {
 
 #[test]
 fn test_mono_multi_impl_different_types() {
-    let i: Int = make_zero::<Int>();
-    let f: Float = make_zero::<Float>();
+    val i: Int = make_zero::<Int>();
+    val f: Float = make_zero::<Float>();
     assert_eq(i, 0);
     assert_eq(f, 0.0);
 }
@@ -45,8 +45,8 @@ fn test_mono_multi_impl_different_types() {
 
 #[test]
 fn test_mono_dedup() {
-    let a = make_zero::<Int>();
-    let b = make_zero::<Int>();
+    val a = make_zero::<Int>();
+    val b = make_zero::<Int>();
     assert_eq(a, 0);
     assert_eq(b, 0);
 }
@@ -84,7 +84,7 @@ fn make_pair<A: DefaultValue, B: DefaultValue>() -> Pair<A, B>
 
 #[test]
 fn test_mono_multi_type_args() {
-    let p = make_pair::<Int, String>();
+    val p = make_pair::<Int, String>();
     assert_eq(p.first, 42);
     assert_eq(p.second, "hello");
 }
@@ -97,8 +97,8 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_mono_with_inference() {
-    let a = identity::<Int>(10);
-    let b = identity("hello".to_string());
+    val a = identity::<Int>(10);
+    val b = identity("hello".to_string());
     assert_eq(a, 10);
     assert_eq(b, "hello");
 }

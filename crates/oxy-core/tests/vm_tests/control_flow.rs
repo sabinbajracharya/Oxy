@@ -19,7 +19,7 @@ fn test_if_false() {
 #[test]
 fn test_if_else() {
     let output =
-        run_and_capture(r#"fn main() { let x = if true { 1 } else { 2 }; println("{}", x); }"#);
+        run_and_capture(r#"fn main() { val x = if true { 1 } else { 2 }; println("{}", x); }"#);
     assert_eq!(output, vec!["1\n"]);
 }
 
@@ -50,8 +50,8 @@ fn test_while_loop() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut i = 0;
-    let mut sum = 0;
+    var i = 0;
+    var sum = 0;
     while i < 5 {
         sum += i;
         i += 1;
@@ -75,7 +75,7 @@ fn test_loop_with_break() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut i = 0;
+    var i = 0;
     loop {
         if i >= 3 {
             break;
@@ -94,8 +94,8 @@ fn test_loop_break_value() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut i = 0;
-    let result = loop {
+    var i = 0;
+    val result = loop {
         i += 1;
         if i == 5 {
             break i * 10;
@@ -113,7 +113,7 @@ fn test_continue_in_while() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut i = 0;
+    var i = 0;
     while i < 5 {
         i += 1;
         if i == 3 {
@@ -132,7 +132,7 @@ fn test_for_range() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..5 {
         sum += i;
     }
@@ -148,7 +148,7 @@ fn test_for_range_inclusive() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut sum = 0;
+    var sum = 0;
     for i in 0..=5 {
         sum += i;
     }
@@ -198,8 +198,8 @@ fn test_match_literals() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = 2;
-    let result = match x {
+    val x = 2;
+    val result = match x {
         1 => "one",
         2 => "two",
         3 => "three",
@@ -217,8 +217,8 @@ fn test_match_wildcard() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = 99;
-    let result = match x {
+    val x = 99;
+    val result = match x {
         1 => "one",
         _ => "other",
     };
@@ -234,7 +234,7 @@ fn test_match_with_blocks() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = 1;
+    val x = 1;
     match x {
         1 => {
             println("it's one!");
@@ -254,8 +254,8 @@ fn test_match_string() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let cmd = "hello";
-    let result = match cmd {
+    val cmd = "hello";
+    val result = match cmd {
         "hello" => "greeting",
         "bye" => "farewell",
         _ => "unknown",
@@ -272,8 +272,8 @@ fn test_match_bool() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = true;
-    let s = match x {
+    val x = true;
+    val s = match x {
         true => "yes",
         false => "no",
     };
@@ -289,8 +289,8 @@ fn test_match_variable_binding() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x = 42;
-    let result = match x {
+    val x = 42;
+    val result = match x {
         n => n + 1,
     };
     println("{}", result);
@@ -305,7 +305,7 @@ fn test_match_non_exhaustive_error() {
     let result = run_compiled(
         r#"
 fn main() {
-    let x = 5;
+    val x = 5;
     match x {
         1 => "one",
         2 => "two",
@@ -322,7 +322,7 @@ fn test_nested_loops() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut count = 0;
+    var count = 0;
     for i in 0..3 {
         for j in 0..3 {
             count += 1;
@@ -340,7 +340,7 @@ fn test_loop_in_function() {
     let output = run_and_capture(
         r#"
 fn find_first_multiple(n: Int, target: Int) -> Int {
-    let mut i = 1;
+    var i = 1;
     loop {
         if i * n >= target {
             return i * n;
@@ -403,7 +403,7 @@ fn test_labeled_break_outer() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut i = 0;
+                var i = 0;
                 'outer: loop {
                     i = i + 1;
                     if i > 10 {
@@ -422,7 +422,7 @@ fn test_labeled_break_nested() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut count = 0;
+                var count = 0;
                 'outer: for x in 0..5 {
                     for y in 0..5 {
                         if x == 2 && y == 2 {
@@ -443,7 +443,7 @@ fn test_labeled_continue_outer() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut result = 0;
+                var result = 0;
                 'outer: for x in 0..5 {
                     for y in 0..5 {
                         if y == 2 {
@@ -466,8 +466,8 @@ fn test_match_range_inclusive() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let x = 5;
-                let result = match x {
+                val x = 5;
+                val result = match x {
                     1..=3 => "low",
                     4..=7 => "mid",
                     _ => "other",
@@ -484,8 +484,8 @@ fn test_match_range_exclusive() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let x = 3;
-                let result = match x {
+                val x = 3;
+                val result = match x {
                     1..5 => "yes",
                     _ => "no",
                 };

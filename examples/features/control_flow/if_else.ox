@@ -6,7 +6,7 @@
 
 #[test]
 fn test_if_true_branch() {
-    let mut x = 0;
+    var x = 0;
     if true {
         x = 1;
     }
@@ -15,7 +15,7 @@ fn test_if_true_branch() {
 
 #[test]
 fn test_if_false_skips() {
-    let mut x = 0;
+    var x = 0;
     if false {
         x = 1;
     }
@@ -26,7 +26,7 @@ fn test_if_false_skips() {
 
 #[test]
 fn test_if_else_true() {
-    let mut x = 0;
+    var x = 0;
     if true {
         x = 1;
     } else {
@@ -37,7 +37,7 @@ fn test_if_else_true() {
 
 #[test]
 fn test_if_else_false() {
-    let mut x = 0;
+    var x = 0;
     if false {
         x = 1;
     } else {
@@ -50,8 +50,8 @@ fn test_if_else_false() {
 
 #[test]
 fn test_else_if_chain() {
-    let mut result = 0;
-    let n = 20;
+    var result = 0;
+    val n = 20;
     if n < 10 {
         result = 1;
     } else if n < 30 {
@@ -64,8 +64,8 @@ fn test_else_if_chain() {
 
 #[test]
 fn test_else_if_all_false() {
-    let mut result = 0;
-    let n = 100;
+    var result = 0;
+    val n = 100;
     if n < 10 {
         result = 1;
     } else if n < 30 {
@@ -80,16 +80,16 @@ fn test_else_if_all_false() {
 
 #[test]
 fn test_if_expression() {
-    let x = if true { 10 } else { 20 };
+    val x = if true { 10 } else { 20 };
     assert_eq(x, 10);
 
-    let y = if false { 10 } else { 20 };
+    val y = if false { 10 } else { 20 };
     assert_eq(y, 20);
 }
 
 #[test]
 fn test_if_expression_no_else() {
-    let x = if true { 42 };
+    val x = if true { 42 };
     // No else: returns unit-like value when false
     assert_eq(x, 42);
 }
@@ -98,7 +98,7 @@ fn test_if_expression_no_else() {
 
 #[test]
 fn test_nested_if() {
-    let mut x = 0;
+    var x = 0;
     if true {
         if true {
             x = 42;
@@ -109,7 +109,7 @@ fn test_nested_if() {
 
 #[test]
 fn test_nested_if_else() {
-    let mut x = 0;
+    var x = 0;
     if true {
         if false {
             x = 1;
@@ -124,7 +124,7 @@ fn test_nested_if_else() {
 
 #[test]
 fn test_if_with_less_than() {
-    let mut x = 0;
+    var x = 0;
     if 5 < 10 {
         x = 1;
     }
@@ -133,7 +133,7 @@ fn test_if_with_less_than() {
 
 #[test]
 fn test_if_with_equality() {
-    let mut x = 0;
+    var x = 0;
     if 42 == 42 {
         x = 1;
     }
@@ -142,7 +142,7 @@ fn test_if_with_equality() {
 
 #[test]
 fn test_if_with_not() {
-    let mut x = 0;
+    var x = 0;
     if !false {
         x = 1;
     }
@@ -151,7 +151,7 @@ fn test_if_with_not() {
 
 #[test]
 fn test_if_with_compound_condition() {
-    let mut x = 0;
+    var x = 0;
     if 5 < 10 && 20 > 15 {
         x = 1;
     }
@@ -162,8 +162,8 @@ fn test_if_with_compound_condition() {
 
 #[test]
 fn test_if_multiple_stmts() {
-    let mut a = 0;
-    let mut b = 0;
+    var a = 0;
+    var b = 0;
     if true {
         a = 1;
         b = 2;
@@ -176,7 +176,7 @@ fn test_if_multiple_stmts() {
 
 #[test]
 fn test_dangling_else() {
-    let mut x = 0;
+    var x = 0;
     if true {
         if false {
             x = 1;

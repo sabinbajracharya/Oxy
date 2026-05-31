@@ -22,17 +22,17 @@
 // - Return -1 for not found
 
 fn main() {
-    let nums = [-1, 0, 3, 5, 9, 12];
+    val nums = [-1, 0, 3, 5, 9, 12];
     println("{}", search(nums, 9));
     println("{}", search(nums, 2));
 }
 
 fn search(nums: List, target: Int) -> Int {
-    let mut left = 0;
-    let mut right = nums.len() - 1;
+    var left = 0;
+    var right = nums.len() - 1;
     while left <= right {
-        let mid = left + (right - left) / 2;
-        let mid_val = nums[mid];
+        val mid = left + (right - left) / 2;
+        val mid_val = nums[mid];
         if mid_val == target {
             return mid;
         } else if mid_val < target {
@@ -46,13 +46,13 @@ fn search(nums: List, target: Int) -> Int {
 
 #[test]
 fn test_found() {
-    let nums = [-1, 0, 3, 5, 9, 12];
+    val nums = [-1, 0, 3, 5, 9, 12];
     assert_eq(search(nums, 9), 4);
 }
 
 #[test]
 fn test_not_found() {
-    let nums = [-1, 0, 3, 5, 9, 12];
+    val nums = [-1, 0, 3, 5, 9, 12];
     assert_eq(search(nums, 2), -1);
 }
 

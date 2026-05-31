@@ -23,16 +23,16 @@
 // - The pivot is never at index 0 if the array was actually rotated
 
 fn main() {
-    let nums = [4, 5, 6, 7, 0, 1, 2];
+    val nums = [4, 5, 6, 7, 0, 1, 2];
     println("{}", search(nums, 0));
     println("{}", search(nums, 3));
 }
 
 fn search(nums: List, target: Int) -> Int {
-    let mut left = 0;
-    let mut right = nums.len() - 1;
+    var left = 0;
+    var right = nums.len() - 1;
     while left <= right {
-        let mid = left + (right - left) / 2;
+        val mid = left + (right - left) / 2;
         if nums[mid] == target {
             return mid;
         }
@@ -57,14 +57,14 @@ fn search(nums: List, target: Int) -> Int {
 
 #[test]
 fn test_found() {
-    let nums = [4, 5, 6, 7, 0, 1, 2];
+    val nums = [4, 5, 6, 7, 0, 1, 2];
     assert_eq(search(nums, 0), 4);
     assert_eq(search(nums, 6), 2);
 }
 
 #[test]
 fn test_not_found() {
-    let nums = [4, 5, 6, 7, 0, 1, 2];
+    val nums = [4, 5, 6, 7, 0, 1, 2];
     assert_eq(search(nums, 3), -1);
 }
 

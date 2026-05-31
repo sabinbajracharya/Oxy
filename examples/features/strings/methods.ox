@@ -129,7 +129,7 @@ fn test_replace_empty() {
 
 #[test]
 fn test_split_basic() {
-    let parts = "a,b,c".split(",");
+    val parts = "a,b,c".split(",");
     assert_eq(parts.len(), 3);
     assert_eq(parts[0], "a");
     assert_eq(parts[1], "b");
@@ -138,21 +138,21 @@ fn test_split_basic() {
 
 #[test]
 fn test_split_no_match() {
-    let parts = "hello".split(",");
+    val parts = "hello".split(",");
     assert_eq(parts.len(), 1);
     assert_eq(parts[0], "hello");
 }
 
 #[test]
 fn test_split_empty_string() {
-    let parts = "".split(",");
+    val parts = "".split(",");
     assert_eq(parts.len(), 1);
     assert_eq(parts[0], "");
 }
 
 #[test]
 fn test_split_by_whitespace() {
-    let parts = "one two three".split(" ");
+    val parts = "one two three".split(" ");
     assert_eq(parts.len(), 3);
 }
 
@@ -160,7 +160,7 @@ fn test_split_by_whitespace() {
 
 #[test]
 fn test_chars_basic() {
-    let chars = "abc".chars();
+    val chars = "abc".chars();
     assert_eq(chars.len(), 3);
     assert_eq(chars[0], 'a');
     assert_eq(chars[1], 'b');
@@ -169,13 +169,13 @@ fn test_chars_basic() {
 
 #[test]
 fn test_chars_empty() {
-    let chars = "".chars();
+    val chars = "".chars();
     assert_eq(chars.len(), 0);
 }
 
 #[test]
 fn test_chars_unicode() {
-    let chars = "héllo".chars();
+    val chars = "héllo".chars();
     assert_eq(chars.len(), 5);
     assert_eq(chars[0], 'h');
     assert_eq(chars[1], 'é');
@@ -236,19 +236,19 @@ fn test_substring_full() {
 
 #[test]
 fn test_parse_int() {
-    let r = "42".parse_int();
+    val r = "42".parse_int();
     assert(r.is_ok());
 }
 
 #[test]
 fn test_parse_int_invalid() {
-    let r = "notanumber".parse_int();
+    val r = "notanumber".parse_int();
     assert(r.is_err());
 }
 
 #[test]
 fn test_parse_float() {
-    let r = "3.14".parse_float();
+    val r = "3.14".parse_float();
     assert(r.is_ok());
 }
 
@@ -256,14 +256,14 @@ fn test_parse_float() {
 
 #[test]
 fn test_clone() {
-    let s = "hello";
-    let s2 = s.clone();
+    val s = "hello";
+    val s2 = s.clone();
     assert_eq(s, s2);
 }
 
 #[test]
 fn test_to_string() {
-    let s = "hello";
+    val s = "hello";
     assert_eq(s.to_string(), "hello");
     assert_eq("".to_string(), "");
 }
@@ -279,6 +279,6 @@ fn test_method_chain() {
 #[test]
 fn test_chain_after_len() {
     // len() returns Int, not a string — but other methods chain on strings
-    let s = "  hi  ".trim();
+    val s = "  hi  ".trim();
     assert_eq(s.len(), 2);
 }

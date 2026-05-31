@@ -13,12 +13,12 @@ fn never_some() -> Option<Int> {
 }
 
 fn outer_result() -> Result<Int, String> {
-    let v = fails()?;
+    val v = fails()?;
     Ok(v + 1)
 }
 
 fn outer_option() -> Option<Int> {
-    let v = never_some()?;
+    val v = never_some()?;
     Some(v + 1)
 }
 
@@ -38,12 +38,12 @@ fn test_question_mark_in_option_fn_ok() {
 #[compile_error]
 fn test_question_mark_in_unit_fn_rejected() {
     // main-style fn returning `()` — `?` would silently drop the Err.
-    let _v = fails()?;
+    val _v = fails()?;
 }
 
 #[compile_error]
 fn test_question_mark_in_int_fn_rejected() -> Int {
-    let _v = fails()?;
+    val _v = fails()?;
     0
 }
 
@@ -51,7 +51,7 @@ fn test_question_mark_in_int_fn_rejected() -> Int {
 fn test_question_mark_on_non_result_rejected() -> Result<Int, String> {
     // `?` requires a Result/Option operand. Calling it on a plain Int
     // is meaningless.
-    let n: Int = 5;
-    let _v = n?;
+    val n: Int = 5;
+    val _v = n?;
     Ok(0)
 }

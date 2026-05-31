@@ -14,7 +14,7 @@ struct PoInt {
 }
 
 fn main() {
-    let p = PoInt { x: 1.0, y: 2.0 };
+    val p = PoInt { x: 1.0, y: 2.0 };
     println("{} {}", p.x, p.y);
 }
 "#,
@@ -32,7 +32,7 @@ struct PoInt {
 }
 
 fn main() {
-    let mut p = PoInt { x: 1.0, y: 2.0 };
+    var p = PoInt { x: 1.0, y: 2.0 };
     p.x = 10.0;
     println("{} {}", p.x, p.y);
 }
@@ -61,7 +61,7 @@ impl PoInt {
 }
 
 fn main() {
-    let p = PoInt::new(3.0, 4.0);
+    val p = PoInt::new(3.0, 4.0);
     p.display();
 }
 "#,
@@ -85,7 +85,7 @@ impl Rect {
 }
 
 fn main() {
-    let r = Rect { w: 5.0, h: 3.0 };
+    val r = Rect { w: 5.0, h: 3.0 };
     println("{}", r.area());
 }
 "#,
@@ -103,7 +103,7 @@ struct PoInt {
 }
 
 fn main() {
-    let p = PoInt { x: 1.0, y: 2.0 };
+    val p = PoInt { x: 1.0, y: 2.0 };
     println("{:?}", p);
 }
 "#,
@@ -122,7 +122,7 @@ enum Color {
 }
 
 fn main() {
-    let c = Color::Red;
+    val c = Color::Red;
     println("{}", c);
 }
 "#,
@@ -140,7 +140,7 @@ enum Shape {
 }
 
 fn main() {
-    let s = Shape::Circle(5.0);
+    val s = Shape::Circle(5.0);
     println("{}", s);
 }
 "#,
@@ -167,9 +167,9 @@ impl Shape {
 }
 
 fn main() {
-    let s = Shape::Circle(5.0);
+    val s = Shape::Circle(5.0);
     println("{}", s.area());
-    let r = Shape::Rectangle(4.0, 3.0);
+    val r = Shape::Rectangle(4.0, 3.0);
     println("{}", r.area());
 }
 "#,
@@ -187,12 +187,12 @@ fn test_enum_match_three_field_tuple_variant() {
 enum E { Three(Int, Int, Int), Four(Int, Int, Int, Int) }
 
 fn main() {
-    let v = E::Three(10, 20, 30);
+    val v = E::Three(10, 20, 30);
     match v {
         E::Three(a, b, c) => println("{} {} {}", a, b, c),
         _ => println("no"),
     }
-    let w = E::Four(1, 2, 3, 4);
+    val w = E::Four(1, 2, 3, 4);
     match w {
         E::Four(a, b, c, d) => println("{} {} {} {}", a, b, c, d),
         _ => println("no"),
@@ -241,8 +241,8 @@ enum Shape {
 }
 
 fn main() {
-    let s = Shape::Circle(2.5);
-    let p = Shape::PoInt;
+    val s = Shape::Circle(2.5);
+    val p = Shape::PoInt;
     println("{:?}", s);
     println("{:?}", p);
 }
@@ -267,11 +267,11 @@ impl PoInt {
 }
 
 fn main() {
-    let p1 = PoInt::new(0.0, 0.0);
-    let p2 = PoInt::new(3.0, 4.0);
-    let dx = p1.x - p2.x;
-    let dy = p1.y - p2.y;
-    let dist_sq = dx * dx + dy * dy;
+    val p1 = PoInt::new(0.0, 0.0);
+    val p2 = PoInt::new(3.0, 4.0);
+    val dx = p1.x - p2.x;
+    val dy = p1.y - p2.y;
+    val dist_sq = dx * dx + dy * dy;
     println("{}", dist_sq);
 }
 "#,
@@ -298,7 +298,7 @@ impl Counter {
 }
 
 fn main() {
-    let c = Counter::new();
+    val c = Counter::new();
     println("{}", c.value());
 }
 "#,
@@ -316,9 +316,9 @@ struct PoInt {
 }
 
 fn main() {
-    let x = 1.0;
-    let y = 2.0;
-    let p = PoInt { x, y };
+    val x = 1.0;
+    val y = 2.0;
+    val p = PoInt { x, y };
     println("{} {}", p.x, p.y);
 }
 "#,
@@ -364,7 +364,7 @@ fn test_struct_field_mutation_via_method() {
             }
 
             fn main() {
-                let mut c = Counter::new();
+                var c = Counter::new();
                 c.inc();
                 c.inc();
                 println("{}", c.count);
@@ -393,7 +393,7 @@ fn test_struct_field_mutation_via_self_push() {
             }
 
             fn main() {
-                let mut s = Stack::new();
+                var s = Stack::new();
                 s.push(10);
                 s.push(20);
                 println("{}", s.items.len());
@@ -409,7 +409,7 @@ fn test_listnode_new() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let n = ListNode::new(5);
+                val n = ListNode::new(5);
                 println("{}", n.val);
                 println("{}", n.next.is_none());
             }
@@ -423,7 +423,7 @@ fn test_treenode_new() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let t = TreeNode::new(10);
+                val t = TreeNode::new(10);
                 println("{}", t.val);
                 println("{}", t.left.is_none());
                 println("{}", t.right.is_none());
@@ -438,8 +438,8 @@ fn test_listnode_linking() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut head = ListNode::new(1);
-                let second = ListNode::new(2);
+                var head = ListNode::new(1);
+                val second = ListNode::new(2);
                 head.next = Some(second);
                 println("{}", head.val);
                 println("{}", head.next.unwrap().val);
@@ -454,9 +454,9 @@ fn test_treenode_linking() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut root = TreeNode::new(5);
-                let left = TreeNode::new(3);
-                let right = TreeNode::new(7);
+                var root = TreeNode::new(5);
+                val left = TreeNode::new(3);
+                val right = TreeNode::new(7);
                 root.left = Some(left);
                 root.right = Some(right);
                 println("{}", root.val);

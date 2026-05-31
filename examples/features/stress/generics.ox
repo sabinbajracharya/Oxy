@@ -5,17 +5,17 @@ struct Wrap<T> { value: T }
 
 #[test]
 fn test_generic_struct_int() {
-    let w = Wrap { value: 42 };
+    val w = Wrap { value: 42 };
     assert_eq(w.value, 42);
 }
 #[test]
 fn test_generic_struct_string() {
-    let w = Wrap { value: "hi".to_string() };
+    val w = Wrap { value: "hi".to_string() };
     assert_eq(w.value, "hi");
 }
 #[test]
 fn test_generic_struct_bool() {
-    let w = Wrap { value: true };
+    val w = Wrap { value: true };
     assert_eq(w.value, true);
 }
 
@@ -24,7 +24,7 @@ struct Pair<A, B> { first: A, second: B }
 
 #[test]
 fn test_generic_multi_param() {
-    let p = Pair { first: 1, second: "one".to_string() };
+    val p = Pair { first: 1, second: "one".to_string() };
     assert_eq(p.first, 1);
     assert_eq(p.second, "one");
 }
@@ -52,7 +52,7 @@ fn returns_value<T>(x: T) -> T { x }
 
 #[test]
 fn test_turbofish_explicit() {
-    let n: Int = returns_value::<Int>(42);
+    val n: Int = returns_value::<Int>(42);
     assert_eq(n, 42);
 }
 
@@ -67,19 +67,19 @@ fn test_generic_over_vec_int() {
 }
 #[test]
 fn test_generic_over_vec_empty() {
-    let v: List<Int> = [];
+    val v: List<Int> = [];
     assert_eq(first_elem(v), None);
 }
 
 // --- nested generic types ---
 #[test]
 fn test_vec_of_option_int() {
-    let v: List<Option<Int>> = [Some(1), None, Some(3)];
+    val v: List<Option<Int>> = [Some(1), None, Some(3)];
     assert_eq(v.len(), 3);
 }
 #[test]
 fn test_option_of_vec_int() {
-    let o: Option<List<Int>> = Some([1, 2, 3]);
+    val o: Option<List<Int>> = Some([1, 2, 3]);
     assert_eq(o.is_some(), true);
 }
 
@@ -88,7 +88,7 @@ use std::collections::Map;
 
 #[test]
 fn test_hashmap_string_int() {
-    let mut m: Map<String, Int> = Map::new();
+    var m: Map<String, Int> = Map::new();
     m.insert("a".to_string(), 1);
     m.insert("b".to_string(), 2);
     assert_eq(m.get("a"), Some(1));
@@ -102,7 +102,7 @@ impl Box1<Int> {
 }
 #[test]
 fn test_generic_struct_concrete_method() {
-    let b = Box1 { v: 7 };
+    val b = Box1 { v: 7 };
     assert_eq(b.get_int(), 7);
 }
 
@@ -113,6 +113,6 @@ impl Stash<Int> {
 }
 #[test]
 fn test_turbofish_on_path_call() {
-    let s: Stash<Int> = Stash::<Int>::new();
+    val s: Stash<Int> = Stash::<Int>::new();
     assert_eq(s.items.len(), 0);
 }

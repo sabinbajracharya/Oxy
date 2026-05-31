@@ -27,45 +27,45 @@ fn sum_both<T>(a: T, b: T) -> T {
 #[test]
 fn test_same_generic_param_same_type_ok() {
     // Both args Int → should compile
-    let _r = sum_both(1, 2);
+    val _r = sum_both(1, 2);
 }
 
 #[test]
 fn test_same_generic_param_string_ok() {
     // Both args String → should compile
-    let _r = sum_both("a".to_string(), "b".to_string());
+    val _r = sum_both("a".to_string(), "b".to_string());
 }
 
 #[compile_error]
 fn test_same_generic_param_int_and_string_rejected() {
     // T bound to Int for first arg, String for second → type mismatch
-    let _r = sum_both(5, "SABOM".to_string());
+    val _r = sum_both(5, "SABOM".to_string());
 }
 
 #[compile_error]
 fn test_same_generic_param_string_and_int_rejected() {
-    let _r = sum_both("hello".to_string(), 42);
+    val _r = sum_both("hello".to_string(), 42);
 }
 
 #[compile_error]
 fn test_same_generic_param_bool_and_int_rejected() {
-    let _r = sum_both(true, 42);
+    val _r = sum_both(true, 42);
 }
 
 // === Single generic param, variable args ===
 
 #[compile_error]
 fn test_same_generic_param_vars_mixed_types_rejected() {
-    let a: Int = 5;
-    let b: String = "world".to_string();
-    let _r = sum_both(a, b);
+    val a: Int = 5;
+    val b: String = "world".to_string();
+    val _r = sum_both(a, b);
 }
 
 #[test]
 fn test_same_generic_param_vars_same_type_ok() {
-    let a: Int = 5;
-    let b: Int = 10;
-    let _r = sum_both(a, b);
+    val a: Int = 5;
+    val b: Int = 10;
+    val _r = sum_both(a, b);
 }
 
 // === Three generic params, mixed violations ===
@@ -76,17 +76,17 @@ fn triple<T>(a: T, b: T, c: T) -> T {
 
 #[test]
 fn test_triple_same_type_ok() {
-    let _r = triple(1, 2, 3);
+    val _r = triple(1, 2, 3);
 }
 
 #[compile_error]
 fn test_triple_first_two_ok_third_mismatch_rejected() {
-    let _r = triple(1, 2, "bad".to_string());
+    val _r = triple(1, 2, "bad".to_string());
 }
 
 #[compile_error]
 fn test_triple_middle_mismatch_rejected() {
-    let _r = triple(1, "bad".to_string(), 3);
+    val _r = triple(1, "bad".to_string(), 3);
 }
 
 // === Multiple generic params, independent types are fine ===
@@ -103,7 +103,7 @@ struct Pair<A, B> {
 #[test]
 fn test_different_generic_params_different_types_ok() {
     // A=Int, B=String — different generic params, should compile
-    let p = make_pair(42, "hello".to_string());
+    val p = make_pair(42, "hello".to_string());
     assert_eq(p.first, 42);
     assert_eq(p.second, "hello");
 }
@@ -111,7 +111,7 @@ fn test_different_generic_params_different_types_ok() {
 #[test]
 fn test_different_generic_params_same_type_ok() {
     // A=Int, B=Int — different params can be same concrete type
-    let p = make_pair(42, 100);
+    val p = make_pair(42, 100);
     assert_eq(p.first, 42);
     assert_eq(p.second, 100);
 }
@@ -124,12 +124,12 @@ fn first_of_three<A, B>(a: A, b: B, c: A) -> A {
 
 #[test]
 fn test_reused_generic_param_same_type_ok() {
-    let _r = first_of_three(1, true, 2);
+    val _r = first_of_three(1, true, 2);
 }
 
 #[compile_error]
 fn test_reused_generic_param_mismatch_rejected() {
-    let _r = first_of_three(1, true, "bad".to_string());
+    val _r = first_of_three(1, true, "bad".to_string());
 }
 
 // === Generic function returning generic type ===
@@ -145,7 +145,7 @@ fn test_choose_same_type_ok() {
 
 #[compile_error]
 fn test_choose_mixed_type_rejected() {
-    let _r = choose(10, "not Int".to_string());
+    val _r = choose(10, "not Int".to_string());
 }
 
 // === Generic with concrete trailing param ===
@@ -174,14 +174,14 @@ struct SameType<T> {
 
 #[test]
 fn test_same_type_struct_same_types_ok() {
-    let s = SameType { a: 10, b: 20 };
+    val s = SameType { a: 10, b: 20 };
     assert_eq(s.a, 10);
     assert_eq(s.b, 20);
 }
 
 #[compile_error]
 fn test_same_type_struct_mixed_types_rejected() {
-    let _s = SameType { a: 10, b: "hello".to_string() };
+    val _s = SameType { a: 10, b: "hello".to_string() };
 }
 
 // === Enum with generic type mismatch ===
@@ -193,12 +193,12 @@ enum MyResult<T, E> {
 
 #[test]
 fn test_result_ok_ok() {
-    let _r: MyResult<Int, String> = MyResult::Ok(42);
+    val _r: MyResult<Int, String> = MyResult::Ok(42);
 }
 
 #[test]
 fn test_result_err_ok() {
-    let _r: MyResult<Int, String> = MyResult::Err("oops".to_string());
+    val _r: MyResult<Int, String> = MyResult::Err("oops".to_string());
 }
 
 // === Impl block method with generics, type mismatch ===
@@ -219,21 +219,21 @@ impl Cell {
 
 #[test]
 fn test_cell_new_ok() {
-    let c = Cell::new(42);
+    val c = Cell::new(42);
     assert_eq(c.value, 42);
 }
 
 #[test]
 fn test_cell_replace_same_type_ok() {
-    let c = Cell::new(10);
-    let c2 = c.replace(20);
+    val c = Cell::new(10);
+    val c2 = c.replace(20);
     assert_eq(c2.value, 20);
 }
 
 #[compile_error]
 fn test_cell_replace_wrong_type_rejected() {
-    let c = Cell::new(10);
-    let _c2 = c.replace("wrong".to_string());
+    val c = Cell::new(10);
+    val _c2 = c.replace("wrong".to_string());
 }
 
 // === Generic function with turbofish, type mismatch ===
@@ -244,7 +244,7 @@ fn id_t<T>(x: T) -> T {
 
 #[test]
 fn test_turbofish_correct_type_ok() {
-    let x = id_t::<Int>(42);
+    val x = id_t::<Int>(42);
     assert_eq(x, 42);
 }
 

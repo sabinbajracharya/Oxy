@@ -3,43 +3,43 @@
 
 #[test]
 fn test_signum_positive_int() {
-    let n: Int = 42;
+    val n: Int = 42;
     assert_eq(n.signum(), 1);
 }
 
 #[test]
 fn test_signum_negative_int() {
-    let n: Int = -17;
+    val n: Int = -17;
     assert_eq(n.signum(), -1);
 }
 
 #[test]
 fn test_signum_zero_int() {
-    let n: Int = 0;
+    val n: Int = 0;
     assert_eq(n.signum(), 0);
 }
 
 #[test]
 fn test_signum_byte_positive() {
-    let b: Byte = 5;
+    val b: Byte = 5;
     assert_eq(b.signum(), 1);
 }
 
 #[test]
 fn test_signum_byte_zero() {
-    let b: Byte = 0;
+    val b: Byte = 0;
     assert_eq(b.signum(), 0);
 }
 
 #[test]
 fn test_signum_float_positive() {
-    let x: Float = 3.14;
+    val x: Float = 3.14;
     assert_eq(x.signum(), 1.0);
 }
 
 #[test]
 fn test_signum_float_negative() {
-    let x: Float = -2.5;
+    val x: Float = -2.5;
     assert_eq(x.signum(), -1.0);
 }
 

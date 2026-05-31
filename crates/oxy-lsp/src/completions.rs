@@ -66,6 +66,8 @@ pub(crate) fn snippet_completions() -> Vec<CompletionItem> {
             "fn ${1:name}(${2:params}) {\n    $0\n}",
             "Function definition",
         ),
+        ("val", "val ${1:name} = ${2:expr};", "Immutable binding"),
+        ("var", "var ${1:name} = ${2:expr};", "Mutable binding"),
         (
             "struct",
             "struct ${1:Name} {\n    $0\n}",
@@ -82,7 +84,7 @@ pub(crate) fn snippet_completions() -> Vec<CompletionItem> {
         ("while", "while ${1:condition} {\n    $0\n}", "While loop"),
         (
             "if let",
-            "if let ${1:pattern} = ${2:expr} {\n    $0\n}",
+            "if val ${1:pattern} = ${2:expr} {\n    $0\n}",
             "If let binding",
         ),
     ];
@@ -447,7 +449,7 @@ fn find_var_type_in_items(items: &[Item], var_name: &str) -> Option<String> {
                     return Some(param.type_ann.name().to_string());
                 }
             }
-            // Check body for let bindings
+            // Check body for val bindings
             if let Some(ty) = find_let_type_in_block(&f.body, var_name) {
                 return Some(ty);
             }

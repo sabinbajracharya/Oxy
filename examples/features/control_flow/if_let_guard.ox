@@ -1,5 +1,5 @@
-// === Feature: if let with && guard ===
-// `if let Pat = expr && guard` is sugar for matching the pattern AND
+// === Feature: if val with && guard ===
+// `if val Pat = expr && guard` is sugar for matching the pattern AND
 // requiring an extra boolean condition. On pattern miss OR guard false,
 // execution falls through to the else branch.
 
@@ -8,7 +8,7 @@ fn main() {}
 // === Guard passes ===
 
 fn positive_only(opt: Option<Int>) -> Int {
-    if let Some(v) = opt && v > 0 {
+    if val Some(v) = opt && v > 0 {
         v
     } else {
         -1
@@ -33,8 +33,8 @@ fn test_iflet_guard_none_fails_pattern() {
 // === Guard without else ===
 
 fn extract_positive(opt: Option<Int>) -> Int {
-    let mut result = 0;
-    if let Some(v) = opt && v > 0 {
+    var result = 0;
+    if val Some(v) = opt && v > 0 {
         result = v;
     }
     result
@@ -58,7 +58,7 @@ fn test_iflet_guard_no_else_none() {
 // === Result with guard ===
 
 fn ok_in_range(r: Result<Int, String>) -> bool {
-    if let Ok(n) = r && n >= 0 && n < 100 {
+    if val Ok(n) = r && n >= 0 && n < 100 {
         true
     } else {
         false
@@ -88,7 +88,7 @@ fn test_iflet_result_guard_err() {
 // === Guard using bound variable in string method ===
 
 fn long_name(opt: Option<String>) -> bool {
-    if let Some(s) = opt && s.len() > 3 {
+    if val Some(s) = opt && s.len() > 3 {
         true
     } else {
         false
@@ -113,9 +113,9 @@ fn test_iflet_guard_string_none() {
 // === Guard with else if chain ===
 
 fn classify(opt: Option<Int>) -> String {
-    if let Some(v) = opt && v > 100 {
+    if val Some(v) = opt && v > 100 {
         "big".to_string()
-    } else if let Some(v) = opt && v > 0 {
+    } else if val Some(v) = opt && v > 0 {
         "small".to_string()
     } else {
         "other".to_string()

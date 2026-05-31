@@ -17,8 +17,8 @@ struct Point { x: Int, y: Int }
 // --- 1. literal patterns ---
 #[test]
 fn test_match_int_literal() {
-    let n = 3;
-    let s = match n {
+    val n = 3;
+    val s = match n {
         0 => "zero",
         1 => "one",
         2 => "two",
@@ -30,8 +30,8 @@ fn test_match_int_literal() {
 
 #[test]
 fn test_match_string_literal() {
-    let s = "hello";
-    let r = match s {
+    val s = "hello";
+    val r = match s {
         "hi" => 1,
         "hello" => 2,
         "bye" => 3,
@@ -42,8 +42,8 @@ fn test_match_string_literal() {
 
 #[test]
 fn test_match_bool_literal() {
-    let b = true;
-    let r = match b {
+    val b = true;
+    val r = match b {
         true => 1,
         false => 0,
     };
@@ -52,8 +52,8 @@ fn test_match_bool_literal() {
 
 #[test]
 fn test_match_char_literal() {
-    let c = 'b';
-    let r = match c {
+    val c = 'b';
+    val r = match c {
         'a' => 1,
         'b' => 2,
         'c' => 3,
@@ -65,8 +65,8 @@ fn test_match_char_literal() {
 // --- 2. wildcard catches anything ---
 #[test]
 fn test_match_wildcard_only() {
-    let n = 999;
-    let r = match n {
+    val n = 999;
+    val r = match n {
         _ => 42,
     };
     assert_eq(r, 42);
@@ -75,8 +75,8 @@ fn test_match_wildcard_only() {
 // --- 3. ident pattern binds ---
 #[test]
 fn test_match_ident_binds() {
-    let n = 7;
-    let r = match n {
+    val n = 7;
+    val r = match n {
         x => x * 10,
     };
     assert_eq(r, 70);
@@ -85,8 +85,8 @@ fn test_match_ident_binds() {
 // --- 4. enum unit variant ---
 #[test]
 fn test_match_enum_unit_variant() {
-    let c = Color::Green;
-    let s = match c {
+    val c = Color::Green;
+    val s = match c {
         Color::Red => "r",
         Color::Green => "g",
         Color::Blue => "b",
@@ -97,8 +97,8 @@ fn test_match_enum_unit_variant() {
 // --- 5. enum tuple variant ---
 #[test]
 fn test_match_enum_tuple_variant() {
-    let s = Shape::Triangle(3.0, 4.0, 5.0);
-    let p = match s {
+    val s = Shape::Triangle(3.0, 4.0, 5.0);
+    val p = match s {
         Shape::Circle(r) => r,
         Shape::Triangle(a, b, c) => a + b + c,
         Shape::Rect { w, h } => w + h,
@@ -110,8 +110,8 @@ fn test_match_enum_tuple_variant() {
 // --- 6. enum struct variant ---
 #[test]
 fn test_match_enum_struct_variant() {
-    let s = Shape::Rect { w: 4.0, h: 6.0 };
-    let area = match s {
+    val s = Shape::Rect { w: 4.0, h: 6.0 };
+    val area = match s {
         Shape::Circle(r) => 3.14 * r * r,
         Shape::Triangle(a, b, c) => a + b + c,
         Shape::Rect { w, h } => w * h,
@@ -123,8 +123,8 @@ fn test_match_enum_struct_variant() {
 // --- 7. struct pattern (top-level struct, not enum variant) ---
 #[test]
 fn test_match_struct_pattern() {
-    let p = Point { x: 3, y: 4 };
-    let dist = match p {
+    val p = Point { x: 3, y: 4 };
+    val dist = match p {
         Point { x, y } => x * x + y * y,
     };
     assert_eq(dist, 25);
@@ -133,8 +133,8 @@ fn test_match_struct_pattern() {
 // --- 8. tuple pattern ---
 #[test]
 fn test_match_tuple_pattern() {
-    let t = (1, 2, 3);
-    let sum = match t {
+    val t = (1, 2, 3);
+    val sum = match t {
         (a, b, c) => a + b + c,
     };
     assert_eq(sum, 6);
@@ -143,8 +143,8 @@ fn test_match_tuple_pattern() {
 // --- 9. or-pattern ---
 #[test]
 fn test_match_or_pattern() {
-    let n = 5;
-    let category = match n {
+    val n = 5;
+    val category = match n {
         1 | 3 | 5 | 7 | 9 => "odd",
         2 | 4 | 6 | 8 => "even",
         _ => "other",
@@ -155,8 +155,8 @@ fn test_match_or_pattern() {
 // --- 10. range pattern (exclusive) ---
 #[test]
 fn test_match_range_exclusive() {
-    let n = 5;
-    let band = match n {
+    val n = 5;
+    val band = match n {
         0..10 => "small",
         10..100 => "med",
         _ => "large",
@@ -167,8 +167,8 @@ fn test_match_range_exclusive() {
 // --- 11. range pattern (inclusive) ---
 #[test]
 fn test_match_range_inclusive() {
-    let n = 10;
-    let band = match n {
+    val n = 10;
+    val band = match n {
         0..=9 => "small",
         10..=99 => "med",
         _ => "large",
@@ -179,8 +179,8 @@ fn test_match_range_inclusive() {
 // --- 12. guarded arms ---
 #[test]
 fn test_match_with_guard() {
-    let n = 8;
-    let s = match n {
+    val n = 8;
+    val s = match n {
         x if x < 0 => "neg",
         0 => "zero",
         x if x < 10 => "small",
@@ -193,8 +193,8 @@ fn test_match_with_guard() {
 // --- 13. guard with enum variant bindings ---
 #[test]
 fn test_match_guard_with_enum_bindings() {
-    let s = Shape::Circle(10.0);
-    let kind = match s {
+    val s = Shape::Circle(10.0);
+    val kind = match s {
         Shape::Circle(r) if r < 5.0 => "small circle",
         Shape::Circle(r) if r < 20.0 => "med circle",
         Shape::Circle(_) => "large circle",
@@ -206,8 +206,8 @@ fn test_match_guard_with_enum_bindings() {
 // --- 14. nested match ---
 #[test]
 fn test_match_nested() {
-    let s = Shape::Rect { w: 5.0, h: 5.0 };
-    let kind = match s {
+    val s = Shape::Rect { w: 5.0, h: 5.0 };
+    val kind = match s {
         Shape::Rect { w, h } => match w == h {
             true => "square",
             false => "rect",
@@ -220,8 +220,8 @@ fn test_match_nested() {
 // --- 15. match as a statement (no value used) ---
 #[test]
 fn test_match_as_statement() {
-    let mut counter = 0;
-    let c = Color::Blue;
+    var counter = 0;
+    val c = Color::Blue;
     match c {
         Color::Red => counter = 1,
         Color::Green => counter = 2,
@@ -233,8 +233,8 @@ fn test_match_as_statement() {
 // --- 16. match returning struct ---
 #[test]
 fn test_match_returning_struct() {
-    let n = 1;
-    let p = match n {
+    val n = 1;
+    val p = match n {
         0 => Point { x: 0, y: 0 },
         1 => Point { x: 1, y: 1 },
         _ => Point { x: 99, y: 99 },
@@ -245,8 +245,8 @@ fn test_match_returning_struct() {
 // --- 17. match with println in each arm (stack discipline) ---
 #[test]
 fn test_match_with_side_effects_each_arm() {
-    let mut total = 0;
-    let shapes = [
+    var total = 0;
+    val shapes = [
         Shape::Circle(1.0),
         Shape::Rect { w: 2.0, h: 3.0 },
         Shape::Triangle(1.0, 1.0, 1.0),
@@ -284,8 +284,8 @@ fn test_match_fn_called_many_times() {
 // --- 19. match in loop body ---
 #[test]
 fn test_match_in_loop() {
-    let mut acc = 0;
-    let mut i = 0;
+    var acc = 0;
+    var i = 0;
     while i < 5 {
         acc = acc + match i {
             0 => 0,
@@ -302,13 +302,13 @@ fn test_match_in_loop() {
 // --- 20. Option match ---
 #[test]
 fn test_match_option() {
-    let some_v: Option<Int> = Some(42);
-    let none_v: Option<Int> = None;
-    let a = match some_v {
+    val some_v: Option<Int> = Some(42);
+    val none_v: Option<Int> = None;
+    val a = match some_v {
         Some(x) => x,
         None => -1,
     };
-    let b = match none_v {
+    val b = match none_v {
         Some(x) => x,
         None => -1,
     };
@@ -319,13 +319,13 @@ fn test_match_option() {
 // --- 21. Result match ---
 #[test]
 fn test_match_result() {
-    let ok: Result<Int, String> = Ok(7);
-    let err: Result<Int, String> = Err("nope".to_string());
-    let a = match ok {
+    val ok: Result<Int, String> = Ok(7);
+    val err: Result<Int, String> = Err("nope".to_string());
+    val a = match ok {
         Ok(x) => x,
         Err(_) => 0,
     };
-    let b = match err {
+    val b = match err {
         Ok(x) => x,
         Err(_) => 99,
     };

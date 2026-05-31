@@ -12,7 +12,7 @@ struct Point {
 
 #[test]
 fn test_derive_default_named() {
-    let p = Point::default();
+    val p = Point::default();
     assert_eq(p.x, 0);
     assert_eq(p.y, 0);
 }
@@ -36,7 +36,7 @@ impl Default for Config {
 
 #[test]
 fn test_derive_default_overridden() {
-    let c = Config::default();
+    val c = Config::default();
     assert_eq(c.host, "localhost");
     assert_eq(c.port, 8080);
 }
@@ -52,7 +52,7 @@ struct Pos3 {
 
 #[test]
 fn test_derive_default_3d() {
-    let p = Pos3::default();
+    val p = Pos3::default();
     assert_eq(p.x, 0.0);
     assert_eq(p.y, 0.0);
     assert_eq(p.z, 0.0);
@@ -70,7 +70,7 @@ struct Mixed {
 
 #[test]
 fn test_derive_default_mixed() {
-    let m = Mixed::default();
+    val m = Mixed::default();
     assert_eq(m.int_val, 0);
     assert_eq(m.float_val, 0.0);
     assert_eq(m.string_val, "");
@@ -86,8 +86,8 @@ struct Counter {
 
 #[test]
 fn test_multiple_defaults() {
-    let a = Counter::default();
-    let b = Counter::default();
+    val a = Counter::default();
+    val b = Counter::default();
     assert_eq(a.value, 0);
     assert_eq(b.value, 0);
 }

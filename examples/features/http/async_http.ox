@@ -18,31 +18,31 @@ fn expect_response(r: HttpResponse) -> HttpResponse { r }
 
 #[test]
 fn test_fetch_type_flows_through_await() {
-    let f = http::fetch("https://example.com".to_string());   // Future<HttpResponse>
-    let r = f.await;                                           // HttpResponse
-    let _ = expect_response(r);                                // OK: HttpResponse → HttpResponse
+    val f = http::fetch("https://example.com".to_string());   // Future<HttpResponse>
+    val r = f.await;                                           // HttpResponse
+    val _ = expect_response(r);                                // OK: HttpResponse → HttpResponse
 }
 
 #[test]
 fn test_fetch_post_type_flows_through_await() {
-    let f = http::fetch_post("https://example.com".to_string(), "body".to_string());
-    let r = f.await;
-    let _ = expect_response(r);
+    val f = http::fetch_post("https://example.com".to_string(), "body".to_string());
+    val r = f.await;
+    val _ = expect_response(r);
 }
 
 // --- compile_error: type mismatch across http::fetch .await ---
 
 #[compile_error]
 fn fetch_wrong_type_through_await() {
-    let f = http::fetch("https://example.com".to_string());   // Future<HttpResponse>
-    let r = f.await;                                           // HttpResponse
-    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
+    val f = http::fetch("https://example.com".to_string());   // Future<HttpResponse>
+    val r = f.await;                                           // HttpResponse
+    val _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
 }
 
 #[compile_error]
 fn fetch_post_wrong_type_through_await() {
-    let f = http::fetch_post("https://example.com".to_string(), "data".to_string());
-    let r = f.await;
-    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
+    val f = http::fetch_post("https://example.com".to_string(), "data".to_string());
+    val r = f.await;
+    val _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
 }
 

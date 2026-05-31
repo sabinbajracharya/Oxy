@@ -26,25 +26,25 @@ struct ListNode {
 }
 
 fn main() {
-    let mut l1 = ListNode::new(1);
-    let mut n2 = ListNode::new(2);
-    let n4 = ListNode::new(4);
+    var l1 = ListNode::new(1);
+    var n2 = ListNode::new(2);
+    val n4 = ListNode::new(4);
     n2.next = Some(n4);
     l1.next = Some(n2);
 
-    let mut l2 = ListNode::new(1);
-    let mut n3 = ListNode::new(3);
-    let n4b = ListNode::new(4);
+    var l2 = ListNode::new(1);
+    var n3 = ListNode::new(3);
+    val n4b = ListNode::new(4);
     n3.next = Some(n4b);
     l2.next = Some(n3);
 
-    let merged = merge_two_lists(Some(l1), Some(l2));
+    val merged = merge_two_lists(Some(l1), Some(l2));
     print_list(merged);
 }
 
 fn print_list(head: Option) {
-    let mut curr = head;
-    while let Some(node) = curr {
+    var curr = head;
+    while val Some(node) = curr {
         print("{} ", node.val);
         curr = node.next;
     }
@@ -58,14 +58,14 @@ fn merge_two_lists(l1: Option, l2: Option) -> Option {
     if l2.is_none() {
         return l1;
     }
-    let mut node_a = l1.unwrap();
-    let mut node_b = l2.unwrap();
+    var node_a = l1.unwrap();
+    var node_b = l2.unwrap();
     if node_a.val <= node_b.val {
-        let rest_a = node_a.next;
+        val rest_a = node_a.next;
         node_a.next = merge_two_lists(rest_a, Some(node_b));
         Some(node_a)
     } else {
-        let rest_b = node_b.next;
+        val rest_b = node_b.next;
         node_b.next = merge_two_lists(Some(node_a), rest_b);
         Some(node_b)
     }
@@ -73,21 +73,21 @@ fn merge_two_lists(l1: Option, l2: Option) -> Option {
 
 #[test]
 fn test_merge_basic() {
-    let mut l1 = ListNode::new(1);
-    let n2 = ListNode::new(3);
+    var l1 = ListNode::new(1);
+    val n2 = ListNode::new(3);
     l1.next = Some(n2);
 
-    let mut l2 = ListNode::new(2);
-    let n4 = ListNode::new(4);
+    var l2 = ListNode::new(2);
+    val n4 = ListNode::new(4);
     l2.next = Some(n4);
 
-    let result = merge_two_lists(Some(l1), Some(l2));
+    val result = merge_two_lists(Some(l1), Some(l2));
     assert_eq(result.unwrap().val, 1);
 }
 
 #[test]
 fn test_merge_one_empty() {
-    let l1 = ListNode::new(5);
-    let result = merge_two_lists(Some(l1), None);
+    val l1 = ListNode::new(5);
+    val result = merge_two_lists(Some(l1), None);
     assert_eq(result.unwrap().val, 5);
 }

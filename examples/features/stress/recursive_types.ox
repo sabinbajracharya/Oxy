@@ -22,13 +22,13 @@ fn list_sum(l: List) -> Int {
 
 #[test]
 fn test_linked_list_empty() {
-    let l = List::Empty;
+    val l = List::Empty;
     assert_eq(list_len(l), 0);
 }
 
 #[test]
 fn test_linked_list_three_nodes() {
-    let l = List::Node(1, [List::Node(2, [List::Node(3, [List::Empty])])]);
+    val l = List::Node(1, [List::Node(2, [List::Node(3, [List::Empty])])]);
     assert_eq(list_sum(l), 6);
 }
 
@@ -42,7 +42,7 @@ fn tree_sum(t: Tree) -> Int {
     match t {
         Tree::Leaf => 0,
         Tree::Node(v, children) => {
-            let mut total = v;
+            var total = v;
             for c in children {
                 total = total + tree_sum(c);
             }
@@ -53,19 +53,19 @@ fn tree_sum(t: Tree) -> Int {
 
 #[test]
 fn test_tree_single_node() {
-    let t = Tree::Node(5, []);
+    val t = Tree::Node(5, []);
     assert_eq(tree_sum(t), 5);
 }
 
 #[test]
 fn test_tree_with_children() {
-    let t = Tree::Node(1, [Tree::Node(2, []), Tree::Node(3, [])]);
+    val t = Tree::Node(1, [Tree::Node(2, []), Tree::Node(3, [])]);
     assert_eq(tree_sum(t), 6);
 }
 
 #[test]
 fn test_tree_deep() {
-    let t = Tree::Node(1, [
+    val t = Tree::Node(1, [
         Tree::Node(2, [
             Tree::Node(4, []),
             Tree::Node(5, []),
@@ -144,7 +144,7 @@ struct TreeNode {
 }
 
 fn count_nodes(t: TreeNode) -> Int {
-    let mut n = 1;
+    var n = 1;
     for c in t.children {
         n = n + count_nodes(c);
     }
@@ -153,7 +153,7 @@ fn count_nodes(t: TreeNode) -> Int {
 
 #[test]
 fn test_tree_node_count() {
-    let t = TreeNode {
+    val t = TreeNode {
         value: 1,
         children: [
             TreeNode { value: 2, children: [] },

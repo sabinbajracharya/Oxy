@@ -3,22 +3,22 @@
 
 #[test]
 fn test_list_literal_matches_declared() {
-    let arr: [Int; 3] = [1, 2, 3];
+    val arr: [Int; 3] = [1, 2, 3];
     assert_eq(arr.len(), 3);
 }
 
 #[test]
 fn test_list_literal_int_promotion_ok() {
-    let arr: [Int; 2] = [1, 2];
+    val arr: [Int; 2] = [1, 2];
     assert_eq(arr[0], 1);
 }
 
 #[compile_error]
 fn test_array_literal_wrong_element_type() {
-    let _: [Int; 2] = [1, "name"];
+    val _: [Int; 2] = [1, "name"];
 }
 
 #[compile_error]
 fn test_array_literal_string_for_int_array() {
-    let _: [Int; 1] = ["hello"];
+    val _: [Int; 1] = ["hello"];
 }

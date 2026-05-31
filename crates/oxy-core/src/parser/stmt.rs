@@ -40,7 +40,7 @@ impl Parser {
         }
 
         match self.peek_kind() {
-            TokenKind::Let => self.parse_let_stmt(),
+            TokenKind::Val | TokenKind::Var => self.parse_val_var_stmt(),
             TokenKind::Return => self.parse_return_stmt(),
             TokenKind::While => self.parse_while_stmt(None),
             TokenKind::Loop => self.parse_loop_stmt(None),
@@ -98,13 +98,16 @@ impl Parser {
         None
     }
 
-    fn parse_let_stmt(&mut self) -> Result<Stmt, PipelineError> {
+    fn parse_val_var_stmt(&mut self) -> Result<Stmt, PipelineError> {
         let start_span = self.current_span();
-        self.expect(TokenKind::Let)?;
+        let mutable = if self.match_token(&TokenKind::Var) {
+            true
+        } else {
+            self.expect(TokenKind::Val)?;
+            false
+        };
 
-        let mutable = self.match_token(&TokenKind::Mut);
-
-        // Check for destructuring: `let (x, y) = ...` or `let [a, b] = ...`
+        // Check for destructuring: `val (x, y) = ...` or `var [a, b] = ...`
         if self.check(&TokenKind::LParen) || self.check(&TokenKind::LBracket) {
             let pattern = self.parse_pattern()?;
             self.expect(TokenKind::Eq)?;
@@ -125,7 +128,7 @@ impl Parser {
             self.expect_ident()?
         };
 
-        // Check for struct destructuring: `let Name { x, y } = ...`
+        // Check for struct destructuring: `val Name { x, y } = ...`
         if self.check(&TokenKind::LBrace) {
             let struct_pattern = self.parse_struct_pattern(name, start_span)?;
             self.expect(TokenKind::Eq)?;
@@ -141,13 +144,7 @@ impl Parser {
         }
 
         let type_ann = if self.match_token(&TokenKind::Colon) {
-            // Accept optional & or &mut in type position
-            if self.check(&TokenKind::Amp) {
-                self.advance();
-                if self.check(&TokenKind::Mut) {
-                    self.advance();
-                }
-            }
+            // Skip obsolete & in type position (references are not supported)
             Some(self.parse_type_annotation()?)
         } else {
             None
@@ -197,9 +194,14 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::While)?;
 
-        // Check for `while let`
-        if self.check(&TokenKind::Let) {
-            self.advance();
+        // Check for `while val` / `while var`
+        if self.check(&TokenKind::Val) || self.check(&TokenKind::Var) {
+            let mutable = if self.match_token(&TokenKind::Var) {
+                true
+            } else {
+                self.expect(TokenKind::Val)?;
+                false
+            };
             let pattern = self.parse_pattern()?;
             self.expect(TokenKind::Eq)?;
             let expr = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
@@ -210,6 +212,7 @@ impl Parser {
                 pattern: Box::new(pattern),
                 expr: Box::new(expr),
                 body,
+                mutable,
                 span: self.merge_spans(start_span, end_span),
             });
         }

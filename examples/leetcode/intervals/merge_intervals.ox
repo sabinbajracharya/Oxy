@@ -22,25 +22,25 @@
 // - Empty input returns empty output
 
 fn main() {
-    let intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
-    let merged = merge(intervals);
+    val intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
+    val merged = merge(intervals);
     for m in merged {
         println("{:?}", m);
     }
 }
 
 fn merge(intervals: List) -> List {
-    let n = intervals.len();
+    val n = intervals.len();
     if n <= 1 {
         return intervals;
     }
     // Sort by start time
     intervals.sort_by_key(|iv| iv[0]);
-    let mut result = [];
-    let mut current = intervals[0];
-    let mut i = 1;
+    var result = [];
+    var current = intervals[0];
+    var i = 1;
     while i < n {
-        let next = intervals[i];
+        val next = intervals[i];
         if next[0] <= current[1] {
             // Overlapping — merge by extending end
             if next[1] > current[1] {
@@ -58,19 +58,19 @@ fn merge(intervals: List) -> List {
 
 #[test]
 fn test_example() {
-    let intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
-    let result = merge(intervals);
+    val intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
+    val result = merge(intervals);
     assert_eq(result, [[1, 6], [8, 10], [15, 18]]);
 }
 
 #[test]
 fn test_no_overlap() {
-    let intervals = [[1, 2], [3, 4]];
+    val intervals = [[1, 2], [3, 4]];
     assert_eq(merge(intervals), [[1, 2], [3, 4]]);
 }
 
 #[test]
 fn test_contained() {
-    let intervals = [[1, 4], [2, 3]];
+    val intervals = [[1, 4], [2, 3]];
     assert_eq(merge(intervals), [[1, 4]]);
 }

@@ -10,8 +10,8 @@ enum Event {
 // --- match with multiple data extraction ---
 #[test]
 fn test_match_tuple_variant_extracts_all() {
-    let e = Event::Click(50, 100);
-    let s = match e {
+    val e = Event::Click(50, 100);
+    val s = match e {
         Event::Click(x, y) => x + y,
         Event::KeyPress(_) => -1,
         Event::Quit => -2,
@@ -22,8 +22,8 @@ fn test_match_tuple_variant_extracts_all() {
 
 #[test]
 fn test_match_struct_variant_extracts_all() {
-    let e = Event::Resize { w: 800, h: 600 };
-    let area = match e {
+    val e = Event::Resize { w: 800, h: 600 };
+    val area = match e {
         Event::Click(_, _) => 0,
         Event::KeyPress(_) => 0,
         Event::Quit => 0,
@@ -35,8 +35,8 @@ fn test_match_struct_variant_extracts_all() {
 // --- match with guards on enum bindings ---
 #[test]
 fn test_match_guards_on_binding() {
-    let e = Event::Click(5, 5);
-    let kind = match e {
+    val e = Event::Click(5, 5);
+    val kind = match e {
         Event::Click(x, y) if x == y => "diagonal",
         Event::Click(_, _) => "off-diagonal",
         _ => "not a click",
@@ -52,8 +52,8 @@ enum Op {
 
 #[test]
 fn test_match_literal_in_tuple_pos() {
-    let op = Op::Inc(7);
-    let r = match op {
+    val op = Op::Inc(7);
+    val r = match op {
         Op::Add(a, b) => a + b,
         Op::Inc(n) => n + 1,
     };
@@ -63,8 +63,8 @@ fn test_match_literal_in_tuple_pos() {
 // --- nested match ---
 #[test]
 fn test_deeply_nested_match() {
-    let o: Option<Result<Int, String>> = Some(Ok(42));
-    let v = match o {
+    val o: Option<Result<Int, String>> = Some(Ok(42));
+    val v = match o {
         Some(r) => match r {
             Ok(n) => n,
             Err(_) => -1,
@@ -77,8 +77,8 @@ fn test_deeply_nested_match() {
 // --- match returning closure ---
 #[test]
 fn test_match_returns_closure() {
-    let pick = 1;
-    let f = match pick {
+    val pick = 1;
+    val f = match pick {
         0 => |x: Int| x + 1,
         1 => |x: Int| x * 2,
         _ => |x: Int| x,
@@ -89,8 +89,8 @@ fn test_match_returns_closure() {
 // --- match on bool ---
 #[test]
 fn test_match_on_bool() {
-    let b = false;
-    let s = match b {
+    val b = false;
+    val s = match b {
         true => "yes",
         false => "no",
     };
@@ -122,11 +122,11 @@ fn safe_div(a: Int, b: Int) -> Option<Int> {
 
 #[test]
 fn test_match_option_returned_from_fn() {
-    let v1 = match safe_div(10, 2) {
+    val v1 = match safe_div(10, 2) {
         Some(x) => x,
         None => -1,
     };
-    let v2 = match safe_div(10, 0) {
+    val v2 = match safe_div(10, 0) {
         Some(x) => x,
         None => -1,
     };
@@ -137,8 +137,8 @@ fn test_match_option_returned_from_fn() {
 // --- match with or-pattern on literal ---
 #[test]
 fn test_match_or_pattern_strings() {
-    let day = "Sat";
-    let r = match day {
+    val day = "Sat";
+    val r = match day {
         "Sat" | "Sun" => "weekend",
         "Mon" | "Tue" | "Wed" | "Thu" | "Fri" => "weekday",
         _ => "unknown",
@@ -158,14 +158,14 @@ fn classify(n: Int) -> (String, Int) {
 
 #[test]
 fn test_match_returning_tuple() {
-    let (a, b) = classify(7);
+    val (a, b) = classify(7);
     assert_eq(a, "small");
     assert_eq(b, 7);
 }
 
 #[test]
 fn test_match_returning_tuple_neg() {
-    let (a, b) = classify(-3);
+    val (a, b) = classify(-3);
     assert_eq(a, "neg");
     assert_eq(b, 3);
 }
@@ -173,8 +173,8 @@ fn test_match_returning_tuple_neg() {
 // --- match used inside for body ---
 #[test]
 fn test_match_in_for_body() {
-    let mut hits = 0;
-    let mut misses = 0;
+    var hits = 0;
+    var misses = 0;
     for n in [1, 2, 3, 4, 5] {
         match n % 2 {
             0 => hits = hits + 1,
@@ -185,11 +185,11 @@ fn test_match_in_for_body() {
     assert_eq(misses, 3);
 }
 
-// --- if-let chained with else ---
+// --- if-val chained with else ---
 #[test]
 fn test_if_let_else_chain() {
-    let opt: Option<Int> = None;
-    let r = if let Some(x) = opt {
+    val opt: Option<Int> = None;
+    val r = if val Some(x) = opt {
         x * 10
     } else {
         99
@@ -200,11 +200,11 @@ fn test_if_let_else_chain() {
 // --- pattern bindings used in arm body ---
 #[test]
 fn test_pattern_bindings_in_complex_body() {
-    let e = Event::Click(7, 12);
-    let r = match e {
+    val e = Event::Click(7, 12);
+    val r = match e {
         Event::Click(x, y) => {
-            let sum = x + y;
-            let prod = x * y;
+            val sum = x + y;
+            val prod = x * y;
             sum + prod
         }
         _ => 0,

@@ -37,7 +37,7 @@ use mymath::Point;
 
 #[test]
 fn test_struct_from_file_module() {
-    let p = Point { x: 1.0, y: 2.0 };
+    val p = Point { x: 1.0, y: 2.0 };
     assert_eq(p.x, 1.0);
     assert_eq(p.y, 2.0);
 }
@@ -47,8 +47,8 @@ use mymath::Operation;
 
 #[test]
 fn test_enum_from_file_module() {
-    let add_op = Operation::Add(3, 4);
+    val add_op = Operation::Add(3, 4);
     assert_eq(mymath::execute(add_op), 7);
-    let mul_op = Operation::Mul(3, 4);
+    val mul_op = Operation::Mul(3, 4);
     assert_eq(mymath::execute(mul_op), 12);
 }

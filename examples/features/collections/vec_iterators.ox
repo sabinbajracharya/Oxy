@@ -8,8 +8,8 @@
 
 #[test]
 fn test_map() {
-    let v = [1, 2, 3];
-    let doubled = v.map(|x| x * 2);
+    val v = [1, 2, 3];
+    val doubled = v.map(|x| x * 2);
     assert_eq(doubled.len(), 3);
 }
 
@@ -17,8 +17,8 @@ fn test_map() {
 
 #[test]
 fn test_filter() {
-    let v = [1, 2, 3, 4, 5, 6];
-    let evens = v.filter(|x| x % 2 == 0);
+    val v = [1, 2, 3, 4, 5, 6];
+    val evens = v.filter(|x| x % 2 == 0);
     assert_eq(evens.len(), 3);
 }
 
@@ -26,15 +26,15 @@ fn test_filter() {
 
 #[test]
 fn test_fold_sum() {
-    let v = [1, 2, 3, 4];
-    let result = v.fold(0, |acc, x| acc + x);
+    val v = [1, 2, 3, 4];
+    val result = v.fold(0, |acc, x| acc + x);
     assert_eq(result, 10);
 }
 
 #[test]
 fn test_fold_multiply() {
-    let v = [1, 2, 3, 4];
-    let result = v.fold(1, |acc, x| acc * x);
+    val v = [1, 2, 3, 4];
+    val result = v.fold(1, |acc, x| acc * x);
     assert_eq(result, 24);
 }
 
@@ -42,25 +42,25 @@ fn test_fold_multiply() {
 
 #[test]
 fn test_any_true() {
-    let v = [1, 3, 5, 8];
+    val v = [1, 3, 5, 8];
     assert(v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_any_false() {
-    let v = [1, 3, 5, 7];
+    val v = [1, 3, 5, 7];
     assert(!v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_true() {
-    let v = [2, 4, 6, 8];
+    val v = [2, 4, 6, 8];
     assert(v.all(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_false() {
-    let v = [2, 3, 4];
+    val v = [2, 3, 4];
     assert(!v.all(|x| x % 2 == 0));
 }
 
@@ -68,15 +68,15 @@ fn test_all_false() {
 
 #[test]
 fn test_find_some() {
-    let v = [1, 3, 5, 8, 9];
-    let r = v.find(|x| x % 2 == 0);
+    val v = [1, 3, 5, 8, 9];
+    val r = v.find(|x| x % 2 == 0);
     assert(r.is_some());
 }
 
 #[test]
 fn test_find_none() {
-    let v = [1, 3, 5, 7];
-    let r = v.find(|x| x % 2 == 0);
+    val v = [1, 3, 5, 7];
+    val r = v.find(|x| x % 2 == 0);
     assert(r.is_none());
 }
 
@@ -84,15 +84,15 @@ fn test_find_none() {
 
 #[test]
 fn test_position_found() {
-    let v = ["a", "b", "c", "d"];
-    let r = v.position(|x| x == "c");
+    val v = ["a", "b", "c", "d"];
+    val r = v.position(|x| x == "c");
     assert(r.is_some());
 }
 
 #[test]
 fn test_position_not_found() {
-    let v = ["a", "b", "c"];
-    let r = v.position(|x| x == "z");
+    val v = ["a", "b", "c"];
+    val r = v.position(|x| x == "z");
     assert(r.is_none());
 }
 
@@ -100,13 +100,13 @@ fn test_position_not_found() {
 
 #[test]
 fn test_sum() {
-    let v = [1, 2, 3, 4, 5];
+    val v = [1, 2, 3, 4, 5];
     assert_eq(v.sum(), 15);
 }
 
 #[test]
 fn test_count() {
-    let v = [1, 2, 3, 4, 5];
+    val v = [1, 2, 3, 4, 5];
     assert_eq(v.count(), 5);
 }
 
@@ -114,8 +114,8 @@ fn test_count() {
 
 #[test]
 fn test_for_each() {
-    let v = [1, 2, 3, 4, 5];
-    let mut count = 0;
+    val v = [1, 2, 3, 4, 5];
+    var count = 0;
     v.for_each(|x| count = count + 1);
     assert_eq(count, 5);
 }
@@ -124,9 +124,9 @@ fn test_for_each() {
 
 #[test]
 fn test_enumerate() {
-    let v = ["a", "b", "c"];
-    let pairs = v.enumerate();
-    let mut count = 0;
+    val v = ["a", "b", "c"];
+    val pairs = v.enumerate();
+    var count = 0;
     for pair in pairs {
         count = count + 1;
     }
@@ -137,10 +137,10 @@ fn test_enumerate() {
 
 #[test]
 fn test_zip() {
-    let a = [1, 2, 3];
-    let b = ["a", "b", "c"];
-    let zipped = a.zip(b);
-    let mut count = 0;
+    val a = [1, 2, 3];
+    val b = ["a", "b", "c"];
+    val zipped = a.zip(b);
+    var count = 0;
     for pair in zipped {
         count = count + 1;
     }
@@ -151,9 +151,9 @@ fn test_zip() {
 
 #[test]
 fn test_take() {
-    let v = [1, 2, 3, 4, 5];
-    let first_two = v.take(2);
-    let mut count = 0;
+    val v = [1, 2, 3, 4, 5];
+    val first_two = v.take(2);
+    var count = 0;
     for x in first_two {
         count = count + 1;
     }
@@ -164,9 +164,9 @@ fn test_take() {
 
 #[test]
 fn test_skip() {
-    let v = [1, 2, 3, 4, 5];
-    let rest = v.skip(3);
-    let mut count = 0;
+    val v = [1, 2, 3, 4, 5];
+    val rest = v.skip(3);
+    var count = 0;
     for x in rest {
         count = count + 1;
     }
@@ -177,10 +177,10 @@ fn test_skip() {
 
 #[test]
 fn test_chain() {
-    let a = [1, 2];
-    let b = [3, 4];
-    let combined = a.chain(b);
-    let mut count = 0;
+    val a = [1, 2];
+    val b = [3, 4];
+    val combined = a.chain(b);
+    var count = 0;
     for x in combined {
         count = count + 1;
     }
@@ -191,10 +191,10 @@ fn test_chain() {
 
 #[test]
 fn test_rev_iter() {
-    let mut v = [1, 2, 3];
+    var v = [1, 2, 3];
     v.reverse();
     // Now iterate over the reversed vec
-    let mut count = 0;
+    var count = 0;
     for x in v {
         count = count + 1;
     }

@@ -10,7 +10,7 @@ fn divide(a: Float, b: Float) -> Result<Float, String> {
 }
 
 fn find_item(items: List<String>, target: String) -> Option<Int> {
-    let mut i = 0;
+    var i = 0;
     for item in items {
         if item == target {
             return Some(i);
@@ -21,7 +21,7 @@ fn find_item(items: List<String>, target: String) -> Option<Int> {
 }
 
 fn safe_divide(a: Float, b: Float) -> Result<Float, String> {
-    let result = divide(a, b)?;
+    val result = divide(a, b)?;
     Ok(result * 2.0)
 }
 
@@ -39,32 +39,32 @@ fn main() {
     }
 
     // Result methods
-    let ok_val: Result<Int, String> = Ok(42);
+    val ok_val: Result<Int, String> = Ok(42);
     println("is_ok: {}", ok_val.is_ok());
     println("unwrap: {}", ok_val.unwrap());
 
     // Option usage
     println("\n=== Option ===");
-    let items = ["apple", "banana", "cherry"];
-    let found = find_item(items, "banana");
+    val items = ["apple", "banana", "cherry"];
+    val found = find_item(items, "banana");
 
-    if let Some(idx) = found {
+    if val Some(idx) = found {
         println("Found banana at index {}", idx);
     } else {
         println("Not found");
     }
 
     // Option methods
-    let some_val = Some(10);
-    let none_val: Option<Int> = None;
+    val some_val = Some(10);
+    val none_val: Option<Int> = None;
     println("some is_some: {}", some_val.is_some());
     println("none is_none: {}", none_val.is_none());
     println("unwrap_or: {}", none_val.unwrap_or(99));
 
-    // while let with List::pop()
-    println("\n=== while let ===");
-    let mut stack = [1, 2, 3];
-    while let Some(top) = stack.pop() {
+    // while val with List::pop()
+    println("\n=== while val ===");
+    var stack = [1, 2, 3];
+    while val Some(top) = stack.pop() {
         println("popped: {}", top);
     }
 
@@ -82,7 +82,7 @@ fn main() {
 
     // dbg function
     println("\n=== dbg ===");
-    let x = 42;
+    val x = 42;
     dbg(x);
 
     println("\nDone!");

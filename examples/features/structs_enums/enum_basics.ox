@@ -13,8 +13,8 @@ enum Color {
 
 #[test]
 fn test_enum_unit_variants() {
-    let c = Color::Red;
-    let result = match c {
+    val c = Color::Red;
+    val result = match c {
         Color::Red => "red",
         Color::Green => "green",
         Color::Blue => "blue",
@@ -31,8 +31,8 @@ enum Shape {
 
 #[test]
 fn test_enum_tuple_variant() {
-    let s = Shape::Circle(5.0);
-    let area = match s {
+    val s = Shape::Circle(5.0);
+    val area = match s {
         Shape::Circle(r) => 3.14 * r * r,
         Shape::Rectangle(w, h) => w * h,
     };
@@ -41,8 +41,8 @@ fn test_enum_tuple_variant() {
 
 #[test]
 fn test_enum_match_rectangle() {
-    let s = Shape::Rectangle(4.0, 5.0);
-    let area = match s {
+    val s = Shape::Rectangle(4.0, 5.0);
+    val area = match s {
         Shape::Circle(r) => 3.14 * r * r,
         Shape::Rectangle(w, h) => w * h,
     };
@@ -58,8 +58,8 @@ enum Message {
 
 #[test]
 fn test_enum_struct_variant() {
-    let msg = Message::Move { x: 10, y: 20 };
-    let result = match msg {
+    val msg = Message::Move { x: 10, y: 20 };
+    val result = match msg {
         Message::Quit => "quit",
         Message::Move { x, y } => "move",
     };
@@ -76,8 +76,8 @@ enum Status {
 
 #[test]
 fn test_enum_exhaustive_match() {
-    let s = Status::Active;
-    let code = match s {
+    val s = Status::Active;
+    val code = match s {
         Status::Pending => 0,
         Status::Active => 1,
         Status::Done => 2,
@@ -89,8 +89,8 @@ fn test_enum_exhaustive_match() {
 
 #[test]
 fn test_enum_wildcard_match() {
-    let c = Color::Green;
-    let is_red = match c {
+    val c = Color::Green;
+    val is_red = match c {
         Color::Red => true,
         _ => false,
     };

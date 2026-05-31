@@ -1197,10 +1197,10 @@ mod tests {
     #[test]
     fn test_keywords() {
         assert_eq!(
-            kinds("let mut fn return if else while loop for in"),
+            kinds("val var fn return if else while loop for in"),
             vec![
-                TokenKind::Let,
-                TokenKind::Mut,
+                TokenKind::Val,
+                TokenKind::Var,
                 TokenKind::Fn,
                 TokenKind::Return,
                 TokenKind::If,
@@ -1276,11 +1276,11 @@ mod tests {
     #[test]
     fn test_line_comment() {
         assert_eq!(
-            kinds("let x // this is a comment\nlet y"),
+            kinds("val x // this is a comment\nval y"),
             vec![
-                TokenKind::Let,
+                TokenKind::Val,
                 TokenKind::Ident("x".into()),
-                TokenKind::Let,
+                TokenKind::Val,
                 TokenKind::Ident("y".into()),
                 TokenKind::Eof,
             ]
@@ -1290,16 +1290,16 @@ mod tests {
     #[test]
     fn test_block_comment() {
         assert_eq!(
-            kinds("let /* comment */ x"),
-            vec![TokenKind::Let, TokenKind::Ident("x".into()), TokenKind::Eof,]
+            kinds("val /* comment */ x"),
+            vec![TokenKind::Val, TokenKind::Ident("x".into()), TokenKind::Eof,]
         );
     }
 
     #[test]
     fn test_nested_block_comment() {
         assert_eq!(
-            kinds("let /* outer /* inner */ still comment */ x"),
-            vec![TokenKind::Let, TokenKind::Ident("x".into()), TokenKind::Eof,]
+            kinds("val /* outer /* inner */ still comment */ x"),
+            vec![TokenKind::Val, TokenKind::Ident("x".into()), TokenKind::Eof,]
         );
     }
 
@@ -1341,7 +1341,7 @@ mod tests {
     fn test_full_program() {
         let src = r#"
 fn main() {
-    let x: i64 = 42;
+    val x: i64 = 42;
     println("value: {}", x);
 }
 "#;
@@ -1353,7 +1353,7 @@ fn main() {
         assert_eq!(token_kinds[2], &TokenKind::LParen);
         assert_eq!(token_kinds[3], &TokenKind::RParen);
         assert_eq!(token_kinds[4], &TokenKind::LBrace);
-        assert_eq!(token_kinds[5], &TokenKind::Let);
+        assert_eq!(token_kinds[5], &TokenKind::Val);
         assert_eq!(token_kinds[6], &TokenKind::Ident("x".into()));
         assert_eq!(token_kinds[7], &TokenKind::Colon);
         assert_eq!(token_kinds[8], &TokenKind::Ident("i64".into()));

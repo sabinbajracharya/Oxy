@@ -15,7 +15,7 @@ impl Greet for EnglishGuy {
 
 #[test]
 fn test_basic_trait_impl() {
-    let g = EnglishGuy { name: "Alice".to_string() };
+    val g = EnglishGuy { name: "Alice".to_string() };
     assert_eq(g.hello(), "Hello, I'm Alice");
 }
 
@@ -34,7 +34,7 @@ impl Named for Cat {
 
 #[test]
 fn test_trait_default_method() {
-    let c = Cat { fluff: "Mittens".to_string() };
+    val c = Cat { fluff: "Mittens".to_string() };
     assert_eq(c.greet(), "hi, Mittens");
 }
 
@@ -47,7 +47,7 @@ impl Named for Dog {
 
 #[test]
 fn test_trait_default_override() {
-    let d = Dog { woof: "Rex".to_string() };
+    val d = Dog { woof: "Rex".to_string() };
     assert_eq(d.greet(), "BARK, Rex!");
 }
 
@@ -66,8 +66,8 @@ impl Area for Sq {
 
 #[test]
 fn test_trait_dispatch_per_type() {
-    let c = Circ { r: 2.0 };
-    let s = Sq { s: 3.0 };
+    val c = Circ { r: 2.0 };
+    val s = Sq { s: 3.0 };
     assert_eq(c.area(), 12.56);
     assert_eq(s.area(), 9.0);
 }
@@ -81,7 +81,7 @@ impl Pair<Int> {
 
 #[test]
 fn test_generic_struct_method() {
-    let p: Pair<Int> = Pair::<Int>::new(3, 4);
+    val p: Pair<Int> = Pair::<Int>::new(3, 4);
     assert_eq(p.a, 3);
     assert_eq(p.b, 4);
 }
@@ -95,13 +95,13 @@ impl<T> Cell<T> {
 
 #[test]
 fn test_generic_impl_int() {
-    let c = Cell::make(42);
+    val c = Cell::make(42);
     assert_eq(c.v, 42);
 }
 
 #[test]
 fn test_generic_impl_string() {
-    let c = Cell::make("hi".to_string());
+    val c = Cell::make("hi".to_string());
     assert_eq(c.v, "hi");
 }
 
@@ -114,7 +114,7 @@ impl<T> Box2<T> {
 
 #[test]
 fn test_generic_impl_method_uses_T_as_return() {
-    let b = Box2 { v: 7 };
+    val b = Box2 { v: 7 };
     assert_eq(b.get(), 7);
 }
 
@@ -127,8 +127,8 @@ impl<A, B> TwoBox<A, B> {
 
 #[test]
 fn test_generic_impl_two_params() {
-    let t = TwoBox { a: 1, b: "x".to_string() };
-    let s = t.swap();
+    val t = TwoBox { a: 1, b: "x".to_string() };
+    val s = t.swap();
     assert_eq(s.a, "x");
     assert_eq(s.b, 1);
 }
@@ -139,8 +139,8 @@ struct Pt { x: Int, y: Int }
 
 #[test]
 fn test_derive_debug() {
-    let p = Pt { x: 1, y: 2 };
-    let s = format("{:?}", p);
+    val p = Pt { x: 1, y: 2 };
+    val s = format("{:?}", p);
     assert(s.contains("1"));
     assert(s.contains("2"));
 }
@@ -151,8 +151,8 @@ struct Box1 { v: Int }
 
 #[test]
 fn test_derive_clone() {
-    let b = Box1 { v: 7 };
-    let b2 = b.clone();
+    val b = Box1 { v: 7 };
+    val b2 = b.clone();
     assert_eq(b2.v, 7);
     assert_eq(b, b2);
 }
@@ -182,9 +182,9 @@ impl Move for Walker {
 
 #[test]
 fn test_multiple_traits_on_type() {
-    let w = Walker { name: "Bob".to_string(), speed: 5 };
+    val w = Walker { name: "Bob".to_string(), speed: 5 };
     assert_eq(w.noise(), "Bob walks");
-    let w2 = Walker { name: "Bob".to_string(), speed: 5 };
+    val w2 = Walker { name: "Bob".to_string(), speed: 5 };
     assert_eq(w2.step(), 5);
 }
 
@@ -208,7 +208,7 @@ impl Stack for VecStack {
 
 #[test]
 fn test_trait_multiple_methods() {
-    let s = VecStack { data: [1, 2, 3] };
+    val s = VecStack { data: [1, 2, 3] };
     assert_eq(s.is_empty(), false);
     assert_eq(s.peek(), Some(3));
 }
@@ -220,6 +220,6 @@ fn area_double<T: Area>(t: T) -> Float {
 
 #[test]
 fn test_trait_bound_on_generic_fn() {
-    let c = Circ { r: 1.0 };
+    val c = Circ { r: 1.0 };
     assert_eq(area_double(c), 6.28);
 }

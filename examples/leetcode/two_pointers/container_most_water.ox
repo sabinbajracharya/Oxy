@@ -23,19 +23,19 @@
 // - O(n) time, O(1) space
 
 fn main() {
-    let heights = [1, 8, 6, 2, 5, 4, 8, 3, 7];
+    val heights = [1, 8, 6, 2, 5, 4, 8, 3, 7];
     println("{}", max_area(heights));
 }
 
 fn max_area(height: List) -> Int {
-    let mut left = 0;
-    let mut right = height.len() - 1;
-    let mut max_water = 0;
+    var left = 0;
+    var right = height.len() - 1;
+    var max_water = 0;
     while left < right {
-        let h_left = height[left];
-        let h_right = height[right];
-        let h = if h_left < h_right { h_left } else { h_right };
-        let area = (right - left) * h;
+        val h_left = height[left];
+        val h_right = height[right];
+        val h = if h_left < h_right { h_left } else { h_right };
+        val area = (right - left) * h;
         if area > max_water {
             max_water = area;
         }

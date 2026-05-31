@@ -17,8 +17,8 @@
 // - Classic push/pop with shared mutable state
 
 fn main() {
-    let candidates = [2, 3, 6, 7];
-    let result = combination_sum(candidates, 7);
+    val candidates = [2, 3, 6, 7];
+    val result = combination_sum(candidates, 7);
     for c in result {
         println("{:?}", c);
     }
@@ -29,9 +29,9 @@ fn backtrack(candidates: List, start: Int, target: Int, current: List, result: L
         result.push(current.clone());
         return;
     }
-    let mut i = start;
+    var i = start;
     while i < candidates.len() {
-        let val = candidates[i];
+        val val = candidates[i];
         if val <= target {
             current.push(val);
             backtrack(candidates, i, target - val, current, result);
@@ -42,20 +42,20 @@ fn backtrack(candidates: List, start: Int, target: Int, current: List, result: L
 }
 
 fn combination_sum(candidates: List, target: Int) -> List {
-    let result = [];
-    let current = [];
+    val result = [];
+    val current = [];
     backtrack(candidates, 0, target, current, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = combination_sum([2, 3, 6, 7], 7);
+    val result = combination_sum([2, 3, 6, 7], 7);
     assert(result.len() > 0);
 }
 
 #[test]
 fn test_no_solution() {
-    let result = combination_sum([2], 1);
+    val result = combination_sum([2], 1);
     assert_eq(result.len(), 0);
 }

@@ -6,7 +6,7 @@
 
 #[test]
 fn test_concat_two_strings() {
-    let s = "hello " + "world";
+    val s = "hello " + "world";
     assert_eq(s, "hello world");
 }
 
@@ -19,7 +19,7 @@ fn test_concat_empty_strings() {
 
 #[test]
 fn test_concat_multiple() {
-    let s = "a" + "b" + "c";
+    val s = "a" + "b" + "c";
     assert_eq(s, "abc");
 }
 
@@ -27,7 +27,7 @@ fn test_concat_multiple() {
 
 #[test]
 fn test_concat_string_and_int() {
-    let s = "value: " + "42";
+    val s = "value: " + "42";
     assert(s.contains("42"));
 }
 
@@ -97,7 +97,7 @@ fn test_case_sensitive_ordering() {
 
 #[test]
 fn test_for_loop_chars() {
-    let mut count = 0;
+    var count = 0;
     for c in "hello" {
         count = count + 1;
     }
@@ -106,7 +106,7 @@ fn test_for_loop_chars() {
 
 #[test]
 fn test_for_loop_empty() {
-    let mut count = 0;
+    var count = 0;
     for c in "" {
         count = count + 1;
     }
@@ -117,7 +117,7 @@ fn test_for_loop_empty() {
 
 #[test]
 fn test_let_string() {
-    let mut s = "hello";
+    var s = "hello";
     s = "world";
     assert_eq(s, "world");
 }

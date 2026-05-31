@@ -59,7 +59,7 @@ fn test_combined_short_circuit() {
 
 #[test]
 fn test_and_with_comparisons() {
-    let x = 10;
+    val x = 10;
     assert(x > 5 && x < 20);
     assert(!(x > 5 && x < 8));
 }
@@ -68,7 +68,7 @@ fn test_and_with_comparisons() {
 
 #[test]
 fn test_or_with_comparisons() {
-    let x = 10;
+    val x = 10;
     assert(x < 5 || x > 8);
     assert(!(x < 5 || x < 0));
 }
@@ -77,9 +77,9 @@ fn test_or_with_comparisons() {
 
 #[test]
 fn test_nested_and_or() {
-    let a = true;
-    let b = false;
-    let c = true;
+    val a = true;
+    val b = false;
+    val c = true;
     assert((a && c) || b);
     assert(!(a && b && c));
 }
@@ -89,8 +89,8 @@ fn test_nested_and_or() {
 #[test]
 fn test_short_circuit_skips_function() {
     // When left side is false for &&, right side never executes
-    let mut called = false;
-    let result = false && {
+    var called = false;
+    val result = false && {
         called = true;
         true
     };
@@ -101,8 +101,8 @@ fn test_short_circuit_skips_function() {
 #[test]
 fn test_or_short_circuit_skips_function() {
     // When left side is true for ||, right side never executes
-    let mut called = false;
-    let result = true || {
+    var called = false;
+    val result = true || {
         called = true;
         false
     };
@@ -114,14 +114,14 @@ fn test_or_short_circuit_skips_function() {
 
 #[test]
 fn test_chain_of_ands() {
-    let x = 15;
+    val x = 15;
     assert(x > 0 && x < 100 && x != 50 && x > 10);
     assert(!(x > 0 && x < 100 && x == 15 && x > 20));
 }
 
 #[test]
 fn test_chain_of_ors() {
-    let x = 5;
+    val x = 5;
     assert(x == 0 || x == 5 || x == 10);
     assert(!(x == 1 || x == 2 || x == 3));
 }

@@ -77,11 +77,11 @@
             "patterns": [
                 {
                     "name": "keyword.other.oxy",
-                    "match": "\\b(let|mut|fn|struct|enum|impl|trait|mod|use|pub|const|static|type|as|ref|where|move|async|await|dyn|unsafe|extern|crate|super)\\b"
+                    "match": "\\b(val|var|let|mut|fn|struct|enum|impl|trait|mod|use|pub|const|static|type|as|ref|where|move|async|await|dyn|unsafe|extern|crate|super)\\b"
                 },
                 {
                     "name": "storage.type.oxy",
-                    "match": "\\b(let|mut|const|static)\\b"
+                    "match": "\\b(val|var|const|static)\\b"
                 },
                 {
                     "name": "keyword.other.fn.oxy",

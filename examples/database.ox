@@ -4,7 +4,7 @@
 
 fn main() {
     // Open an in-memory database (use Db::open("myapp.db") for a file)
-    let db = Db::memory();
+    val db = Db::memory();
 
     // Create a table
     db.execute("CREATE TABLE users (
@@ -26,7 +26,7 @@ fn main() {
 
     // Query all users
     println("\nAll users:");
-    let users = db.query("SELECT id, name, email, age FROM users ORDER BY name");
+    val users = db.query("SELECT id, name, email, age FROM users ORDER BY name");
     for user in users {
         println("  {} - {} ({}) age {}",
             user.get("id").unwrap(),
@@ -37,7 +37,7 @@ fn main() {
 
     // Query with parameters
     println("\nUsers older than 28:");
-    let older = db.query("SELECT name, age FROM users WHERE age > ?1", [28]);
+    val older = db.query("SELECT name, age FROM users WHERE age > ?1", [28]);
     for user in older {
         println("  {} (age {})",
             user.get("name").unwrap(),
@@ -45,18 +45,18 @@ fn main() {
     }
 
     // Query a single row
-    let bob = db.query_row("SELECT name, email FROM users WHERE name = ?1", ["Bob"]);
+    val bob = db.query_row("SELECT name, email FROM users WHERE name = ?1", ["Bob"]);
     match bob {
         Some(row) => println("\nFound Bob: {}", row.get("email").unwrap()),
         None => println("\nBob not found"),
     }
 
     // Update and check affected rows
-    let updated = db.execute("UPDATE users SET age = ?1 WHERE name = ?2", [26, "Bob"]);
+    val updated = db.execute("UPDATE users SET age = ?1 WHERE name = ?2", [26, "Bob"]);
     println("\nUpdated {} row(s)", updated);
 
     // Delete
-    let deleted = db.execute("DELETE FROM users WHERE age > ?1", [30]);
+    val deleted = db.execute("DELETE FROM users WHERE age > ?1", [30]);
     println("Deleted {} row(s)", deleted);
 
     db.close();

@@ -1,6 +1,6 @@
 // === Feature: Enums — Data Variants ===
 // Enum variants can carry data. Pattern matching extracts the data.
-// Supports nested matching, if-let, and option-like enum patterns.
+// Supports nested matching, if-val, and option-like enum patterns.
 
 // === Option-like Enum ===
 
@@ -11,8 +11,8 @@ enum MyOption {
 
 #[test]
 fn test_custom_option_some() {
-    let x = MyOption::MySome(42);
-    let result = match x {
+    val x = MyOption::MySome(42);
+    val result = match x {
         MyOption::MySome(v) => v,
         MyOption::MyNone => 0,
     };
@@ -21,8 +21,8 @@ fn test_custom_option_some() {
 
 #[test]
 fn test_custom_option_none() {
-    let x = MyOption::MyNone;
-    let result = match x {
+    val x = MyOption::MyNone;
+    val result = match x {
         MyOption::MySome(v) => v,
         MyOption::MyNone => -1,
     };
@@ -38,8 +38,8 @@ enum MyResult {
 
 #[test]
 fn test_custom_result_ok() {
-    let r = MyResult::MyOk("success");
-    let msg = match r {
+    val r = MyResult::MyOk("success");
+    val msg = match r {
         MyResult::MyOk(m) => m,
         MyResult::MyErr(e) => e,
     };
@@ -48,8 +48,8 @@ fn test_custom_result_ok() {
 
 #[test]
 fn test_custom_result_err() {
-    let r = MyResult::MyErr("failed");
-    let msg = match r {
+    val r = MyResult::MyErr("failed");
+    val msg = match r {
         MyResult::MyOk(m) => m,
         MyResult::MyErr(e) => e,
     };
@@ -60,9 +60,9 @@ fn test_custom_result_err() {
 
 #[test]
 fn test_if_let_some() {
-    let x = MyOption::MySome(10);
-    let mut found = 0;
-    if let MyOption::MySome(v) = x {
+    val x = MyOption::MySome(10);
+    var found = 0;
+    if val MyOption::MySome(v) = x {
         found = v;
     }
     assert_eq(found, 10);
@@ -70,9 +70,9 @@ fn test_if_let_some() {
 
 #[test]
 fn test_if_let_none_else() {
-    let x = MyOption::MyNone;
-    let mut result = 0;
-    if let MyOption::MySome(v) = x {
+    val x = MyOption::MyNone;
+    var result = 0;
+    if val MyOption::MySome(v) = x {
         result = v;
     } else {
         result = -1;
@@ -90,8 +90,8 @@ enum Event {
 
 #[test]
 fn test_enum_mixed_variants() {
-    let e = Event::Click(100, 200);
-    let desc = match e {
+    val e = Event::Click(100, 200);
+    val desc = match e {
         Event::KeyPress(c) => "key",
         Event::Click(x, y) => "click",
         Event::Resize { w, h } => "resize",
@@ -112,7 +112,7 @@ enum Color {
 
 #[test]
 fn test_three_positional_fields_bind_correctly() {
-    let c = Color::Rgb(255, 128, 64);
+    val c = Color::Rgb(255, 128, 64);
     match c {
         Color::Rgb(r, g, b) => {
             assert_eq(r, 255);
@@ -125,7 +125,7 @@ fn test_three_positional_fields_bind_correctly() {
 
 #[test]
 fn test_four_positional_fields_bind_correctly() {
-    let c = Color::Rgba(10, 20, 30, 40);
+    val c = Color::Rgba(10, 20, 30, 40);
     match c {
         Color::Rgba(r, g, b, a) => {
             assert_eq(r, 10);
@@ -139,9 +139,9 @@ fn test_four_positional_fields_bind_correctly() {
 
 #[test]
 fn test_if_let_three_positional_fields() {
-    let c = Color::Hsl(120, 50, 75);
-    let mut total = 0;
-    if let Color::Hsl(h, s, l) = c {
+    val c = Color::Hsl(120, 50, 75);
+    var total = 0;
+    if val Color::Hsl(h, s, l) = c {
         total = h + s + l;
     }
     assert_eq(total, 245);

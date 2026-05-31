@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn test_keyword_hover() {
         assert!(keyword_hover("fn").is_some());
-        assert!(keyword_hover("let").is_some());
+        assert!(keyword_hover("val").is_some());
         assert!(keyword_hover("notakeyword").is_none());
     }
 

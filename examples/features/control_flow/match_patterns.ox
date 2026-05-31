@@ -7,7 +7,7 @@
 
 #[test]
 fn test_match_integer_literal() {
-    let result = match 2 {
+    val result = match 2 {
         1 => "one",
         2 => "two",
         3 => "three",
@@ -18,7 +18,7 @@ fn test_match_integer_literal() {
 
 #[test]
 fn test_match_wildcard_fallback() {
-    let result = match 99 {
+    val result = match 99 {
         1 => "one",
         _ => "other",
     };
@@ -29,8 +29,8 @@ fn test_match_wildcard_fallback() {
 
 #[test]
 fn test_match_returns_value() {
-    let n = 10;
-    let category = match n {
+    val n = 10;
+    val category = match n {
         0 => "zero",
         1..=9 => "small",
         _ => "large",
@@ -42,8 +42,8 @@ fn test_match_returns_value() {
 
 #[test]
 fn test_match_binding() {
-    let x = 42;
-    let y = match x {
+    val x = 42;
+    val y = match x {
         v => v,
     };
     assert_eq(y, 42);
@@ -53,7 +53,7 @@ fn test_match_binding() {
 
 #[test]
 fn test_match_string() {
-    let result = match "hello" {
+    val result = match "hello" {
         "hi" => 1,
         "hello" => 2,
         _ => 3,
@@ -65,7 +65,7 @@ fn test_match_string() {
 
 #[test]
 fn test_match_bool() {
-    let result = match true {
+    val result = match true {
         true => "yes",
         false => "no",
     };
@@ -76,8 +76,8 @@ fn test_match_bool() {
 
 #[test]
 fn test_match_guard() {
-    let n = 15;
-    let result = match n {
+    val n = 15;
+    val result = match n {
         x if x < 10 => "small",
         x if x < 20 => "medium",
         _ => "large",
@@ -87,8 +87,8 @@ fn test_match_guard() {
 
 #[test]
 fn test_match_guard_false_falls_through() {
-    let n = 5;
-    let result = match n {
+    val n = 5;
+    val result = match n {
         x if x > 10 => "big",
         x if x < 10 => "small",
         _ => "other",
@@ -100,8 +100,8 @@ fn test_match_guard_false_falls_through() {
 
 #[test]
 fn test_match_option_some() {
-    let opt = Some(42);
-    let result = match opt {
+    val opt = Some(42);
+    val result = match opt {
         Some(v) => v,
         None => 0,
     };
@@ -110,8 +110,8 @@ fn test_match_option_some() {
 
 #[test]
 fn test_match_option_none() {
-    let opt = None;
-    let result = match opt {
+    val opt = None;
+    val result = match opt {
         Some(v) => v,
         None => -1,
     };
@@ -122,8 +122,8 @@ fn test_match_option_none() {
 
 #[test]
 fn test_match_result_ok() {
-    let r: Result = Ok(100);
-    let result = match r {
+    val r: Result = Ok(100);
+    val result = match r {
         Ok(v) => v,
         Err(_) => -1,
     };
@@ -132,8 +132,8 @@ fn test_match_result_ok() {
 
 #[test]
 fn test_match_result_err() {
-    let r: Result = Err("oops");
-    let result = match r {
+    val r: Result = Err("oops");
+    val result = match r {
         Ok(v) => v.to_string(),
         Err(e) => e,
     };
@@ -144,8 +144,8 @@ fn test_match_result_err() {
 
 #[test]
 fn test_match_range() {
-    let n = 5;
-    let result = match n {
+    val n = 5;
+    val result = match n {
         1..=3 => "low",
         4..=6 => "mid",
         _ => "high",
@@ -155,8 +155,8 @@ fn test_match_range() {
 
 #[test]
 fn test_match_range_exclusive() {
-    let n = 3;
-    let result = match n {
+    val n = 3;
+    val result = match n {
         1..3 => "low",
         3..5 => "mid",
         _ => "other",
@@ -168,8 +168,8 @@ fn test_match_range_exclusive() {
 
 #[test]
 fn test_match_multiple_patterns() {
-    let c = 'x';
-    let result = match c {
+    val c = 'x';
+    val result = match c {
         'a' => "vowel-a",
         'e' => "vowel-e",
         _ => "consonant",
@@ -181,8 +181,8 @@ fn test_match_multiple_patterns() {
 
 #[test]
 fn test_or_pattern_vowels() {
-    let c = 'e';
-    let kind = match c {
+    val c = 'e';
+    val kind = match c {
         'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
         _ => "consonant",
     };
@@ -191,8 +191,8 @@ fn test_or_pattern_vowels() {
 
 #[test]
 fn test_or_pattern_consonant_falls_through() {
-    let c = 'b';
-    let kind = match c {
+    val c = 'b';
+    val kind = match c {
         'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
         _ => "consonant",
     };
@@ -201,7 +201,7 @@ fn test_or_pattern_consonant_falls_through() {
 
 #[test]
 fn test_or_pattern_int_literals() {
-    let mut hits = 0;
+    var hits = 0;
     for n in [1, 2, 3, 4] {
         match n {
             1 | 2 => hits = hits + 10,
@@ -216,9 +216,9 @@ fn test_or_pattern_int_literals() {
 fn test_or_pattern_combined_with_range_and_guard_in_for_loop() {
     // Regression: combining OR + Range + guard inside a for loop used to
     // corrupt the iterator slot (Range pattern's slot-0 scratch hack).
-    let mut buf = "".to_string();
+    var buf = "".to_string();
     for n in [0, 2, 5, 42, -3] {
-        let label = match n {
+        val label = match n {
             0 => "zero",
             1 | 2 => "or",
             3..=9 => "range",
@@ -234,8 +234,8 @@ fn test_or_pattern_combined_with_range_and_guard_in_for_loop() {
 
 #[test]
 fn test_match_option_enum() {
-    let opt = Some(42);
-    let result = match opt {
+    val opt = Some(42);
+    val result = match opt {
         Some(v) => v,
         None => -1,
     };
@@ -246,8 +246,8 @@ fn test_match_option_enum() {
 
 #[test]
 fn test_match_some_wildcard() {
-    let opt = Some("hello");
-    let result = match opt {
+    val opt = Some("hello");
+    val result = match opt {
         Some(_) => 1,
         None => 0,
     };
@@ -258,8 +258,8 @@ fn test_match_some_wildcard() {
 
 #[test]
 fn test_match_tuple_all_bindings() {
-    let pair = (3, 4);
-    let label = match pair {
+    val pair = (3, 4);
+    val label = match pair {
         (a, b) => f"{a}+{b}",
     };
     assert_eq(label, "3+4");
@@ -267,8 +267,8 @@ fn test_match_tuple_all_bindings() {
 
 #[test]
 fn test_match_tuple_literal_then_binding() {
-    let pair = (1, 99);
-    let label = match pair {
+    val pair = (1, 99);
+    val label = match pair {
         (1, y) => f"one-{y}",
         (x, y) => f"{x}-{y}",
     };
@@ -277,8 +277,8 @@ fn test_match_tuple_literal_then_binding() {
 
 #[test]
 fn test_match_tuple_binding_then_literal() {
-    let pair = (5, 0);
-    let label = match pair {
+    val pair = (5, 0);
+    val label = match pair {
         (x, 0) => f"{x}-zero",
         (x, y) => f"{x}-{y}",
     };
@@ -287,8 +287,8 @@ fn test_match_tuple_binding_then_literal() {
 
 #[test]
 fn test_match_tuple_all_literals() {
-    let pair = (2, 3);
-    let label = match pair {
+    val pair = (2, 3);
+    val label = match pair {
         (1, 1) => "ones",
         (2, 3) => "two-three",
         (_, _) => "other",
@@ -298,8 +298,8 @@ fn test_match_tuple_all_literals() {
 
 #[test]
 fn test_match_tuple_with_wildcards() {
-    let pair = (7, 8);
-    let label = match pair {
+    val pair = (7, 8);
+    val label = match pair {
         (_, 0) => "second-zero",
         (_, y) => f"second-{y}",
     };
@@ -308,8 +308,8 @@ fn test_match_tuple_with_wildcards() {
 
 #[test]
 fn test_match_three_tuple() {
-    let triple = (1, 2, 3);
-    let label = match triple {
+    val triple = (1, 2, 3);
+    val label = match triple {
         (1, b, c) => f"one-{b}-{c}",
         (a, b, c) => f"{a}-{b}-{c}",
     };
@@ -319,10 +319,10 @@ fn test_match_three_tuple() {
 #[test]
 fn test_match_tuple_inside_for_loop() {
     // Regression: pattern-binding slots cannot collide with iterator slots.
-    let pairs = [(1, 2), (3, 4), (5, 6)];
-    let mut buf = "".to_string();
+    val pairs = [(1, 2), (3, 4), (5, 6)];
+    var buf = "".to_string();
     for (a, b) in pairs {
-        let label = match (a, b) {
+        val label = match (a, b) {
             (1, y) => f"one-{y}",
             (x, 4) => f"{x}-four",
             (x, y) => f"{x}+{y}",
@@ -334,8 +334,8 @@ fn test_match_tuple_inside_for_loop() {
 
 #[test]
 fn test_if_let_tuple_pattern() {
-    let pair = (10, 20);
-    if let (x, y) = pair {
+    val pair = (10, 20);
+    if val (x, y) = pair {
         assert_eq(x, 10);
         assert_eq(y, 20);
     }

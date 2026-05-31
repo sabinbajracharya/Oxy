@@ -22,8 +22,8 @@ fn parse_fn(src: &str) -> FnDef {
 // === Let statements ===
 
 #[test]
-fn test_let_simple() {
-    let stmts = parse_fn_body("fn main() { let x = 42; }");
+fn test_val_simple() {
+    let stmts = parse_fn_body("fn main() { val x = 42; }");
     assert_eq!(stmts.len(), 1);
     let Stmt::Let {
         name,
@@ -32,7 +32,7 @@ fn test_let_simple() {
         ..
     } = &stmts[0]
     else {
-        panic!("expected let statement");
+        panic!("expected val statement");
     };
     assert_eq!(name, "x");
     assert!(!mutable);
@@ -40,18 +40,18 @@ fn test_let_simple() {
 }
 
 #[test]
-fn test_let_mut() {
-    let stmts = parse_fn_body("fn main() { let mut x = 10; }");
+fn test_var() {
+    let stmts = parse_fn_body("fn main() { var x = 10; }");
     let Stmt::Let { name, mutable, .. } = &stmts[0] else {
-        panic!("expected let statement");
+        panic!("expected var statement");
     };
     assert_eq!(name, "x");
     assert!(mutable);
 }
 
 #[test]
-fn test_let_with_type() {
-    let stmts = parse_fn_body("fn main() { let x: i64 = 42; }");
+fn test_val_with_type() {
+    let stmts = parse_fn_body("fn main() { val x: i64 = 42; }");
     let Stmt::Let { type_ann, .. } = &stmts[0] else {
         panic!("expected let statement");
     };
@@ -264,7 +264,7 @@ fn test_if_else_if() {
 
 #[test]
 fn test_block_as_value() {
-    let stmts = parse_fn_body("fn main() { let x = { 42 }; }");
+    let stmts = parse_fn_body("fn main() { val x = { 42 }; }");
     let Stmt::Let {
         value: Some(expr), ..
     } = &stmts[0]
@@ -333,24 +333,24 @@ fn test_tail_expression() {
 
 #[test]
 fn test_pretty_print() {
-    let program = parse("fn main() { let x: i64 = 1 + 2; }").unwrap();
+    let program = parse("fn main() { val x: i64 = 1 + 2; }").unwrap();
     let output = program.pretty_print();
     assert!(output.contains("fn main()"));
-    assert!(output.contains("let x: i64 = (1 + 2);"));
+    assert!(output.contains("val x: i64 = (1 + 2);"));
 }
 
 // === Error cases ===
 
 #[test]
-fn test_missing_semicolon_in_let() {
-    let result = parse("fn main() { let x = 42 }");
+fn test_missing_semicolon_in_val() {
+    let result = parse("fn main() { val x = 42 }");
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expected ';'"));
 }
 
 #[test]
 fn test_missing_rbrace() {
-    let result = parse("fn main() { let x = 42;");
+    let result = parse("fn main() { val x = 42;");
     assert!(result.is_err());
 }
 
@@ -756,7 +756,7 @@ fn main() {}
 
 #[test]
 fn test_struct_init_expr() {
-    let stmts = parse_fn_body("fn main() { let p = PoInt { x: 1.0, y: 2.0 }; }");
+    let stmts = parse_fn_body("fn main() { val p = PoInt { x: 1.0, y: 2.0 }; }");
     let Stmt::Let {
         value: Some(expr), ..
     } = &stmts[0]
@@ -952,7 +952,7 @@ fn main() {}"#,
 
 #[test]
 fn test_if_let_expr() {
-    let program = parse(r#"fn main() { if let Some(x) = foo() { println("{}", x); } }"#).unwrap();
+    let program = parse(r#"fn main() { if val Some(x) = foo() { println("{}", x); } }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -964,7 +964,7 @@ fn test_if_let_expr() {
 
 #[test]
 fn test_if_let_with_else() {
-    let program = parse(r#"fn main() { if let Some(x) = foo() { x } else { 0 } }"#).unwrap();
+    let program = parse(r#"fn main() { if val Some(x) = foo() { x } else { 0 } }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -980,7 +980,7 @@ fn test_if_let_with_else() {
 #[test]
 fn test_while_let_stmt() {
     let program =
-        parse(r#"fn main() { while let Some(x) = v.pop() { println("{}", x); } }"#).unwrap();
+        parse(r#"fn main() { while val Some(x) = v.pop() { println("{}", x); } }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -989,7 +989,7 @@ fn test_while_let_stmt() {
 
 #[test]
 fn test_try_operator() {
-    let program = parse(r#"fn main() { let x = foo()?; }"#).unwrap();
+    let program = parse(r#"fn main() { val x = foo()?; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1066,7 +1066,7 @@ fn test_ok_err_pattern() {
 
 #[test]
 fn test_closure_with_params() {
-    let program = parse(r#"fn main() { let f = |x, y| x + y; }"#).unwrap();
+    let program = parse(r#"fn main() { val f = |x, y| x + y; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1086,7 +1086,7 @@ fn test_closure_with_params() {
 
 #[test]
 fn test_closure_with_types() {
-    let program = parse(r#"fn main() { let f = |x: i64| -> i64 { x * 2 }; }"#).unwrap();
+    let program = parse(r#"fn main() { val f = |x: i64| -> i64 { x * 2 }; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1111,7 +1111,7 @@ fn test_closure_with_types() {
 
 #[test]
 fn test_empty_closure() {
-    let program = parse(r#"fn main() { let f = || 42; }"#).unwrap();
+    let program = parse(r#"fn main() { val f = || 42; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1129,7 +1129,7 @@ fn test_empty_closure() {
 
 #[test]
 fn test_closure() {
-    let program = parse(r#"fn main() { let f = |x| x; }"#).unwrap();
+    let program = parse(r#"fn main() { val f = |x| x; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1242,7 +1242,7 @@ fn test_for_destructure() {
 
 #[test]
 fn test_turbofish_method() {
-    let program = parse("fn main() { let x = obj.collect::<i64>(); }").unwrap();
+    let program = parse("fn main() { val x = obj.collect::<i64>(); }").unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected fn")
     };
@@ -1267,7 +1267,7 @@ fn test_turbofish_method() {
 
 #[test]
 fn test_turbofish_nested() {
-    let program = parse("fn main() { let x = obj.collect::<List<i64>>(); }").unwrap();
+    let program = parse("fn main() { val x = obj.collect::<List<i64>>(); }").unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected fn")
     };
@@ -1290,7 +1290,7 @@ fn test_turbofish_nested() {
 
 #[test]
 fn test_turbofish_call() {
-    let program = parse("fn main() { let x = foo::<i64>(42); }").unwrap();
+    let program = parse("fn main() { val x = foo::<i64>(42); }").unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected fn")
     };

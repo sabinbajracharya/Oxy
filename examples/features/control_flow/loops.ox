@@ -7,8 +7,8 @@
 
 #[test]
 fn test_while_basic() {
-    let mut sum = 0;
-    let mut i = 0;
+    var sum = 0;
+    var i = 0;
     while i < 5 {
         sum = sum + i;
         i = i + 1;
@@ -19,7 +19,7 @@ fn test_while_basic() {
 
 #[test]
 fn test_while_zero_iterations() {
-    let mut count = 0;
+    var count = 0;
     while false {
         count = count + 1;
     }
@@ -28,8 +28,8 @@ fn test_while_zero_iterations() {
 
 #[test]
 fn test_while_single_iteration() {
-    let mut count = 0;
-    let mut done = false;
+    var count = 0;
+    var done = false;
     while !done {
         count = count + 1;
         done = true;
@@ -41,7 +41,7 @@ fn test_while_single_iteration() {
 
 #[test]
 fn test_while_break() {
-    let mut i = 0;
+    var i = 0;
     while i < 100 {
         if i == 5 {
             break;
@@ -55,8 +55,8 @@ fn test_while_break() {
 
 #[test]
 fn test_while_continue() {
-    let mut sum = 0;
-    let mut i = 0;
+    var sum = 0;
+    var i = 0;
     while i < 5 {
         i = i + 1;
         if i == 3 {
@@ -71,7 +71,7 @@ fn test_while_continue() {
 
 #[test]
 fn test_loop_break() {
-    let mut i = 0;
+    var i = 0;
     loop {
         i = i + 1;
         if i >= 10 {
@@ -83,7 +83,7 @@ fn test_loop_break() {
 
 #[test]
 fn test_loop_break_with_value() {
-    let result = loop {
+    val result = loop {
         break 42;
     };
     assert_eq(result, 42);
@@ -93,8 +93,8 @@ fn test_loop_break_with_value() {
 
 #[test]
 fn test_loop_continue() {
-    let mut sum = 0;
-    let mut i = 0;
+    var sum = 0;
+    var i = 0;
     loop {
         i = i + 1;
         if i > 10 {
@@ -112,10 +112,10 @@ fn test_loop_continue() {
 
 #[test]
 fn test_nested_loops() {
-    let mut total = 0;
-    let mut i = 0;
+    var total = 0;
+    var i = 0;
     while i < 3 {
-        let mut j = 0;
+        var j = 0;
         while j < 3 {
             total = total + 1;
             j = j + 1;
@@ -129,8 +129,8 @@ fn test_nested_loops() {
 
 #[test]
 fn test_break_innermost() {
-    let mut outer = 0;
-    let mut inner = 0;
+    var outer = 0;
+    var inner = 0;
     while outer < 5 {
         outer = outer + 1;
         inner = 0;
@@ -149,9 +149,9 @@ fn test_break_innermost() {
 
 #[test]
 fn test_labeled_break() {
-    let mut x = 0;
+    var x = 0;
     'outer: while x < 10 {
-        let mut y = 0;
+        var y = 0;
         while y < 10 {
             y = y + 1;
             if y == 3 {
@@ -167,11 +167,11 @@ fn test_labeled_break() {
 
 #[test]
 fn test_labeled_continue() {
-    let mut sum = 0;
-    let mut i = 0;
+    var sum = 0;
+    var i = 0;
     'outer: while i < 5 {
         i = i + 1;
-        let mut j = 0;
+        var j = 0;
         while j < 5 {
             j = j + 1;
             if j == i {
@@ -188,7 +188,7 @@ fn test_labeled_continue() {
 
 #[test]
 fn test_break_outer_from_deep() {
-    let mut count = 0;
+    var count = 0;
     'a: loop {
         count = count + 1;
         'b: loop {

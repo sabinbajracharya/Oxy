@@ -123,7 +123,7 @@ fn run_passes_script_args_through() {
     // Oxy's std::env::args() returns Vec<String>; the test script prints them.
     write(
         &proj.join("src/main.ox"),
-        "fn main() {\n    let args = std::env::args();\n    for a in args { println(\"arg:{}\", a); }\n}\n",
+        "fn main() {\n    val args = std::env::args();\n    for a in args { println(\"arg:{}\", a); }\n}\n",
     );
 
     tug_cmd(&proj)

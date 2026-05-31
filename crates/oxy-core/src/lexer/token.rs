@@ -83,10 +83,10 @@ pub enum TokenKind {
     Ident(String),
 
     // === Keywords ===
-    /// `let` — variable binding
-    Let,
-    /// `mut` — mutable binding modifier
-    Mut,
+    /// `val` — immutable variable binding
+    Val,
+    /// `var` — mutable variable binding
+    Var,
     /// `fn` — function definition
     Fn,
     /// `return` — return from function
@@ -247,8 +247,8 @@ impl TokenKind {
     /// Returns the keyword `TokenKind` for a given string, or `None` if not a keyword.
     pub fn from_keyword(word: &str) -> Option<Self> {
         match word {
-            "let" => Some(Self::Let),
-            "mut" => Some(Self::Mut),
+            "val" => Some(Self::Val),
+            "var" => Some(Self::Var),
             "fn" => Some(Self::Fn),
             "return" => Some(Self::Return),
             "if" => Some(Self::If),
@@ -293,8 +293,8 @@ impl TokenKind {
             Self::True => "'true'",
             Self::False => "'false'",
             Self::Ident(_) => "identifier",
-            Self::Let => "'let'",
-            Self::Mut => "'mut'",
+            Self::Val => "'val'",
+            Self::Var => "'var'",
             Self::Fn => "'fn'",
             Self::Return => "'return'",
             Self::If => "'if'",
@@ -376,9 +376,9 @@ impl TokenKind {
 /// All keyword strings recognised by the lexer. Must stay in sync with
 /// `TokenKind::from_keyword`. Re-exported via `crate::symbols::KEYWORDS`.
 pub const KEYWORDS: &[&str] = &[
-    "let", "mut", "fn", "return", "if", "else", "while", "loop", "for", "in", "break", "continue",
-    "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self", "Self", "as", "const",
-    "type", "async", "await", "true", "false", "super", "crate",
+    "val", "var", "fn", "return", "if", "else", "while", "loop", "for", "in",
+    "break", "continue", "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self",
+    "Self", "as", "const", "type", "async", "await", "true", "false", "super", "crate",
 ];
 
 impl std::fmt::Display for TokenKind {
@@ -401,7 +401,8 @@ mod tests {
 
     #[test]
     fn test_keyword_lookup() {
-        assert_eq!(TokenKind::from_keyword("let"), Some(TokenKind::Let));
+        assert_eq!(TokenKind::from_keyword("val"), Some(TokenKind::Val));
+        assert_eq!(TokenKind::from_keyword("var"), Some(TokenKind::Var));
         assert_eq!(TokenKind::from_keyword("fn"), Some(TokenKind::Fn));
         assert_eq!(TokenKind::from_keyword("self"), Some(TokenKind::SelfLower));
         assert_eq!(TokenKind::from_keyword("Self"), Some(TokenKind::SelfUpper));
@@ -428,6 +429,7 @@ mod tests {
             "\"hi\""
         );
         assert_eq!(format!("{}", TokenKind::Plus), "'+'");
-        assert_eq!(format!("{}", TokenKind::Let), "'let'");
+        assert_eq!(format!("{}", TokenKind::Val), "'val'");
+        assert_eq!(format!("{}", TokenKind::Var), "'var'");
     }
 }

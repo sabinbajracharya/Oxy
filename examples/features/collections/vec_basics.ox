@@ -7,26 +7,26 @@
 
 #[test]
 fn test_vec_macro_empty() {
-    let v = [];
+    val v = [];
     assert_eq(v.len(), 0);
     assert(v.is_empty());
 }
 
 #[test]
 fn test_vec_macro_elements() {
-    let v = [1, 2, 3];
+    val v = [1, 2, 3];
     assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_array_literal() {
-    let v = [10, 20, 30];
+    val v = [10, 20, 30];
     assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_array_literal_empty() {
-    let v = [];
+    val v = [];
     assert_eq(v.len(), 0);
 }
 
@@ -34,29 +34,29 @@ fn test_array_literal_empty() {
 
 #[test]
 fn test_push_pop() {
-    let mut v = [];
+    var v = [];
     v.push(10);
     v.push(20);
     v.push(30);
     assert_eq(v.len(), 3);
 
-    let x = v.pop();
+    val x = v.pop();
     assert(x.is_some());
     assert_eq(v.len(), 2);
 }
 
 #[test]
 fn test_pop_empty() {
-    let mut v = [];
-    let x = v.pop();
+    var v = [];
+    val x = v.pop();
     // pop on empty returns None
     assert(x.is_none());
 }
 
 #[test]
 fn test_push_many() {
-    let mut v = [];
-    let mut i = 0;
+    var v = [];
+    var i = 0;
     while i < 100 {
         v.push(i);
         i = i + 1;
@@ -68,11 +68,11 @@ fn test_push_many() {
 
 #[test]
 fn test_len_and_is_empty() {
-    let v = [1, 2, 3];
+    val v = [1, 2, 3];
     assert_eq(v.len(), 3);
     assert(!v.is_empty());
 
-    let empty = [];
+    val empty = [];
     assert_eq(empty.len(), 0);
     assert(empty.is_empty());
 }
@@ -81,7 +81,7 @@ fn test_len_and_is_empty() {
 
 #[test]
 fn test_contains() {
-    let v = [10, 20, 30];
+    val v = [10, 20, 30];
     assert(v.contains(10));
     assert(v.contains(30));
     assert(!v.contains(99));
@@ -89,7 +89,7 @@ fn test_contains() {
 
 #[test]
 fn test_contains_empty() {
-    let v = [];
+    val v = [];
     assert(!v.contains(42));
 }
 
@@ -97,30 +97,30 @@ fn test_contains_empty() {
 
 #[test]
 fn test_first() {
-    let v = ["a", "b", "c"];
-    let f = v.first();
+    val v = ["a", "b", "c"];
+    val f = v.first();
     assert(f.is_some());
     assert(!f.is_none());
 }
 
 #[test]
 fn test_first_empty() {
-    let v = [];
-    let f = v.first();
+    val v = [];
+    val f = v.first();
     assert(f.is_none());
 }
 
 #[test]
 fn test_last() {
-    let v = ["a", "b", "c"];
-    let l = v.last();
+    val v = ["a", "b", "c"];
+    val l = v.last();
     assert(l.is_some());
 }
 
 #[test]
 fn test_last_empty() {
-    let v = [];
-    let l = v.last();
+    val v = [];
+    val l = v.last();
     assert(l.is_none());
 }
 
@@ -128,15 +128,15 @@ fn test_last_empty() {
 
 #[test]
 fn test_get_valid() {
-    let v = ["a", "b", "c"];
-    let x = v.get(1);
+    val v = ["a", "b", "c"];
+    val x = v.get(1);
     assert(x.is_some());
 }
 
 #[test]
 fn test_get_out_of_bounds() {
-    let v = ["a", "b", "c"];
-    let x = v.get(10);
+    val v = ["a", "b", "c"];
+    val x = v.get(10);
     assert(x.is_none());
 }
 
@@ -144,14 +144,14 @@ fn test_get_out_of_bounds() {
 
 #[test]
 fn test_insert_front() {
-    let mut v = [2, 3];
+    var v = [2, 3];
     v.insert(0, 1);
     assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_insert_middle() {
-    let mut v = [1, 3];
+    var v = [1, 3];
     v.insert(1, 2);
     assert_eq(v.len(), 3);
 }
@@ -160,7 +160,7 @@ fn test_insert_middle() {
 
 #[test]
 fn test_remove_valid() {
-    let mut v = ["a", "b", "c"];
+    var v = ["a", "b", "c"];
     v.remove(1);
     assert_eq(v.len(), 2);
 }
@@ -169,7 +169,7 @@ fn test_remove_valid() {
 
 #[test]
 fn test_clear() {
-    let mut v = [1, 2, 3];
+    var v = [1, 2, 3];
     v.clear();
     assert_eq(v.len(), 0);
     assert(v.is_empty());

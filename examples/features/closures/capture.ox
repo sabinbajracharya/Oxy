@@ -7,8 +7,8 @@
 
 #[test]
 fn test_value_capture() {
-    let factor = 10;
-    let multiply = |x| x * factor;
+    val factor = 10;
+    val multiply = |x| x * factor;
     assert_eq(multiply(5), 50);
 }
 
@@ -16,9 +16,9 @@ fn test_value_capture() {
 
 #[test]
 fn test_multiple_captures() {
-    let a = 10;
-    let b = 20;
-    let sum = || a + b;
+    val a = 10;
+    val b = 20;
+    val sum = || a + b;
     assert_eq(sum(), 30);
 }
 
@@ -26,8 +26,8 @@ fn test_multiple_captures() {
 
 #[test]
 fn test_mutable_capture() {
-    let mut count = 0;
-    let inc = || {
+    var count = 0;
+    val inc = || {
         count = count + 1;
     };
     inc();
@@ -40,8 +40,8 @@ fn test_mutable_capture() {
 
 #[test]
 fn test_capture_with_param_and_mut() {
-    let mut total = 100;
-    let add = |x| total = total + x;
+    var total = 100;
+    val add = |x| total = total + x;
     add(50);
     assert_eq(total, 150);
 }
@@ -51,9 +51,9 @@ fn test_capture_with_param_and_mut() {
 
 #[test]
 fn test_multiple_closures_same_capture() {
-    let mut counter = 0;
-    let inc = || { counter = counter + 1; };
-    let dec = || { counter = counter - 1; };
+    var counter = 0;
+    val inc = || { counter = counter + 1; };
+    val dec = || { counter = counter - 1; };
     inc();
     inc();
     assert_eq(counter, 2);
@@ -65,11 +65,11 @@ fn test_multiple_closures_same_capture() {
 
 #[test]
 fn test_capture_in_loop() {
-    let mut captured = 0;
-    let mut i = 0;
+    var captured = 0;
+    var i = 0;
     while i < 5 {
-        let val = i;
-        let closure = || val;
+        val val = i;
+        val closure = || val;
         captured = captured + closure();
         i = i + 1;
     }
@@ -80,9 +80,9 @@ fn test_capture_in_loop() {
 
 #[test]
 fn test_nested_closure() {
-    let outer_val = 10;
-    let inner_closure = || {
-        let add = |x| x + outer_val;
+    val outer_val = 10;
+    val inner_closure = || {
+        val add = |x| x + outer_val;
         add(5)
     };
     assert_eq(inner_closure(), 15);
@@ -92,7 +92,7 @@ fn test_nested_closure() {
 
 #[test]
 fn test_capture_string() {
-    let prefix = "Hello, ";
-    let greet = |name| prefix + name;
+    val prefix = "Hello, ";
+    val greet = |name| prefix + name;
     assert_eq(greet("World"), "Hello, World");
 }

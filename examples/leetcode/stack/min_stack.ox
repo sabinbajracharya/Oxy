@@ -34,7 +34,7 @@ impl MinStack {
 
     fn push(self, val: Int) {
         self.data.push(val);
-        let min_val = if self.mins.is_empty() || val < self.mins.last().unwrap() {
+        val min_val = if self.mins.is_empty() || val < self.mins.last().unwrap() {
             val
         } else {
             self.mins.last().unwrap()
@@ -57,7 +57,7 @@ impl MinStack {
 }
 
 fn main() {
-    let mut s = MinStack::new();
+    var s = MinStack::new();
     s.push(-2);
     s.push(0);
     s.push(-3);
@@ -69,7 +69,7 @@ fn main() {
 
 #[test]
 fn test_min_stack() {
-    let mut s = MinStack::new();
+    var s = MinStack::new();
     s.push(-2);
     s.push(0);
     s.push(-3);

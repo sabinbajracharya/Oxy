@@ -29,35 +29,35 @@ struct TreeNode {
 }
 
 fn main() {
-    let mut root = TreeNode::new(3);
+    var root = TreeNode::new(3);
     root.left = Some(TreeNode::new(9));
-    let mut r = TreeNode::new(20);
+    var r = TreeNode::new(20);
     r.left = Some(TreeNode::new(15));
     r.right = Some(TreeNode::new(7));
     root.right = Some(r);
-    let levels = level_order(Some(root));
+    val levels = level_order(Some(root));
     for level in levels {
         println("{:?}", level);
     }
 }
 
 fn level_order(root: Option) -> List {
-    let mut result = [];
+    var result = [];
     if root.is_none() {
         return result;
     }
-    let mut queue = VecDeque::new();
+    var queue = VecDeque::new();
     queue.push_back(root.unwrap());
     while !queue.is_empty() {
-        let level_size = queue.len();
-        let mut level = [];
+        val level_size = queue.len();
+        var level = [];
         for _i in 0..level_size {
-            let mut node = queue.pop_front().unwrap();
+            var node = queue.pop_front().unwrap();
             level.push(node.val);
-            if let Some(left) = node.left {
+            if val Some(left) = node.left {
                 queue.push_back(left);
             }
-            if let Some(right) = node.right {
+            if val Some(right) = node.right {
                 queue.push_back(right);
             }
         }
@@ -68,13 +68,13 @@ fn level_order(root: Option) -> List {
 
 #[test]
 fn test_example() {
-    let mut root = TreeNode::new(3);
+    var root = TreeNode::new(3);
     root.left = Some(TreeNode::new(9));
-    let mut r = TreeNode::new(20);
+    var r = TreeNode::new(20);
     r.left = Some(TreeNode::new(15));
     r.right = Some(TreeNode::new(7));
     root.right = Some(r);
-    let result = level_order(Some(root));
+    val result = level_order(Some(root));
     assert_eq(result.len(), 3);
     assert_eq(result[0], [3]);
     assert_eq(result[1], [9, 20]);

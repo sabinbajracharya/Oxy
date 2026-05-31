@@ -13,11 +13,11 @@
 //
 // === Pattern Recognition ===
 // - "All permutations" → backtracking with visited tracking
-// - Shared mutable collections let us use classic push/pop/recurse/undo
+// - Shared mutable collections val us use classic push/pop/recurse/undo
 
 fn main() {
-    let nums = [1, 2, 3];
-    let result = permute(nums);
+    val nums = [1, 2, 3];
+    val result = permute(nums);
     for p in result {
         println("{:?}", p);
     }
@@ -28,7 +28,7 @@ fn backtrack(nums: List, current: List, used: List, result: List) {
         result.push(current.clone());
         return;
     }
-    let mut i = 0;
+    var i = 0;
     while i < nums.len() {
         if !used[i] {
             used[i] = true;
@@ -42,28 +42,28 @@ fn backtrack(nums: List, current: List, used: List, result: List) {
 }
 
 fn permute(nums: List) -> List {
-    let n = nums.len();
-    let mut used = [];
-    let mut i = 0;
+    val n = nums.len();
+    var used = [];
+    var i = 0;
     while i < n {
         used.push(false);
         i = i + 1;
     }
-    let result = [];
-    let current = [];
+    val result = [];
+    val current = [];
     backtrack(nums, current, used, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = permute([1, 2, 3]);
+    val result = permute([1, 2, 3]);
     assert_eq(result.len(), 6);
 }
 
 #[test]
 fn test_single() {
-    let result = permute([1]);
+    val result = permute([1]);
     assert_eq(result.len(), 1);
     assert_eq(result[0], [1]);
 }

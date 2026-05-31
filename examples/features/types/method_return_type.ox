@@ -21,20 +21,20 @@ impl Counter {
 
 #[test]
 fn test_method_return_type_resolved() {
-    let c = Counter::new();
-    let n: Int = c.get_count();
+    val c = Counter::new();
+    val n: Int = c.get_count();
     assert_eq(n, 0);
 }
 
 #[test]
 fn test_method_return_type_with_args() {
-    let c = Counter::new();
-    let n: Int = c.add(5);
+    val c = Counter::new();
+    val n: Int = c.add(5);
     assert_eq(n, 5);
 }
 
 #[compile_error]
 fn test_method_return_type_mismatch() {
-    let c = Counter::new();
-    let s: String = c.get_count(); // ERROR: Int assigned to String
+    val c = Counter::new();
+    val s: String = c.get_count(); // ERROR: Int assigned to String
 }

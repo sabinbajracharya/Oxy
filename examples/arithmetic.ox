@@ -1,7 +1,7 @@
 // arithmetic.ox — Basic arithmetic operations
 fn main() {
-    let a = 10;
-    let b = 3;
+    val a = 10;
+    val b = 3;
 
     println("{} + {} = {}", a, b, a + b);
     println("{} - {} = {}", a, b, a - b);
@@ -9,7 +9,7 @@ fn main() {
     println("{} / {} = {}", a, b, a / b);
     println("{} % {} = {}", a, b, a % b);
 
-    let x = 2.5;
-    let y = 1.5;
+    val x = 2.5;
+    val y = 1.5;
     println("{} + {} = {}", x, y, x + y);
 }

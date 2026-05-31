@@ -24,23 +24,23 @@
 // - Skip duplicate left/right values after finding a match
 
 fn main() {
-    let nums = [-1, 0, 1, 2, -1, -4];
-    let triplets = three_sum(nums);
+    val nums = [-1, 0, 1, 2, -1, -4];
+    val triplets = three_sum(nums);
     for t in triplets {
         println("{:?}", t);
     }
 }
 
 fn three_sum(nums: List) -> List {
-    let mut sorted = nums;
+    var sorted = nums;
     sorted.sort_by(|a, b| {
         if a < b { -1 } else if a > b { 1 } else { 0 }
     });
-    let mut result = [];
-    let n = sorted.len();
-    let mut i = 0;
+    var result = [];
+    val n = sorted.len();
+    var i = 0;
     while i < n - 2 {
-        let a = sorted[i];
+        val a = sorted[i];
         if a > 0 {
             break; // Can't sum to 0 if smallest > 0
         }
@@ -49,10 +49,10 @@ fn three_sum(nums: List) -> List {
             i = i + 1;
             continue;
         }
-        let mut left = i + 1;
-        let mut right = n - 1;
+        var left = i + 1;
+        var right = n - 1;
         while left < right {
-            let sum = a + sorted[left] + sorted[right];
+            val sum = a + sorted[left] + sorted[right];
             if sum < 0 {
                 left = left + 1;
             } else if sum > 0 {
@@ -77,21 +77,21 @@ fn three_sum(nums: List) -> List {
 
 #[test]
 fn test_example() {
-    let nums = [-1, 0, 1, 2, -1, -4];
-    let result = three_sum(nums);
+    val nums = [-1, 0, 1, 2, -1, -4];
+    val result = three_sum(nums);
     assert_eq(result.len(), 2);
 }
 
 #[test]
 fn test_no_solution() {
-    let nums = [1, 2, 3];
-    let result = three_sum(nums);
+    val nums = [1, 2, 3];
+    val result = three_sum(nums);
     assert_eq(result.len(), 0);
 }
 
 #[test]
 fn test_all_zeros() {
-    let nums = [0, 0, 0, 0];
-    let result = three_sum(nums);
+    val nums = [0, 0, 0, 0];
+    val result = three_sum(nums);
     assert_eq(result.len(), 1);
 }

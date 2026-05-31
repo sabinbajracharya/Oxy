@@ -24,19 +24,19 @@
 // - Return -1 if total cost > total gas
 
 fn main() {
-    let gas = [1, 2, 3, 4, 5];
-    let cost = [3, 4, 5, 1, 2];
+    val gas = [1, 2, 3, 4, 5];
+    val cost = [3, 4, 5, 1, 2];
     println("{}", can_complete_circuit(gas, cost));
 }
 
 fn can_complete_circuit(gas: List, cost: List) -> Int {
-    let n = gas.len();
-    let mut total = 0;
-    let mut tank = 0;
-    let mut start = 0;
-    let mut i = 0;
+    val n = gas.len();
+    var total = 0;
+    var tank = 0;
+    var start = 0;
+    var i = 0;
     while i < n {
-        let net = gas[i] - cost[i];
+        val net = gas[i] - cost[i];
         total = total + net;
         tank = tank + net;
         if tank < 0 {
@@ -50,14 +50,14 @@ fn can_complete_circuit(gas: List, cost: List) -> Int {
 
 #[test]
 fn test_possible() {
-    let gas = [1, 2, 3, 4, 5];
-    let cost = [3, 4, 5, 1, 2];
+    val gas = [1, 2, 3, 4, 5];
+    val cost = [3, 4, 5, 1, 2];
     assert_eq(can_complete_circuit(gas, cost), 3);
 }
 
 #[test]
 fn test_impossible() {
-    let gas = [2, 3, 4];
-    let cost = [3, 4, 3];
+    val gas = [2, 3, 4];
+    val cost = [3, 4, 3];
     assert_eq(can_complete_circuit(gas, cost), -1);
 }

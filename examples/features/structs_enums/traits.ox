@@ -21,7 +21,7 @@ impl Greet for Person {
 
 #[test]
 fn test_trait_basic() {
-    let p = Person { name: "Alice" };
+    val p = Person { name: "Alice" };
     assert_eq(p.greet(), "Hello, Alice");
 }
 
@@ -48,7 +48,7 @@ impl Shape2D for Square {
 
 #[test]
 fn test_trait_multiple_methods() {
-    let s = Square { side: 3.0 };
+    val s = Square { side: 3.0 };
     assert_eq(s.area(), 9.0);
     assert_eq(s.perimeter(), 12.0);
 }
@@ -76,7 +76,7 @@ impl Describable for Widget {
 
 #[test]
 fn test_trait_default_method() {
-    let w = Widget { id: 1 };
+    val w = Widget { id: 1 };
     assert_eq(w.type_name(), "Widget");
     assert_eq(w.describe(), "no description");
 }
@@ -95,7 +95,7 @@ impl Identifiable for Widget {
 
 #[test]
 fn test_multiple_trait_impls() {
-    let w = Widget { id: 99 };
+    val w = Widget { id: 99 };
     assert_eq(w.id(), 99);
     assert_eq(w.type_name(), "Widget");
 }

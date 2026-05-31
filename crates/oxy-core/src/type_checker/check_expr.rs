@@ -300,6 +300,7 @@ impl TypeChecker {
                 then_block,
                 else_block,
                 span,
+                ..
             } => self.infer_if_let(pattern, inner, guard, then_block, else_block, span),
 
             // Grouped expressions propagate the expected type inward.

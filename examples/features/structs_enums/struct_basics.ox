@@ -12,14 +12,14 @@ struct Point {
 
 #[test]
 fn test_named_struct_construction() {
-    let p = Point { x: 10, y: 20 };
+    val p = Point { x: 10, y: 20 };
     assert_eq(p.x, 10);
     assert_eq(p.y, 20);
 }
 
 #[test]
 fn test_named_struct_field_access() {
-    let p = Point { x: 1, y: 2 };
+    val p = Point { x: 1, y: 2 };
     assert_eq(p.x, 1);
 }
 
@@ -27,7 +27,7 @@ fn test_named_struct_field_access() {
 
 #[test]
 fn test_struct_field_mutation() {
-    let mut p = Point { x: 0, y: 0 };
+    var p = Point { x: 0, y: 0 };
     p.x = 42;
     p.y = 99;
     assert_eq(p.x, 42);
@@ -38,9 +38,9 @@ fn test_struct_field_mutation() {
 
 #[test]
 fn test_struct_shorthand_init() {
-    let x = 5;
-    let y = 15;
-    let p = Point { x, y };
+    val x = 5;
+    val y = 15;
+    val p = Point { x, y };
     assert_eq(p.x, 5);
     assert_eq(p.y, 15);
 }
@@ -51,7 +51,7 @@ struct Pair(Int, String);
 
 #[test]
 fn test_tuple_struct_field_access() {
-    let p = Pair { 0: 42, 1: "hello" };
+    val p = Pair { 0: 42, 1: "hello" };
     assert_eq(p.0, 42);
 }
 
@@ -61,7 +61,7 @@ struct Marker;
 
 #[test]
 fn test_unit_struct() {
-    let m = Marker {};
+    val m = Marker {};
     // Unit struct exists and can be matched
     assert(true);
 }
@@ -70,8 +70,8 @@ fn test_unit_struct() {
 
 #[test]
 fn test_multiple_instances() {
-    let a = Point { x: 1, y: 2 };
-    let b = Point { x: 3, y: 4 };
+    val a = Point { x: 1, y: 2 };
+    val b = Point { x: 3, y: 4 };
     assert_eq(a.x + b.x, 4);
     assert_eq(a.y + b.y, 6);
 }

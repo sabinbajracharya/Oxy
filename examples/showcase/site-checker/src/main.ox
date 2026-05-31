@@ -7,15 +7,15 @@
 use cli_utils;
 
 fn find_html_files(dir: String) -> List<String> {
-    let mut files = [];
-    let result = std::fs::read_dir(dir);
+    var files = [];
+    val result = std::fs::read_dir(dir);
     match result {
         Ok(entries) => {
             for entry in entries {
-                let sep = if dir.ends_with("/") { "" } else { "/" };
-                let path = dir + sep + entry;
+                val sep = if dir.ends_with("/") { "" } else { "/" };
+                val path = dir + sep + entry;
                 if std::fs::is_dir(path) {
-                    let nested = find_html_files(path);
+                    val nested = find_html_files(path);
                     for f in nested {
                         files.push(f);
                     }
@@ -30,22 +30,22 @@ fn find_html_files(dir: String) -> List<String> {
 }
 
 fn extract_urls(html: String) -> List<String> {
-    let mut urls = [];
+    var urls = [];
 
-    let patterns = [
+    val patterns = [
         r#"href="([^"]*)""#,
         r#"src="([^"]*)""#,
     ];
 
-    let mut i = 0;
+    var i = 0;
     while i < patterns.len() {
-        let rx_result = Regex::new(patterns.get(i).unwrap().to_string());
+        val rx_result = Regex::new(patterns.get(i).unwrap().to_string());
         match rx_result {
             Ok(rx) => {
-                let matches = rx.find_all(html);
+                val matches = rx.find_all(html);
                 for m in matches {
-                    let s = m.to_string();
-                    let url = s.replace("href=\"", "").replace("src=\"", "").replace("\"", "");
+                    val s = m.to_string();
+                    val url = s.replace("href=\"", "").replace("src=\"", "").replace("\"", "");
                     if url.len() > 0
                         && !url.starts_with("#")
                         && !url.starts_with("mailto:")
@@ -64,10 +64,10 @@ fn extract_urls(html: String) -> List<String> {
 }
 
 fn check_http(url: String, verbose: bool) -> bool {
-    let resp = http::get(url);
+    val resp = http::get(url);
     match resp {
         Ok(response) => {
-            let ok = response.status >= 200 && response.status < 400;
+            val ok = response.status >= 200 && response.status < 400;
             if verbose {
                 if ok {
                     cli_utils::success(url + "  HTTP " + response.status.to_string());
@@ -87,28 +87,28 @@ fn check_http(url: String, verbose: bool) -> bool {
 }
 
 fn main() {
-    let args = std::args::parse();
+    val args = std::args::parse();
 
-    let dir_opt = args.flags.get("dir");
+    val dir_opt = args.flags.get("dir");
     if dir_opt.is_none() {
         cli_utils::die("--dir=<path> is required");
     }
-    let base_dir = dir_opt.unwrap().to_string();
-    let check_external = args.flags.contains_key("check-external");
-    let verbose = args.flags.contains_key("verbose") || args.flags.contains_key("v");
+    val base_dir = dir_opt.unwrap().to_string();
+    val check_external = args.flags.contains_key("check-external");
+    val verbose = args.flags.contains_key("verbose") || args.flags.contains_key("v");
 
     cli_utils::header("site-checker");
     cli_utils::info("scanning " + base_dir + "...");
 
-    let files = find_html_files(base_dir);
+    val files = find_html_files(base_dir);
     cli_utils::info("found " + files.len().to_string() + " HTML file(s)");
 
-    let mut all_urls = [];
+    var all_urls = [];
     for file in files {
-        let result = std::fs::read_to_string(file);
+        val result = std::fs::read_to_string(file);
         match result {
             Ok(html) => {
-                let urls = extract_urls(html);
+                val urls = extract_urls(html);
                 for url in urls {
                     all_urls.push(url);
                 }
@@ -120,8 +120,8 @@ fn main() {
     cli_utils::info("found " + all_urls.len().to_string() + " link(s)");
 
     // separate local and external URLs
-    let mut local_urls = [];
-    let mut external_urls = [];
+    var local_urls = [];
+    var external_urls = [];
 
     for url in all_urls {
         if url.starts_with("http://") || url.starts_with("https://") {
@@ -131,14 +131,14 @@ fn main() {
         }
     }
 
-    let mut ok_count = 0;
-    let mut broken = 0;
+    var ok_count = 0;
+    var broken = 0;
 
     // check local files
     if local_urls.len() > 0 {
         cli_utils::header("Local links (" + local_urls.len().to_string() + ")");
         for url in local_urls {
-            let target = if url.starts_with("/") {
+            val target = if url.starts_with("/") {
                 base_dir + url
             } else {
                 url

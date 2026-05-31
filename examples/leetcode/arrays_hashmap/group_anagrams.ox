@@ -22,21 +22,21 @@
 // - List::join("") to reconstruct the key string
 
 fn main() {
-    let strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
-    let groups = group_anagrams(strs);
+    val strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
+    val groups = group_anagrams(strs);
     for g in groups {
         println("{:?}", g);
     }
 }
 
 fn sort_string(s: String) -> String {
-    let mut chars = [];
+    var chars = [];
     for ch in s {
         chars.push(ch);
     }
     chars.sort_by(|a, b| {
-        let ao = a.code();
-        let bo = b.code();
+        val ao = a.code();
+        val bo = b.code();
         if ao < bo { -1 } else if ao > bo { 1 } else { 0 }
     });
     // Convert sorted chars back to string using join
@@ -44,10 +44,10 @@ fn sort_string(s: String) -> String {
 }
 
 fn group_anagrams(strs: List) -> List {
-    let mut map = Map::new();
+    var map = Map::new();
     for s in strs {
-        let key = sort_string(s);
-        let mut group = map.get(key.clone()).unwrap_or([]);
+        val key = sort_string(s);
+        var group = map.get(key.clone()).unwrap_or([]);
         group.push(s);
         map.insert(key, group);
     }
@@ -56,22 +56,22 @@ fn group_anagrams(strs: List) -> List {
 
 #[test]
 fn test_basic() {
-    let strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
-    let result = group_anagrams(strs);
+    val strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
+    val result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }
 
 #[test]
 fn test_single_word() {
-    let strs = ["abc"];
-    let result = group_anagrams(strs);
+    val strs = ["abc"];
+    val result = group_anagrams(strs);
     assert_eq(result.len(), 1);
     assert_eq(result[0].len(), 1);
 }
 
 #[test]
 fn test_no_anagrams() {
-    let strs = ["abc", "def", "ghi"];
-    let result = group_anagrams(strs);
+    val strs = ["abc", "def", "ghi"];
+    val result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }

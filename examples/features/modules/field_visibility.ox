@@ -29,20 +29,20 @@ mod database {
 #[test]
 fn test_public_field_accessible() {
     use database::Record;
-    let r = Record::new("user".to_string(), 1234);
+    val r = Record::new("user".to_string(), 1234);
     assert_eq(r.name, "user");
 }
 
 #[test]
 fn test_private_field_via_accessor() {
-    let r = database::make_admin();
+    val r = database::make_admin();
     assert_eq(r.get_key(), 9999);
 }
 
 #[test]
 fn test_public_constructor() {
     use database::Record;
-    let r = Record::new("test".to_string(), 42);
+    val r = Record::new("test".to_string(), 42);
     assert_eq(r.name, "test");
     assert_eq(r.get_key(), 42);
 }
@@ -62,7 +62,7 @@ mod geometry {
 
 #[test]
 fn test_pub_fields_directly_accessible() {
-    let p = geometry::origin();
+    val p = geometry::origin();
     assert_eq(p.x, 0.0);
     assert_eq(p.y, 0.0);
 }
@@ -70,7 +70,7 @@ fn test_pub_fields_directly_accessible() {
 #[test]
 fn test_pub_struct_init_from_outside() {
     use geometry::Point;
-    let p = Point { x: 1.0, y: 2.0 };
+    val p = Point { x: 1.0, y: 2.0 };
     assert_eq(p.x, 1.0);
     assert_eq(p.y, 2.0);
 }
@@ -98,7 +98,7 @@ mod config {
 #[test]
 fn test_mixed_visibility_via_constructor() {
     use config::Settings;
-    let s = Settings::new(true, 10);
+    val s = Settings::new(true, 10);
     assert_eq(s.debug, true);
     assert_eq(s.max_connections, 10);
     assert_eq(s.get_counter(), 0);
@@ -108,25 +108,25 @@ fn test_mixed_visibility_via_constructor() {
 
 #[compile_error]
 fn test_cannot_read_private_field_from_outside() {
-    let r = database::make_admin();
-    let _ = r.secret_key; // ERROR: private field
+    val r = database::make_admin();
+    val _ = r.secret_key; // ERROR: private field
 }
 
 #[compile_error]
 fn test_cannot_init_private_field_from_outside() {
     use database::Record;
-    let _ = Record { name: "x".to_string(), secret_key: 1 }; // ERROR: private field
+    val _ = Record { name: "x".to_string(), secret_key: 1 }; // ERROR: private field
 }
 
 #[compile_error]
 fn test_cannot_read_mixed_private_field() {
     use config::Settings;
-    let s = Settings::new(true, 10);
-    let _ = s.internal_counter; // ERROR: private field
+    val s = Settings::new(true, 10);
+    val _ = s.internal_counter; // ERROR: private field
 }
 
 #[compile_error]
 fn test_cannot_init_mixed_private_field() {
     use config::Settings;
-    let _ = Settings { debug: true, max_connections: 5, internal_counter: 0 }; // ERROR: private field
+    val _ = Settings { debug: true, max_connections: 5, internal_counter: 0 }; // ERROR: private field
 }

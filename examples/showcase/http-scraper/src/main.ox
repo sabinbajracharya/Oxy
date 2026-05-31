@@ -7,14 +7,14 @@
 use cli_utils;
 
 fn extract_hrefs(html: String) -> List<String> {
-    let mut urls = [];
-    let rx_result = Regex::new(r#"href="([^"]*)""#);
+    var urls = [];
+    val rx_result = Regex::new(r#"href="([^"]*)""#);
     match rx_result {
         Ok(rx) => {
-            let matches = rx.find_all(html);
+            val matches = rx.find_all(html);
             for m in matches {
-                let s = m.to_string();
-                let url = s.replace("href=\"", "").replace("\"", "");
+                val s = m.to_string();
+                val url = s.replace("href=\"", "").replace("\"", "");
                 if url.len() > 0 && !url.starts_with("#") && !url.starts_with("mailto:") && !url.starts_with("javascript:") {
                     urls.push(url);
                 }
@@ -26,11 +26,11 @@ fn extract_hrefs(html: String) -> List<String> {
 }
 
 fn extract_matches(html: String, pattern: String) -> List<String> {
-    let mut results = [];
-    let rx_result = Regex::new(pattern);
+    var results = [];
+    val rx_result = Regex::new(pattern);
     match rx_result {
         Ok(rx) => {
-            let matches = rx.find_all(html);
+            val matches = rx.find_all(html);
             for m in matches {
                 results.push(m.to_string());
             }
@@ -41,17 +41,17 @@ fn extract_matches(html: String, pattern: String) -> List<String> {
 }
 
 fn main() {
-    let args = std::args::parse();
+    val args = std::args::parse();
 
-    let url_opt = args.flags.get("url");
+    val url_opt = args.flags.get("url");
     if url_opt.is_none() {
         cli_utils::die("--url=<url> is required");
     }
-    let target = url_opt.unwrap().to_string();
+    val target = url_opt.unwrap().to_string();
 
-    let want_links = args.flags.contains_key("links");
-    let has_pattern = args.flags.contains_key("pattern");
-    let as_json = args.flags.contains_key("json");
+    val want_links = args.flags.contains_key("links");
+    val has_pattern = args.flags.contains_key("pattern");
+    val as_json = args.flags.contains_key("json");
 
     if !want_links && !has_pattern {
         cli_utils::die("need --links or --pattern=<regex>");
@@ -59,17 +59,17 @@ fn main() {
 
     cli_utils::info("fetching " + target + "...");
 
-    let resp = http::get(target);
+    val resp = http::get(target);
     match resp {
         Ok(response) => {
             if !response.status_ok() {
                 cli_utils::die("HTTP " + response.status.to_string());
             }
 
-            let body = response.body;
+            val body = response.body;
 
             if want_links {
-                let links = extract_hrefs(body);
+                val links = extract_hrefs(body);
 
                 if as_json {
                     println("{}", links.to_json());
@@ -83,8 +83,8 @@ fn main() {
             }
 
             if has_pattern {
-                let pat = args.flags.get("pattern").unwrap().to_string();
-                let items = extract_matches(body, pat);
+                val pat = args.flags.get("pattern").unwrap().to_string();
+                val items = extract_matches(body, pat);
 
                 if as_json {
                     println("{}", items.to_json());

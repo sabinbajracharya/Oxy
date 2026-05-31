@@ -23,16 +23,16 @@
 // - For min-heap behavior, negate values
 
 fn main() {
-    let nums = [3, 2, 1, 5, 6, 4];
+    val nums = [3, 2, 1, 5, 6, 4];
     println("{}", find_kth_largest(nums, 2));
 }
 
 fn find_kth_largest(nums: List, k: Int) -> Int {
-    let mut heap = BinaryHeap::new();
+    var heap = BinaryHeap::new();
     for num in nums {
         heap.push(num);
     }
-    let mut i = 1;
+    var i = 1;
     while i < k {
         heap.pop();
         i = i + 1;
