@@ -135,16 +135,6 @@ impl JitContext {
         slot
     }
 
-    /// Pop a value from the operand stack.
-    /// Caller is responsible for reading the value from the returned pointer.
-    pub fn pop_slot(&mut self) -> *mut Value {
-        if self.sp == 0 {
-            return std::ptr::null_mut();
-        }
-        self.sp -= 1;
-        unsafe { self.buffer.add(self.local_count + self.sp) }
-    }
-
     /// Get a pointer to a local variable slot.
     pub fn local_slot(&self, index: usize) -> *mut Value {
         assert!(index < self.local_count);
@@ -166,17 +156,6 @@ impl JitContext {
         }
         self.buffer = new_buffer;
         self.capacity = new_capacity;
-    }
-
-    /// Reset operand stack without deallocating.
-    pub fn reset_stack(&mut self) {
-        // Drop values on the stack to avoid leaks
-        for i in 0..self.sp {
-            unsafe {
-                std::ptr::drop_in_place(self.buffer.add(self.local_count + i));
-            }
-        }
-        self.sp = 0;
     }
 }
 

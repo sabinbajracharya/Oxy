@@ -3,8 +3,6 @@
 //! Pipeline: AST → TypeChecker → ir_gen (AST → Register IR + CFG) → codegen (IR → CLIF) → native.
 //! Bytecode (OpCode/Chunk) has been retired. No operand stack.
 
-#![allow(dead_code)]
-
 // ── Cranelift backend (native only) ────────────────────────────────────
 #[cfg(not(target_arch = "wasm32"))]
 mod codegen;
@@ -32,9 +30,6 @@ use cranelift_frontend::FunctionBuilderContext;
 use cranelift_jit::{JITBuilder, JITModule};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-/// Compiled native function pointer type.
-pub(crate) type JitFn = extern "C" fn(*mut JitContext) -> u64;
 
 /// FFI function declarations with their parameter types and return type.
 #[cfg(not(target_arch = "wasm32"))]

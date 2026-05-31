@@ -36,6 +36,9 @@ pub(crate) struct BasicBlock {
     pub id: BlockId,
     pub ops: Vec<IrOp>,
     pub terminator: Terminator,
+    /// CFG predecessor edges. Reserved for dataflow/SSA analysis passes; not yet
+    /// populated or read by the current ir_gen/codegen (see IR_DESIGN.md).
+    #[allow(dead_code)]
     pub predecessors: Vec<BlockId>,
 }
 
@@ -111,10 +114,17 @@ pub(crate) enum IrOp {
     /// Copy a register value (used when a value is needed in multiple places).
     Copy(Reg, Reg),
     /// Read the result slot from ctx after a function call returns.
+    ///
+    /// Result/error-plumbing vocabulary (see IR_DESIGN.md): implemented in both
+    /// backends and codegen, but ir_gen currently routes returns through
+    /// `Terminator::Return` and the FFI rather than emitting these directly.
+    #[allow(dead_code)]
     ReadResult(Reg),
     /// Write register to ctx.result for function return.
+    #[allow(dead_code)]
     WriteResult(Reg),
     /// Set error message in ctx.
+    #[allow(dead_code)]
     SetError(Reg),
     /// Check if ctx has an error set (returns bool-like in result register).
     CheckError(Reg),
@@ -184,7 +194,11 @@ pub(crate) enum Terminator {
     },
     /// Halt execution (end of program).
     Halt,
-    /// Panic: push error message, go to error path.
+    /// Panic: set error from register, return the error discriminant.
+    ///
+    /// Implemented in both backends (see IR_DESIGN.md) but not yet emitted by
+    /// ir_gen, which currently lowers panics through the FFI.
+    #[allow(dead_code)]
     Panic(Reg),
 }
 
@@ -223,25 +237,12 @@ impl IrFunction {
         id
     }
 
-    pub(crate) fn block(&self, id: BlockId) -> &BasicBlock {
-        &self.blocks[id]
-    }
-
     pub(crate) fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
         &mut self.blocks[id]
     }
 }
 
 impl BasicBlock {
-    pub(crate) fn new(id: BlockId) -> Self {
-        Self {
-            id,
-            ops: Vec::new(),
-            terminator: Terminator::Halt,
-            predecessors: Vec::new(),
-        }
-    }
-
     pub(crate) fn push(&mut self, op: IrOp) {
         self.ops.push(op);
     }
@@ -331,6 +332,9 @@ impl std::fmt::Display for Terminator {
 }
 
 impl IrFunction {
+    /// Render this function's IR for `OXY_VM_TRACE`. Only reached from the
+    /// native codegen path, so it is dead on wasm (where codegen isn't built).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) fn dump(&self) -> String {
         let mut out = String::new();
         use std::fmt::Write;

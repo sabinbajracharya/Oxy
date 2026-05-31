@@ -156,8 +156,8 @@ Primary sources:
                                [ spill slots: grow DOWN from capacity-1 ]
   ```
 
-- `sp` = operand-stack depth. `push_slot` / `pop_slot` compute
-  `buffer.add(local_count + sp)` (`context.rs:146-163`).
+- `sp` = operand-stack depth. `push_slot` computes
+  `buffer.add(local_count + sp)` (`context.rs`).
 - Spill slots for register values grow **downward** from `capacity-1`
   (`codegen.rs:176-188`); `capacity = local_count + STACK_CAP`, `STACK_CAP = 2048`.
 - Other fields: result/error state (`result: Value`, `error_msg: [u8; 1024]`,

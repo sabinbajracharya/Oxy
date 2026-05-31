@@ -614,22 +614,6 @@ pub(crate) fn reset_runtime_state() {
 
 // ── Function calls ───────────────────────────────────────────────────
 
-/// Call stack for nested Oxy function invocations.
-static CALL_STACK: std::sync::OnceLock<std::sync::Mutex<Vec<CallFrame>>> =
-    std::sync::OnceLock::new();
-
-struct CallFrame {
-    caller_local_count: usize,
-    caller_sp: usize,
-}
-
-fn call_stack_lock() -> std::sync::MutexGuard<'static, Vec<CallFrame>> {
-    CALL_STACK
-        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
-        .lock()
-        .unwrap()
-}
-
 // ── CalleeFrame: buffer lifecycle for JIT function calls ────────────────
 //
 // Every JIT function call needs a fresh buffer where the callee's locals
@@ -729,15 +713,6 @@ impl CalleeFrame {
 /// to get backwards. Mirrors how `oxy_call_closure` builds its callee frame
 /// directly from a Vec.
 fn invoke_jit_fn(ctx: &mut JitContext, fn_ptr: *const u8, local_count: usize, args: Vec<Value>) {
-    // Save caller state on the call stack
-    {
-        let mut call_stack = call_stack_lock();
-        call_stack.push(CallFrame {
-            caller_local_count: ctx.local_count,
-            caller_sp: ctx.sp,
-        });
-    }
-
     // The caller already popped the args, so the operand stack top is where the
     // call's result will land.
     let result_sp = ctx.sp;

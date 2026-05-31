@@ -19,14 +19,6 @@ fn find_fn<'a>(ir: &'a IrGen, name: &str) -> &'a IrFunction {
         .unwrap_or_else(|| panic!("function not found: {name}"))
 }
 
-/// Helper: collect all IrOp variants in a function as strings (for simple matching).
-fn op_names(f: &IrFunction) -> Vec<String> {
-    f.blocks
-        .iter()
-        .flat_map(|b| b.ops.iter().map(|op| format!("{:?}", op)))
-        .collect()
-}
-
 // ── Literals ───────────────────────────────────────────────────────
 
 #[test]
