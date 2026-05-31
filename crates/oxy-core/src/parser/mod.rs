@@ -48,20 +48,21 @@ pub struct Parser {
 #[allow(dead_code)] // Variants like Call will be used in later phases
 enum Precedence {
     None = 0,
-    Assignment = 1, // = += -= etc.
-    Range = 2,      // .. ..=
-    Or = 3,         // ||
-    And = 4,        // &&
-    BitOr = 5,      // |
-    BitXor = 6,     // ^
-    BitAnd = 7,     // &
-    Equality = 8,   // == !=
-    Comparison = 9, // < > <= >=
-    Shift = 10,     // << >>
-    Term = 11,      // + -
-    Factor = 12,    // * / %
-    Unary = 13,     // - ! & *
-    Call = 14,      // () .
+    Assignment = 1,  // = += -= etc.
+    Pipeline = 2,    // |>
+    Range = 3,       // .. ..=
+    Or = 4,          // ||
+    And = 5,         // &&
+    BitOr = 6,       // |
+    BitXor = 7,      // ^
+    BitAnd = 8,      // &
+    Equality = 9,    // == !=
+    Comparison = 10, // < > <= >=
+    Shift = 11,      // << >>
+    Term = 12,       // + -
+    Factor = 13,     // * / %
+    Unary = 14,      // - ! & *
+    Call = 15,       // () .
 }
 
 impl Precedence {
@@ -71,6 +72,7 @@ impl Precedence {
             TokenKind::PipePipe => Precedence::Or,
             TokenKind::AmpAmp => Precedence::And,
             TokenKind::Pipe => Precedence::BitOr,
+            TokenKind::PipeArrow => Precedence::Pipeline,
             TokenKind::Caret => Precedence::BitXor,
             TokenKind::Amp => Precedence::BitAnd,
             TokenKind::EqEq | TokenKind::BangEq => Precedence::Equality,

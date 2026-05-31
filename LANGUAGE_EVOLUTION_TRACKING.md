@@ -82,12 +82,12 @@
 ## Phase 3: Expressiveness
 
 ### 3.1 Pipeline operator `|>`
-- [ ] Add `PipeArrow` token to lexer
-- [ ] Add `Precedence::Pipeline` level (between Assignment and Range)
-- [ ] Parse `|>` as binary infix, desugar to `Expr::Call` or `Expr::MethodCall` in parser
-- [ ] Handle edge cases: `?`, `.await`, method chains, multi-line
-- [ ] Add pipeline test file: `examples/features/expressions/pipeline.ox`
-- [ ] **Commit:** `feat: add pipeline operator |>`
+- [x] Add `PipeArrow` token to lexer
+- [x] Add `Precedence::Pipeline` level (between Assignment and Range)
+- [x] Parse `|>` as binary infix, desugar to `Expr::Call` or `Expr::MethodCall` in parser
+- [x] Handle edge cases: `?`, `.await`, method chains, multi-line
+- [x] Add pipeline test file: `examples/features/expressions/pipeline.ox` + 5 Rust TC tests
+- [x] **Committed:** `feat: add pipeline operator |>`
 
 ### 3.2 Single-line function syntax
 - [ ] Parse `fn name(params) -> T = expr` — desugar to block with tail expr

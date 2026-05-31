@@ -245,4 +245,87 @@ mod tests {
         );
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
+
+    // --- Phase 3.1: pipeline operator |> ---
+
+    #[test]
+    fn test_pipeline_basic_call() {
+        // `5 |> double()` desugars to `double(5)`
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int { x * 2 }
+            fn main() {
+                let r = 5 |> double();
+                let _ = r;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_pipeline_with_args() {
+        // `5 |> add(3)` desugars to `add(5, 3)`
+        let result = run_compiled(
+            r#"
+            fn add(a: int, b: int) -> int { a + b }
+            fn main() {
+                let r = 5 |> add(3);
+                let _ = r;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_pipeline_chain() {
+        // `5 |> double() |> add(3)` desugars to `add(double(5), 3)`
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int { x * 2 }
+            fn add(a: int, b: int) -> int { a + b }
+            fn main() {
+                let r = 5 |> double() |> add(3);
+                let _ = r;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_pipeline_bare_ident() {
+        // `21 |> double` desugars to `double(21)`
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int { x * 2 }
+            fn main() {
+                let r = 21 |> double;
+                let _ = r;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_pipeline_type_mismatch_is_rejected() {
+        // `s |> doubler` where s is a String and doubler expects int
+        let result = run_compiled(
+            r#"
+            fn doubler(x: int) -> int { x * 2 }
+            fn main() {
+                let s = "hello";
+                let _ = s |> doubler;
+            }
+            "#,
+        );
+        assert!(result.is_err(), "expected type mismatch, got Ok");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("type mismatch"),
+            "expected type mismatch error, got: {err}"
+        );
+    }
 }

@@ -552,6 +552,14 @@ impl Parser {
             });
         }
 
+        // Pipeline operator: `x |> f(args)` desugars to `f(x, args)`
+        if op_kind == TokenKind::PipeArrow {
+            self.advance();
+            let right = self.parse_expr(prec)?;
+            let span = self.merge_spans(left.span(), right.span());
+            return Self::desugar_pipeline(left, right, span);
+        }
+
         // Binary operators
         if let Some(bin_op) = Self::token_to_binop(&op_kind) {
             self.advance();
@@ -1060,6 +1068,91 @@ impl Parser {
             TokenKind::Shl => Some(BinOp::Shl),
             TokenKind::Shr => Some(BinOp::Shr),
             _ => None,
+        }
+    }
+
+    /// Desugar `left |> right` into a function call.
+    ///
+    /// | Right side form        | Desugared to                     |
+    /// |------------------------|----------------------------------|
+    /// | `f(args...)`           | `f(left, args...)`               |
+    /// | `y.method(args...)`    | `y.method(left, args...)`        |
+    /// | `path::func(args...)`  | `path::func(left, args...)`      |
+    /// | `f` (bare ident)       | `f(left)`                        |
+    /// | `y.method` (field)     | `y.method(left)`                 |
+    /// | `path::to::func` (path)| `path::to::func(left)`           |
+    fn desugar_pipeline(left: Expr, right: Expr, span: Span) -> Result<Expr, PipelineError> {
+        match right {
+            Expr::Call {
+                callee,
+                turbofish,
+                mut args,
+                ..
+            } => {
+                args.insert(0, left);
+                Ok(Expr::Call {
+                    callee,
+                    turbofish,
+                    args,
+                    span,
+                })
+            }
+            Expr::MethodCall {
+                object,
+                method,
+                turbofish,
+                mut args,
+                ..
+            } => {
+                args.insert(0, left);
+                Ok(Expr::MethodCall {
+                    object,
+                    method,
+                    turbofish,
+                    args,
+                    span,
+                })
+            }
+            Expr::PathCall {
+                path,
+                turbofish,
+                mut args,
+                ..
+            } => {
+                args.insert(0, left);
+                Ok(Expr::PathCall {
+                    path,
+                    turbofish,
+                    args,
+                    span,
+                })
+            }
+            Expr::Ident(name, ident_span) => Ok(Expr::Call {
+                callee: Box::new(Expr::Ident(name, ident_span)),
+                turbofish: None,
+                args: vec![left],
+                span,
+            }),
+            Expr::FieldAccess { object, field, .. } => Ok(Expr::MethodCall {
+                object,
+                method: field,
+                turbofish: None,
+                args: vec![left],
+                span,
+            }),
+            Expr::Path { segments, .. } => Ok(Expr::PathCall {
+                path: segments,
+                turbofish: None,
+                args: vec![left],
+                span,
+            }),
+            _ => Err(PipelineError::Parser {
+                message: "right side of `|>` must be a function call, method call, \
+                     or identifier"
+                    .to_string(),
+                line: span.line,
+                column: span.column,
+            }),
         }
     }
 }

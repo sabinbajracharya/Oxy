@@ -199,10 +199,12 @@ impl<'src> Lexer<'src> {
                 }
             }
 
-            // Pipe or PipePipe
+            // Pipe or PipePipe or PipeArrow
             '|' => {
                 if self.match_char('|') {
                     TokenKind::PipePipe
+                } else if self.match_char('>') {
+                    TokenKind::PipeArrow
                 } else {
                     TokenKind::Pipe
                 }
@@ -1000,8 +1002,13 @@ mod tests {
     #[test]
     fn test_arrows() {
         assert_eq!(
-            kinds("-> =>"),
-            vec![TokenKind::Arrow, TokenKind::FatArrow, TokenKind::Eof]
+            kinds("-> => |>"),
+            vec![
+                TokenKind::Arrow,
+                TokenKind::FatArrow,
+                TokenKind::PipeArrow,
+                TokenKind::Eof,
+            ]
         );
     }
 

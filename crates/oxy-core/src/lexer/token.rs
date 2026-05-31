@@ -201,6 +201,8 @@ pub enum TokenKind {
     Arrow,
     /// `=>`
     FatArrow,
+    /// `|>` — pipeline operator
+    PipeArrow,
     /// `::`
     ColonColon,
     /// `..`
@@ -349,6 +351,7 @@ impl TokenKind {
             Self::PercentEq => "'%='",
             Self::Arrow => "'->'",
             Self::FatArrow => "'=>'",
+            Self::PipeArrow => "'|>'",
             Self::ColonColon => "'::'",
             Self::DotDot => "'..'",
             Self::DotDotEq => "'..='",
