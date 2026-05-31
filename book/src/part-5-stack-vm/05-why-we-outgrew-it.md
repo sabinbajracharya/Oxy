@@ -1,19 +1,30 @@
 # Why We Outgrew It
 
-<!-- OPUS_FILL
-Write a 2-3 paragraph narrative. This is the pivot point of the book — where the
-project commits to native compilation.
+This is the pivot of the whole book — the moment the project stops climbing the ladder of
+interpreters and commits to native compilation. And the thing to understand is that nothing was
+wrong with the stack VM. It worked. It was a real, measurable upgrade over the tree-walker, ten to
+fifty times faster on the loops that mattered. If the goal had been "a faster interpreter," we'd
+have been done. The goal was never that. The goal was native machine code, as fast as C, and at
+some point the question on the table became: *what would it take to emit native code from here?*
+The answer was not "improve the stack VM." The answer was that the stack VM was now standing in the
+way.
 
-The emotional arc: the stack VM worked. It was a real upgrade. And then someone said
-"what would it take to emit native code?" and the answer was: not a stack VM. Cranelift
-wants register IR.
+The reason is a mismatch. Cranelift — the code generator we'd be handing things to — does not want
+a stack. It wants a *register* IR: named values, explicit operations on those values, no implicit
+push-and-pop discipline to reverse-engineer. So a stack VM in front of Cranelift means writing a
+translation pass that reads stack bytecode, figures out which stack slots are really which values,
+and rebuilds them as registers. That pass is real work, it's the kind of thing the Ruby-on-LLVM and
+Python-on-LLVM projects had to grind through, and it's a whole new surface for bugs. We actually
+started building it — the `bytecode-to-Cranelift translator` commit — and it lasted exactly one day
+before the better idea won: don't translate the stack into registers, just *emit registers
+directly from the AST in the first place.* The stack VM wasn't a foundation to build on; it was a
+middleman to remove.
 
-Reference the actual decision: rather than translate stack → register (an extra pass),
-just emit register IR directly from the AST. The stack VM becomes an unnecessary middleman.
-
-End with: "We made the call. The stack VM was removed in the same commit that added the
-register IR. No overlap, no compatibility period. Just: here is the better thing."
--->
+So we made the call, and we made it cleanly. The stack VM was deleted in the same span of commits
+that introduced the register IR — no overlap, no dual-backend compatibility period, no slow
+deprecation. The removal commit dropped about 2,700 lines; the register IR added about 4,000. One
+day there was a stack VM and the next there wasn't, and in its place was the thing the rest of this
+book is about. Here is the better thing.
 
 ## The Cranelift impedance mismatch
 

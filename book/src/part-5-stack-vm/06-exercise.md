@@ -1,10 +1,13 @@
 # Exercise: Trace a Program on the Stack
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercises don't involve the retired stack VM —
-they use the mental model to understand the current IR. Frame it as:
-"The stack VM is gone, but the mental model is useful. Let's apply it."
--->
+The stack VM is gone, but the mental model it gave you — flatten the tree into a linear sequence of
+simple instructions, then execute them in a loop — is exactly the lens you need for the register IR
+coming up in Part 6. So these exercises use the stack model as a thinking tool rather than asking
+you to edit retired code. You'll hand-compile a program to stack bytecode on paper, trace it by
+hand, and then dump the *real* register IR for a comparable program and see precisely where the two
+models agree and where they part ways. That contrast is the whole point: feel the stack model
+clearly enough that, when registers replace it next part, you can see exactly what changed and why
+it's a better fit for native code.
 
 ## Part A: Hand-compile to stack bytecode
 

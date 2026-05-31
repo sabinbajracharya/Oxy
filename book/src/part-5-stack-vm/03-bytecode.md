@@ -1,16 +1,19 @@
 # Bytecode: A Language Between Languages
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-Bytecode is a second language that lives between the source language and machine code.
-It is designed to be easy to generate (from the compiler) and easy to execute (by the VM).
-Neither humans nor machines need to read it directly — it is a private protocol between
-the compiler and the runtime.
+Bytecode is a second language — one that sits in the gap between the source you write and the
+machine code a CPU runs, and is designed to please neither humans nor hardware but the two programs
+on either side of it. The compiler should find it easy to *generate*: emit a flat list of simple
+instructions as you walk the AST. The VM should find it easy to *execute*: read the instructions
+in order, jumping around for branches and loops. Nobody is meant to read bytecode for pleasure;
+it's a private protocol between the compiler and the runtime, a handshake format that exists only
+so those two can stop talking in trees and start talking in sequences.
 
-Reference: Java bytecode, Python bytecode (.pyc files), WebAssembly is technically a
-form of bytecode. The concept is universal and predates all of these by decades (UCSD Pascal
-p-code, 1978).
--->
+You've almost certainly run on bytecode without thinking about it. Java compiles to JVM bytecode.
+Those `.pyc` files Python leaves lying around are cached bytecode. WebAssembly — which Part 8 leans
+on heavily — is, in a real sense, a bytecode too. And the idea is older than any of them: UCSD
+Pascal was shipping "p-code" in 1978 on exactly this principle. So bytecode is well-trodden ground,
+which is part of why Oxy tried it — and, as the end of this chapter explains, part of why Oxy
+eventually walked away from it in favor of something better suited to becoming native code.
 
 ## What bytecode is
 

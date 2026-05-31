@@ -1,14 +1,21 @@
 # Why Tree-Walking Is Slow
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook. This is the "why we changed" chapter.
-The key problem with tree-walking is indirection: every operation requires a recursive call,
-a match on the AST variant, and heap-allocated Value objects. These are individually cheap
-but compound catastrophically in loops.
+The last part ended with a promise to show you the wall the tree-walker ran into. Here it is, and
+the shape of it is *indirection*. Every single operation in a tree-walking interpreter is wrapped
+in layers of overhead: a recursive function call to descend into the node, a `match` to figure out
+which kind of node it is, a walk back up with a heap-allocated `Value` object carrying the result.
+Add two numbers and you've paid for three function calls, a couple of pattern matches, and an
+allocation that you immediately throw away. Each of those costs is trivial on its own — nanoseconds,
+who cares. The problem is that they don't stay on their own. Put them inside a loop that runs ten
+million times and "trivial" multiplies into "catastrophic."
 
-Use the benchmark: the tight summation loop that takes seconds on the tree-walker.
-Make the reader feel the ceiling: "Ferrite worked. And then we hit the wall."
--->
+The benchmark below — a plain summation loop, the kind of thing you'd write without a second
+thought — takes *seconds* on the tree-walker. Not milliseconds. Seconds. The equivalent C loop
+finishes in about ten milliseconds, which is to say the tree-walker is something like five hundred
+times slower at the exact kind of code Oxy claims to care about. Ferrite worked, and it worked for
+a long time, and it ran a whole real language. And then we wrote a hot loop and hit the wall. This
+chapter is about measuring that wall precisely, because you can't justify the next three parts of
+machinery until you've felt exactly how immovable it is.
 
 ## The three costs that compound
 

@@ -1,11 +1,13 @@
 # Oxy's Stack VM: What It Was
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro framing this as archaeology — like the tree-walker chapter.
-"The stack VM lived for exactly one week: added May 13, removed May 28. It ran the full
-feature suite — structs, closures, traits, async — before being replaced by the register IR."
-Make it feel significant: a week of real work, a real working system, retired for good reasons.
--->
+More archaeology, like the tree-walker chapter — except this dig site is shockingly recent. The
+stack VM existed for fifteen days. It was added on May 13, 2026 and removed on May 28, and in that
+two-week window it was Oxy's entire execution engine, running the full feature suite: structs,
+closures, traits, pattern matching, async/await, the whole standard library. That's the thing worth
+sitting with before we read the code. This was not a sketch or a spike. It was a complete, working
+language implementation, built with real care, and then deliberately deleted two weeks later for
+reasons that — as the next chapter explains — were exactly right. Fifteen days of solid engineering,
+retired on purpose. Let's go read what it was.
 
 ## The timeline
 

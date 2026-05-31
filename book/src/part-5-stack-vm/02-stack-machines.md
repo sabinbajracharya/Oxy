@@ -1,16 +1,19 @@
 # Stack Machines: The Mental Model
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-Stack machines are the most intuitive virtual machine model. Push operands, execute
-an operation (which pops its inputs and pushes its result), repeat.
+If you ever used one of those old Hewlett-Packard calculators — the ones where you typed `4`, then
+`3`, then `+`, in that order, and `7` appeared — you have already used a stack machine, and you
+already understand the model we're about to build. It's called Reverse Polish Notation, and the
+mechanism behind it is the simplest virtual machine there is: there's one stack, you push operands
+onto it, and an operator pops the operands it needs, computes, and pushes the result back. `4 3 +`
+means *push 4, push 3, now `+` pops both and pushes their sum*. That's the entire idea. There is no
+tree to walk and nothing to recurse into — just a flat stream of "push this, do that."
 
-Use the RPN calculator analogy: "4 3 +" means push 4, push 3, then '+' pops both and
-pushes 7. That's a stack machine. Hewlett-Packard built calculators this way in the 1970s.
-The JVM works this way. CPython works this way.
-
-Make the reader feel: "Oh, this is just a reverse-polish calculator?"
--->
+This is not a toy model, either. HP shipped calculators on it in the 1970s, the Java Virtual
+Machine runs on it, CPython's bytecode interpreter runs on it, and for about fifteen days in May
+2026, so did Oxy. So when the realization lands — *wait, this is just a reverse-Polish calculator?*
+— lean into it, because that is genuinely most of what a stack VM is. The rest of this chapter is
+the handful of additions that turn the calculator into something that can run real programs: a
+place to put variables, a way to call functions, and an instruction set to encode it all.
 
 ## The stack machine model
 
