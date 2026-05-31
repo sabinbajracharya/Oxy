@@ -1,6 +1,13 @@
 # IR Test Coverage Plan — AST → Register IR Lowering
 
-> **Status:** design only. This document specifies *what* snapshot tests should exist and
+> **Status: RETIRED (plan fulfilled).** Every 🆕 row below was implemented; the 82 golden
+> files now live under `crates/oxy-core/tests/snapshots/ir/**` and are asserted by
+> `crates/oxy-core/tests/ir_snapshot_tests.rs`. This document is kept for historical
+> context — it is **not** current guidance. The live coverage is the test suite itself;
+> the IR/serialization sources of truth are `crates/oxy-core/src/vm/jit/IR_DESIGN.md`
+> and `IR_SNAPSHOT_FORMAT.md`.
+
+> **(Original plan, as written.)** This document specifies *what* snapshot tests should exist and
 > *why*. It does not contain test code. An implementing model/engineer should turn each 🆕
 > row into one `gen_ir_snapshot()` golden-file test in `crates/oxy-core/tests/ir_snapshot_tests.rs`.
 

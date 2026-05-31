@@ -107,8 +107,11 @@ Folders to document (15): `lexer/`, `parser/`, `ast/`, `type_checker/`, `types/`
 `env/`, `json/`, `http/`, `stdlib/`, `vm/`, `vm/builtins/`, `vm/jit/`,
 `vm/jit/ir_gen/`, plus crate roots `oxy-cli/`, `oxy-lsp/`, `oxy-tug/`.
 
-Reconcile the existing `vm/jit/IR_DESIGN.md`, `IR_SNAPSHOT_FORMAT.md`,
-`IR_TEST_COVERAGE.md` — link them from `vm/jit/README.md` rather than duplicating.
+Reconcile the existing `vm/jit/IR_DESIGN.md` and `IR_SNAPSHOT_FORMAT.md` — link them
+from `vm/jit/README.md` rather than duplicating. **(Done.)** `IR_SNAPSHOT_FORMAT.md`
+status corrected to "implemented"; the fulfilled `IR_TEST_COVERAGE.md` plan was retired
+to `docs/history/ir-test-coverage-plan.md` (its 82 golden files live under
+`tests/snapshots/ir/**`).
 
 Rewrite/replace stale `docs/`:
 - Replace `docs/bytecode-vm.md` → `docs/execution-model.md` (register IR + two

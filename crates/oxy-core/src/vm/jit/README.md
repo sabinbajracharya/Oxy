@@ -23,8 +23,11 @@ IR interpreter (`../interp.rs`) consumes the identical `IrFunction`s.
 ## Companion design docs (in this folder)
 
 - `IR_DESIGN.md` — canonical reference for the register IR design & invariants.
-- `IR_SNAPSHOT_FORMAT.md` — the snapshot serialization format spec.
-- `IR_TEST_COVERAGE.md` — what IR snapshot tests should exist and why.
+- `IR_SNAPSHOT_FORMAT.md` — the snapshot serialization format spec (implemented by `ir_snapshot.rs`).
+
+The IR snapshot test-coverage plan is fulfilled (82 golden files under
+`crates/oxy-core/tests/snapshots/ir/**`, asserted by `tests/ir_snapshot_tests.rs`); the
+original plan is retired to `docs/history/ir-test-coverage-plan.md`.
 
 ## Key types & entry points
 

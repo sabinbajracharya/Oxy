@@ -11,8 +11,8 @@ build/test workflow and project conventions is the root [`CLAUDE.md`](../CLAUDE.
 | [`execution-model.md`](execution-model.md) | **Start here.** The pipeline, the register IR, the two backends (Cranelift JIT + wasm IR interpreter), the shared `oxy_*` FFI, and the divergence guards. |
 | [`architecture/exhaustive-ast-walkers.md`](architecture/exhaustive-ast-walkers.md) | Why match statements over `Expr`/`Stmt`/`IrOp` are exhaustive (a correctness guard). |
 | `crates/oxy-core/src/vm/jit/IR_DESIGN.md` | Canonical register-IR design & invariants. |
-| `crates/oxy-core/src/vm/jit/IR_SNAPSHOT_FORMAT.md` | IR snapshot serialization format. |
-| `crates/oxy-core/src/vm/jit/IR_TEST_COVERAGE.md` | IR snapshot test coverage plan. |
+| `crates/oxy-core/src/vm/jit/IR_SNAPSHOT_FORMAT.md` | IR snapshot serialization format (implemented). |
+| [`history/ir-test-coverage-plan.md`](history/ir-test-coverage-plan.md) | Retired: the (now-fulfilled) IR snapshot test coverage plan. |
 
 ## Decision records (ADRs)
 

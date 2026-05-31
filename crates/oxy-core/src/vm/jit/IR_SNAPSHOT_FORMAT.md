@@ -1,6 +1,7 @@
 # Oxy Register IR — Canonical Snapshot Serialization Format (Spec)
 
-> **Status:** specification, not yet implemented.
+> **Status:** implemented by `jit/ir_snapshot.rs` (`gen_ir_snapshot` in `vm/api.rs`).
+> This document is the spec that serializer conforms to.
 > **Scope:** defines the *canonical textual serialization* of the Register IR
 > (`IrFunction` / `BasicBlock` / `IrOp` / `Terminator` from `jit/ir.rs`) for use in
 > golden / snapshot tests and stable diffs.

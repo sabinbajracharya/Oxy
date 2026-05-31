@@ -91,8 +91,9 @@ Primary sources:
   `entry: BlockId`, `local_count`, `return_type`, `params`, `captures`,
   `is_async`.
 - `BlockId = usize` (`ir.rs:14`). Blocks are stored in a `Vec` and indexed by
-  position; each block's `id` mirrors its index. `block(id)` / `block_mut(id)`
-  accessors are on `IrFunction`.
+  position; each block's `id` mirrors its index. The `block_mut(id)` accessor is
+  on `IrFunction` (lowering mutates blocks in place; there is no immutable
+  `block(id)` getter).
 - `BasicBlock` (`ir.rs:35`) = `{ id, ops: Vec<IrOp>, terminator, predecessors:
   Vec<BlockId> }` — a list of straight-line ops plus exactly one terminator.
 - During lowering, `ir_gen` keeps a `current_block` cursor: `emit` appends to it,
