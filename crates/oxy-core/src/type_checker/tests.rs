@@ -189,4 +189,60 @@ mod tests {
         );
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
+
+    // --- Phase 2.4/2.5: generic return + nested/local function inference ---
+
+    #[test]
+    fn test_generic_return_type_inference() {
+        // first_elem<T>(Vec<T>) -> Option<T> should infer T=int and
+        // return Option<int>.
+        let result = run_compiled(
+            r#"
+            fn first_elem<T>(v: Vec<T>) -> Option<T> {
+                if v.len() == 0 { None } else { Some(v[0]) }
+            }
+            fn main() {
+                let x = first_elem(vec![1, 2, 3]);
+                // x should be Option<int>
+                let _ = x.unwrap() + 1;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_closure_infers_params_from_let_binding_type() {
+        // When a closure is assigned to a typed let binding, the expected
+        // fn type should flow into the closure (Phase 2.2 + 2.3 combined).
+        let result = run_compiled(
+            r#"
+            fn main() {
+                // Expected type fn(int) -> int flows into closure via
+                // bidirectional inference from the let annotation.
+                let f: fn(int) -> int = |x| x * 2;
+                let _ = f(21);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_closure_infers_from_nested_call_context() {
+        // Closure passed to a function with concrete fn type should have
+        // params inferred, and the return type flows from the body.
+        let result = run_compiled(
+            r#"
+            fn map_vec(v: Vec<int>, f: fn(int) -> int) -> Vec<int> { v.map(f) }
+            fn main() {
+                let v = vec![1, 2, 3];
+                // Closure |x| x + 1: x inferred as int from fn(int) -> int
+                let result = map_vec(v, |x| x + 1);
+                let _ = result;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
 }
