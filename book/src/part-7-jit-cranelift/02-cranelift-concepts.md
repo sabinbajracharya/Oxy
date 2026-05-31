@@ -1,17 +1,19 @@
 # Cranelift: The Rust-Native Code Generator
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-Cranelift is the code generator that powers both wasmtime (the WebAssembly runtime used by
-many production systems) and Firefox's SpiderMonkey JavaScript engine. It is written in
-Rust and designed specifically for JIT compilation — fast to compile, reasonable code quality.
+Cranelift is a production code generator written in Rust, and you've very likely already run code
+it compiled. It's the backend for Wasmtime, the WebAssembly runtime used across a lot of
+production infrastructure, and it has done duty in Firefox's JavaScript engine. It was designed
+from the start for the JIT use case: take an IR, turn it into native machine code, and do it
+*fast* — milliseconds per module, not seconds.
 
-Contrast with LLVM: LLVM produces better code quality but compilation is slow (seconds per
-module). Cranelift is faster to compile (milliseconds per module) at the cost of some
-optimization quality. For a JIT where startup time matters, Cranelift is the right choice.
-
-End with: Cranelift is what `codegen.rs` talks to. Let's understand how.
--->
+That speed is the whole reason to pick it over the obvious alternative. LLVM, the giant that
+backs Clang and rustc, produces better-optimized machine code than Cranelift — but it takes its
+time doing so, seconds per module, because it runs dozens of heavyweight optimization passes. For
+an ahead-of-time compiler where the user never sees the compile, that trade is fine. For a JIT,
+where compilation happens *while your program is starting up* and the user is waiting, it's
+backwards: you want to be running as soon as possible, and slightly-less-optimal code that's ready
+in a millisecond beats perfect code that's ready in a second. Cranelift makes exactly that trade,
+which is why it's the right tool for Oxy. It's what `codegen.rs` talks to. Let's understand how.
 
 ## What Cranelift provides
 

@@ -1,14 +1,19 @@
 # The FFI Bridge: How Rust Becomes a Runtime
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The FFI bridge is the shared runtime — the layer that both the JIT and the wasm interpreter
-call into. It is the single source of truth for what Oxy operations DO.
+Here is the load-bearing idea of the entire backend, and it's worth slowing down for: **one
+runtime, both backends.** Cranelift compiles arithmetic and control flow to native instructions,
+but it does not implement what it *means* to push to a vector, format a string, or construct a
+struct. All of that — the actual semantics of Oxy's operations — lives in one place: a family of
+plain Rust functions named `oxy_*`, the FFI bridge. This is the single source of truth for what
+Oxy operations *do*.
 
-Reference the key insight: "one runtime, both backends." The JIT calls these functions as
-native machine code calls. The interpreter dispatches to the same function pointers.
-The semantics cannot diverge because they share the implementation.
--->
+And the elegance is that both execution backends reach the very same functions. The JIT calls them
+as native machine-code calls, emitted by Cranelift. The wasm interpreter, which has no machine
+code, looks the same functions up in a pointer table and calls them directly. Two completely
+different ways of *getting there*, but the *destination* is identical Rust. This is why the JIT and
+the interpreter cannot drift apart on what a program means: there is no second implementation to
+drift from. `Vec::push` is correct or incorrect exactly once, for everyone. The rest of this
+chapter is how that bridge is built — and the consistency test that keeps the two backends honest.
 
 ## The `oxy_*` function family
 

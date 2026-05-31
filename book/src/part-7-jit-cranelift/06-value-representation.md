@@ -1,13 +1,20 @@
 # Value Representation: How Oxy Stores Everything
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-Every runtime value in Oxy — an integer, a string, a struct, a closure — is represented
-by one enum: `Value`. This is the lingua franca between compiled code and the Rust runtime.
+Everything Oxy can hold at runtime — an integer, a string, a vector, a struct, an enum variant, a
+closure, a future — is, in the end, one Rust enum called `Value`. That single type is the lingua
+franca of the whole system: it's what the FFI functions push and pop, what crosses the boundary
+between compiled code and the Rust runtime, what flows unchanged through both backends. When a
+compiled function hands a result back, it hands back a `Value`. When the interpreter computes
+something, it computes a `Value`. One vocabulary, spoken everywhere.
 
-The cost: every `Value` carries a tag (which variant it is) and may carry heap-allocated data.
-The benefit: a single type that passes through every layer of the system unchanged.
--->
+That uniformity has a price, and it's honest to name it. Every `Value` carries a tag saying which
+variant it is, and the enum is as big as its largest variant, so even a humble integer is boxed
+into something larger than a bare `i64` — and complex variants pull in heap allocations on top.
+That's overhead the tree-walker paid on every single operation, and it's exactly the cost the JIT's
+two-map strategy works so hard to *avoid* in hot loops by keeping scalars as raw Cranelift values
+until the last possible moment. So `Value` is the great convenience and the great cost of the
+runtime at once: the single type that lets every layer interoperate, and the boxing the fast path
+spends its effort dodging. This chapter is a tour of what's inside it.
 
 ## The `Value` enum
 

@@ -1,16 +1,20 @@
 # Rust Concepts: Unsafe, Raw Pointers, and Memory
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-`unsafe` in Rust is not a red flag — it is an explicit acknowledgment of "here be dragons."
-The Rust compiler cannot verify these operations, so the programmer takes responsibility.
-The JIT's FFI layer uses unsafe extensively and correctly.
+The word `unsafe` scares people, and it shouldn't — not because the operations are harmless, but
+because the keyword means almost the opposite of what it sounds like. `unsafe` is not Rust admitting
+it gave up on safety. It's Rust drawing a box around the handful of operations it genuinely cannot
+verify — dereferencing a raw pointer, calling into C, doing pointer arithmetic — and asking you to
+sign for them. Inside that box, the borrow checker, the type system, and the lifetime rules are all
+*still on*. The only thing `unsafe` unlocks is a short list of capabilities the compiler can't prove
+sound on your behalf, and in exchange it asks you to have proven them sound yourself.
 
-Frame it as: unsafe is not about doing dangerous things unsafely. It is about doing the
-same inherently-dangerous things (raw memory access, C interop, pointer arithmetic) but
-with explicit acknowledgment of the responsibility. Good unsafe code is well-reasoned
-and well-commented. Oxy's FFI code is that.
--->
+So `unsafe` isn't about doing dangerous things carelessly; it's about doing inherently dangerous
+things — the kind any JIT must do, because handing raw memory to a code generator is intrinsically
+beyond what a type system can check — with the danger marked, reasoned about, and commented. Good
+`unsafe` code is *more* carefully thought through than the safe code around it, precisely because
+the compiler isn't there to catch you. Oxy's FFI layer is exactly that kind of code, and this
+chapter walks through where it lives, why each `unsafe` block is sound, and the one double-free
+invariant that, if you forget it, brings the whole thing down.
 
 ## What `unsafe` means in Rust
 

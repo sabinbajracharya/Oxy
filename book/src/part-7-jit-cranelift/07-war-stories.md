@@ -1,26 +1,40 @@
 # War Stories: From 129 Failures to Zero
 
-<!-- OPUS_FILL
-Write a 4-5 paragraph narrative opening for this chapter.
+We had a JIT. It compiled. It ran. It was wrong in a hundred and twenty-nine ways.
 
-This is the emotional peak of Part 7. The JIT was built, the tests were run, and the
-result was: 129 failures. Not 1. Not 10. 129.
+That's the number that came back the first time the whole feature suite ran against the freshly
+merged Cranelift backend: `129 FAILED`. Not one bug to chase down, not a dozen rough edges — a
+hundred and twenty-nine red lines scrolling past, touching booleans, collections, closures,
+generics, async, pattern matching, very nearly everything the language could do. There's a
+particular feeling to that moment, and if you build compilers you'll meet it eventually: the thing
+*works*, in the sense that it accepts a program and produces an answer, and the answer is simply
+wrong, over and over, in ways that seem to have nothing to do with each other. It's easy to read
+129 as "129 separate problems" and feel the floor drop out.
 
-The narrative arc: 
-- "We had a JIT. It compiled. It ran. It was wrong in 129 ways."
-- The methodical debugging process — not whack-a-mole (fix one test), but cluster-finding
-  (find the root cause that's causing 30 failures at once)
-- The satisfaction of a root-cause fix that flips 35 tests green at once
-- The lesson: never debug a compiler by fixing individual test cases
+The instinct in that moment is whack-a-mole: open the first failing test, see that `true` printed
+as `1`, patch that one case, rerun, move to the next. Resist it. That instinct is the single
+slowest way to fix a compiler, and it would have meant 129 separate edits, each one a little
+special-case band-aid, the whole codebase slowly turning into scar tissue. Because here is the
+thing about a compiler test suite: it is not a list of bugs. It is a list of *symptoms*. The actual
+bugs are far fewer, and each one tends to be a single convention that two parts of the compiler
+disagree about — and that one disagreement shows up as twenty, thirty, thirty-five red lines at
+once. Find the disagreement, fix it in one place, and watch an entire cluster of tests turn green
+together. That is the only sane way through 129 failures, and it's the discipline this chapter is
+really about.
 
-Reference the actual document: docs/history/ir-cfg-jit-fix-log.md — the real-time log
-kept during the debugging session. 
+So the work became archaeology, not whack-a-mole. Group the failures by what they had in common.
+*Everything boolean is broken* — that's one cluster, and it points at one place where `true`
+acquired the wrong tag. *Every collection constructor returns the wrong thing* — another cluster,
+another single mismatch, this time between how a name was registered and how it was looked up.
+*Every generic method can't be found* — a third. Each cluster had one root cause and one honest
+fix, and the satisfaction of watching `129 → 94` after a single five-line change — thirty-five
+tests cleared at once — is hard to overstate. It's the closest compiler work gets to a magic trick.
 
-Tone: honest, a bit battle-worn, ultimately triumphant. Make the reader feel the debugging
-sessions. Reference specific clusters by name (Bool/Unit tagging, path canonicalization, etc.)
-
-This should be Opus territory — full narrative prose throughout.
--->
+What follows is the real sequence, reconstructed from `docs/history/ir-cfg-jit-fix-log.md`, the log
+we kept in real time as the number came down. It includes the hours we wasted on a wrong hypothesis,
+because that was real too. Read it as a worked example of the only debugging method that scales:
+treat the failures as symptoms, hunt the convention mismatch underneath, fix the cause, and let the
+symptoms clear themselves.
 
 ## The document behind this chapter
 

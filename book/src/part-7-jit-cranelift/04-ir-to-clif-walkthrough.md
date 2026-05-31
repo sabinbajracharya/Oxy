@@ -1,9 +1,11 @@
 # From IR Ops to CLIF: The Codegen Walkthrough
 
-<!-- OPUS_FILL
-1-paragraph intro. "This is the chapter where Oxy IR becomes machine code. Open codegen.rs."
-Keep it tight — the chapter is code-heavy.
--->
+This is the chapter where it all pays off — where Oxy's register IR finally crosses over into real
+machine code. Everything so far has been preparation: the IR was designed to lower cleanly, and
+`codegen.rs` is where that lowering happens, op by op, translating each `IrOp` and `Terminator`
+into Cranelift instructions that Cranelift then turns into x86 or arm64. It's a code-heavy chapter,
+so open `crates/oxy-core/src/vm/jit/codegen.rs` and read along; the central thing to keep in mind
+is the two-map register strategy, which is the first thing we'll unpack.
 
 **File:** `crates/oxy-core/src/vm/jit/codegen.rs`
 

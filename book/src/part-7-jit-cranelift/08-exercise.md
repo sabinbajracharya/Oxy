@@ -1,11 +1,12 @@
 # Exercise: Add a New IR Instruction
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercise adds a feature to the JIT that goes through
-all three layers: IR op → codegen → FFI. This is the full stack.
-Frame it as: "You are about to add a feature that touches every layer of the JIT.
-After this, you have read every layer at least once."
--->
+This exercise is the full stack. You're going to add an FFI function and reason about the
+`JitContext` buffer, the codegen, and the IR all at once — which means by the time you're done,
+you'll have touched every layer of the JIT with your own hands, not just read about it. That's the
+real milestone here. Part 7 covered the deepest machinery in the book; this is where you prove to
+yourself that the machinery is approachable, one function and one buffer slot at a time. Part D
+closes the loop back to the war stories, so you practice not just *building* in the JIT but
+*debugging* it the way that actually works.
 
 ## Part A: Add `oxy_is_truthy` as an FFI function
 

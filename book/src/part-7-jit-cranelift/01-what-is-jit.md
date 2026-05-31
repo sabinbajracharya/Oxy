@@ -1,22 +1,25 @@
 # What Is JIT Compilation?
 
-<!-- OPUS_FILL
-Write a 3-paragraph hook.
+JIT stands for Just-In-Time, and the phrase is more literal than it sounds: the program is compiled
+to native machine code at *runtime*, at the last possible moment before it executes. That's a third
+option distinct from the two you already know. A C compiler does its work *ahead* of time, long
+before the user runs anything. The tree-walker did its work *during* execution, re-examining the
+same code on every single pass. A JIT splits the difference — it waits until you actually run the
+program, then compiles it to real machine instructions, then jumps into those instructions. Just in
+time: not too early, not never.
 
-JIT = Just-In-Time. The program is compiled to native machine code at runtime, right
-before it executes — not before distribution (like C), not by walking the code every
-time (like the tree-walker). The "just in time" means: "compiled at the last possible
-moment before execution."
+This is not an exotic technique; it's the quiet engine under most of modern computing. Java's
+HotSpot JIT is the reason "Java is slow" stopped being true sometime around 2005. V8 is the reason
+the JavaScript in your browser runs within shouting distance of C. LuaJIT, PyPy, the .NET CLR —
+all JITs. When something dynamic turns out to be surprisingly fast, there is very often a JIT
+underneath doing exactly what this part of the book describes.
 
-Reference real JITs: HotSpot (Java), V8 (JavaScript), PyPy (Python). They are the reason
-your browser runs JavaScript at near-C speed, and why Java stopped being slow.
-
-The key insight: native code has no dispatch overhead. No "match on opcode". No boxing
-of integers. The CPU just executes instructions directly.
-
-End with: Oxy uses Cranelift — a Rust-native code generator — to do this compilation.
-Cranelift takes our register IR and emits native x86/arm64 machine code. That's this part.
--->
+And the reason native code is so much faster comes down to what *isn't* there. No `match` on an
+opcode to decide what to do next. No boxing an integer into a heap object just to add it. No
+recursive `eval` call per node. The CPU just executes instructions, directly, the way the hardware
+was built to. Oxy gets there using **Cranelift** — a code generator written in Rust, designed for
+exactly this job — which takes the register IR we built in Part 6 and emits native x86 or arm64
+machine code. How that translation works, and what it costs, is what this part is about.
 
 ## AOT vs JIT vs interpretation
 
