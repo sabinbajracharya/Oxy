@@ -103,15 +103,21 @@
 - [x] **Commit:** `feat(stdlib): add pipeline-friendly free functions` (`4ff1353`)
 
 ### 3.4 Remove all `!` macros — make them built-in functions
-- [ ] Remove `!` token from macro call syntax in parser
-- [ ] `println!(...)` → `println(...)`, `print!(...)` → `print(...)`, `eprintln!()` → `eprintln()`
-- [ ] `format!(...)` → `format(...)`, `dbg!(...)` → `dbg(...)`
-- [ ] `panic!(...)` → `panic(...)`, `todo!(...)` → `todo(...)`
-- [ ] `vec![...]` → `List(...)` (rename to match new type name — see 3.5)
-- [ ] Update ir_gen: route `Expr::Call` for these built-in names (no `MacroCall` needed)
-- [ ] Keep `MacroCall` AST node? No — remove it. All macro-like things become regular calls.
-- [ ] Update all `.ox` test files
-- [ ] **Commit:** `refactor: remove ! macro syntax — all built-ins are functions`
+- [x] Remove `!` token from macro call syntax in parser (clear error message)
+- [x] `println!(...)` → `println(...)`, `print!(...)` → `print(...)`, `eprintln!()` → `eprintln()`
+- [x] `format!(...)` → `format(...)`, `dbg!(...)` → `dbg(...)`
+- [x] `panic!(...)` → `panic(...)`, `todo!(...)` → `todo(...)`
+- [x] `vec![...]` → `vec(...)` (name unchanged until 3.5 rename)
+- [x] `assert_eq!(...)` → `assert_eq(...)`, `assert!(...)` → `assert(...)`, `assert_ne!(...)` → `assert_ne(...)`
+- [x] Update ir_gen: route `Expr::Call` for built-in names (no `MacroCall` needed)
+- [x] Remove `MacroCall` AST node entirely — all macro-like things become regular `Expr::Call`
+- [x] Update type checker: remove `infer_macro_call`, add built-in call type checks
+- [x] Update `.ox` test files (all 200+ files)
+- [x] Update Rust test files with embedded Oxy source strings
+- [x] Update `symbols.rs`: remove `!` from all names
+- [x] Update LSP: remove `!` handling in word_at_position, update tests
+- [x] Regenerate IR snapshots
+- [x] **Commit:** `refactor: remove ! macro syntax — all built-ins are functions`
 
 ### 3.5 Type naming — consistency + `Vec` → `List`
 - [ ] Research: Gleam/Elm use uppercase types (`Int`, `String`, `Bool`, `List`), Lua untyped

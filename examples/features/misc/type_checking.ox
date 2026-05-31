@@ -21,14 +21,14 @@ use data::Entry;
 fn test_field_access_returns_string() {
     let e = data::make_entry();
     let n: String = e.name;
-    assert_eq!(n, "test");
+    assert_eq(n, "test");
 }
 
 #[test]
 fn test_field_access_returns_i64() {
     let e = data::make_entry();
     let c: int = e.count;
-    assert_eq!(c, 42);
+    assert_eq(c, 42);
 }
 
 // === Self in Impl Blocks ===
@@ -55,7 +55,7 @@ use shapes::Rect;
 #[test]
 fn test_self_in_impl_block() {
     let r = Rect::new(5, 10);
-    assert_eq!(r.area(), 50);
+    assert_eq(r.area(), 50);
 }
 
 // === Struct Name Resolution Through Use Aliases ===
@@ -75,7 +75,7 @@ use lib::Widget;
 #[test]
 fn test_struct_via_use_alias() {
     let w: Widget = lib::create();
-    assert_eq!(w.label, "ok");
+    assert_eq(w.label, "ok");
 }
 
 // === String Indexing ===
@@ -84,7 +84,7 @@ fn test_struct_via_use_alias() {
 fn test_string_index_type() {
     let s = "hello".to_string();
     let c: char = s[0];
-    assert_eq!(c, 'h');
+    assert_eq(c, 'h');
 }
 
 // === Type Annotation on PathCall Return ===
@@ -98,7 +98,7 @@ mod calc {
 #[test]
 fn test_path_call_return_type() {
     let v: int = calc::value();
-    assert_eq!(v, 100);
+    assert_eq(v, 100);
 }
 
 // === Nested Field Access Chaining ===
@@ -123,5 +123,5 @@ use outer_mod::Outer;
 fn test_nested_field_access() {
     let o = outer_mod::make();
     let v: int = o.inner.val;
-    assert_eq!(v, 99);
+    assert_eq(v, 99);
 }

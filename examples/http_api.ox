@@ -4,13 +4,13 @@ fn main() {
     let resp = http::get("https://jsonplaceholder.typicode.com/todos/1");
     match resp {
         Ok(response) => {
-            println!("Status: {}", response.status);
+            println("Status: {}", response.status);
             if response.status_ok() {
                 let data = response.json().unwrap();
-                println!("Title: {}", data.get("title").unwrap());
+                println("Title: {}", data.get("title").unwrap());
             }
         }
-        Err(e) => println!("Error: {}", e),
+        Err(e) => println("Error: {}", e),
     }
 
     // POST with JSON
@@ -20,8 +20,8 @@ fn main() {
 
     let resp = http::post_json("https://jsonplaceholder.typicode.com/posts", user);
     match resp {
-        Ok(response) => println!("Created with status: {}", response.status),
-        Err(e) => println!("Error: {}", e),
+        Ok(response) => println("Created with status: {}", response.status),
+        Err(e) => println("Error: {}", e),
     }
 
     // Request builder
@@ -29,7 +29,7 @@ fn main() {
         .header("Accept", "application/json")
         .send();
     match resp {
-        Ok(response) => println!("Builder status: {}", response.status),
-        Err(e) => println!("Error: {}", e),
+        Ok(response) => println("Builder status: {}", response.status),
+        Err(e) => println("Error: {}", e),
     }
 }

@@ -23,13 +23,13 @@
 // - Return -1 if dp[amount] is still the sentinel
 
 fn main() {
-    let coins = vec![1, 2, 5];
-    println!("{}", coin_change(coins, 11));
+    let coins = vec(1, 2, 5);
+    println("{}", coin_change(coins, 11));
 }
 
 fn coin_change(coins: Vec, amount: int) -> int {
     let inf = amount + 1;
-    let mut dp = vec![0];
+    let mut dp = vec(0);
     for _i in 0..amount {
         dp.push(inf);
     }
@@ -51,15 +51,15 @@ fn coin_change(coins: Vec, amount: int) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(coin_change(vec![1, 2, 5], 11), 3);
+    assert_eq(coin_change(vec(1, 2, 5), 11), 3);
 }
 
 #[test]
 fn test_impossible() {
-    assert_eq!(coin_change(vec![2], 3), -1);
+    assert_eq(coin_change(vec(2), 3), -1);
 }
 
 #[test]
 fn test_zero() {
-    assert_eq!(coin_change(vec![1], 0), 0);
+    assert_eq(coin_change(vec(1), 0), 0);
 }

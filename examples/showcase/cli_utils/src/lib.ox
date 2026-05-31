@@ -6,25 +6,25 @@
 
 pub fn header(text: String) {
     let bar = "=".repeat(text.len() + 4);
-    println!(bar);
-    println!("  " + text);
-    println!(bar);
+    println(bar);
+    println("  " + text);
+    println(bar);
 }
 
 pub fn info(text: String) {
-    println!("  " + text);
+    println("  " + text);
 }
 
 pub fn success(text: String) {
-    println!("  ok  " + text);
+    println("  ok  " + text);
 }
 
 pub fn warn(text: String) {
-    println!("  warn  " + text);
+    println("  warn  " + text);
 }
 
 pub fn fail(text: String) {
-    println!("  FAIL  " + text);
+    println("  FAIL  " + text);
 }
 
 pub fn die(text: String) {

@@ -13,8 +13,8 @@ fn test_while_basic() {
         sum = sum + i;
         i = i + 1;
     }
-    assert_eq!(sum, 10);
-    assert_eq!(i, 5);
+    assert_eq(sum, 10);
+    assert_eq(i, 5);
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn test_while_zero_iterations() {
     while false {
         count = count + 1;
     }
-    assert_eq!(count, 0);
+    assert_eq(count, 0);
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_while_single_iteration() {
         count = count + 1;
         done = true;
     }
-    assert_eq!(count, 1);
+    assert_eq(count, 1);
 }
 
 // === Break in While ===
@@ -48,7 +48,7 @@ fn test_while_break() {
         }
         i = i + 1;
     }
-    assert_eq!(i, 5);
+    assert_eq(i, 5);
 }
 
 // === Continue in While ===
@@ -64,7 +64,7 @@ fn test_while_continue() {
         }
         sum = sum + i;
     }
-    assert_eq!(sum, 1 + 2 + 4 + 5);
+    assert_eq(sum, 1 + 2 + 4 + 5);
 }
 
 // === Loop with Break ===
@@ -78,7 +78,7 @@ fn test_loop_break() {
             break;
         }
     }
-    assert_eq!(i, 10);
+    assert_eq(i, 10);
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn test_loop_break_with_value() {
     let result = loop {
         break 42;
     };
-    assert_eq!(result, 42);
+    assert_eq(result, 42);
 }
 
 // === Continue in Loop ===
@@ -105,7 +105,7 @@ fn test_loop_continue() {
         }
         sum = sum + i;
     }
-    assert_eq!(sum, 1 + 3 + 5 + 7 + 9);
+    assert_eq(sum, 1 + 3 + 5 + 7 + 9);
 }
 
 // === Nested Loops ===
@@ -122,7 +122,7 @@ fn test_nested_loops() {
         }
         i = i + 1;
     }
-    assert_eq!(total, 9);
+    assert_eq(total, 9);
 }
 
 // === Break from Nested Loop (innermost) ===
@@ -141,8 +141,8 @@ fn test_break_innermost() {
             }
         }
     }
-    assert_eq!(outer, 5);
-    assert_eq!(inner, 2);
+    assert_eq(outer, 5);
+    assert_eq(inner, 2);
 }
 
 // === Labeled Break ===
@@ -160,7 +160,7 @@ fn test_labeled_break() {
         }
         x = x + 1;
     }
-    assert_eq!(x, 0);
+    assert_eq(x, 0);
 }
 
 // === Labeled Continue ===
@@ -181,7 +181,7 @@ fn test_labeled_continue() {
         }
     }
     // Only inner loops where j != i contribute
-    assert!(sum > 0);
+    assert(sum > 0);
 }
 
 // === Break all nested loops ===
@@ -199,5 +199,5 @@ fn test_break_outer_from_deep() {
             }
         }
     }
-    assert_eq!(count, 3);
+    assert_eq(count, 3);
 }

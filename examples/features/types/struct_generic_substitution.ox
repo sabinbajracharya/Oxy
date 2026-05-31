@@ -14,20 +14,20 @@ struct Pair<A, B> {
 #[test]
 fn test_generic_struct_init_ok() {
     let b: Box<int> = Box { value: 5 };
-    assert_eq!(b.value, 5);
+    assert_eq(b.value, 5);
 }
 
 #[test]
 fn test_generic_struct_string_field_ok() {
     let b: Box<String> = Box { value: "hi".to_string() };
-    assert_eq!(b.value, "hi");
+    assert_eq(b.value, "hi");
 }
 
 #[test]
 fn test_two_param_generic_ok() {
     let p: Pair<int, String> = Pair { first: 1, second: "x".to_string() };
-    assert_eq!(p.first, 1);
-    assert_eq!(p.second, "x");
+    assert_eq(p.first, 1);
+    assert_eq(p.second, "x");
 }
 
 #[compile_error]

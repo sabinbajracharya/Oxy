@@ -10,12 +10,12 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_identity_same_type_int() {
-    assert_eq!(identity(42), 42);
+    assert_eq(identity(42), 42);
 }
 
 #[test]
 fn test_identity_same_type_string() {
-    assert_eq!(identity("hello".to_string()), "hello");
+    assert_eq(identity("hello".to_string()), "hello");
 }
 
 // === Single generic param, mixed arg types ===
@@ -104,16 +104,16 @@ struct Pair<A, B> {
 fn test_different_generic_params_different_types_ok() {
     // A=int, B=String — different generic params, should compile
     let p = make_pair(42, "hello".to_string());
-    assert_eq!(p.first, 42);
-    assert_eq!(p.second, "hello");
+    assert_eq(p.first, 42);
+    assert_eq(p.second, "hello");
 }
 
 #[test]
 fn test_different_generic_params_same_type_ok() {
     // A=int, B=int — different params can be same concrete type
     let p = make_pair(42, 100);
-    assert_eq!(p.first, 42);
-    assert_eq!(p.second, 100);
+    assert_eq(p.first, 42);
+    assert_eq(p.second, 100);
 }
 
 // === Multiple generic params where same param reused ===
@@ -140,7 +140,7 @@ fn choose<T>(a: T, b: T) -> T {
 
 #[test]
 fn test_choose_same_type_ok() {
-    assert_eq!(choose(10, 20), 10);
+    assert_eq(choose(10, 20), 10);
 }
 
 #[compile_error]
@@ -156,13 +156,13 @@ fn tag_value<T>(label: String, value: T) -> T {
 
 #[test]
 fn test_mixed_generic_and_concrete_ok() {
-    assert_eq!(tag_value("age".to_string(), 42), 42);
+    assert_eq(tag_value("age".to_string(), 42), 42);
 }
 
 #[test]
 fn test_mixed_generic_and_concrete_different_types_ok() {
     // Different calls with different T are fine
-    assert_eq!(tag_value("name".to_string(), "Sabin".to_string()), "Sabin");
+    assert_eq(tag_value("name".to_string(), "Sabin".to_string()), "Sabin");
 }
 
 // === Struct with same-type constraint via single generic param ===
@@ -175,8 +175,8 @@ struct SameType<T> {
 #[test]
 fn test_same_type_struct_same_types_ok() {
     let s = SameType { a: 10, b: 20 };
-    assert_eq!(s.a, 10);
-    assert_eq!(s.b, 20);
+    assert_eq(s.a, 10);
+    assert_eq(s.b, 20);
 }
 
 #[compile_error]
@@ -220,14 +220,14 @@ impl Cell {
 #[test]
 fn test_cell_new_ok() {
     let c = Cell::new(42);
-    assert_eq!(c.value, 42);
+    assert_eq(c.value, 42);
 }
 
 #[test]
 fn test_cell_replace_same_type_ok() {
     let c = Cell::new(10);
     let c2 = c.replace(20);
-    assert_eq!(c2.value, 20);
+    assert_eq(c2.value, 20);
 }
 
 #[compile_error]
@@ -245,7 +245,7 @@ fn id_t<T>(x: T) -> T {
 #[test]
 fn test_turbofish_correct_type_ok() {
     let x = id_t::<int>(42);
-    assert_eq!(x, 42);
+    assert_eq(x, 42);
 }
 
 // NOTE: Generic function bodies with operators like `a + b` cannot be

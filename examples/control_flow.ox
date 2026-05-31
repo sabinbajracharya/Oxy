@@ -16,14 +16,14 @@ fn main() {
         factorial *= i;
         i += 1;
     }
-    println!("5! = {}", factorial);
+    println("5! = {}", factorial);
 
     // For loop with range
     let mut sum = 0;
     for i in 1..=100 {
         sum += i;
     }
-    println!("Sum 1..=100 = {}", sum);
+    println("Sum 1..=100 = {}", sum);
 
     // Loop with break value
     let mut x = 1;
@@ -33,24 +33,24 @@ fn main() {
             break x;
         }
     };
-    println!("First power of 2 > 100: {}", result);
+    println("First power of 2 > 100: {}", result);
 
     // FizzBuzz
-    println!("FizzBuzz 1..=15:");
+    println("FizzBuzz 1..=15:");
     for i in 1..=15 {
         if i % 15 == 0 {
-            println!("  FizzBuzz");
+            println("  FizzBuzz");
         } else if i % 3 == 0 {
-            println!("  Fizz");
+            println("  Fizz");
         } else if i % 5 == 0 {
-            println!("  Buzz");
+            println("  Buzz");
         } else {
-            println!("  {}", i);
+            println("  {}", i);
         }
     }
 
     // Match expression
     for i in 0..4 {
-        println!("classify({}) = {}", i, classify(i));
+        println("classify({}) = {}", i, classify(i));
     }
 }

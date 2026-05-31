@@ -37,12 +37,12 @@ fn main() {
     root.right = Some(r);
     let levels = level_order(Some(root));
     for level in levels {
-        println!("{:?}", level);
+        println("{:?}", level);
     }
 }
 
 fn level_order(root: Option) -> Vec {
-    let mut result = vec![];
+    let mut result = vec();
     if root.is_none() {
         return result;
     }
@@ -50,7 +50,7 @@ fn level_order(root: Option) -> Vec {
     queue.push_back(root.unwrap());
     while !queue.is_empty() {
         let level_size = queue.len();
-        let mut level = vec![];
+        let mut level = vec();
         for _i in 0..level_size {
             let mut node = queue.pop_front().unwrap();
             level.push(node.val);
@@ -75,13 +75,13 @@ fn test_example() {
     r.right = Some(TreeNode::new(7));
     root.right = Some(r);
     let result = level_order(Some(root));
-    assert_eq!(result.len(), 3);
-    assert_eq!(result[0], vec![3]);
-    assert_eq!(result[1], vec![9, 20]);
-    assert_eq!(result[2], vec![15, 7]);
+    assert_eq(result.len(), 3);
+    assert_eq(result[0], vec(3));
+    assert_eq(result[1], vec(9, 20));
+    assert_eq(result[2], vec(15, 7));
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(level_order(None).len(), 0);
+    assert_eq(level_order(None).len(), 0);
 }

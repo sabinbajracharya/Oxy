@@ -10,6 +10,14 @@ fn parse_fn_body(src: &str) -> Vec<Stmt> {
     f.body.stmts.clone()
 }
 
+fn parse_fn_body_result(src: &str) -> Result<Vec<Stmt>, crate::errors::PipelineError> {
+    let program = parse(src)?;
+    let Item::Function(f) = &program.items[0] else {
+        panic!("expected function item");
+    };
+    Ok(f.body.stmts.clone())
+}
+
 /// Extract a FnDef from the first item.
 fn parse_fn(src: &str) -> FnDef {
     let program = parse(src).unwrap();
@@ -209,13 +217,29 @@ fn test_function_call_no_args() {
 // === Macro calls ===
 
 #[test]
-fn test_println_macro() {
-    let stmts = parse_fn_body(r#"fn main() { println!("hello {}", x); }"#);
+fn test_macro_syntax_rejected() {
+    // Build the source dynamically to prevent auto-fixers from removing the `!`
+    let src = format!("fn main() {{ {}!(\"hello {{}}\", x); }}", "println");
+    let result = parse_fn_body_result(&src);
+    assert!(result.is_err(), "expected parse error for `!` macro syntax");
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("no longer supported"),
+        "expected 'no longer supported' error, got: {err}"
+    );
+}
+
+#[test]
+fn test_println_as_regular_call() {
+    let stmts = parse_fn_body(r#"fn main() { println("hello {}", x); }"#);
     let Stmt::Expr { expr, .. } = &stmts[0] else {
         panic!("expected expr stmt");
     };
-    let Expr::MacroCall { name, args, .. } = expr else {
-        panic!("expected MacroCall");
+    let Expr::Call { callee, args, .. } = expr else {
+        panic!("expected Call, got {:?}", expr);
+    };
+    let Expr::Ident(name, _) = callee.as_ref() else {
+        panic!("expected Ident callee");
     };
     assert_eq!(name, "println");
     assert_eq!(args.len(), 2);
@@ -388,7 +412,7 @@ fn main() {
     let x: i64 = 10;
     let y: i64 = 20;
     let result = add(x, y);
-    println!("Result: {}", result);
+    println("Result: {}", result);
 }
 "#;
     let program = parse(src).unwrap();
@@ -442,7 +466,7 @@ fn test_loop_stmt() {
 
 #[test]
 fn test_for_stmt() {
-    let stmts = parse_fn_body("fn main() { for i in 0..10 { println!(\"{}\", i); } }");
+    let stmts = parse_fn_body("fn main() { for i in 0..10 { println(\"{}\", i); } }");
     assert_eq!(stmts.len(), 1);
     let Stmt::For { name, iterable, .. } = &stmts[0] else {
         panic!("expected for");
@@ -507,7 +531,7 @@ fn test_match_expr() {
 #[test]
 fn test_match_with_blocks() {
     let stmts = parse_fn_body(
-        r#"fn main() { match x { 1 => { println!("one"); } _ => { println!("other"); } }; }"#,
+        r#"fn main() { match x { 1 => { println("one"); } _ => { println("other"); } }; }"#,
     );
     let Stmt::Expr { expr, .. } = &stmts[0] else {
         panic!();
@@ -663,16 +687,27 @@ fn test_empty_tuple() {
 }
 
 #[test]
-fn test_vec_macro_brackets() {
-    let stmts = parse_fn_body("fn main() { vec![1, 2, 3]; }");
+fn test_vec_as_regular_call() {
+    let stmts = parse_fn_body("fn main() { vec(1, 2, 3); }");
     let Stmt::Expr { expr, .. } = &stmts[0] else {
         panic!();
     };
-    let Expr::MacroCall { name, args, .. } = expr else {
-        panic!("expected MacroCall");
+    let Expr::Call { callee, args, .. } = expr else {
+        panic!("expected Call, got {:?}", expr);
+    };
+    let Expr::Ident(name, _) = callee.as_ref() else {
+        panic!("expected Ident callee");
     };
     assert_eq!(name, "vec");
     assert_eq!(args.len(), 3);
+}
+
+#[test]
+fn test_vec_brackets_macro_rejected() {
+    // Build dynamically to prevent auto-fixers from removing the `!`
+    let src = format!("fn main() {{ {}![1, 2, 3]; }}", "vec");
+    let result = parse_fn_body_result(&src);
+    assert!(result.is_err(), "expected parse error for `!` macro syntax");
 }
 
 #[test]
@@ -923,7 +958,7 @@ fn test_generic_fn_def() {
 #[test]
 fn test_generic_fn_with_bounds() {
     let program =
-        parse("fn print_val<T: Display>(x: T) { println!(\"{}\", x); }\nfn main() {}").unwrap();
+        parse("fn print_val<T: Display>(x: T) { println(\"{}\", x); }\nfn main() {}").unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -964,7 +999,7 @@ fn main() {}"#,
 
 #[test]
 fn test_if_let_expr() {
-    let program = parse(r#"fn main() { if let Some(x) = foo() { println!("{}", x); } }"#).unwrap();
+    let program = parse(r#"fn main() { if let Some(x) = foo() { println("{}", x); } }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -992,7 +1027,7 @@ fn test_if_let_with_else() {
 #[test]
 fn test_while_let_stmt() {
     let program =
-        parse(r#"fn main() { while let Some(x) = v.pop() { println!("{}", x); } }"#).unwrap();
+        parse(r#"fn main() { while let Some(x) = v.pop() { println("{}", x); } }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1245,7 +1280,7 @@ fn test_const_def() {
 
 #[test]
 fn test_for_destructure() {
-    let body = parse_fn_body("fn main() { for (k, v) in items { println!(\"{}\", k); } }");
+    let body = parse_fn_body("fn main() { for (k, v) in items { println(\"{}\", k); } }");
     assert!(matches!(&body[0], Stmt::ForDestructure { .. }));
     if let Stmt::ForDestructure { names, .. } = &body[0] {
         assert_eq!(names, &["k", "v"]);

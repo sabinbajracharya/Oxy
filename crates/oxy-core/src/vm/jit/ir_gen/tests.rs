@@ -421,7 +421,7 @@ fn test_loop_expression() {
 #[test]
 fn test_for_in() {
     let ir =
-        gen("fn main() -> int { let mut sum = 0; for x in vec![1, 2, 3] { sum = sum + x; } sum }");
+        gen("fn main() -> int { let mut sum = 0; for x in vec(1, 2, 3) { sum = sum + x; } sum }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 2,
@@ -605,7 +605,7 @@ fn test_match_on_enum() {
 
 #[test]
 fn test_vec_literal() {
-    let ir = gen("fn main() -> int { let v = vec![1, 2, 3]; 0 }");
+    let ir = gen("fn main() -> int { let v = vec(1, 2, 3); 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -626,7 +626,7 @@ fn test_tuple_literal() {
 
 #[test]
 fn test_index_expr() {
-    let ir = gen("fn main() -> int { let v = vec![1, 2, 3]; v[0] }");
+    let ir = gen("fn main() -> int { let v = vec(1, 2, 3); v[0] }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -671,7 +671,7 @@ fn test_try_operator() {
 
 #[test]
 fn test_panic_macro_lowering() {
-    let ir = gen("fn main() { panic!(\"boom\"); }");
+    let ir = gen("fn main() { panic(\"boom\"); }");
     let f = find_fn(&ir, "main");
     // Must have SetError op in some block.
     assert!(
@@ -823,7 +823,7 @@ fn test_unreachable_code_is_rejected() {
     );
 }
 
-// ── Gaps from audit: MacroCall, Grouped, Repeat, AsyncBlock, Await ──
+// ── Gaps from audit: Grouped, Repeat, AsyncBlock, Await ──
 
 #[test]
 fn test_grouped_expression() {
@@ -839,7 +839,7 @@ fn test_grouped_expression() {
 
 #[test]
 fn test_macro_call_println() {
-    let ir = gen("fn main() { println!(\"hello\") }");
+    let ir = gen("fn main() { println(\"hello\") }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -894,7 +894,7 @@ fn test_while_let() {
 
 #[test]
 fn test_for_destructure() {
-    let ir = gen("fn main() -> int { for (a, b) in vec![(1, 2), (3, 4)] { let _x = a + b; } 0 }");
+    let ir = gen("fn main() -> int { for (a, b) in vec((1, 2), (3, 4)) { let _x = a + b; } 0 }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 3,

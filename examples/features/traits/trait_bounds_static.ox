@@ -19,5 +19,5 @@ fn make_zero<T: Zero>() -> T {
 #[test]
 fn test_trait_static_method_bound() {
     let z = make_zero::<int>();
-    assert_eq!(z, 0);
+    assert_eq(z, 0);
 }

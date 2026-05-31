@@ -23,14 +23,14 @@ impl Counter {
 fn test_method_return_type_resolved() {
     let c = Counter::new();
     let n: int = c.get_count();
-    assert_eq!(n, 0);
+    assert_eq(n, 0);
 }
 
 #[test]
 fn test_method_return_type_with_args() {
     let c = Counter::new();
     let n: int = c.add(5);
-    assert_eq!(n, 5);
+    assert_eq(n, 5);
 }
 
 #[compile_error]

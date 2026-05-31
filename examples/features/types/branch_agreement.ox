@@ -4,7 +4,7 @@
 fn test_if_else_same_type_ok() {
     let n = 5;
     let s = if n > 0 { "positive".to_string() } else { "non-positive".to_string() };
-    assert_eq!(s, "positive");
+    assert_eq(s, "positive");
 }
 
 #[test]
@@ -15,7 +15,7 @@ fn test_match_arms_same_type_ok() {
         2 => "two".to_string(),
         _ => "other".to_string(),
     };
-    assert_eq!(s, "one");
+    assert_eq(s, "one");
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn test_if_else_with_unit_arms_ok() {
     } else {
         total = 2;
     }
-    assert_eq!(total, 1);
+    assert_eq(total, 1);
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_if_else_int_compatibility_ok() {
     // int and int are compatible at the binding level via int promotion.
     let n: int = 5;
     let v = if n > 0 { 10 } else { 20 };
-    assert_eq!(v, 10);
+    assert_eq(v, 10);
 }
 
 #[compile_error]

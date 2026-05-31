@@ -192,8 +192,8 @@ mod tests {
     fn test_path_join_two() {
         let out = run(r#"
 fn main() {
-    let p = std::path::join(vec!["a".to_string(), "b".to_string()]);
-    println!("{}", p);
+    let p = std::path::join(vec("a".to_string(), "b".to_string()));
+    println("{}", p);
 }
 "#);
         assert!(out.trim_end().ends_with("b"));
@@ -205,7 +205,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     let n = std::path::basename("/a/b/c.txt");
-    println!("{}", n);
+    println("{}", n);
 }
 "#);
         assert_eq!(out, "c.txt\n");
@@ -216,7 +216,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     let e = std::path::extension("foo/bar.tar.gz");
-    if let Some(s) = e { println!("{}", s); } else { println!("none"); }
+    if let Some(s) = e { println("{}", s); } else { println("none"); }
 }
 "#);
         assert_eq!(out, "gz\n");
@@ -227,7 +227,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     let n = std::path::normalize("a/b/./../c");
-    println!("{}", n);
+    println("{}", n);
 }
 "#);
         let trimmed = out.trim_end();

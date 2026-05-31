@@ -22,8 +22,8 @@
 // - Base: empty → 0, single → nums[0]
 
 fn main() {
-    let nums = vec![1, 2, 3, 1];
-    println!("{}", rob(nums));
+    let nums = vec(1, 2, 3, 1);
+    println("{}", rob(nums));
 }
 
 fn rob(nums: Vec) -> int {
@@ -46,15 +46,15 @@ fn rob(nums: Vec) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(rob(vec![1, 2, 3, 1]), 4);
+    assert_eq(rob(vec(1, 2, 3, 1)), 4);
 }
 
 #[test]
 fn test_two_houses() {
-    assert_eq!(rob(vec![2, 1]), 2);
+    assert_eq(rob(vec(2, 1)), 2);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(rob(vec![]), 0);
+    assert_eq(rob(vec()), 0);
 }

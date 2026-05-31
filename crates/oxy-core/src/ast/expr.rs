@@ -51,12 +51,6 @@ pub enum Expr {
         args: Vec<Expr>,
         span: Span,
     },
-    /// Macro-style call: `println!("hello {}", x)`
-    MacroCall {
-        name: String,
-        args: Vec<Expr>,
-        span: Span,
-    },
     /// Block expression: `{ stmts }`
     Block(Block),
     /// If expression: `if cond { ... } [else { ... }]`
@@ -195,7 +189,6 @@ impl Expr {
             | Expr::BinaryOp { span: s, .. }
             | Expr::UnaryOp { span: s, .. }
             | Expr::Call { span: s, .. }
-            | Expr::MacroCall { span: s, .. }
             | Expr::If { span: s, .. }
             | Expr::Assign { span: s, .. }
             | Expr::CompoundAssign { span: s, .. }
@@ -346,16 +339,6 @@ impl Expr {
             Expr::Call { callee, args, .. } => {
                 callee.pretty_print(out, 0);
                 out.push('(');
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        out.push_str(", ");
-                    }
-                    arg.pretty_print(out, 0);
-                }
-                out.push(')');
-            }
-            Expr::MacroCall { name, args, .. } => {
-                out.push_str(&format!("{name}!("));
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         out.push_str(", ");

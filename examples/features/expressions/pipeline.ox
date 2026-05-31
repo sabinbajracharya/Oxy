@@ -7,17 +7,17 @@ fn multiply(a: int, b: int) -> int { a * b }
 
 fn main() {
     let r1 = 5 |> double();
-    println!("5 |> double() = {}", r1);
+    println("5 |> double() = {}", r1);
 
     let r2 = 5 |> add(3);
-    println!("5 |> add(3) = {}", r2);
+    println("5 |> add(3) = {}", r2);
 
     let r3 = 5 |> double() |> add(3);
-    println!("5 |> double() |> add(3) = {}", r3);
+    println("5 |> double() |> add(3) = {}", r3);
 
     let r4 = 21 |> double;
-    println!("21 |> double = {}", r4);
+    println("21 |> double = {}", r4);
 
     let r5 = 1 |> add(2) |> multiply(3) |> add(4);
-    println!("1 |> add(2) |> multiply(3) |> add(4) = {}", r5);
+    println("1 |> add(2) |> multiply(3) |> add(4) = {}", r5);
 }

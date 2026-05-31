@@ -12,7 +12,7 @@ fn test_const_in_if_condition() {
     if score < MAX_SIZE {
         got = "below".to_string();
     }
-    assert_eq!(got, "below");
+    assert_eq(got, "below");
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn test_const_in_else_if_condition() {
     } else {
         "small".to_string()
     };
-    assert_eq!(label, "small");
+    assert_eq(label, "small");
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn test_const_in_while_condition() {
         i = i + 1;
         if i > 5 { break; }
     }
-    assert_eq!(i, 6);
+    assert_eq(i, 6);
 }
 
 const LIMIT: int = 5;
@@ -46,7 +46,7 @@ fn test_uppercase_const_in_for_range() {
     for i in 0..LIMIT {
         sum = sum + i;
     }
-    assert_eq!(sum, 10);
+    assert_eq(sum, 10);
 }
 
 // Sanity: struct literals still work outside header positions.
@@ -54,5 +54,5 @@ struct Pt { x: int, y: int }
 #[test]
 fn test_struct_init_still_works_outside_headers() {
     let p = Pt { x: 1, y: 2 };
-    assert_eq!(p.x + p.y, 3);
+    assert_eq(p.x + p.y, 3);
 }

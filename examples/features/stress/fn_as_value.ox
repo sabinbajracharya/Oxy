@@ -9,18 +9,18 @@ fn neg(x: int) -> int { -x }
 
 #[test]
 fn test_named_fn_as_arg() {
-    assert_eq!(apply(square, 5), 25);
+    assert_eq(apply(square, 5), 25);
 }
 
 #[test]
 fn test_closure_as_arg() {
-    assert_eq!(apply(|x| x * 2, 10), 20);
+    assert_eq(apply(|x| x * 2, 10), 20);
 }
 
 #[test]
 fn test_pass_different_named_fns() {
-    assert_eq!(apply(square, 4), 16);
-    assert_eq!(apply(neg, 7), -7);
+    assert_eq(apply(square, 4), 16);
+    assert_eq(apply(neg, 7), -7);
 }
 
 // --- two-arg fn pointer ---
@@ -30,8 +30,8 @@ fn mul(a: int, b: int) -> int { a * b }
 
 #[test]
 fn test_two_arg_fn_pointer() {
-    assert_eq!(apply2(add, 3, 4), 7);
-    assert_eq!(apply2(mul, 3, 4), 12);
+    assert_eq(apply2(add, 3, 4), 7);
+    assert_eq(apply2(mul, 3, 4), 12);
 }
 
 // --- fn returning fn (closure as return value) ---
@@ -42,15 +42,15 @@ fn make_adder(n: int) -> fn(int) -> int {
 #[test]
 fn test_fn_returns_closure() {
     let add5 = make_adder(5);
-    assert_eq!(add5(3), 8);
+    assert_eq(add5(3), 8);
 }
 
 // --- fn stored in a Vec ---
 #[test]
 fn test_fns_in_vec() {
-    let ops: Vec<fn(int) -> int> = vec![square, neg];
+    let ops: Vec<fn(int) -> int> = vec(square, neg);
     let r0 = ops[0](6);
     let r1 = ops[1](6);
-    assert_eq!(r0, 36);
-    assert_eq!(r1, -6);
+    assert_eq(r0, 36);
+    assert_eq(r1, -6);
 }

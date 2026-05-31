@@ -4,13 +4,13 @@
 #[test]
 fn test_array_literal_matches_declared() {
     let arr: [int; 3] = [1, 2, 3];
-    assert_eq!(arr.len(), 3);
+    assert_eq(arr.len(), 3);
 }
 
 #[test]
 fn test_array_literal_int_promotion_ok() {
     let arr: [int; 2] = [1, 2];
-    assert_eq!(arr[0], 1);
+    assert_eq(arr[0], 1);
 }
 
 #[compile_error]

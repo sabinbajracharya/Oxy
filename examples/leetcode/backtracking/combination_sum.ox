@@ -17,10 +17,10 @@
 // - Classic push/pop with shared mutable state
 
 fn main() {
-    let candidates = vec![2, 3, 6, 7];
+    let candidates = vec(2, 3, 6, 7);
     let result = combination_sum(candidates, 7);
     for c in result {
-        println!("{:?}", c);
+        println("{:?}", c);
     }
 }
 
@@ -42,20 +42,20 @@ fn backtrack(candidates: Vec, start: int, target: int, current: Vec, result: Vec
 }
 
 fn combination_sum(candidates: Vec, target: int) -> Vec {
-    let result = vec![];
-    let current = vec![];
+    let result = vec();
+    let current = vec();
     backtrack(candidates, 0, target, current, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = combination_sum(vec![2, 3, 6, 7], 7);
-    assert!(result.len() > 0);
+    let result = combination_sum(vec(2, 3, 6, 7), 7);
+    assert(result.len() > 0);
 }
 
 #[test]
 fn test_no_solution() {
-    let result = combination_sum(vec![2], 1);
-    assert_eq!(result.len(), 0);
+    let result = combination_sum(vec(2), 1);
+    assert_eq(result.len(), 0);
 }

@@ -146,11 +146,6 @@ impl IrGen {
             }
             Expr::AsyncBlock { body, .. } => self.collect_idents_in_block(body, param_names, out),
             Expr::Await { expr, .. } => self.collect_idents(expr, param_names, out),
-            Expr::MacroCall { args, .. } => {
-                for a in args {
-                    self.collect_idents(a, param_names, out);
-                }
-            }
             _ => {}
         }
     }

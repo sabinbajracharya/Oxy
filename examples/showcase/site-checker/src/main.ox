@@ -7,7 +7,7 @@
 use cli_utils;
 
 fn find_html_files(dir: String) -> Vec<String> {
-    let mut files = vec![];
+    let mut files = vec();
     let result = std::fs::read_dir(dir);
     match result {
         Ok(entries) => {
@@ -30,12 +30,12 @@ fn find_html_files(dir: String) -> Vec<String> {
 }
 
 fn extract_urls(html: String) -> Vec<String> {
-    let mut urls = vec![];
+    let mut urls = vec();
 
-    let patterns = vec![
+    let patterns = vec(
         r#"href="([^"]*)""#,
         r#"src="([^"]*)""#,
-    ];
+    );
 
     let mut i = 0;
     while i < patterns.len() {
@@ -103,7 +103,7 @@ fn main() {
     let files = find_html_files(base_dir);
     cli_utils::info("found " + files.len().to_string() + " HTML file(s)");
 
-    let mut all_urls = vec![];
+    let mut all_urls = vec();
     for file in files {
         let result = std::fs::read_to_string(file);
         match result {
@@ -120,8 +120,8 @@ fn main() {
     cli_utils::info("found " + all_urls.len().to_string() + " link(s)");
 
     // separate local and external URLs
-    let mut local_urls = vec![];
-    let mut external_urls = vec![];
+    let mut local_urls = vec();
+    let mut external_urls = vec();
 
     for url in all_urls {
         if url.starts_with("http://") || url.starts_with("https://") {

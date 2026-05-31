@@ -7,20 +7,20 @@
 #[test]
 fn test_concat_two_strings() {
     let s = "hello " + "world";
-    assert_eq!(s, "hello world");
+    assert_eq(s, "hello world");
 }
 
 #[test]
 fn test_concat_empty_strings() {
-    assert_eq!("" + "", "");
-    assert_eq!("hello" + "", "hello");
-    assert_eq!("" + "world", "world");
+    assert_eq("" + "", "");
+    assert_eq("hello" + "", "hello");
+    assert_eq("" + "world", "world");
 }
 
 #[test]
 fn test_concat_multiple() {
     let s = "a" + "b" + "c";
-    assert_eq!(s, "abc");
+    assert_eq(s, "abc");
 }
 
 // === Concatenation: String + other types ===
@@ -28,69 +28,69 @@ fn test_concat_multiple() {
 #[test]
 fn test_concat_string_and_int() {
     let s = "value: " + "42";
-    assert!(s.contains("42"));
+    assert(s.contains("42"));
 }
 
 // === Equality Comparison ===
 
 #[test]
 fn test_eq_equal() {
-    assert!("hello" == "hello");
-    assert!("" == "");
+    assert("hello" == "hello");
+    assert("" == "");
 }
 
 #[test]
 fn test_eq_not_equal() {
-    assert!("hello" != "world");
-    assert!("abc" != "ABC");
-    assert!("" != " ");
+    assert("hello" != "world");
+    assert("abc" != "ABC");
+    assert("" != " ");
 }
 
 #[test]
 fn test_eq_double_negation() {
-    assert!(!("hello" == "world"));
+    assert(!("hello" == "world"));
 }
 
 // === Lexicographic Ordering ===
 
 #[test]
 fn test_less_than() {
-    assert!("a" < "b");
-    assert!("abc" < "abd");
-    assert!("" < "a");
-    assert!(!("b" < "a"));
-    assert!(!("abc" < "abc"));
+    assert("a" < "b");
+    assert("abc" < "abd");
+    assert("" < "a");
+    assert(!("b" < "a"));
+    assert(!("abc" < "abc"));
 }
 
 #[test]
 fn test_greater_than() {
-    assert!("b" > "a");
-    assert!("hello" > "hell");
-    assert!(!("a" > "b"));
+    assert("b" > "a");
+    assert("hello" > "hell");
+    assert(!("a" > "b"));
 }
 
 #[test]
 fn test_less_equal() {
-    assert!("a" <= "b");
-    assert!("a" <= "a");
-    assert!("" <= "");
-    assert!(!("b" <= "a"));
+    assert("a" <= "b");
+    assert("a" <= "a");
+    assert("" <= "");
+    assert(!("b" <= "a"));
 }
 
 #[test]
 fn test_greater_equal() {
-    assert!("b" >= "a");
-    assert!("b" >= "b");
-    assert!(!("a" >= "b"));
+    assert("b" >= "a");
+    assert("b" >= "b");
+    assert(!("a" >= "b"));
 }
 
 // === Case Sensitivity in Comparison ===
 
 #[test]
 fn test_case_sensitive_ordering() {
-    assert!("A" < "a");
-    assert!("ABC" < "abc");
-    assert!("hello" != "HELLO");
+    assert("A" < "a");
+    assert("ABC" < "abc");
+    assert("hello" != "HELLO");
 }
 
 // === For Loop Iteration ===
@@ -101,7 +101,7 @@ fn test_for_loop_chars() {
     for c in "hello" {
         count = count + 1;
     }
-    assert_eq!(count, 5);
+    assert_eq(count, 5);
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn test_for_loop_empty() {
     for c in "" {
         count = count + 1;
     }
-    assert_eq!(count, 0);
+    assert_eq(count, 0);
 }
 
 // === String in Let Binding ===
@@ -119,5 +119,5 @@ fn test_for_loop_empty() {
 fn test_let_string() {
     let mut s = "hello";
     s = "world";
-    assert_eq!(s, "world");
+    assert_eq(s, "world");
 }

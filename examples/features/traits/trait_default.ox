@@ -19,7 +19,7 @@ impl Greet for Person {}
 #[test]
 fn test_default_method_inherited() {
     let p = Person { name: "Alice" };
-    assert_eq!(p.greeting(), "Hello!");
+    assert_eq(p.greeting(), "Hello!");
 }
 
 // === Override Default Method ===
@@ -46,9 +46,9 @@ impl Descriptor for Widget {
 #[test]
 fn test_override_default() {
     let w = Widget { kind: "gadget" };
-    assert_eq!(w.describe(), "a gadget");
+    assert_eq(w.describe(), "a gadget");
     // label() is NOT overridden — uses default, which calls overridden describe()
-    assert_eq!(w.label(), "Label: a gadget");
+    assert_eq(w.label(), "Label: a gadget");
 }
 
 // === Default Method Calls Another Default ===
@@ -75,8 +75,8 @@ impl Calculator for Counter {
 #[test]
 fn test_default_calls_other_method() {
     let c = Counter { count: 10 };
-    assert_eq!(c.value(), 10);
-    assert_eq!(c.add(5), 15);
+    assert_eq(c.value(), 10);
+    assert_eq(c.add(5), 15);
 }
 
 // === Multiple Traits with Default Methods ===
@@ -101,6 +101,6 @@ impl B for Thing {}
 #[test]
 fn test_multiple_defaults() {
     let t = Thing;
-    assert_eq!(t.a(), 10);
-    assert_eq!(t.b(), 20);
+    assert_eq(t.a(), 10);
+    assert_eq(t.b(), 20);
 }

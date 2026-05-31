@@ -23,8 +23,8 @@
 // - Loop until left == right
 
 fn main() {
-    let nums = vec![3, 4, 5, 1, 2];
-    println!("{}", find_min(nums));
+    let nums = vec(3, 4, 5, 1, 2);
+    println("{}", find_min(nums));
 }
 
 fn find_min(nums: Vec) -> int {
@@ -43,15 +43,15 @@ fn find_min(nums: Vec) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(find_min(vec![3, 4, 5, 1, 2]), 1);
+    assert_eq(find_min(vec(3, 4, 5, 1, 2)), 1);
 }
 
 #[test]
 fn test_not_rotated() {
-    assert_eq!(find_min(vec![1, 2, 3, 4, 5]), 1);
+    assert_eq(find_min(vec(1, 2, 3, 4, 5)), 1);
 }
 
 #[test]
 fn test_two_elements() {
-    assert_eq!(find_min(vec![2, 1]), 1);
+    assert_eq(find_min(vec(2, 1)), 1);
 }

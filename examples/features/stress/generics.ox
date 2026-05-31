@@ -6,17 +6,17 @@ struct Wrap<T> { value: T }
 #[test]
 fn test_generic_struct_int() {
     let w = Wrap { value: 42 };
-    assert_eq!(w.value, 42);
+    assert_eq(w.value, 42);
 }
 #[test]
 fn test_generic_struct_string() {
     let w = Wrap { value: "hi".to_string() };
-    assert_eq!(w.value, "hi");
+    assert_eq(w.value, "hi");
 }
 #[test]
 fn test_generic_struct_bool() {
     let w = Wrap { value: true };
-    assert_eq!(w.value, true);
+    assert_eq(w.value, true);
 }
 
 // --- generic struct, multi param ---
@@ -25,26 +25,26 @@ struct Pair<A, B> { first: A, second: B }
 #[test]
 fn test_generic_multi_param() {
     let p = Pair { first: 1, second: "one".to_string() };
-    assert_eq!(p.first, 1);
-    assert_eq!(p.second, "one");
+    assert_eq(p.first, 1);
+    assert_eq(p.second, "one");
 }
 
 // --- generic fn, single param, no bounds ---
 fn identity<T>(x: T) -> T { x }
 
 #[test]
-fn test_generic_identity_int() { assert_eq!(identity(42), 42); }
+fn test_generic_identity_int() { assert_eq(identity(42), 42); }
 #[test]
-fn test_generic_identity_string() { assert_eq!(identity("hi".to_string()), "hi"); }
+fn test_generic_identity_string() { assert_eq(identity("hi".to_string()), "hi"); }
 #[test]
-fn test_generic_identity_bool() { assert_eq!(identity(true), true); }
+fn test_generic_identity_bool() { assert_eq(identity(true), true); }
 
 // --- generic fn, two args same type ---
 fn pick_first<T>(a: T, _b: T) -> T { a }
 
 #[test]
 fn test_generic_pick_first() {
-    assert_eq!(pick_first(10, 20), 10);
+    assert_eq(pick_first(10, 20), 10);
 }
 
 // --- turbofish on generic fn ---
@@ -53,7 +53,7 @@ fn returns_value<T>(x: T) -> T { x }
 #[test]
 fn test_turbofish_explicit() {
     let n: int = returns_value::<int>(42);
-    assert_eq!(n, 42);
+    assert_eq(n, 42);
 }
 
 // --- generic over Vec ---
@@ -63,24 +63,24 @@ fn first_elem<T>(v: Vec<T>) -> Option<T> {
 
 #[test]
 fn test_generic_over_vec_int() {
-    assert_eq!(first_elem(vec![1, 2, 3]), Some(1));
+    assert_eq(first_elem(vec(1, 2, 3)), Some(1));
 }
 #[test]
 fn test_generic_over_vec_empty() {
-    let v: Vec<int> = vec![];
-    assert_eq!(first_elem(v), None);
+    let v: Vec<int> = vec();
+    assert_eq(first_elem(v), None);
 }
 
 // --- nested generic types ---
 #[test]
 fn test_vec_of_option_int() {
-    let v: Vec<Option<int>> = vec![Some(1), None, Some(3)];
-    assert_eq!(v.len(), 3);
+    let v: Vec<Option<int>> = vec(Some(1), None, Some(3));
+    assert_eq(v.len(), 3);
 }
 #[test]
 fn test_option_of_vec_int() {
-    let o: Option<Vec<int>> = Some(vec![1, 2, 3]);
-    assert_eq!(o.is_some(), true);
+    let o: Option<Vec<int>> = Some(vec(1, 2, 3));
+    assert_eq(o.is_some(), true);
 }
 
 // --- HashMap<K, V> ---
@@ -91,8 +91,8 @@ fn test_hashmap_string_int() {
     let mut m: HashMap<String, int> = HashMap::new();
     m.insert("a".to_string(), 1);
     m.insert("b".to_string(), 2);
-    assert_eq!(m.get("a"), Some(1));
-    assert_eq!(m.get("missing"), None);
+    assert_eq(m.get("a"), Some(1));
+    assert_eq(m.get("missing"), None);
 }
 
 // --- generic struct method (concrete impl) ---
@@ -103,16 +103,16 @@ impl Box1<int> {
 #[test]
 fn test_generic_struct_concrete_method() {
     let b = Box1 { v: 7 };
-    assert_eq!(b.get_int(), 7);
+    assert_eq(b.get_int(), 7);
 }
 
 // --- turbofish on PathCall ---
 struct Stash<T> { items: Vec<T> }
 impl Stash<int> {
-    fn new() -> Stash<int> { Stash { items: vec![] } }
+    fn new() -> Stash<int> { Stash { items: vec() } }
 }
 #[test]
 fn test_turbofish_on_path_call() {
     let s: Stash<int> = Stash::<int>::new();
-    assert_eq!(s.items.len(), 0);
+    assert_eq(s.items.len(), 0);
 }

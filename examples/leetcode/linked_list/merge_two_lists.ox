@@ -45,10 +45,10 @@ fn main() {
 fn print_list(head: Option) {
     let mut curr = head;
     while let Some(node) = curr {
-        print!("{} ", node.val);
+        print("{} ", node.val);
         curr = node.next;
     }
-    println!("");
+    println("");
 }
 
 fn merge_two_lists(l1: Option, l2: Option) -> Option {
@@ -82,12 +82,12 @@ fn test_merge_basic() {
     l2.next = Some(n4);
 
     let result = merge_two_lists(Some(l1), Some(l2));
-    assert_eq!(result.unwrap().val, 1);
+    assert_eq(result.unwrap().val, 1);
 }
 
 #[test]
 fn test_merge_one_empty() {
     let l1 = ListNode::new(5);
     let result = merge_two_lists(Some(l1), None);
-    assert_eq!(result.unwrap().val, 5);
+    assert_eq(result.unwrap().val, 5);
 }

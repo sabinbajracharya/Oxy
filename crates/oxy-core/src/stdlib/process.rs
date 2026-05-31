@@ -195,9 +195,9 @@ mod tests {
 fn main() {
     let result = std::process::command("echo");
     if let Ok(output) = result {
-        println!("{}", output.success);
+        println("{}", output.success);
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -208,10 +208,10 @@ fn main() {
     fn test_process_command_with_args() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command_with_args("echo", vec!["hello", "world"]);
+    let result = std::process::command_with_args("echo", vec("hello", "world"));
     if let Ok(output) = result {
         let trimmed = output.stdout.trim();
-        println!("{}", trimmed);
+        println("{}", trimmed);
     }
 }
 "#);
@@ -224,9 +224,9 @@ fn main() {
 fn main() {
     let result = std::process::command("nonexistent_program_xyz_12345");
     if let Ok(output) = result {
-        println!("ok");
+        println("ok");
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -239,7 +239,7 @@ fn main() {
 fn main() {
     let result = std::process::command("true");
     if let Ok(output) = result {
-        println!("{}", output.status);
+        println("{}", output.status);
     }
 }
 "#);
@@ -252,7 +252,7 @@ fn main() {
 fn main() {
     let result = std::process::command("false");
     if let Ok(output) = result {
-        println!("{}", output.success);
+        println("{}", output.success);
     }
 }
 "#);
@@ -270,22 +270,22 @@ fn main() {
         // be invoked once per line, in order.
         let out = run(r#"
 fn main() {
-    let mut lines = vec![];
+    let mut lines = vec();
     let result = std::process::spawn(
         "printf",
-        vec!["%s\n%s\n", "first", "second"],
+        vec("%s\n%s\n", "first", "second"),
         |line, stream| {
             lines.push(stream);
             lines.push(line);
         },
     );
     if let Ok(output) = result {
-        println!("{}", output.success);
+        println("{}", output.success);
         for l in lines {
-            println!("{}", l);
+            println("{}", l);
         }
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -297,10 +297,10 @@ fn main() {
         // `sh -c` lets us deterministically write to both streams.
         let out = run(r#"
 fn main() {
-    let mut tagged = vec![];
+    let mut tagged = vec();
     let _ = std::process::spawn(
         "sh",
-        vec!["-c", "echo out1; echo err1 1>&2; echo out2"],
+        vec("-c", "echo out1; echo err1 1>&2; echo out2"),
         |line, stream| {
             tagged.push(stream + ":" + line);
         },
@@ -308,7 +308,7 @@ fn main() {
     // Sort for determinism — interleaving between stdout/stderr is racy.
     tagged.sort();
     for t in tagged {
-        println!("{}", t);
+        println("{}", t);
     }
 }
 "#);
@@ -319,11 +319,11 @@ fn main() {
     fn test_process_spawn_status_on_failure() {
         let out = run(r#"
 fn main() {
-    let result = std::process::spawn("false", vec![], |_line, _stream| {});
+    let result = std::process::spawn("false", vec(), |_line, _stream| {});
     if let Ok(output) = result {
-        println!("{} {}", output.success, output.status);
+        println("{} {}", output.success, output.status);
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -336,13 +336,13 @@ fn main() {
 fn main() {
     let result = std::process::spawn(
         "nonexistent_program_xyz_98765",
-        vec![],
+        vec(),
         |_line, _stream| {},
     );
     if let Ok(_) = result {
-        println!("ok");
+        println("ok");
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);

@@ -10,7 +10,7 @@ mod tests {
         let source = r#"
         fn main() {
             let arr = [1, 2, 3];
-            println!(arr);
+            println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -22,7 +22,7 @@ mod tests {
         let source = r#"
         fn main() {
             let arr = [];
-            println!(arr);
+            println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -34,7 +34,7 @@ mod tests {
         let source = r#"
         fn main() {
             let arr = [[1, 2], [3, 4]];
-            println!(arr);
+            println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -48,8 +48,8 @@ mod tests {
         let source = r#"
         fn main() {
             let arr = [10, 20, 30];
-            println!(arr[0]);
-            println!(arr[2]);
+            println(arr[0]);
+            println(arr[2]);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -63,8 +63,8 @@ mod tests {
         let source = r#"
         fn main() {
             let s = "ab";
-            println!(s[0]);
-            println!(s[1]);
+            println(s[0]);
+            println(s[1]);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -78,8 +78,8 @@ mod tests {
         let source = r#"
         fn main() {
             let t = (10, 20);
-            println!(t.0);
-            println!(t.1);
+            println(t.0);
+            println(t.1);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -95,7 +95,7 @@ mod tests {
         let source = r#"
         fn main() {
             for (a, b) in [(1, 10), (2, 20)] {
-                println!(a + b);
+                println(a + b);
             }
         }
         "#;
@@ -115,7 +115,7 @@ mod tests {
             for i in 0..3 {
                 sum = sum + i;
             }
-            println!("{}", sum);
+            println("{}", sum);
         }
         "#;
         let result = run_compiled(source);
@@ -127,7 +127,7 @@ mod tests {
         let source = r#"
         fn main() {
             for i in 0..3 {
-                println!(i);
+                println(i);
             }
         }
         "#;
@@ -145,7 +145,7 @@ mod tests {
             for i in 0..5 {
                 sum = sum + i;
             }
-            println!(sum);
+            println(sum);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -160,7 +160,7 @@ mod tests {
         fn main() {
             for i in 0..10 {
                 if i == 3 { break; }
-                println!(i);
+                println(i);
             }
         }
         "#;
@@ -177,7 +177,7 @@ mod tests {
         fn main() {
             let mut i = 0;
             while i < 3 {
-                println!(i);
+                println(i);
                 i = i + 1;
             }
         }
@@ -195,7 +195,7 @@ mod tests {
             let mut i = 0;
             while i < 10 {
                 if i == 3 { break; }
-                println!(i);
+                println(i);
                 i = i + 1;
             }
         }
@@ -213,7 +213,7 @@ mod tests {
             let mut i = 0;
             loop {
                 if i >= 3 { break; }
-                println!(i);
+                println(i);
                 i = i + 1;
             }
         }
@@ -230,7 +230,7 @@ mod tests {
         fn main() {
             for i in 0..5 {
                 if i == 2 { continue; }
-                println!(i);
+                println(i);
             }
         }
         "#;
@@ -248,7 +248,7 @@ mod tests {
             while i < 5 {
                 i = i + 1;
                 if i == 3 { continue; }
-                println!(i);
+                println(i);
             }
         }
         "#;
@@ -267,7 +267,7 @@ mod tests {
                 i = i + 1;
                 if i == 2 { continue; }
                 if i > 3 { break; }
-                println!(i);
+                println(i);
             }
         }
         "#;
@@ -282,7 +282,7 @@ mod tests {
         let source = r#"
         fn main() {
             for c in "ab" {
-                println!(c);
+                println(c);
             }
         }
         "#;
@@ -299,7 +299,7 @@ mod tests {
             for i in 0..3 {
                 for j in 0..3 {
                     if j == 1 { break; }
-                    println!(j);
+                    println(j);
                 }
             }
         }
@@ -341,7 +341,7 @@ mod tests {
             let y = x * 2;
             let z = y - 4;
             let w = z / 2;
-            println!("{}", w);
+            println("{}", w);
         }
         "#;
         let result = run_compiled(source);
@@ -354,7 +354,7 @@ mod tests {
         fn add(x: int, y: int) -> int { x + y }
         fn main() {
             let r = add(3, 4);
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled(source);
@@ -369,8 +369,8 @@ mod tests {
             if n <= 1 { n } else { 99 }
         }
         fn main() {
-            println!("{}", check(0));
-            println!("{}", check(5));
+            println("{}", check(0));
+            println("{}", check(5));
         }
         "#;
         let result = run_compiled(source);
@@ -384,7 +384,7 @@ mod tests {
         fn main() {
             let mut x = 0;
             while x < 3 {
-                println!("{}", x);
+                println("{}", x);
                 x = x + 1;
             }
         }
@@ -399,7 +399,7 @@ mod tests {
         fn fib(n: int) -> int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
-        fn main() { println!("{}", fib(2)); }
+        fn main() { println("{}", fib(2)); }
         "#;
         let result = run_compiled(source);
         assert!(result.is_ok(), "compiled failed: {:?}", result.err());
@@ -413,7 +413,7 @@ mod tests {
         }
         fn main() {
             let r = fib(10);
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled(source);
@@ -430,7 +430,7 @@ mod tests {
                 sum = sum + i;
                 i = i + 1;
             }
-            println!("{}", sum);
+            println("{}", sum);
         }
         "#;
         let result = run_compiled(source);
@@ -444,8 +444,8 @@ mod tests {
             if n % 2 == 0 { true } else { false }
         }
         fn main() {
-            println!("{}", is_even(4));
-            println!("{}", is_even(7));
+            println("{}", is_even(4));
+            println("{}", is_even(7));
         }
         "#;
         let result = run_compiled(source);
@@ -460,7 +460,7 @@ mod tests {
         }
         fn main() {
             let r = fib(10);
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         // Both should produce the same result
@@ -478,7 +478,7 @@ mod tests {
         fn main() {
             let mut x = 10;
             x += 5;
-            println!("{}", x);
+            println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -493,7 +493,7 @@ mod tests {
         fn main() {
             let mut x = 10;
             x -= 3;
-            println!("{}", x);
+            println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -508,7 +508,7 @@ mod tests {
         fn main() {
             let mut x = 7;
             x *= 3;
-            println!("{}", x);
+            println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -523,7 +523,7 @@ mod tests {
         fn main() {
             let mut x = 20;
             x /= 4;
-            println!("{}", x);
+            println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -539,7 +539,7 @@ mod tests {
         let source = r#"
         fn main() {
             let msg = f"hello world";
-            println!("{}", msg);
+            println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -554,7 +554,7 @@ mod tests {
         fn main() {
             let name = "Oxy";
             let msg = f"Hello, {name}!";
-            println!("{}", msg);
+            println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -574,7 +574,7 @@ mod tests {
             let x = 10;
             let y = 20;
             let msg = f"{x} + {y} = {x + y}";
-            println!("{}", msg);
+            println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -595,7 +595,7 @@ mod tests {
         struct Point { x: int, y: int }
         enum Shape { Circle, Square(int) }
         fn main() {
-            println!("ok");
+            println("ok");
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -620,7 +620,7 @@ mod tests {
         fn main() {
             let c = Counter { n: 0 };
             let c2 = c.inc();
-            println!("{}", c2.n);
+            println("{}", c2.n);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -640,7 +640,7 @@ mod tests {
         }
         fn main() {
             let v = Value { x: 42 };
-            println!("{}", v.get());
+            println("{}", v.get());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -660,7 +660,7 @@ mod tests {
                 1 => "one",
                 _ => "other",
             };
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -678,7 +678,7 @@ mod tests {
                 1 => "one",
                 _ => "other",
             };
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -695,7 +695,7 @@ mod tests {
             let r = match x {
                 v => v + 1,
             };
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -718,7 +718,7 @@ mod tests {
                 Opt::Some(v) => v,
                 Opt::None => 0,
             };
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -740,7 +740,7 @@ mod tests {
         fn main() {
             let x = Opt::Some(42);
             if let Opt::Some(v) = x {
-                println!("{}", v);
+                println("{}", v);
             }
         }
         "#;
@@ -757,9 +757,9 @@ mod tests {
         fn main() {
             let x = Opt::None;
             if let Opt::Some(v) = x {
-                println!("{}", v);
+                println("{}", v);
             } else {
-                println!("nothing");
+                println("nothing");
             }
         }
         "#;
@@ -779,7 +779,7 @@ mod tests {
     fn test_compiled_pathcall_math_sqrt() {
         let source = r#"
         fn main() {
-            println!("{}", math::sqrt(16.0));
+            println("{}", math::sqrt(16.0));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -792,7 +792,7 @@ mod tests {
     fn test_compiled_pathcall_math_abs() {
         let source = r#"
         fn main() {
-            println!("{}", math::abs(-42));
+            println("{}", math::abs(-42));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -806,7 +806,7 @@ mod tests {
         let source = r#"
         fn main() {
             let s = String::from("hello");
-            println!("{}", s);
+            println("{}", s);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -824,7 +824,7 @@ mod tests {
         let source = r#"
         fn main() {
             let m = HashMap::new();
-            println!("{}", m.len());
+            println("{}", m.len());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -846,7 +846,7 @@ mod tests {
             pub fn double(x: int) -> int { x * 2 }
         }
         fn main() {
-            println!("{}", math::double(21));
+            println("{}", math::double(21));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -868,7 +868,7 @@ mod tests {
             }
         }
         fn main() {
-            println!("{}", outer::inner::val());
+            println("{}", outer::inner::val());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -885,7 +885,7 @@ mod tests {
         }
         use calc::triple;
         fn main() {
-            println!("{}", triple(7));
+            println("{}", triple(7));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -904,7 +904,7 @@ mod tests {
             pub fn two() -> int { a::one() + a::one() }
         }
         fn main() {
-            println!("{}", b::two());
+            println("{}", b::two());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -917,9 +917,9 @@ mod tests {
     fn test_compiled_iter_any() {
         let source = r#"
         fn main() {
-            let v = vec![1, 2, 3];
+            let v = vec(1, 2, 3);
             let r = v.iter().any(|x| x == 2);
-            println!("{}", r);
+            println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -935,7 +935,7 @@ mod tests {
         let source = r#"
         fn main() {
             let h = spawn(|| 42);
-            println!("{}", h.await);
+            println("{}", h.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -950,8 +950,8 @@ mod tests {
         fn main() {
             let a = spawn(|| 100);
             let b = spawn(|| 200);
-            println!("{}", a.await);
-            println!("{}", b.await);
+            println("{}", a.await);
+            println("{}", b.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -968,7 +968,7 @@ mod tests {
                 sleep(0);
                 99
             });
-            println!("{}", h.await);
+            println("{}", h.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -984,7 +984,7 @@ mod tests {
             let a = spawn(|| 42);
             let b = spawn(|| 99);
             let result = select(a, b);
-            println!("{}", result);
+            println("{}", result);
         }
         "#;
         let result = run_compiled_capturing(source);

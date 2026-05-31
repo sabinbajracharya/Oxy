@@ -33,7 +33,7 @@ fn main() {
     r.right = Some(TreeNode::new(7));
     root.left = Some(l);
     root.right = Some(r);
-    println!("{}", max_depth(Some(root)));
+    println("{}", max_depth(Some(root)));
 }
 
 fn max_depth(root: Option) -> int {
@@ -55,15 +55,15 @@ fn test_example() {
     r.right = Some(TreeNode::new(7));
     root.left = Some(l);
     root.right = Some(r);
-    assert_eq!(max_depth(Some(root)), 3);
+    assert_eq(max_depth(Some(root)), 3);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(max_depth(None), 0);
+    assert_eq(max_depth(None), 0);
 }
 
 #[test]
 fn test_single_node() {
-    assert_eq!(max_depth(Some(TreeNode::new(1))), 1);
+    assert_eq(max_depth(Some(TreeNode::new(1))), 1);
 }

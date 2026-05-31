@@ -8,8 +8,8 @@
 #[test]
 fn test_new_empty() {
     let s = BTreeSet::new();
-    assert_eq!(s.len(), 0);
-    assert!(s.is_empty());
+    assert_eq(s.len(), 0);
+    assert(s.is_empty());
 }
 
 // === insert ===
@@ -18,8 +18,8 @@ fn test_new_empty() {
 fn test_insert() {
     let mut s = BTreeSet::new();
     let was_new = s.insert(1);
-    assert!(was_new);
-    assert_eq!(s.len(), 1);
+    assert(was_new);
+    assert_eq(s.len(), 1);
 }
 
 #[test]
@@ -27,8 +27,8 @@ fn test_insert_duplicate() {
     let mut s = BTreeSet::new();
     s.insert(1);
     let was_new = s.insert(1);
-    assert!(!was_new);
-    assert_eq!(s.len(), 1);
+    assert(!was_new);
+    assert_eq(s.len(), 1);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_insert_multiple() {
     s.insert("c");
     s.insert("a");
     s.insert("b");
-    assert_eq!(s.len(), 3);
+    assert_eq(s.len(), 3);
 }
 
 // === contains ===
@@ -46,14 +46,14 @@ fn test_insert_multiple() {
 fn test_contains() {
     let mut s = BTreeSet::new();
     s.insert(42);
-    assert!(s.contains(42));
-    assert!(!s.contains(99));
+    assert(s.contains(42));
+    assert(!s.contains(99));
 }
 
 #[test]
 fn test_contains_empty() {
     let s = BTreeSet::new();
-    assert!(!s.contains(1));
+    assert(!s.contains(1));
 }
 
 // === remove ===
@@ -63,9 +63,9 @@ fn test_remove_existing() {
     let mut s = BTreeSet::new();
     s.insert("hello");
     let existed = s.remove("hello");
-    assert!(existed);
-    assert_eq!(s.len(), 0);
-    assert!(!s.contains("hello"));
+    assert(existed);
+    assert_eq(s.len(), 0);
+    assert(!s.contains("hello"));
 }
 
 #[test]
@@ -73,8 +73,8 @@ fn test_remove_missing() {
     let mut s = BTreeSet::new();
     s.insert(1);
     let existed = s.remove(42);
-    assert!(!existed);
-    assert_eq!(s.len(), 1);
+    assert(!existed);
+    assert_eq(s.len(), 1);
 }
 
 // === union ===
@@ -88,7 +88,7 @@ fn test_union() {
     b.insert(2);
     b.insert(3);
     let u = a.union(b);
-    assert_eq!(u.len(), 3);
+    assert_eq(u.len(), 3);
 }
 
 // === intersection ===
@@ -104,7 +104,7 @@ fn test_intersection() {
     b.insert(3);
     b.insert(4);
     let inter = a.intersection(b);
-    assert_eq!(inter.len(), 2);
+    assert_eq(inter.len(), 2);
 }
 
 // === difference ===
@@ -118,7 +118,7 @@ fn test_difference() {
     let mut b = BTreeSet::new();
     b.insert(2);
     let diff = a.difference(b);
-    assert_eq!(diff.len(), 2);
+    assert_eq(diff.len(), 2);
 }
 
 // === to_vec ===
@@ -130,11 +130,11 @@ fn test_to_vec() {
     s.insert(1);
     s.insert(2);
     let v = s.to_vec();
-    assert_eq!(v.len(), 3);
+    assert_eq(v.len(), 3);
     // BTreeSet returns elements in sorted order
-    assert_eq!(v[0], 1);
-    assert_eq!(v[1], 2);
-    assert_eq!(v[2], 3);
+    assert_eq(v[0], 1);
+    assert_eq(v[1], 2);
+    assert_eq(v[2], 3);
 }
 
 // === Iteration ===
@@ -149,7 +149,7 @@ fn test_iteration() {
     for val in s {
         count = count + 1;
     }
-    assert_eq!(count, 3);
+    assert_eq(count, 3);
 }
 
 // === clone ===
@@ -159,6 +159,6 @@ fn test_clone() {
     let mut s = BTreeSet::new();
     s.insert("x");
     let s2 = s.clone();
-    assert_eq!(s2.len(), 1);
-    assert!(s2.contains("x"));
+    assert_eq(s2.len(), 1);
+    assert(s2.contains("x"));
 }

@@ -24,13 +24,13 @@ fn imitate_main_err() -> Result<(), String> {
 
 #[test]
 fn test_main_returning_result_unit_parses_and_typechecks() {
-    assert_eq!(imitate_main_ok(), Ok(()));
+    assert_eq(imitate_main_ok(), Ok(()));
 }
 
 #[test]
 fn test_main_pattern_propagates_err() {
     match imitate_main_err() {
-        Err(msg) => assert_eq!(msg, "boom"),
-        Ok(_) => panic!("expected Err"),
+        Err(msg) => assert_eq(msg, "boom"),
+        Ok(_) => panic("expected Err"),
     }
 }

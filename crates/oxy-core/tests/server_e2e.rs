@@ -61,7 +61,7 @@ fn main() {{
     std::server::get(app, "/hello", |req| std::server::text("hello world"));
     std::server::get(app, "/users/:id", |req| {{
         let id = req.params.get("id").unwrap();
-        std::server::json(format!("{{{{\"id\":\"{{}}\"}}}}", id))
+        std::server::json(format("{{{{\"id\":\"{{}}\"}}}}", id))
     }});
     std::server::post(app, "/echo", |req| std::server::text(req.body));
     std::server::listen(app, {port});

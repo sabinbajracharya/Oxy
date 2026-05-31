@@ -15,12 +15,12 @@ fn factorial(n: int) -> int {
 }
 
 fn greet(name: String) {
-    println!("Hello, {}!", name);
+    println("Hello, {}!", name);
 }
 
 fn main() {
-    println!("{}", add(3, 4));
-    println!("{}", multiply(5, 6));
-    println!("5! = {}", factorial(5));
+    println("{}", add(3, 4));
+    println("{}", multiply(5, 6));
+    println("5! = {}", factorial(5));
     greet("Oxy");
 }

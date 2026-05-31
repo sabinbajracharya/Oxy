@@ -24,15 +24,15 @@
 // - This is the foundation for diff/merge/edit-distance algorithms
 
 fn main() {
-    println!("{}", longest_common_subsequence("abcde", "ace"));
+    println("{}", longest_common_subsequence("abcde", "ace"));
 }
 
 fn longest_common_subsequence(text1: String, text2: String) -> int {
     let m = text1.len();
     let n = text2.len();
     // Use two rows for O(n) space
-    let mut prev = vec![];
-    let mut cur = vec![];
+    let mut prev = vec();
+    let mut cur = vec();
     let mut j = 0;
     while j <= n {
         prev.push(0);
@@ -62,15 +62,15 @@ fn longest_common_subsequence(text1: String, text2: String) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(longest_common_subsequence("abcde", "ace"), 3);
+    assert_eq(longest_common_subsequence("abcde", "ace"), 3);
 }
 
 #[test]
 fn test_no_common() {
-    assert_eq!(longest_common_subsequence("abc", "def"), 0);
+    assert_eq(longest_common_subsequence("abc", "def"), 0);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(longest_common_subsequence("abc", ""), 0);
+    assert_eq(longest_common_subsequence("abc", ""), 0);
 }

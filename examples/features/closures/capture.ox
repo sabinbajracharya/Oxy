@@ -9,7 +9,7 @@
 fn test_value_capture() {
     let factor = 10;
     let multiply = |x| x * factor;
-    assert_eq!(multiply(5), 50);
+    assert_eq(multiply(5), 50);
 }
 
 // === Multiple Captures ===
@@ -19,7 +19,7 @@ fn test_multiple_captures() {
     let a = 10;
     let b = 20;
     let sum = || a + b;
-    assert_eq!(sum(), 30);
+    assert_eq(sum(), 30);
 }
 
 // === Mutable Capture ===
@@ -33,7 +33,7 @@ fn test_mutable_capture() {
     inc();
     inc();
     inc();
-    assert_eq!(count, 3);
+    assert_eq(count, 3);
 }
 
 // === Capture with Initial Value ===
@@ -43,7 +43,7 @@ fn test_capture_with_param_and_mut() {
     let mut total = 100;
     let add = |x| total = total + x;
     add(50);
-    assert_eq!(total, 150);
+    assert_eq(total, 150);
 }
 
 
@@ -56,9 +56,9 @@ fn test_multiple_closures_same_capture() {
     let dec = || { counter = counter - 1; };
     inc();
     inc();
-    assert_eq!(counter, 2);
+    assert_eq(counter, 2);
     dec();
-    assert_eq!(counter, 1);
+    assert_eq(counter, 1);
 }
 
 // === Closure Captured in Loop ===
@@ -73,7 +73,7 @@ fn test_capture_in_loop() {
         captured = captured + closure();
         i = i + 1;
     }
-    assert_eq!(captured, 10);
+    assert_eq(captured, 10);
 }
 
 // === Nested Closure Capture ===
@@ -85,7 +85,7 @@ fn test_nested_closure() {
         let add = |x| x + outer_val;
         add(5)
     };
-    assert_eq!(inner_closure(), 15);
+    assert_eq(inner_closure(), 15);
 }
 
 // === Capture String ===
@@ -94,5 +94,5 @@ fn test_nested_closure() {
 fn test_capture_string() {
     let prefix = "Hello, ";
     let greet = |name| prefix + name;
-    assert_eq!(greet("World"), "Hello, World");
+    assert_eq(greet("World"), "Hello, World");
 }

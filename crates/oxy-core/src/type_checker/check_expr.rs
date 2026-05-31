@@ -379,7 +379,6 @@ impl TypeChecker {
             Expr::AsyncBlock { body, .. } => self.infer_async_block(body),
             Expr::Await { expr: inner, .. } => self.infer_await(inner),
             Expr::FString { .. } => Ok(TypeInfo::String),
-            Expr::MacroCall { name, args, .. } => self.infer_macro_call(name, args),
             Expr::Path { segments, .. } => self.infer_path(segments),
             Expr::SelfRef { .. } => self.infer_self_ref(),
             Expr::As {

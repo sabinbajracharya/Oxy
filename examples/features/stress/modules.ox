@@ -13,14 +13,14 @@ mod math {
 
 #[test]
 fn test_module_pub_fn() {
-    assert_eq!(math::add(2, 3), 5);
-    assert_eq!(math::sub(10, 4), 6);
+    assert_eq(math::add(2, 3), 5);
+    assert_eq(math::sub(10, 4), 6);
 }
 
 #[test]
 fn test_nested_module() {
-    assert_eq!(math::advanced::square(5), 25);
-    assert_eq!(math::advanced::cube(3), 27);
+    assert_eq(math::advanced::square(5), 25);
+    assert_eq(math::advanced::cube(3), 27);
 }
 
 // --- use for shorter name ---
@@ -29,8 +29,8 @@ use math::advanced::square;
 
 #[test]
 fn test_use_simple() {
-    assert_eq!(add(7, 8), 15);
-    assert_eq!(square(4), 16);
+    assert_eq(add(7, 8), 15);
+    assert_eq(square(4), 16);
 }
 
 // --- use as alias ---
@@ -38,7 +38,7 @@ use math::sub as subtract;
 
 #[test]
 fn test_use_alias() {
-    assert_eq!(subtract(10, 3), 7);
+    assert_eq(subtract(10, 3), 7);
 }
 
 // --- use group ---
@@ -52,7 +52,7 @@ use ops::{one, two, three};
 
 #[test]
 fn test_use_group() {
-    assert_eq!(one() + two() + three(), 6);
+    assert_eq(one() + two() + three(), 6);
 }
 
 // --- module-private struct ---
@@ -67,7 +67,7 @@ mod data {
 #[test]
 fn test_pub_struct_pub_field() {
     let b = data::new(42);
-    assert_eq!(b.value, 42);
+    assert_eq(b.value, 42);
 }
 
 // --- field visibility within module ---
@@ -88,10 +88,10 @@ mod hidden_fields {
 #[test]
 fn test_field_visibility_pub() {
     let c = hidden_fields::new();
-    assert_eq!(c.visible, 0);
+    assert_eq(c.visible, 0);
     let c2 = hidden_fields::bump(c);
-    assert_eq!(c2.visible, 1);
-    assert_eq!(hidden_fields::count(c2), 1);
+    assert_eq(c2.visible, 1);
+    assert_eq(hidden_fields::count(c2), 1);
 }
 
 // --- pub ---
@@ -102,8 +102,8 @@ mod crate_only {
 
 #[test]
 fn test_pub_crate() {
-    assert_eq!(crate_only::shared(), 99);
-    assert_eq!(crate_only::calls_shared(), 99);
+    assert_eq(crate_only::shared(), 99);
+    assert_eq(crate_only::calls_shared(), 99);
 }
 
 // --- enum in module — `mod::Enum::Variant` resolves to the qualified enum ---
@@ -121,7 +121,7 @@ mod shapes {
 #[test]
 fn test_enum_in_module() {
     let c = shapes::Color::Green;
-    assert_eq!(shapes::name(c), "green");
+    assert_eq(shapes::name(c), "green");
 }
 
 // --- enum via use ---
@@ -130,5 +130,5 @@ use shapes::Color;
 #[test]
 fn test_enum_via_use() {
     let c = Color::Red;
-    assert_eq!(shapes::name(c), "red");
+    assert_eq(shapes::name(c), "red");
 }

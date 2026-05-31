@@ -13,21 +13,21 @@
 fn test_fstring_single_variable() {
     let name = "Alice";
     let s = f"Hello {name}";
-    assert_eq!(s, "Hello Alice");
+    assert_eq(s, "Hello Alice");
 }
 
 #[test]
 fn test_fstring_int_interpolation() {
     let x = 42;
     let s = f"value: {x}";
-    assert_eq!(s, "value: 42");
+    assert_eq(s, "value: 42");
 }
 
 #[test]
 fn test_fstring_float_interpolation() {
     let pi = 3.14;
     let s = f"pi is {pi}";
-    assert!(s.contains("3.14"));
+    assert(s.contains("3.14"));
 }
 
 // === Multiple Interpolations ===
@@ -37,8 +37,8 @@ fn test_fstring_multiple() {
     let x = 10;
     let y = 20;
     let s = f"x={x}, y={y}";
-    assert!(s.contains("x=10"));
-    assert!(s.contains("y=20"));
+    assert(s.contains("x=10"));
+    assert(s.contains("y=20"));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_fstring_three_exprs() {
     let b = "b";
     let c = "c";
     let s = f"{a}{b}{c}";
-    assert_eq!(s, "abc");
+    assert_eq(s, "abc");
 }
 
 // === F-String Literal Text ===
@@ -55,13 +55,13 @@ fn test_fstring_three_exprs() {
 #[test]
 fn test_fstring_no_interpolation() {
     let s = f"hello world";
-    assert_eq!(s, "hello world");
+    assert_eq(s, "hello world");
 }
 
 #[test]
 fn test_fstring_empty_interpolation() {
     let s = f"";
-    assert_eq!(s, "");
+    assert_eq(s, "");
 }
 
 // === Expressions in F-Strings ===
@@ -69,19 +69,19 @@ fn test_fstring_empty_interpolation() {
 #[test]
 fn test_fstring_arithmetic_expression() {
     let s = f"1 + 2 = {1 + 2}";
-    assert_eq!(s, "1 + 2 = 3");
+    assert_eq(s, "1 + 2 = 3");
 }
 
 #[test]
 fn test_fstring_method_call() {
     let s = f"uppercase: {"hello".to_uppercase()}";
-    assert_eq!(s, "uppercase: HELLO");
+    assert_eq(s, "uppercase: HELLO");
 }
 
 #[test]
 fn test_fstring_function_call() {
     let s = f"len: {"abc".len()}";
-    assert_eq!(s, "len: 3");
+    assert_eq(s, "len: 3");
 }
 
 // === F-String with String Variable ===
@@ -91,7 +91,7 @@ fn test_fstring_string_var() {
     let greeting = "Hey";
     let name = "Bob";
     let s = f"{greeting} {name}!";
-    assert_eq!(s, "Hey Bob!");
+    assert_eq(s, "Hey Bob!");
 }
 
 // === F-String with Chars ===
@@ -100,5 +100,5 @@ fn test_fstring_string_var() {
 fn test_fstring_char() {
     let c = 'X';
     let s = f"char: {c}";
-    assert_eq!(s, "char: X");
+    assert_eq(s, "char: X");
 }

@@ -9,9 +9,9 @@ fn test_for_destructure_vec_of_tuples() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let pairs = vec![(1, "a"), (2, "b")];
+    let pairs = vec((1, "a"), (2, "b"));
     for (num, letter) in pairs {
-        println!("{} {}", num, letter);
+        println("{} {}", num, letter);
     }
 }
 "#,
@@ -25,7 +25,7 @@ fn test_let_tuple_destructure() {
         r#"fn main() {
             let t = (1, 2, 3);
             let (a, b, c) = t;
-            println!("{} {} {}", a, b, c);
+            println("{} {} {}", a, b, c);
             }"#,
     );
     assert_eq!(output, vec!["1 2 3\n"]);
@@ -35,9 +35,9 @@ fn test_let_tuple_destructure() {
 fn test_let_slice_destructure() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec![10, 20];
+            let v = vec(10, 20);
             let [x, y] = v;
-            println!("{} {}", x, y);
+            println("{} {}", x, y);
             }"#,
     );
     assert_eq!(output, vec!["10 20\n"]);
@@ -48,10 +48,10 @@ fn test_vec_empty_macro() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut v = vec![];
-                println!("{}", v.len());
+                let mut v = vec();
+                println("{}", v.len());
                 v.push(42);
-                println!("{}", v.len());
+                println("{}", v.len());
             }
             "#,
     );
@@ -65,7 +65,7 @@ fn test_use_import_shortcut() {
             use std::env;
             fn main() {
                 let vars = env::vars();
-                println!("{}", vars.len() >= 0);
+                println("{}", vars.len() >= 0);
             }
             "#,
     );
@@ -77,13 +77,13 @@ fn test_range_slicing_vec() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = vec![10, 20, 30, 40, 50];
+                let v = vec(10, 20, 30, 40, 50);
                 let a = v[1..4];
-                println!("{} {} {}", a[0], a[1], a[2]);
+                println("{} {} {}", a[0], a[1], a[2]);
                 let b = v[..2];
-                println!("{} {}", b[0], b[1]);
+                println("{} {}", b[0], b[1]);
                 let c = v[3..];
-                println!("{} {}", c[0], c[1]);
+                println("{} {}", c[0], c[1]);
             }
             "#,
     );
@@ -96,9 +96,9 @@ fn test_range_slicing_string() {
         r#"
             fn main() {
                 let s = "hello world";
-                println!("{}", s[..5]);
-                println!("{}", s[6..]);
-                println!("{}", s[2..8]);
+                println("{}", s[..5]);
+                println("{}", s[6..]);
+                println("{}", s[2..8]);
             }
             "#,
     );
@@ -110,11 +110,11 @@ fn test_clone_vec() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = vec![1, 2, 3];
+                let a = vec(1, 2, 3);
                 let mut b = a.clone();
                 b.push(4);
                 // .clone() is a deep copy — mutations don't propagate
-                println!("{} {}", a.len(), b.len());
+                println("{} {}", a.len(), b.len());
             }
             "#,
     );
@@ -126,10 +126,10 @@ fn test_vec_shared_mutation() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = vec![1, 2, 3];
+                let a = vec(1, 2, 3);
                 let mut b = a;        // shared via Rc — no deep copy
                 b.push(4);            // mutation visible through both
-                println!("{} {}", a.len(), b.len());
+                println("{} {}", a.len(), b.len());
             }
             "#,
     );
@@ -143,7 +143,7 @@ fn test_clone_tuple() {
             fn main() {
                 let t = (1, "hello", true);
                 let t2 = t.clone();
-                println!("{} {}", t.0, t2.1);
+                println("{} {}", t.0, t2.1);
             }
             "#,
     );
@@ -158,8 +158,8 @@ fn test_hashmap_index_access() {
                 let mut m = HashMap::new();
                 m.insert("name", "Oxy");
                 m.insert("version", "0.1");
-                println!("{}", m["name"]);
-                println!("{}", m["version"]);
+                println("{}", m["name"]);
+                println("{}", m["version"]);
             }
             "#,
     );
@@ -173,7 +173,7 @@ fn test_use_group_std() {
             use std::{env, fs};
             fn main() {
                 let vars = env::vars();
-                println!("{}", vars.len() > 0);
+                println("{}", vars.len() > 0);
             }
             "#,
     );
@@ -192,7 +192,7 @@ fn test_match_guard() {
                     n if n > 0 => "positive",
                     _ => "unknown",
                 };
-                println!("{}", result);
+                println("{}", result);
             }
             "#,
     );
@@ -204,7 +204,7 @@ fn test_match_guard_with_binding() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let values = vec![1, -2, 3, -4, 5];
+                let values = vec(1, -2, 3, -4, 5);
                 let mut pos = 0;
                 let mut neg = 0;
                 for v in values {
@@ -214,7 +214,7 @@ fn test_match_guard_with_binding() {
                         _ => {},
                     }
                 }
-                println!("{} {}", pos, neg);
+                println("{} {}", pos, neg);
             }
             "#,
     );
@@ -241,7 +241,7 @@ fn test_operator_overload_add() {
                 let a = Point { x: 1, y: 2 };
                 let b = Point { x: 3, y: 4 };
                 let c = a + b;
-                println!("{} {}", c.x, c.y);
+                println("{} {}", c.x, c.y);
             }
             "#,
     );
@@ -260,13 +260,13 @@ fn test_impl_display() {
 
             impl Display for Point {
                 fn fmt(self) -> String {
-                    format!("({}, {})", self.x, self.y)
+                    format("({}, {})", self.x, self.y)
                 }
             }
 
             fn main() {
                 let p = Point { x: 3, y: 4 };
-                println!("Point is: {}", p);
+                println("Point is: {}", p);
             }
             "#,
     );
@@ -296,9 +296,9 @@ fn test_enum_methods() {
 
             fn main() {
                 let d = Direction::East;
-                println!("{}", d.is_horizontal());
+                println("{}", d.is_horizontal());
                 let d2 = Direction::North;
-                println!("{}", d2.is_horizontal());
+                println("{}", d2.is_horizontal());
             }
             "#,
     );

@@ -21,7 +21,7 @@ fn make_zero<T: Zero>() -> T {
 #[test]
 fn test_mono_single_impl() {
     let z = make_zero::<int>();
-    assert_eq!(z, 0);
+    assert_eq(z, 0);
 }
 
 // === Monomorphization: Single Type Arg, Multiple Impls ===
@@ -36,8 +36,8 @@ impl Zero for float {
 fn test_mono_multi_impl_different_types() {
     let i: int = make_zero::<int>();
     let f: float = make_zero::<float>();
-    assert_eq!(i, 0);
-    assert_eq!(f, 0.0);
+    assert_eq(i, 0);
+    assert_eq(f, 0.0);
 }
 
 // === Monomorphization: Deduplication ===
@@ -47,8 +47,8 @@ fn test_mono_multi_impl_different_types() {
 fn test_mono_dedup() {
     let a = make_zero::<int>();
     let b = make_zero::<int>();
-    assert_eq!(a, 0);
-    assert_eq!(b, 0);
+    assert_eq(a, 0);
+    assert_eq(b, 0);
 }
 
 // === Monomorphization: Multiple Type Args ===
@@ -85,8 +85,8 @@ fn make_pair<A: DefaultValue, B: DefaultValue>() -> Pair<A, B>
 #[test]
 fn test_mono_multi_type_args() {
     let p = make_pair::<int, String>();
-    assert_eq!(p.first, 42);
-    assert_eq!(p.second, "hello");
+    assert_eq(p.first, 42);
+    assert_eq(p.second, "hello");
 }
 
 // === Monomorphization: Mixed Turbofish and Inference ===
@@ -99,6 +99,6 @@ fn identity<T>(x: T) -> T {
 fn test_mono_with_inference() {
     let a = identity::<int>(10);
     let b = identity("hello".to_string());
-    assert_eq!(a, 10);
-    assert_eq!(b, "hello");
+    assert_eq(a, 10);
+    assert_eq(b, "hello");
 }

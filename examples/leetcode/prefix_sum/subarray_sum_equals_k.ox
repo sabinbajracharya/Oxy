@@ -23,8 +23,8 @@
 // - O(n) time, O(n) space
 
 fn main() {
-    let nums = vec![1, 1, 1];
-    println!("{}", subarray_sum(nums, 2));
+    let nums = vec(1, 1, 1);
+    println("{}", subarray_sum(nums, 2));
 }
 
 fn subarray_sum(nums: Vec, k: int) -> int {
@@ -44,16 +44,16 @@ fn subarray_sum(nums: Vec, k: int) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(subarray_sum(vec![1, 1, 1], 2), 2);
+    assert_eq(subarray_sum(vec(1, 1, 1), 2), 2);
 }
 
 #[test]
 fn test_negative() {
-    assert_eq!(subarray_sum(vec![1, -1, 0], 0), 3);
+    assert_eq(subarray_sum(vec(1, -1, 0), 0), 3);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq!(subarray_sum(vec![5], 5), 1);
-    assert_eq!(subarray_sum(vec![5], 3), 0);
+    assert_eq(subarray_sum(vec(5), 5), 1);
+    assert_eq(subarray_sum(vec(5), 3), 0);
 }

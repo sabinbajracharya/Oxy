@@ -16,7 +16,7 @@ fn test_custom_option_some() {
         MyOption::MySome(v) => v,
         MyOption::MyNone => 0,
     };
-    assert_eq!(result, 42);
+    assert_eq(result, 42);
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn test_custom_option_none() {
         MyOption::MySome(v) => v,
         MyOption::MyNone => -1,
     };
-    assert_eq!(result, -1);
+    assert_eq(result, -1);
 }
 
 // === Result-like Enum ===
@@ -43,7 +43,7 @@ fn test_custom_result_ok() {
         MyResult::MyOk(m) => m,
         MyResult::MyErr(e) => e,
     };
-    assert_eq!(msg, "success");
+    assert_eq(msg, "success");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn test_custom_result_err() {
         MyResult::MyOk(m) => m,
         MyResult::MyErr(e) => e,
     };
-    assert_eq!(msg, "failed");
+    assert_eq(msg, "failed");
 }
 
 // === If-Let Pattern ===
@@ -65,7 +65,7 @@ fn test_if_let_some() {
     if let MyOption::MySome(v) = x {
         found = v;
     }
-    assert_eq!(found, 10);
+    assert_eq(found, 10);
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn test_if_let_none_else() {
     } else {
         result = -1;
     }
-    assert_eq!(result, -1);
+    assert_eq(result, -1);
 }
 
 // === Enum with Mixed Data ===
@@ -96,7 +96,7 @@ fn test_enum_mixed_variants() {
         Event::Click(x, y) => "click",
         Event::Resize { w, h } => "resize",
     };
-    assert_eq!(desc, "click");
+    assert_eq(desc, "click");
 }
 
 // === Tuple Variants with Many Positional Fields ===
@@ -115,11 +115,11 @@ fn test_three_positional_fields_bind_correctly() {
     let c = Color::Rgb(255, 128, 64);
     match c {
         Color::Rgb(r, g, b) => {
-            assert_eq!(r, 255);
-            assert_eq!(g, 128);
-            assert_eq!(b, 64);
+            assert_eq(r, 255);
+            assert_eq(g, 128);
+            assert_eq(b, 64);
         }
-        _ => assert!(false),
+        _ => assert(false),
     }
 }
 
@@ -128,12 +128,12 @@ fn test_four_positional_fields_bind_correctly() {
     let c = Color::Rgba(10, 20, 30, 40);
     match c {
         Color::Rgba(r, g, b, a) => {
-            assert_eq!(r, 10);
-            assert_eq!(g, 20);
-            assert_eq!(b, 30);
-            assert_eq!(a, 40);
+            assert_eq(r, 10);
+            assert_eq(g, 20);
+            assert_eq(b, 30);
+            assert_eq(a, 40);
         }
-        _ => assert!(false),
+        _ => assert(false),
     }
 }
 
@@ -144,5 +144,5 @@ fn test_if_let_three_positional_fields() {
     if let Color::Hsl(h, s, l) = c {
         total = h + s + l;
     }
-    assert_eq!(total, 245);
+    assert_eq(total, 245);
 }

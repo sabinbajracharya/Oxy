@@ -8,8 +8,8 @@
 fn test_new_returns_increasing_handle() {
     let a = std::server::new();
     let b = std::server::new();
-    assert!(a > 0);
-    assert!(b > a);
+    assert(a > 0);
+    assert(b > a);
 }
 
 #[test]
@@ -27,36 +27,36 @@ fn test_register_routes_all_methods() {
 #[test]
 fn test_text_response_shape() {
     let r = std::server::text("hello");
-    assert_eq!(r.status, 200);
-    assert_eq!(r.body, "hello");
-    assert_eq!(r.content_type, "text/plain; charset=utf-8");
+    assert_eq(r.status, 200);
+    assert_eq(r.body, "hello");
+    assert_eq(r.content_type, "text/plain; charset=utf-8");
 }
 
 #[test]
 fn test_json_response_shape() {
     let r = std::server::json("{\"k\":1}");
-    assert_eq!(r.status, 200);
-    assert_eq!(r.body, "{\"k\":1}");
-    assert_eq!(r.content_type, "application/json; charset=utf-8");
+    assert_eq(r.status, 200);
+    assert_eq(r.body, "{\"k\":1}");
+    assert_eq(r.content_type, "application/json; charset=utf-8");
 }
 
 #[test]
 fn test_html_response_shape() {
     let r = std::server::html("<h1>hi</h1>");
-    assert_eq!(r.status, 200);
-    assert_eq!(r.content_type, "text/html; charset=utf-8");
+    assert_eq(r.status, 200);
+    assert_eq(r.content_type, "text/html; charset=utf-8");
 }
 
 #[test]
 fn test_status_helper_arbitrary_code() {
     let r = std::server::status(404, "missing");
-    assert_eq!(r.status, 404);
-    assert_eq!(r.body, "missing");
+    assert_eq(r.status, 404);
+    assert_eq(r.body, "missing");
 }
 
 #[test]
 fn test_listen_invalid_port_returns_err() {
     let app = std::server::new();
     let r = std::server::listen(app, 99999);
-    assert!(r.is_err());
+    assert(r.is_err());
 }

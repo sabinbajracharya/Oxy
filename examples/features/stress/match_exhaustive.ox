@@ -25,7 +25,7 @@ fn test_match_int_literal() {
         3 => "three",
         _ => "many",
     };
-    assert_eq!(s, "three");
+    assert_eq(s, "three");
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_match_string_literal() {
         "bye" => 3,
         _ => 0,
     };
-    assert_eq!(r, 2);
+    assert_eq(r, 2);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_match_bool_literal() {
         true => 1,
         false => 0,
     };
-    assert_eq!(r, 1);
+    assert_eq(r, 1);
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn test_match_char_literal() {
         'c' => 3,
         _ => 0,
     };
-    assert_eq!(r, 2);
+    assert_eq(r, 2);
 }
 
 // --- 2. wildcard catches anything ---
@@ -69,7 +69,7 @@ fn test_match_wildcard_only() {
     let r = match n {
         _ => 42,
     };
-    assert_eq!(r, 42);
+    assert_eq(r, 42);
 }
 
 // --- 3. ident pattern binds ---
@@ -79,7 +79,7 @@ fn test_match_ident_binds() {
     let r = match n {
         x => x * 10,
     };
-    assert_eq!(r, 70);
+    assert_eq(r, 70);
 }
 
 // --- 4. enum unit variant ---
@@ -91,7 +91,7 @@ fn test_match_enum_unit_variant() {
         Color::Green => "g",
         Color::Blue => "b",
     };
-    assert_eq!(s, "g");
+    assert_eq(s, "g");
 }
 
 // --- 5. enum tuple variant ---
@@ -104,7 +104,7 @@ fn test_match_enum_tuple_variant() {
         Shape::Rect { w, h } => w + h,
         Shape::Nothing => 0.0,
     };
-    assert_eq!(p, 12.0);
+    assert_eq(p, 12.0);
 }
 
 // --- 6. enum struct variant ---
@@ -117,7 +117,7 @@ fn test_match_enum_struct_variant() {
         Shape::Rect { w, h } => w * h,
         Shape::Nothing => 0.0,
     };
-    assert_eq!(area, 24.0);
+    assert_eq(area, 24.0);
 }
 
 // --- 7. struct pattern (top-level struct, not enum variant) ---
@@ -127,7 +127,7 @@ fn test_match_struct_pattern() {
     let dist = match p {
         Point { x, y } => x * x + y * y,
     };
-    assert_eq!(dist, 25);
+    assert_eq(dist, 25);
 }
 
 // --- 8. tuple pattern ---
@@ -137,7 +137,7 @@ fn test_match_tuple_pattern() {
     let sum = match t {
         (a, b, c) => a + b + c,
     };
-    assert_eq!(sum, 6);
+    assert_eq(sum, 6);
 }
 
 // --- 9. or-pattern ---
@@ -149,7 +149,7 @@ fn test_match_or_pattern() {
         2 | 4 | 6 | 8 => "even",
         _ => "other",
     };
-    assert_eq!(category, "odd");
+    assert_eq(category, "odd");
 }
 
 // --- 10. range pattern (exclusive) ---
@@ -161,7 +161,7 @@ fn test_match_range_exclusive() {
         10..100 => "med",
         _ => "large",
     };
-    assert_eq!(band, "small");
+    assert_eq(band, "small");
 }
 
 // --- 11. range pattern (inclusive) ---
@@ -173,7 +173,7 @@ fn test_match_range_inclusive() {
         10..=99 => "med",
         _ => "large",
     };
-    assert_eq!(band, "med");
+    assert_eq(band, "med");
 }
 
 // --- 12. guarded arms ---
@@ -187,7 +187,7 @@ fn test_match_with_guard() {
         x if x < 100 => "med",
         _ => "large",
     };
-    assert_eq!(s, "small");
+    assert_eq(s, "small");
 }
 
 // --- 13. guard with enum variant bindings ---
@@ -200,7 +200,7 @@ fn test_match_guard_with_enum_bindings() {
         Shape::Circle(_) => "large circle",
         _ => "other",
     };
-    assert_eq!(kind, "med circle");
+    assert_eq(kind, "med circle");
 }
 
 // --- 14. nested match ---
@@ -214,7 +214,7 @@ fn test_match_nested() {
         },
         _ => "other",
     };
-    assert_eq!(kind, "square");
+    assert_eq(kind, "square");
 }
 
 // --- 15. match as a statement (no value used) ---
@@ -227,7 +227,7 @@ fn test_match_as_statement() {
         Color::Green => counter = 2,
         Color::Blue => counter = 3,
     }
-    assert_eq!(counter, 3);
+    assert_eq(counter, 3);
 }
 
 // --- 16. match returning struct ---
@@ -239,7 +239,7 @@ fn test_match_returning_struct() {
         1 => Point { x: 1, y: 1 },
         _ => Point { x: 99, y: 99 },
     };
-    assert_eq!(p.x + p.y, 2);
+    assert_eq(p.x + p.y, 2);
 }
 
 // --- 17. match with println in each arm (stack discipline) ---
@@ -260,14 +260,14 @@ fn test_match_with_side_effects_each_arm() {
             Shape::Nothing => { total = total + 1000; }
         }
     }
-    assert_eq!(total, 1111);
+    assert_eq(total, 1111);
 }
 
 // --- 18. match inside a fn returning value, called repeatedly ---
 fn describe(s: Shape) -> String {
     match s {
-        Shape::Circle(r) => format!("circle r={}", r),
-        Shape::Rect { w, h } => format!("rect {}x{}", w, h),
+        Shape::Circle(r) => format("circle r={}", r),
+        Shape::Rect { w, h } => format("rect {}x{}", w, h),
         Shape::Triangle(_, _, _) => "tri".to_string(),
         Shape::Nothing => "nothing".to_string(),
     }
@@ -275,10 +275,10 @@ fn describe(s: Shape) -> String {
 
 #[test]
 fn test_match_fn_called_many_times() {
-    assert_eq!(describe(Shape::Circle(2.0)), "circle r=2.0");
-    assert_eq!(describe(Shape::Rect { w: 3.0, h: 4.0 }), "rect 3.0x4.0");
-    assert_eq!(describe(Shape::Triangle(1.0, 1.0, 1.0)), "tri");
-    assert_eq!(describe(Shape::Nothing), "nothing");
+    assert_eq(describe(Shape::Circle(2.0)), "circle r=2.0");
+    assert_eq(describe(Shape::Rect { w: 3.0, h: 4.0 }), "rect 3.0x4.0");
+    assert_eq(describe(Shape::Triangle(1.0, 1.0, 1.0)), "tri");
+    assert_eq(describe(Shape::Nothing), "nothing");
 }
 
 // --- 19. match in loop body ---
@@ -296,7 +296,7 @@ fn test_match_in_loop() {
         };
         i = i + 1;
     }
-    assert_eq!(acc, 11110);
+    assert_eq(acc, 11110);
 }
 
 // --- 20. Option match ---
@@ -312,8 +312,8 @@ fn test_match_option() {
         Some(x) => x,
         None => -1,
     };
-    assert_eq!(a, 42);
-    assert_eq!(b, -1);
+    assert_eq(a, 42);
+    assert_eq(b, -1);
 }
 
 // --- 21. Result match ---
@@ -329,6 +329,6 @@ fn test_match_result() {
         Ok(x) => x,
         Err(_) => 99,
     };
-    assert_eq!(a, 7);
-    assert_eq!(b, 99);
+    assert_eq(a, 7);
+    assert_eq(b, 99);
 }

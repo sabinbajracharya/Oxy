@@ -23,8 +23,8 @@
 // - O(n) time, O(1) space
 
 fn main() {
-    let heights = vec![1, 8, 6, 2, 5, 4, 8, 3, 7];
-    println!("{}", max_area(heights));
+    let heights = vec(1, 8, 6, 2, 5, 4, 8, 3, 7);
+    println("{}", max_area(heights));
 }
 
 fn max_area(height: Vec) -> int {
@@ -50,15 +50,15 @@ fn max_area(height: Vec) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(max_area(vec![1, 8, 6, 2, 5, 4, 8, 3, 7]), 49);
+    assert_eq(max_area(vec(1, 8, 6, 2, 5, 4, 8, 3, 7)), 49);
 }
 
 #[test]
 fn test_two_elements() {
-    assert_eq!(max_area(vec![1, 1]), 1);
+    assert_eq(max_area(vec(1, 1)), 1);
 }
 
 #[test]
 fn test_descending() {
-    assert_eq!(max_area(vec![5, 4, 3, 2, 1]), 6);
+    assert_eq(max_area(vec(5, 4, 3, 2, 1)), 6);
 }

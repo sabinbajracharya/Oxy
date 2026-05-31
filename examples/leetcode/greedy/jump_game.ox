@@ -22,8 +22,8 @@
 // - O(n) time, O(1) space
 
 fn main() {
-    println!("{}", can_jump(vec![2, 3, 1, 1, 4]));
-    println!("{}", can_jump(vec![3, 2, 1, 0, 4]));
+    println("{}", can_jump(vec(2, 3, 1, 1, 4)));
+    println("{}", can_jump(vec(3, 2, 1, 0, 4)));
 }
 
 fn can_jump(nums: Vec) -> bool {
@@ -45,15 +45,15 @@ fn can_jump(nums: Vec) -> bool {
 
 #[test]
 fn test_reachable() {
-    assert!(can_jump(vec![2, 3, 1, 1, 4]));
+    assert(can_jump(vec(2, 3, 1, 1, 4)));
 }
 
 #[test]
 fn test_unreachable() {
-    assert!(!can_jump(vec![3, 2, 1, 0, 4]));
+    assert(!can_jump(vec(3, 2, 1, 0, 4)));
 }
 
 #[test]
 fn test_single_element() {
-    assert!(can_jump(vec![0]));
+    assert(can_jump(vec(0)));
 }

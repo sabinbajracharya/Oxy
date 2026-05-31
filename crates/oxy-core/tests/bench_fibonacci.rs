@@ -8,7 +8,7 @@ fn fib(n: int) -> int {
 }
 fn main() {
     let r = fib(30);
-    println!("{}", r);
+    println("{}", r);
 }
 "#;
 

@@ -4,18 +4,18 @@
 #[test]
 fn test_if_else_expr() {
     let n = if true { 1 } else { 2 };
-    assert_eq!(n, 1);
+    assert_eq(n, 1);
 }
 #[test]
 fn test_if_else_expr_false() {
     let n = if false { 1 } else { 2 };
-    assert_eq!(n, 2);
+    assert_eq(n, 2);
 }
 #[test]
 fn test_if_no_else_unit() {
     let mut x = 0;
     if true { x = 5; }
-    assert_eq!(x, 5);
+    assert_eq(x, 5);
 }
 #[test]
 fn test_if_else_if_chain() {
@@ -24,7 +24,7 @@ fn test_if_else_if_chain() {
         else if n == 0 { "zero" }
         else if n < 10 { "small" }
         else { "big" };
-    assert_eq!(s, "small");
+    assert_eq(s, "small");
 }
 #[test]
 fn test_nested_if_in_branch() {
@@ -33,7 +33,7 @@ fn test_nested_if_in_branch() {
     } else {
         if true { 3 } else { 4 }
     };
-    assert_eq!(r, 2);
+    assert_eq(r, 2);
 }
 
 // --- while loops ---
@@ -45,7 +45,7 @@ fn test_while_counter() {
         sum = sum + i;
         i = i + 1;
     }
-    assert_eq!(sum, 10);
+    assert_eq(sum, 10);
 }
 #[test]
 fn test_while_break() {
@@ -54,7 +54,7 @@ fn test_while_break() {
         if i == 5 { break; }
         i = i + 1;
     }
-    assert_eq!(i, 5);
+    assert_eq(i, 5);
 }
 #[test]
 fn test_while_continue() {
@@ -65,13 +65,13 @@ fn test_while_continue() {
         if i % 2 == 0 { continue; }
         acc = acc + i;
     }
-    assert_eq!(acc, 25);  // 1+3+5+7+9
+    assert_eq(acc, 25);  // 1+3+5+7+9
 }
 #[test]
 fn test_while_false_runs_zero_times() {
     let mut x = 0;
     while false { x = 99; }
-    assert_eq!(x, 0);
+    assert_eq(x, 0);
 }
 
 // --- for-in ---
@@ -81,7 +81,7 @@ fn test_for_in_range() {
     for i in 0..5 {
         sum = sum + i;
     }
-    assert_eq!(sum, 10);
+    assert_eq(sum, 10);
 }
 #[test]
 fn test_for_in_inclusive_range() {
@@ -89,16 +89,16 @@ fn test_for_in_inclusive_range() {
     for i in 1..=4 {
         sum = sum + i;
     }
-    assert_eq!(sum, 10);
+    assert_eq(sum, 10);
 }
 #[test]
 fn test_for_in_vec() {
-    let v = vec![10, 20, 30, 40];
+    let v = vec(10, 20, 30, 40);
     let mut sum = 0;
     for x in v {
         sum = sum + x;
     }
-    assert_eq!(sum, 100);
+    assert_eq(sum, 100);
 }
 #[test]
 fn test_for_in_array_literal() {
@@ -106,7 +106,7 @@ fn test_for_in_array_literal() {
     for x in [1, 2, 3] {
         sum = sum + x;
     }
-    assert_eq!(sum, 6);
+    assert_eq(sum, 6);
 }
 #[test]
 fn test_for_in_string_chars() {
@@ -114,7 +114,7 @@ fn test_for_in_string_chars() {
     for _c in "hello".chars() {
         count = count + 1;
     }
-    assert_eq!(count, 5);
+    assert_eq(count, 5);
 }
 #[test]
 fn test_for_in_break() {
@@ -123,7 +123,7 @@ fn test_for_in_break() {
         if i == 3 { break; }
         hit = hit + 1;
     }
-    assert_eq!(hit, 3);
+    assert_eq(hit, 3);
 }
 #[test]
 fn test_for_in_continue() {
@@ -132,7 +132,7 @@ fn test_for_in_continue() {
         if i % 3 == 0 { continue; }
         count = count + 1;
     }
-    assert_eq!(count, 6);  // 1,2,4,5,7,8
+    assert_eq(count, 6);  // 1,2,4,5,7,8
 }
 
 // --- loop with break-value ---
@@ -143,7 +143,7 @@ fn test_loop_break_value() {
         if i == 7 { break i * 10; }
         i = i + 1;
     };
-    assert_eq!(r, 70);
+    assert_eq(r, 70);
 }
 #[test]
 fn test_loop_no_value_break() {
@@ -152,7 +152,7 @@ fn test_loop_no_value_break() {
         if i == 3 { break; }
         i = i + 1;
     }
-    assert_eq!(i, 3);
+    assert_eq(i, 3);
 }
 
 // --- nested loops ---
@@ -164,7 +164,7 @@ fn test_nested_loops_double_count() {
             total = total + 1;
         }
     }
-    assert_eq!(total, 12);
+    assert_eq(total, 12);
 }
 #[test]
 fn test_break_only_breaks_inner() {
@@ -175,7 +175,7 @@ fn test_break_only_breaks_inner() {
             total = total + 1;
         }
     }
-    assert_eq!(total, 6);  // 3 outer × 2 inner
+    assert_eq(total, 6);  // 3 outer × 2 inner
 }
 
 // --- labeled break ---
@@ -188,7 +188,7 @@ fn test_labeled_break_outer() {
             total = total + 1;
         }
     }
-    assert_eq!(total, 12);  // 5 + 5 + 2
+    assert_eq(total, 12);  // 5 + 5 + 2
 }
 #[test]
 fn test_labeled_continue_outer() {
@@ -199,7 +199,7 @@ fn test_labeled_continue_outer() {
             total = total + i + j;
         }
     }
-    assert_eq!(total, 3);  // i=0,j=0 → 0; i=1,j=0 → 1; i=2,j=0 → 2
+    assert_eq(total, 3);  // i=0,j=0 → 0; i=1,j=0 → 1; i=2,j=0 → 2
 }
 
 // --- if-let ---
@@ -210,7 +210,7 @@ fn test_if_let_some() {
     if let Some(v) = x {
         got = v;
     }
-    assert_eq!(got, 7);
+    assert_eq(got, 7);
 }
 #[test]
 fn test_if_let_none_skips() {
@@ -219,25 +219,25 @@ fn test_if_let_none_skips() {
     if let Some(v) = x {
         got = v;
     }
-    assert_eq!(got, -1);
+    assert_eq(got, -1);
 }
 #[test]
 fn test_if_let_else() {
     let x: Option<int> = None;
     let n = if let Some(v) = x { v } else { 99 };
-    assert_eq!(n, 99);
+    assert_eq(n, 99);
 }
 
 // --- while-let with Vec.pop ---
 #[test]
 fn test_while_let_pops_vec() {
-    let mut v = vec![1, 2, 3, 4];
+    let mut v = vec(1, 2, 3, 4);
     let mut sum = 0;
     while let Some(x) = v.pop() {
         sum = sum + x;
     }
-    assert_eq!(sum, 10);
-    assert_eq!(v.len(), 0);
+    assert_eq(sum, 10);
+    assert_eq(v.len(), 0);
 }
 
 // --- short-circuit && and || ---
@@ -247,12 +247,12 @@ fn test_and_short_circuits() {
     // top-level with a mangled name and aliases them locally.
     fn always_false(_c: int) -> bool { false }
     let r = always_false(99) && (true || true);
-    assert_eq!(r, false);
+    assert_eq(r, false);
 }
 #[test]
 fn test_or_short_circuits() {
     let r = true || false;
-    assert_eq!(r, true);
+    assert_eq(r, true);
 }
 
 // --- return-as-expression in nested positions ---
@@ -261,9 +261,9 @@ fn early_return_in_if(b: bool) -> int {
     -1
 }
 #[test]
-fn test_early_return_taken() { assert_eq!(early_return_in_if(true), 42); }
+fn test_early_return_taken() { assert_eq(early_return_in_if(true), 42); }
 #[test]
-fn test_early_return_not_taken() { assert_eq!(early_return_in_if(false), -1); }
+fn test_early_return_not_taken() { assert_eq(early_return_in_if(false), -1); }
 
 fn early_return_in_loop() -> int {
     for i in 0..100 {
@@ -272,7 +272,7 @@ fn early_return_in_loop() -> int {
     -1
 }
 #[test]
-fn test_return_from_for() { assert_eq!(early_return_in_loop(), 10); }
+fn test_return_from_for() { assert_eq(early_return_in_loop(), 10); }
 
 fn return_from_while() -> int {
     let mut i = 0;
@@ -283,7 +283,7 @@ fn return_from_while() -> int {
     -1
 }
 #[test]
-fn test_return_from_while() { assert_eq!(return_from_while(), 7); }
+fn test_return_from_while() { assert_eq(return_from_while(), 7); }
 
 // --- block as expression ---
 #[test]
@@ -293,7 +293,7 @@ fn test_block_as_expr() {
         let b = 10;
         a + b
     };
-    assert_eq!(n, 15);
+    assert_eq(n, 15);
 }
 #[test]
 fn test_nested_block_expr() {
@@ -301,5 +301,5 @@ fn test_nested_block_expr() {
         let x = { let y = 2; y * y };
         x + 1
     };
-    assert_eq!(n, 5);
+    assert_eq(n, 5);
 }

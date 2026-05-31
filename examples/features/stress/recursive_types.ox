@@ -23,13 +23,13 @@ fn list_sum(l: List) -> int {
 #[test]
 fn test_linked_list_empty() {
     let l = List::Empty;
-    assert_eq!(list_len(l), 0);
+    assert_eq(list_len(l), 0);
 }
 
 #[test]
 fn test_linked_list_three_nodes() {
-    let l = List::Node(1, vec![List::Node(2, vec![List::Node(3, vec![List::Empty])])]);
-    assert_eq!(list_sum(l), 6);
+    let l = List::Node(1, vec(List::Node(2, vec(List::Node(3, vec(List::Empty))))));
+    assert_eq(list_sum(l), 6);
 }
 
 // --- recursive enum: binary tree ---
@@ -53,28 +53,28 @@ fn tree_sum(t: Tree) -> int {
 
 #[test]
 fn test_tree_single_node() {
-    let t = Tree::Node(5, vec![]);
-    assert_eq!(tree_sum(t), 5);
+    let t = Tree::Node(5, vec());
+    assert_eq(tree_sum(t), 5);
 }
 
 #[test]
 fn test_tree_with_children() {
-    let t = Tree::Node(1, vec![Tree::Node(2, vec![]), Tree::Node(3, vec![])]);
-    assert_eq!(tree_sum(t), 6);
+    let t = Tree::Node(1, vec(Tree::Node(2, vec()), Tree::Node(3, vec())));
+    assert_eq(tree_sum(t), 6);
 }
 
 #[test]
 fn test_tree_deep() {
-    let t = Tree::Node(1, vec![
-        Tree::Node(2, vec![
-            Tree::Node(4, vec![]),
-            Tree::Node(5, vec![]),
-        ]),
-        Tree::Node(3, vec![
-            Tree::Node(6, vec![]),
-        ]),
-    ]);
-    assert_eq!(tree_sum(t), 21);
+    let t = Tree::Node(1, vec(
+        Tree::Node(2, vec(
+            Tree::Node(4, vec()),
+            Tree::Node(5, vec()),
+        )),
+        Tree::Node(3, vec(
+            Tree::Node(6, vec()),
+        )),
+    ));
+    assert_eq(tree_sum(t), 21);
 }
 
 // --- recursive fn: factorial ---
@@ -83,13 +83,13 @@ fn factorial(n: int) -> int {
 }
 
 #[test]
-fn test_factorial_zero() { assert_eq!(factorial(0), 1); }
+fn test_factorial_zero() { assert_eq(factorial(0), 1); }
 #[test]
-fn test_factorial_one() { assert_eq!(factorial(1), 1); }
+fn test_factorial_one() { assert_eq(factorial(1), 1); }
 #[test]
-fn test_factorial_five() { assert_eq!(factorial(5), 120); }
+fn test_factorial_five() { assert_eq(factorial(5), 120); }
 #[test]
-fn test_factorial_ten() { assert_eq!(factorial(10), 3628800); }
+fn test_factorial_ten() { assert_eq(factorial(10), 3628800); }
 
 // --- mutual recursion ---
 fn is_even(n: int) -> bool {
@@ -101,15 +101,15 @@ fn is_odd(n: int) -> bool {
 
 #[test]
 fn test_mutual_recursion_even() {
-    assert_eq!(is_even(0), true);
-    assert_eq!(is_even(4), true);
-    assert_eq!(is_even(7), false);
+    assert_eq(is_even(0), true);
+    assert_eq(is_even(4), true);
+    assert_eq(is_even(7), false);
 }
 #[test]
 fn test_mutual_recursion_odd() {
-    assert_eq!(is_odd(0), false);
-    assert_eq!(is_odd(3), true);
-    assert_eq!(is_odd(6), false);
+    assert_eq(is_odd(0), false);
+    assert_eq(is_odd(3), true);
+    assert_eq(is_odd(6), false);
 }
 
 // --- recursive fn with accumulator ---
@@ -121,11 +121,11 @@ fn sum_to(n: int) -> int {
 }
 
 #[test]
-fn test_sum_to_ten() { assert_eq!(sum_to(10), 55); }
+fn test_sum_to_ten() { assert_eq(sum_to(10), 55); }
 #[test]
-fn test_sum_to_zero() { assert_eq!(sum_to(0), 0); }
+fn test_sum_to_zero() { assert_eq(sum_to(0), 0); }
 #[test]
-fn test_sum_to_hundred() { assert_eq!(sum_to(100), 5050); }
+fn test_sum_to_hundred() { assert_eq(sum_to(100), 5050); }
 
 // --- deep recursion (small enough to fit on the stack) ---
 fn countdown(n: int) -> int {
@@ -134,7 +134,7 @@ fn countdown(n: int) -> int {
 
 #[test]
 fn test_countdown() {
-    assert_eq!(countdown(100), 100);
+    assert_eq(countdown(100), 100);
 }
 
 // --- recursive struct via Vec (no direct self-ref allowed) ---
@@ -155,12 +155,12 @@ fn count_nodes(t: TreeNode) -> int {
 fn test_tree_node_count() {
     let t = TreeNode {
         value: 1,
-        children: vec![
-            TreeNode { value: 2, children: vec![] },
-            TreeNode { value: 3, children: vec![
-                TreeNode { value: 4, children: vec![] },
-            ]},
-        ],
+        children: vec(
+            TreeNode { value: 2, children: vec() },
+            TreeNode { value: 3, children: vec(
+                TreeNode { value: 4, children: vec() },
+            )},
+        ),
     };
-    assert_eq!(count_nodes(t), 4);
+    assert_eq(count_nodes(t), 4);
 }

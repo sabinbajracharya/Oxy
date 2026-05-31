@@ -209,7 +209,7 @@ fn main() {{
     let w = std::fs::write(path, "hello oxy");
     let result = std::fs::read_to_string(path);
     if let Ok(content) = result {{
-        println!("{{}}", content);
+        println("{{}}", content);
     }}
     let d = std::fs::remove_file(path);
 }}
@@ -226,7 +226,7 @@ fn main() {{
 fn main() {{
     let path = "{t}/oxy_test_exists_7c2d.txt";
     let w = std::fs::write(path, "data");
-    println!("{{}}", std::fs::exists(path));
+    println("{{}}", std::fs::exists(path));
     let d = std::fs::remove_file(path);
 }}
 "#
@@ -240,7 +240,7 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    println!("{{}}", std::fs::exists("{t}/oxy_nonexistent_file_xyz_00.txt"));
+    println("{{}}", std::fs::exists("{t}/oxy_nonexistent_file_xyz_00.txt"));
 }}
 "#
         ));
@@ -255,9 +255,9 @@ fn main() {{
 fn main() {{
     let path = "{t}/oxy_test_isfile_3e4f.txt";
     let w = std::fs::write(path, "test");
-    println!("{{}}", std::fs::is_file(path));
-    println!("{{}}", std::fs::is_dir(path));
-    println!("{{}}", std::fs::is_dir("{t}"));
+    println("{{}}", std::fs::is_file(path));
+    println("{{}}", std::fs::is_dir(path));
+    println("{{}}", std::fs::is_dir("{t}"));
     let d = std::fs::remove_file(path);
 }}
 "#
@@ -273,9 +273,9 @@ fn main() {{
 fn main() {{
     let dir = "{t}/oxy_test_dir_a8b9";
     let c = std::fs::create_dir(dir);
-    println!("{{}}", std::fs::is_dir(dir));
+    println("{{}}", std::fs::is_dir(dir));
     let d = std::fs::remove_dir(dir);
-    println!("{{}}", std::fs::exists(dir));
+    println("{{}}", std::fs::exists(dir));
 }}
 "#
         ));
@@ -290,9 +290,9 @@ fn main() {{
 fn main() {{
     let dir = "{t}/oxy_test_nested_c1d2/sub1/sub2";
     let c = std::fs::create_dir_all(dir);
-    println!("{{}}", std::fs::is_dir(dir));
+    println("{{}}", std::fs::is_dir(dir));
     let d = std::fs::remove_dir_all("{t}/oxy_test_nested_c1d2");
-    println!("{{}}", std::fs::exists("{t}/oxy_test_nested_c1d2"));
+    println("{{}}", std::fs::exists("{t}/oxy_test_nested_c1d2"));
 }}
 "#
         ));
@@ -309,10 +309,10 @@ fn main() {{
     let dst = "{t}/oxy_test_rename_dst_5e6f.txt";
     let w = std::fs::write(src, "rename me");
     let r = std::fs::rename(src, dst);
-    println!("{{}}", std::fs::exists(src));
+    println("{{}}", std::fs::exists(src));
     let result = std::fs::read_to_string(dst);
     if let Ok(content) = result {{
-        println!("{{}}", content);
+        println("{{}}", content);
     }}
     let d = std::fs::remove_file(dst);
 }}
@@ -332,11 +332,11 @@ fn main() {{
     let w = std::fs::write(src, "copy me");
     let result = std::fs::copy(src, dst);
     if let Ok(bytes) = result {{
-        println!("{{}}", bytes > 0);
+        println("{{}}", bytes > 0);
     }}
     let read_result = std::fs::read_to_string(dst);
     if let Ok(content) = read_result {{
-        println!("{{}}", content);
+        println("{{}}", content);
     }}
     let d1 = std::fs::remove_file(src);
     let d2 = std::fs::remove_file(dst);
@@ -356,9 +356,9 @@ fn main() {{
     let w = std::fs::write(path, "12345");
     let result = std::fs::metadata(path);
     if let Ok(meta) = result {{
-        println!("{{}}", meta.size);
-        println!("{{}}", meta.is_file);
-        println!("{{}}", meta.is_dir);
+        println("{{}}", meta.size);
+        println("{{}}", meta.is_file);
+        println("{{}}", meta.is_dir);
     }}
     let d = std::fs::remove_file(path);
 }}
@@ -379,7 +379,7 @@ fn main() {{
     let w2 = std::fs::write("{t}/oxy_test_readdir_k1l2/b.txt", "b");
     let result = std::fs::read_dir(dir);
     if let Ok(entries) = result {{
-        println!("{{}}", entries.len());
+        println("{{}}", entries.len());
     }}
     let d = std::fs::remove_dir_all(dir);
 }}
@@ -399,7 +399,7 @@ fn main() {{
     let a = std::fs::append(path, " world");
     let result = std::fs::read_to_string(path);
     if let Ok(content) = result {{
-        println!("{{}}", content);
+        println("{{}}", content);
     }}
     let d = std::fs::remove_file(path);
 }}
@@ -417,9 +417,9 @@ fn main() {{
     let result = std::fs::canonicalize("{t}");
     if let Ok(path) = result {{
         let len = path.len();
-        println!("{{}}", len > 0);
+        println("{{}}", len > 0);
     }} else {{
-        println!("err");
+        println("err");
     }}
 }}
 "#
@@ -435,9 +435,9 @@ fn main() {{
 fn main() {{
     let path = "{t}/oxy_test_remove_o5p6.txt";
     let w = std::fs::write(path, "delete me");
-    println!("{{}}", std::fs::exists(path));
+    println("{{}}", std::fs::exists(path));
     let d = std::fs::remove_file(path);
-    println!("{{}}", std::fs::exists(path));
+    println("{{}}", std::fs::exists(path));
 }}
 "#
         ));

@@ -43,7 +43,7 @@ fn main() {
 
 fn print_tree(root: Option) {
     if let Some(node) = root {
-        print!("{} ", node.val);
+        print("{} ", node.val);
         print_tree(node.left);
         print_tree(node.right);
     }
@@ -75,12 +75,12 @@ fn test_invert() {
     root.right = Some(r);
     let result = invert_tree(Some(root));
     let node = result.unwrap();
-    assert_eq!(node.val, 4);
-    assert_eq!(node.left.unwrap().val, 7);
-    assert_eq!(node.right.unwrap().val, 2);
+    assert_eq(node.val, 4);
+    assert_eq(node.left.unwrap().val, 7);
+    assert_eq(node.right.unwrap().val, 2);
 }
 
 #[test]
 fn test_empty() {
-    assert!(invert_tree(None).is_none());
+    assert(invert_tree(None).is_none());
 }

@@ -22,9 +22,9 @@
 // - Return -1 for not found
 
 fn main() {
-    let nums = vec![-1, 0, 3, 5, 9, 12];
-    println!("{}", search(nums, 9));
-    println!("{}", search(nums, 2));
+    let nums = vec(-1, 0, 3, 5, 9, 12);
+    println("{}", search(nums, 9));
+    println("{}", search(nums, 2));
 }
 
 fn search(nums: Vec, target: int) -> int {
@@ -46,18 +46,18 @@ fn search(nums: Vec, target: int) -> int {
 
 #[test]
 fn test_found() {
-    let nums = vec![-1, 0, 3, 5, 9, 12];
-    assert_eq!(search(nums, 9), 4);
+    let nums = vec(-1, 0, 3, 5, 9, 12);
+    assert_eq(search(nums, 9), 4);
 }
 
 #[test]
 fn test_not_found() {
-    let nums = vec![-1, 0, 3, 5, 9, 12];
-    assert_eq!(search(nums, 2), -1);
+    let nums = vec(-1, 0, 3, 5, 9, 12);
+    assert_eq(search(nums, 2), -1);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq!(search(vec![5], 5), 0);
-    assert_eq!(search(vec![5], 3), -1);
+    assert_eq(search(vec(5), 5), 0);
+    assert_eq(search(vec(5), 3), -1);
 }

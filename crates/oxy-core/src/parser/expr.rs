@@ -127,7 +127,7 @@ impl Parser {
                 self.finish_keyword_path("crate", span)
             }
 
-            // Identifiers (could be followed by `!` for macro, `::` for path, `{` for struct init)
+            // Identifiers (could be followed by `::` for path, `{` for struct init)
             TokenKind::Ident(_) | TokenKind::SelfUpper => {
                 let span = self.current_span();
                 let name = if self.check(&TokenKind::SelfUpper) {
@@ -137,29 +137,16 @@ impl Parser {
                     self.expect_ident()?
                 };
 
-                // Check for macro call: `name!(...)` or `name![...]`
+                // `name!(...)` or `name![...]` — macro syntax is no longer supported.
+                // Oxy uses regular function calls instead.
                 if self.check(&TokenKind::Bang) {
-                    self.advance(); // consume `!`
-                    if self.check(&TokenKind::LBracket) {
-                        // `name![...]`
-                        self.advance();
-                        let args = self.parse_arg_list()?;
-                        let end_span = self.current_span();
-                        self.expect(TokenKind::RBracket)?;
-                        return Ok(Expr::MacroCall {
-                            name,
-                            args,
-                            span: self.merge_spans(span, end_span),
-                        });
-                    }
-                    self.expect(TokenKind::LParen)?;
-                    let args = self.parse_arg_list()?;
-                    let end_span = self.current_span();
-                    self.expect(TokenKind::RParen)?;
-                    return Ok(Expr::MacroCall {
-                        name,
-                        args,
-                        span: self.merge_spans(span, end_span),
+                    return Err(PipelineError::Parser {
+                        message: format!(
+                            "macro syntax `!` is no longer supported. Use `{name}(...)` \
+                             instead of `{name}!(...)`",
+                        ),
+                        line: span.line,
+                        column: span.column,
                     });
                 }
 

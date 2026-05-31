@@ -329,5 +329,5 @@ fn stmt_always_terminates(stmt: &Stmt) -> bool {
 }
 
 fn expr_always_terminates(expr: &Expr) -> bool {
-    matches!(expr, Expr::MacroCall { name, .. } if name == "panic")
+    matches!(&expr, Expr::Call { callee, .. } if matches!(callee.as_ref(), Expr::Ident(name, _) if name == "panic"))
 }

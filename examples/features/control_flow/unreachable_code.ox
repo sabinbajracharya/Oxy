@@ -25,7 +25,7 @@ fn after_continue_in_loop() {
 
 #[compile_error]
 fn after_panic() {
-    panic!("boom");
+    panic("boom");
     let x = 1;  // unreachable
 }
 

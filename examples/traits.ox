@@ -8,7 +8,7 @@ trait Describable {
     fn name(self) -> String;
     // Default method — uses self.name()
     fn describe(self) -> String {
-        format!("I am {}", self.name())
+        format("I am {}", self.name())
     }
 }
 
@@ -25,7 +25,7 @@ impl Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format!("Hello, I'm {} and I'm {} years old!", self.name, self.age)
+        format("Hello, I'm {} and I'm {} years old!", self.name, self.age)
     }
 }
 
@@ -43,7 +43,7 @@ fn identity<T>(x: T) -> T {
 
 // Generic with bounds (bounds parsed but not enforced in this phase)
 fn print_value<T: Display>(val: T) {
-    println!("{}", val);
+    println("{}", val);
 }
 
 // Operator overloading via traits
@@ -73,17 +73,17 @@ impl Mul for Vec2 {
 fn main() {
     // Trait methods
     let p = Person::new(String::from("Alice"), 30);
-    println!("{}", p.greet());
-    println!("{}", p.describe());
+    println("{}", p.greet());
+    println("{}", p.describe());
 
-    // format! macro
-    let msg = format!("{}! You are {} years old.", p.name, p.age);
-    println!("{}", msg);
+    // format function
+    let msg = format("{}! You are {} years old.", p.name, p.age);
+    println("{}", msg);
 
     // Generics
     let x = identity(42);
     let s = identity("hello");
-    println!("identity: {} {}", x, s);
+    println("identity: {} {}", x, s);
 
     // Generic with bounds
     print_value(3.14);
@@ -93,14 +93,14 @@ fn main() {
     let a = Vec2::new(1.0, 2.0);
     let b = Vec2::new(3.0, 4.0);
     let c = a + b;
-    println!("add: ({}, {})", c.x, c.y);
+    println("add: ({}, {})", c.x, c.y);
 
     let d = Vec2::new(2.0, 3.0);
     let e = Vec2::new(4.0, 5.0);
     let f = d * e;
-    println!("mul: ({}, {})", f.x, f.y);
+    println("mul: ({}, {})", f.x, f.y);
 
     // String::from
     let greeting = String::from("Hello, Oxy!");
-    println!("{}", greeting);
+    println("{}", greeting);
 }

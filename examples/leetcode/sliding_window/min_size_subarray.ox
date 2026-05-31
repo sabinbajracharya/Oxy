@@ -23,8 +23,8 @@
 // - Return 0 if min_len was never updated
 
 fn main() {
-    let nums = vec![2, 3, 1, 2, 4, 3];
-    println!("{}", min_sub_array_len(7, nums));
+    let nums = vec(2, 3, 1, 2, 4, 3);
+    println("{}", min_sub_array_len(7, nums));
 }
 
 fn min_sub_array_len(target: int, nums: Vec) -> int {
@@ -50,20 +50,20 @@ fn min_sub_array_len(target: int, nums: Vec) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(min_sub_array_len(7, vec![2, 3, 1, 2, 4, 3]), 2);
+    assert_eq(min_sub_array_len(7, vec(2, 3, 1, 2, 4, 3)), 2);
 }
 
 #[test]
 fn test_no_solution() {
-    assert_eq!(min_sub_array_len(100, vec![1, 2, 3]), 0);
+    assert_eq(min_sub_array_len(100, vec(1, 2, 3)), 0);
 }
 
 #[test]
 fn test_exact_single() {
-    assert_eq!(min_sub_array_len(4, vec![1, 4, 4]), 1);
+    assert_eq(min_sub_array_len(4, vec(1, 4, 4)), 1);
 }
 
 #[test]
 fn test_entire_array() {
-    assert_eq!(min_sub_array_len(15, vec![1, 2, 3, 4, 5]), 5);
+    assert_eq(min_sub_array_len(15, vec(1, 2, 3, 4, 5)), 5);
 }

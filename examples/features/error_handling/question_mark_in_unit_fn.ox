@@ -25,14 +25,14 @@ fn outer_option() -> Option<int> {
 #[test]
 fn test_question_mark_in_result_fn_ok() {
     match outer_result() {
-        Err(_) => assert!(true),
-        Ok(_) => panic!("should have propagated Err"),
+        Err(_) => assert(true),
+        Ok(_) => panic("should have propagated Err"),
     }
 }
 
 #[test]
 fn test_question_mark_in_option_fn_ok() {
-    assert_eq!(outer_option(), None);
+    assert_eq(outer_option(), None);
 }
 
 #[compile_error]

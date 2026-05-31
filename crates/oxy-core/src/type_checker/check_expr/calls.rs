@@ -279,6 +279,48 @@ impl TypeChecker {
                         self.infer_expr(&args[1])?;
                         return Ok(data_ty);
                     }
+                    // Former `!` macro calls — now regular built-in functions.
+                    "println" | "print" | "eprintln" => {
+                        return Ok(TypeInfo::Unit);
+                    }
+                    "format" => {
+                        return Ok(TypeInfo::String);
+                    }
+                    "vec" => {
+                        let mut leader = TypeInfo::Unknown;
+                        for (i, t) in arg_types.iter().enumerate() {
+                            if *t == TypeInfo::Unknown {
+                                continue;
+                            }
+                            if leader == TypeInfo::Unknown {
+                                leader = t.clone();
+                                continue;
+                            }
+                            if leader.accepts(t) {
+                                continue;
+                            }
+                            if t.accepts(&leader) {
+                                leader = t.clone();
+                                continue;
+                            }
+                            let espan = args[i].span();
+                            return Err(PipelineError::TypeError {
+                                message: format!("`vec` has mixed element types: element {} is `{}`, expected `{}`", i + 1, t.name(), leader.name()),
+                                line: espan.line, column: espan.column,
+                            });
+                        }
+                        return Ok(TypeInfo::Vec(Box::new(leader)));
+                    }
+                    "dbg" => {
+                        return Ok(arg_types.first().cloned().unwrap_or(TypeInfo::Unknown));
+                    }
+                    "panic" | "todo" => {
+                        return Ok(TypeInfo::Unknown);
+                    }
+                    "assert_eq" | "assert_ne" | "assert" | "unimplemented" => {
+                        // varargs — type-checked at runtime via registry
+                        return Ok(TypeInfo::Unit);
+                    }
                     "http::fetch" | "http::fetch_post" => {
                         // async HTTP call → Future<HttpResponse>
                         let _ = arg_types; // validate args but don't constrain
@@ -535,56 +577,6 @@ impl TypeChecker {
             for arg in args {
                 self.infer_expr(arg)?;
             }
-        }
-        Ok(TypeInfo::Unknown)
-    }
-
-    pub(super) fn infer_macro_call(
-        &mut self,
-        name: &str,
-        args: &[Expr],
-    ) -> Result<TypeInfo, PipelineError> {
-        // Infer all args so nested calls / field accesses still get
-        // type-checked.
-        let arg_types: Vec<TypeInfo> = args
-            .iter()
-            .map(|a| self.infer_expr(a))
-            .collect::<Result<_, _>>()?;
-        if name == "vec" {
-            // vec![a, b, c] must be homogeneous (or contain Unknown).
-            let mut leader = TypeInfo::Unknown;
-            for (i, t) in arg_types.iter().enumerate() {
-                if *t == TypeInfo::Unknown {
-                    continue;
-                }
-                if leader == TypeInfo::Unknown {
-                    leader = t.clone();
-                    continue;
-                }
-                if leader.accepts(t) {
-                    continue;
-                }
-                if t.accepts(&leader) {
-                    leader = t.clone();
-                    continue;
-                }
-                let espan = args[i].span();
-                return Err(PipelineError::TypeError {
-                    message: format!(
-                        "`vec!` has mixed element types: element {} is `{}`, expected `{}`",
-                        i + 1,
-                        t.name(),
-                        leader.name()
-                    ),
-                    line: espan.line,
-                    column: espan.column,
-                });
-            }
-            return Ok(TypeInfo::Vec(Box::new(leader)));
-        }
-        if name == "dbg" && arg_types.len() == 1 {
-            // dbg!(expr) returns its argument unchanged.
-            return Ok(arg_types.into_iter().next().unwrap());
         }
         Ok(TypeInfo::Unknown)
     }

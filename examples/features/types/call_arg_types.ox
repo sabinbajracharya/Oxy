@@ -17,19 +17,19 @@ fn greet(name: String) -> String {
 #[test]
 fn test_call_matching_arg_types() {
     let a: int = 21;
-    assert_eq!(sum(a), 42);
+    assert_eq(sum(a), 42);
 }
 
 #[test]
 fn test_call_int_promotion_ok() {
     // Any-integer-accepts-any-integer is allowed (wrapping at runtime).
     let n: int = 10;
-    assert_eq!(add(n, 5), 15);
+    assert_eq(add(n, 5), 15);
 }
 
 #[test]
 fn test_call_string_arg_ok() {
-    assert_eq!(greet("world".to_string()), "hello, world".to_string());
+    assert_eq(greet("world".to_string()), "hello, world".to_string());
 }
 
 #[compile_error]

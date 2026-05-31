@@ -24,8 +24,8 @@
 // - max_len = max(max_len, right - left + 1)
 
 fn main() {
-    println!("{}", length_of_longest_substring("abcabcbb"));
-    println!("{}", length_of_longest_substring("bbbbb"));
+    println("{}", length_of_longest_substring("abcabcbb"));
+    println("{}", length_of_longest_substring("bbbbb"));
 }
 
 fn length_of_longest_substring(s: String) -> int {
@@ -51,25 +51,25 @@ fn length_of_longest_substring(s: String) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq!(length_of_longest_substring("abcabcbb"), 3);
+    assert_eq(length_of_longest_substring("abcabcbb"), 3);
 }
 
 #[test]
 fn test_all_same() {
-    assert_eq!(length_of_longest_substring("bbbbb"), 1);
+    assert_eq(length_of_longest_substring("bbbbb"), 1);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(length_of_longest_substring(""), 0);
+    assert_eq(length_of_longest_substring(""), 0);
 }
 
 #[test]
 fn test_single() {
-    assert_eq!(length_of_longest_substring("a"), 1);
+    assert_eq(length_of_longest_substring("a"), 1);
 }
 
 #[test]
 fn test_pwwkew() {
-    assert_eq!(length_of_longest_substring("pwwkew"), 3);
+    assert_eq(length_of_longest_substring("pwwkew"), 3);
 }

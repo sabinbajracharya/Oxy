@@ -11,9 +11,9 @@ struct Box<T> {
 #[test]
 fn test_generic_struct_single() {
     let b = Box { value: 42 };
-    assert_eq!(b.value, 42);
+    assert_eq(b.value, 42);
     let s = Box { value: "hello".to_string() };
-    assert_eq!(s.value, "hello");
+    assert_eq(s.value, "hello");
 }
 
 // === Generic Struct: Multiple Type Params ===
@@ -26,8 +26,8 @@ struct Pair<A, B> {
 #[test]
 fn test_generic_struct_multi() {
     let p = Pair { first: 10, second: "ten".to_string() };
-    assert_eq!(p.first, 10);
-    assert_eq!(p.second, "ten");
+    assert_eq(p.first, 10);
+    assert_eq(p.second, "ten");
 }
 
 // === Generic Struct: Same Type Inference ===
@@ -36,7 +36,7 @@ fn test_generic_struct_multi() {
 fn test_generic_struct_same_type() {
     let b1 = Box { value: 100 };
     let b2 = Box { value: 200 };
-    assert_eq!(b1.value, 100);
+    assert_eq(b1.value, 100);
 }
 
 // === Generic Enum ===
@@ -53,7 +53,7 @@ fn test_generic_enum_some() {
         MyOption::Some(_) => true,
         MyOption::None => false,
     };
-    assert!(is_some);
+    assert(is_some);
 }
 
 // === Generic Function ===
@@ -64,8 +64,8 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_generic_function() {
-    assert_eq!(identity(42), 42);
-    assert_eq!(identity("hello".to_string()), "hello");
+    assert_eq(identity(42), 42);
+    assert_eq(identity("hello".to_string()), "hello");
 }
 
 // === Generic Function with Multiple Params ===
@@ -77,8 +77,8 @@ fn make_pair<A, B>(a: A, b: B) -> Pair<A, B> {
 #[test]
 fn test_generic_function_multi() {
     let p = make_pair(42, true);
-    assert_eq!(p.first, 42);
-    assert_eq!(p.second, true);
+    assert_eq(p.first, 42);
+    assert_eq(p.second, true);
 }
 
 // === Generic Struct with Method ===
@@ -99,5 +99,5 @@ impl Wrapper {
 #[test]
 fn test_generic_struct_method() {
     let w = Wrapper::new(42);
-    assert_eq!(w.get(), 42);
+    assert_eq(w.get(), 42);
 }

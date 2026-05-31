@@ -9,7 +9,7 @@ fn count(text: String, want_lines: bool, want_words: bool, want_chars: bool) -> 
     let lines = text.lines().collect().len();
     let words = text.split_whitespace().collect().len();
     let chars = text.len();
-    let mut parts = vec![];
+    let mut parts = vec();
     if want_lines {
         parts.push(lines.to_string());
     }
@@ -35,7 +35,7 @@ fn main() {
 
     if args.positionals.len() == 0 {
         let text = std::io::read_to_string().unwrap();
-        println!("{}", count(text, lines, words, chars));
+        println("{}", count(text, lines, words, chars));
         return;
     }
 
@@ -48,16 +48,16 @@ fn main() {
             total_lines = total_lines + text.lines().collect().len();
             total_words = total_words + text.split_whitespace().collect().len();
             total_chars = total_chars + text.len();
-            println!("{}\t{}", count(text, lines, words, chars), path);
+            println("{}\t{}", count(text, lines, words, chars), path);
         } else {
-            println!("error reading {}", path);
+            println("error reading {}", path);
         }
     }
     if args.positionals.len() > 1 {
-        let mut parts = vec![];
+        let mut parts = vec();
         if lines { parts.push(total_lines.to_string()); }
         if words { parts.push(total_words.to_string()); }
         if chars { parts.push(total_chars.to_string()); }
-        println!("{}\ttotal", parts.join("\t"));
+        println("{}\ttotal", parts.join("\t"));
     }
 }

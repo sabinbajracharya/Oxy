@@ -14,7 +14,7 @@ fn add(a: int, b: int) -> int {
 
 fn main() {
     let result = add(3, 4);
-    println!("{}", result);
+    println("{}", result);
 }
 "#,
     );
@@ -33,8 +33,8 @@ fn early(x: int) -> int {
 }
 
 fn main() {
-    println!("{}", early(5));
-    println!("{}", early(-1));
+    println("{}", early(5));
+    println("{}", early(-1));
 }
 "#,
     );
@@ -50,7 +50,7 @@ fn double(x: int) -> int {
 }
 
 fn main() {
-    println!("{}", double(21));
+    println("{}", double(21));
 }
 "#,
     );
@@ -84,7 +84,7 @@ fn factorial(n: int) -> int {
 }
 
 fn main() {
-    println!("{}", factorial(5));
+    println("{}", factorial(5));
 }
 "#,
     );

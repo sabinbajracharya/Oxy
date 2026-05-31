@@ -2,19 +2,19 @@
 
 #[test]
 fn test_vec_known_method_ok() {
-    let v: Vec<int> = vec![1, 2, 3];
-    assert_eq!(v.len(), 3);
+    let v: Vec<int> = vec(1, 2, 3);
+    assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_string_known_method_ok() {
     let s = "hello".to_string();
-    assert_eq!(s.len(), 5);
+    assert_eq(s.len(), 5);
 }
 
 #[compile_error]
 fn test_vec_unknown_field_rejected() {
-    let v: Vec<int> = vec![1, 2, 3];
+    let v: Vec<int> = vec(1, 2, 3);
     let _ = v.bogus_field;
 }
 

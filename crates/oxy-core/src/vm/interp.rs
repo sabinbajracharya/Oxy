@@ -1008,7 +1008,7 @@ mod tests {
     /// result must match the JIT's.
     #[test]
     fn interp_async_spawn_await() {
-        assert_parity("fn main() { let h = spawn(|| 42); println!(\"{}\", h.await); }");
+        assert_parity("fn main() { let h = spawn(|| 42); println(\"{}\", h.await); }");
     }
 
     /// A higher-order built-in (`map`/`filter`/`sum`) drives its closure through
@@ -1016,9 +1016,9 @@ mod tests {
     #[test]
     fn interp_higher_order_builtin() {
         assert_parity(
-            "fn main() { let v = vec![1, 2, 3, 4]; \
+            "fn main() { let v = vec(1, 2, 3, 4); \
              let s: int = v.iter().map(|x| x * 2).filter(|x| x > 4).sum(); \
-             println!(\"{}\", s); }",
+             println(\"{}\", s); }",
         );
     }
 
@@ -1029,91 +1029,91 @@ mod tests {
 
     #[test]
     fn interp_arithmetic_and_println() {
-        assert_parity("fn main() { println!(\"{}\", 1 + 2 * 3 - 4); }");
+        assert_parity("fn main() { println(\"{}\", 1 + 2 * 3 - 4); }");
     }
 
     #[test]
     fn interp_let_bindings_and_mutation() {
         assert_parity(
-            "fn main() { let mut x = 10; x = x + 5; let y = x / 3; println!(\"{} {}\", x, y); }",
+            "fn main() { let mut x = 10; x = x + 5; let y = x / 3; println(\"{} {}\", x, y); }",
         );
     }
 
     #[test]
     fn interp_if_else() {
         assert_parity(
-            "fn main() { let n = 7; if n % 2 == 0 { println!(\"even\"); } else { println!(\"odd\"); } }",
+            "fn main() { let n = 7; if n % 2 == 0 { println(\"even\"); } else { println(\"odd\"); } }",
         );
     }
 
     #[test]
     fn interp_while_loop() {
         assert_parity(
-            "fn main() { let mut i = 0; let mut sum = 0; while i < 5 { sum = sum + i; i = i + 1; } println!(\"{}\", sum); }",
+            "fn main() { let mut i = 0; let mut sum = 0; while i < 5 { sum = sum + i; i = i + 1; } println(\"{}\", sum); }",
         );
     }
 
     #[test]
     fn interp_vec_and_index() {
-        assert_parity("fn main() { let v = vec![10, 20, 30]; println!(\"{} {}\", v[0], v[2]); }");
+        assert_parity("fn main() { let v = vec(10, 20, 30); println(\"{} {}\", v[0], v[2]); }");
     }
 
     #[test]
     fn interp_string_and_bool() {
         assert_parity(
-            "fn main() { let s = \"hi\"; let b = s == \"hi\"; println!(\"{} {}\", s, b); }",
+            "fn main() { let s = \"hi\"; let b = s == \"hi\"; println(\"{} {}\", s, b); }",
         );
     }
 
     #[test]
     fn interp_float_arithmetic() {
-        assert_parity("fn main() { let x = 3.5; let y = 2.0; println!(\"{}\", x * y); }");
+        assert_parity("fn main() { let x = 3.5; let y = 2.0; println(\"{}\", x * y); }");
     }
 
     #[test]
     fn interp_function_call() {
         assert_parity(
-            "fn add(a: int, b: int) -> int { a + b }\nfn main() { println!(\"{}\", add(2, 3)); }",
+            "fn add(a: int, b: int) -> int { a + b }\nfn main() { println(\"{}\", add(2, 3)); }",
         );
     }
 
     #[test]
     fn interp_recursion() {
         assert_parity(
-            "fn fib(n: int) -> int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { println!(\"{}\", fib(10)); }",
+            "fn fib(n: int) -> int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { println(\"{}\", fib(10)); }",
         );
     }
 
     #[test]
     fn interp_nested_calls() {
         assert_parity(
-            "fn dbl(x: int) -> int { x * 2 }\nfn inc(x: int) -> int { x + 1 }\nfn main() { println!(\"{}\", dbl(inc(dbl(5)))); }",
+            "fn dbl(x: int) -> int { x * 2 }\nfn inc(x: int) -> int { x + 1 }\nfn main() { println(\"{}\", dbl(inc(dbl(5)))); }",
         );
     }
 
     #[test]
     fn interp_struct_method() {
         assert_parity(
-            "struct Counter { n: int }\nimpl Counter { fn get(self) -> int { self.n } fn bump(self) { self.n = self.n + 1; } }\nfn main() { let mut c = Counter { n: 5 }; c.bump(); println!(\"{}\", c.get()); }",
+            "struct Counter { n: int }\nimpl Counter { fn get(self) -> int { self.n } fn bump(self) { self.n = self.n + 1; } }\nfn main() { let mut c = Counter { n: 5 }; c.bump(); println(\"{}\", c.get()); }",
         );
     }
 
     #[test]
     fn interp_result_ok() {
         assert_parity(
-            "fn half(n: int) -> Result<int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => println!(\"ok {}\", v), Err(e) => println!(\"err {}\", e) } }",
+            "fn half(n: int) -> Result<int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => println(\"ok {}\", v), Err(e) => println(\"err {}\", e) } }",
         );
     }
 
     #[test]
     fn interp_closure_direct_call() {
-        assert_parity("fn main() { let f = |x| x + 1; println!(\"{}\", f(5)); }");
+        assert_parity("fn main() { let f = |x| x + 1; println(\"{}\", f(5)); }");
     }
 
     #[test]
     fn interp_closure_capture() {
         assert_parity(
-            "fn main() { let base = 100; let add = |x| x + base; println!(\"{}\", add(7)); }",
+            "fn main() { let base = 100; let add = |x| x + base; println(\"{}\", add(7)); }",
         );
     }
 
@@ -1122,7 +1122,7 @@ mod tests {
         assert_parity(
             "struct V2 { x: int, y: int }\n\
              impl V2 { fn add(self, o: V2) -> V2 { V2 { x: self.x + o.x, y: self.y + o.y } } }\n\
-             fn main() { let a = V2 { x: 1, y: 2 }; let b = V2 { x: 3, y: 4 }; let c = a + b; println!(\"{} {}\", c.x, c.y); }",
+             fn main() { let a = V2 { x: 1, y: 2 }; let b = V2 { x: 3, y: 4 }; let c = a + b; println(\"{} {}\", c.x, c.y); }",
         );
     }
 
@@ -1131,7 +1131,7 @@ mod tests {
         assert_parity(
             "struct Counter { n: int }\n\
              impl Counter { fn new() -> Counter { Counter { n: 42 } } }\n\
-             fn main() { let c = Counter::new(); println!(\"{}\", c.n); }",
+             fn main() { let c = Counter::new(); println(\"{}\", c.n); }",
         );
     }
 
@@ -1139,14 +1139,14 @@ mod tests {
     fn interp_module_function_call() {
         assert_parity(
             "mod math { pub fn square(x: int) -> int { x * x } }\n\
-             fn main() { println!(\"{}\", math::square(7)); }",
+             fn main() { println(\"{}\", math::square(7)); }",
         );
     }
 
     #[test]
     fn interp_question_propagation() {
         assert_parity(
-            "fn parse(n: int) -> Result<int, String> { if n < 0 { Err(\"neg\") } else { Ok(n) } }\nfn run(n: int) -> Result<int, String> { let x = parse(n)?; Ok(x + 1) }\nfn main() { match run(5) { Ok(v) => println!(\"{}\", v), Err(e) => println!(\"{}\", e) } match run(-1) { Ok(v) => println!(\"{}\", v), Err(e) => println!(\"{}\", e) } }",
+            "fn parse(n: int) -> Result<int, String> { if n < 0 { Err(\"neg\") } else { Ok(n) } }\nfn run(n: int) -> Result<int, String> { let x = parse(n)?; Ok(x + 1) }\nfn main() { match run(5) { Ok(v) => println(\"{}\", v), Err(e) => println(\"{}\", e) } match run(-1) { Ok(v) => println(\"{}\", v), Err(e) => println(\"{}\", e) } }",
         );
     }
 }

@@ -22,15 +22,15 @@
 // - Vec::join("") to reconstruct the key string
 
 fn main() {
-    let strs = vec!["eat", "tea", "tan", "ate", "nat", "bat"];
+    let strs = vec("eat", "tea", "tan", "ate", "nat", "bat");
     let groups = group_anagrams(strs);
     for g in groups {
-        println!("{:?}", g);
+        println("{:?}", g);
     }
 }
 
 fn sort_string(s: String) -> String {
-    let mut chars = vec![];
+    let mut chars = vec();
     for ch in s {
         chars.push(ch);
     }
@@ -47,7 +47,7 @@ fn group_anagrams(strs: Vec) -> Vec {
     let mut map = HashMap::new();
     for s in strs {
         let key = sort_string(s);
-        let mut group = map.get(key.clone()).unwrap_or(vec![]);
+        let mut group = map.get(key.clone()).unwrap_or(vec());
         group.push(s);
         map.insert(key, group);
     }
@@ -56,22 +56,22 @@ fn group_anagrams(strs: Vec) -> Vec {
 
 #[test]
 fn test_basic() {
-    let strs = vec!["eat", "tea", "tan", "ate", "nat", "bat"];
+    let strs = vec("eat", "tea", "tan", "ate", "nat", "bat");
     let result = group_anagrams(strs);
-    assert_eq!(result.len(), 3);
+    assert_eq(result.len(), 3);
 }
 
 #[test]
 fn test_single_word() {
-    let strs = vec!["abc"];
+    let strs = vec("abc");
     let result = group_anagrams(strs);
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].len(), 1);
+    assert_eq(result.len(), 1);
+    assert_eq(result[0].len(), 1);
 }
 
 #[test]
 fn test_no_anagrams() {
-    let strs = vec!["abc", "def", "ghi"];
+    let strs = vec("abc", "def", "ghi");
     let result = group_anagrams(strs);
-    assert_eq!(result.len(), 3);
+    assert_eq(result.len(), 3);
 }

@@ -21,7 +21,7 @@ impl Speak for Dog {
 #[test]
 fn test_basic_trait() {
     let d = Dog { name: "Rex" };
-    assert_eq!(d.speak(), "Woof! I'm Rex");
+    assert_eq(d.speak(), "Woof! I'm Rex");
 }
 
 // === Trait on Enum ===
@@ -48,8 +48,8 @@ impl Area for Shape {
 fn test_trait_on_enum() {
     let c = Shape::Circle(10.0);
     let r = Shape::Rectangle(4.0, 5.0);
-    assert_eq!(c.area(), 314.0);
-    assert_eq!(r.area(), 20.0);
+    assert_eq(c.area(), 314.0);
+    assert_eq(r.area(), 20.0);
 }
 
 // === Trait with Multiple Methods ===
@@ -75,10 +75,10 @@ impl Calculator for Num {
 fn test_multiple_trait_methods() {
     let a = Num(10);
     let b = Num(3);
-    assert_eq!(a.add(b).0, 13);
+    assert_eq(a.add(b).0, 13);
     let c = Num(10);
     let d = Num(3);
-    assert_eq!(c.sub(d).0, 7);
+    assert_eq(c.sub(d).0, 7);
 }
 
 // === Trait with self Receiver ===
@@ -105,8 +105,8 @@ impl Describe for Book {
 #[test]
 fn test_self_receiver() {
     let b = Book { title: "Oxy Guide", year: 2025 };
-    assert_eq!(b.describe(), "Oxy Guide (2025)");
-    assert_eq!(b.tag_line(), "A great read: Oxy Guide (2025)");
+    assert_eq(b.describe(), "Oxy Guide (2025)");
+    assert_eq(b.tag_line(), "A great read: Oxy Guide (2025)");
 }
 
 // === Chaining Trait Method Calls ===
@@ -128,6 +128,6 @@ impl Chain for int {
 #[test]
 fn test_trait_method_chain() {
     let x: int = 5;
-    assert_eq!(x.double().add_ten(), 20);
-    assert_eq!(x.add_ten().double(), 30);
+    assert_eq(x.double().add_ten(), 20);
+    assert_eq(x.add_ten().double(), 30);
 }

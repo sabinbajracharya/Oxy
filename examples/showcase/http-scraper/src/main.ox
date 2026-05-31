@@ -7,7 +7,7 @@
 use cli_utils;
 
 fn extract_hrefs(html: String) -> Vec<String> {
-    let mut urls = vec![];
+    let mut urls = vec();
     let rx_result = Regex::new(r#"href="([^"]*)""#);
     match rx_result {
         Ok(rx) => {
@@ -26,7 +26,7 @@ fn extract_hrefs(html: String) -> Vec<String> {
 }
 
 fn extract_matches(html: String, pattern: String) -> Vec<String> {
-    let mut results = vec![];
+    let mut results = vec();
     let rx_result = Regex::new(pattern);
     match rx_result {
         Ok(rx) => {
@@ -72,11 +72,11 @@ fn main() {
                 let links = extract_hrefs(body);
 
                 if as_json {
-                    println!("{}", links.to_json());
+                    println("{}", links.to_json());
                 } else {
                     cli_utils::header("Links (" + links.len().to_string() + ")");
                     for link in links {
-                        println!("  " + link);
+                        println("  " + link);
                     }
                 }
                 return;
@@ -87,11 +87,11 @@ fn main() {
                 let items = extract_matches(body, pat);
 
                 if as_json {
-                    println!("{}", items.to_json());
+                    println("{}", items.to_json());
                 } else {
                     cli_utils::header("Matches (" + items.len().to_string() + ")");
                     for item in items {
-                        println!("  " + item);
+                        println("  " + item);
                     }
                 }
                 return;

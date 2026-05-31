@@ -22,9 +22,9 @@ fn filter_level(text: String, level: String, show_filename: bool, filename: Stri
     for line in text.lines() {
         if line.contains(level) {
             if show_filename {
-                println!("{}:{}: {}", filename, i, line);
+                println("{}:{}: {}", filename, i, line);
             } else {
-                println!("{}: {}", i, line);
+                println("{}: {}", i, line);
             }
         }
         i = i + 1;
@@ -39,9 +39,9 @@ fn filter_pattern(text: String, pattern: String, show_filename: bool, filename: 
             for line in text.lines() {
                 if rx.is_match(line) {
                     if show_filename {
-                        println!("{}:{}: {}", filename, i, line);
+                        println("{}:{}: {}", filename, i, line);
                     } else {
-                        println!("{}: {}", i, line);
+                        println("{}: {}", i, line);
                     }
                 }
                 i = i + 1;
@@ -104,7 +104,7 @@ fn main() {
             } else {
                 count_level(text, level.unwrap().to_string())
             };
-            println!("{}", n);
+            println("{}", n);
             return;
         }
 
@@ -126,7 +126,7 @@ fn main() {
                 } else {
                     count_level(text, level.unwrap().to_string())
                 };
-                println!("{}", n);
+                println("{}", n);
                 return;
             }
 

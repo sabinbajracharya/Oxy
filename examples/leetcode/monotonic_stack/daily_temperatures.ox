@@ -26,18 +26,18 @@
 // - Default answer is 0 (Vec initialized with zeros)
 
 fn main() {
-    let temps = vec![73, 74, 75, 71, 69, 72, 76, 73];
+    let temps = vec(73, 74, 75, 71, 69, 72, 76, 73);
     let result = daily_temperatures(temps);
-    println!("{:?}", result);
+    println("{:?}", result);
 }
 
 fn daily_temperatures(temps: Vec) -> Vec {
     let n = temps.len();
-    let mut answer = vec![];
+    let mut answer = vec();
     for i in 0..n {
         answer.push(0);
     }
-    let mut stack = vec![];
+    let mut stack = vec();
     for i in 0..n {
         while !stack.is_empty() {
             let prev_idx = stack.last().unwrap();
@@ -55,21 +55,21 @@ fn daily_temperatures(temps: Vec) -> Vec {
 
 #[test]
 fn test_example() {
-    let temps = vec![73, 74, 75, 71, 69, 72, 76, 73];
-    assert_eq!(
+    let temps = vec(73, 74, 75, 71, 69, 72, 76, 73);
+    assert_eq(
         daily_temperatures(temps),
-        vec![1, 1, 4, 2, 1, 1, 0, 0]
+        vec(1, 1, 4, 2, 1, 1, 0, 0)
     );
 }
 
 #[test]
 fn test_all_decreasing() {
-    let temps = vec![5, 4, 3, 2, 1];
-    assert_eq!(daily_temperatures(temps), vec![0, 0, 0, 0, 0]);
+    let temps = vec(5, 4, 3, 2, 1);
+    assert_eq(daily_temperatures(temps), vec(0, 0, 0, 0, 0));
 }
 
 #[test]
 fn test_all_increasing() {
-    let temps = vec![1, 2, 3, 4];
-    assert_eq!(daily_temperatures(temps), vec![1, 1, 1, 0]);
+    let temps = vec(1, 2, 3, 4);
+    assert_eq(daily_temperatures(temps), vec(1, 1, 1, 0));
 }

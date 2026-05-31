@@ -24,8 +24,8 @@
 // - Empty string is a palindrome
 
 fn main() {
-    println!("{}", is_palindrome("A man, a plan, a canal: Panama"));
-    println!("{}", is_palindrome("race a car"));
+    println("{}", is_palindrome("A man, a plan, a canal: Panama"));
+    println("{}", is_palindrome("race a car"));
 }
 
 fn is_palindrome(s: String) -> bool {
@@ -53,20 +53,20 @@ fn is_palindrome(s: String) -> bool {
 
 #[test]
 fn test_valid_palindrome() {
-    assert!(is_palindrome("A man, a plan, a canal: Panama"));
+    assert(is_palindrome("A man, a plan, a canal: Panama"));
 }
 
 #[test]
 fn test_not_palindrome() {
-    assert!(!is_palindrome("race a car"));
+    assert(!is_palindrome("race a car"));
 }
 
 #[test]
 fn test_empty_string() {
-    assert!(is_palindrome(""));
+    assert(is_palindrome(""));
 }
 
 #[test]
 fn test_single_char() {
-    assert!(is_palindrome("a"));
+    assert(is_palindrome("a"));
 }

@@ -13,5 +13,5 @@ fn main() {
         }
         total = total + trimmed.parse_int().unwrap();
     }
-    println!("{}", total);
+    println("{}", total);
 }

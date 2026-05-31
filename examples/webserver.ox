@@ -19,7 +19,7 @@ fn main() {
     // Path parameters
     std::server::get(app, "/users/:id", |req| {
         let id = req.params.get("id").unwrap_or("unknown");
-        std::server::json(format!("{{\"id\": \"{}\"}}", id))
+        std::server::json(format("{{\"id\": \"{}\"}}", id))
     });
 
     // POST endpoint — echo the request body
@@ -33,6 +33,6 @@ fn main() {
     });
 
     // Start the server
-    println!("Starting server on http://127.0.0.1:8080 ...");
+    println("Starting server on http://127.0.0.1:8080 ...");
     std::server::listen(app, 8080);
 }

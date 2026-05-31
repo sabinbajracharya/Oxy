@@ -16,10 +16,10 @@
 // - Shared mutable state for classic push/pop/recurse/undo
 
 fn main() {
-    let nums = vec![1, 2, 3];
+    let nums = vec(1, 2, 3);
     let result = subsets(nums);
     for s in result {
-        println!("{:?}", s);
+        println("{:?}", s);
     }
 }
 
@@ -35,21 +35,21 @@ fn backtrack(nums: Vec, start: int, current: Vec, result: Vec) {
 }
 
 fn subsets(nums: Vec) -> Vec {
-    let result = vec![];
-    let current = vec![];
+    let result = vec();
+    let current = vec();
     backtrack(nums, 0, current, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = subsets(vec![1, 2, 3]);
-    assert_eq!(result.len(), 8);
+    let result = subsets(vec(1, 2, 3));
+    assert_eq(result.len(), 8);
 }
 
 #[test]
 fn test_empty() {
-    let result = subsets(vec![]);
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0], vec![]);
+    let result = subsets(vec());
+    assert_eq(result.len(), 1);
+    assert_eq(result[0], vec());
 }

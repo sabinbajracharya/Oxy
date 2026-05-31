@@ -23,8 +23,8 @@
 // - The while loop runs at most n times total across all iterations
 
 fn main() {
-    let nums = vec![100, 4, 200, 1, 3, 2];
-    println!("{}", longest_consecutive(nums));
+    let nums = vec(100, 4, 200, 1, 3, 2);
+    println("{}", longest_consecutive(nums));
 }
 
 fn longest_consecutive(nums: Vec) -> int {
@@ -51,22 +51,22 @@ fn longest_consecutive(nums: Vec) -> int {
 
 #[test]
 fn test_example() {
-    let nums = vec![100, 4, 200, 1, 3, 2];
-    assert_eq!(longest_consecutive(nums), 4);
+    let nums = vec(100, 4, 200, 1, 3, 2);
+    assert_eq(longest_consecutive(nums), 4);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq!(longest_consecutive(vec![]), 0);
+    assert_eq(longest_consecutive(vec()), 0);
 }
 
 #[test]
 fn test_single() {
-    assert_eq!(longest_consecutive(vec![5]), 1);
+    assert_eq(longest_consecutive(vec(5)), 1);
 }
 
 #[test]
 fn test_duplicates() {
-    let nums = vec![1, 2, 0, 1, 3];
-    assert_eq!(longest_consecutive(nums), 4);
+    let nums = vec(1, 2, 0, 1, 3);
+    assert_eq(longest_consecutive(nums), 4);
 }

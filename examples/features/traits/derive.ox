@@ -13,8 +13,8 @@ struct Point {
 #[test]
 fn test_derive_default_named() {
     let p = Point::default();
-    assert_eq!(p.x, 0);
-    assert_eq!(p.y, 0);
+    assert_eq(p.x, 0);
+    assert_eq(p.y, 0);
 }
 
 // === Derive Default with Explicit Override ===
@@ -37,8 +37,8 @@ impl Default for Config {
 #[test]
 fn test_derive_default_overridden() {
     let c = Config::default();
-    assert_eq!(c.host, "localhost");
-    assert_eq!(c.port, 8080);
+    assert_eq(c.host, "localhost");
+    assert_eq(c.port, 8080);
 }
 
 // === Default on Multiple Structs ===
@@ -53,9 +53,9 @@ struct Pos3 {
 #[test]
 fn test_derive_default_3d() {
     let p = Pos3::default();
-    assert_eq!(p.x, 0.0);
-    assert_eq!(p.y, 0.0);
-    assert_eq!(p.z, 0.0);
+    assert_eq(p.x, 0.0);
+    assert_eq(p.y, 0.0);
+    assert_eq(p.z, 0.0);
 }
 
 // === Derived Default Creates Zero Values ===
@@ -71,10 +71,10 @@ struct Mixed {
 #[test]
 fn test_derive_default_mixed() {
     let m = Mixed::default();
-    assert_eq!(m.int_val, 0);
-    assert_eq!(m.float_val, 0.0);
-    assert_eq!(m.string_val, "");
-    assert_eq!(m.bool_val, false);
+    assert_eq(m.int_val, 0);
+    assert_eq(m.float_val, 0.0);
+    assert_eq(m.string_val, "");
+    assert_eq(m.bool_val, false);
 }
 
 // === Multiple Derive Attributes ===
@@ -88,6 +88,6 @@ struct Counter {
 fn test_multiple_defaults() {
     let a = Counter::default();
     let b = Counter::default();
-    assert_eq!(a.value, 0);
-    assert_eq!(b.value, 0);
+    assert_eq(a.value, 0);
+    assert_eq(b.value, 0);
 }

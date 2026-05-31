@@ -24,17 +24,17 @@
 // - BFS: push all 0 in-degree nodes, process, decrement neighbors
 
 fn main() {
-    let prereqs = vec![vec![1, 0], vec![2, 1], vec![3, 2]];
-    println!("{}", can_finish(4, prereqs));
+    let prereqs = vec(vec(1, 0), vec(2, 1), vec(3, 2));
+    println("{}", can_finish(4, prereqs));
 }
 
 fn can_finish(num_courses: int, prerequisites: Vec) -> bool {
     // Build adjacency list and in-degree array
     let n = num_courses;
-    let mut graph = vec![];
-    let mut indegree = vec![];
+    let mut graph = vec();
+    let mut indegree = vec();
     for _i in 0..n {
-        graph.push(vec![]);
+        graph.push(vec());
         indegree.push(0);
     }
     for pr in prerequisites {
@@ -65,17 +65,17 @@ fn can_finish(num_courses: int, prerequisites: Vec) -> bool {
 
 #[test]
 fn test_possible() {
-    let prereqs = vec![vec![1, 0], vec![2, 1], vec![3, 2]];
-    assert!(can_finish(4, prereqs));
+    let prereqs = vec(vec(1, 0), vec(2, 1), vec(3, 2));
+    assert(can_finish(4, prereqs));
 }
 
 #[test]
 fn test_cycle() {
-    let prereqs = vec![vec![0, 1], vec![1, 0]];
-    assert!(!can_finish(2, prereqs));
+    let prereqs = vec(vec(0, 1), vec(1, 0));
+    assert(!can_finish(2, prereqs));
 }
 
 #[test]
 fn test_no_prereqs() {
-    assert!(can_finish(3, vec![]));
+    assert(can_finish(3, vec()));
 }

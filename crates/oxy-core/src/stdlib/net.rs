@@ -164,9 +164,9 @@ mod tests {
 fn main() {
     let result = std::net::tcp_connect("127.0.0.1:1");
     if let Ok(conn) = result {
-        println!("ok");
+        println("ok");
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -178,7 +178,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     let addr = std::net::socket_addr_parse("127.0.0.1", 8080);
-    println!("{}", addr);
+    println("{}", addr);
 }
 "#);
         assert_eq!(out, "127.0.0.1:8080\n");
@@ -191,10 +191,10 @@ fn main() {
 fn main() {
     let result = std::net::lookup_host("localhost");
     if let Ok(addrs) = result {
-        println!("{}", addrs.len() > 0);
+        println("{}", addrs.len() > 0);
     } else {
         // DNS lookup may fail in some envs — still valid
-        println!("true");
+        println("true");
     }
 }
 "#);

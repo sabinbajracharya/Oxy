@@ -8,7 +8,7 @@ fn add_one(x: int) -> int {
 
 #[test]
 fn test_explicit_return() {
-    assert_eq!(add_one(41), 42);
+    assert_eq(add_one(41), 42);
 }
 
 fn early_return(x: int) -> int {
@@ -20,8 +20,8 @@ fn early_return(x: int) -> int {
 
 #[test]
 fn test_early_return_guard() {
-    assert_eq!(early_return(-5), 0);
-    assert_eq!(early_return(10), 10);
+    assert_eq(early_return(-5), 0);
+    assert_eq(early_return(10), 10);
 }
 
 fn return_unit(x: int) {
@@ -35,7 +35,7 @@ fn return_unit(x: int) {
 fn test_return_unit() {
     return_unit(0);
     return_unit(1);
-    assert!(true);
+    assert(true);
 }
 
 // Implicit return (last expression, no semicolon)
@@ -46,7 +46,7 @@ fn implicit_return(x: int) -> int {
 
 #[test]
 fn test_implicit_return() {
-    assert_eq!(implicit_return(21), 42);
+    assert_eq(implicit_return(21), 42);
 }
 
 // Return from inside if/else
@@ -60,8 +60,8 @@ fn max(a: int, b: int) -> int {
 
 #[test]
 fn test_return_from_if_else() {
-    assert_eq!(max(10, 5), 10);
-    assert_eq!(max(3, 7), 7);
+    assert_eq(max(10, 5), 10);
+    assert_eq(max(3, 7), 7);
 }
 
 // Return from inside loop
@@ -77,8 +77,8 @@ fn find_first_even(nums: Vec<int>) -> int {
 
 #[test]
 fn test_return_from_loop() {
-    let nums = vec![1, 3, 5, 8, 9];
-    assert_eq!(find_first_even(nums), 8);
+    let nums = vec(1, 3, 5, 8, 9);
+    assert_eq(find_first_even(nums), 8);
 }
 
 // Return from inside match
@@ -92,8 +92,8 @@ fn match_return(x: int) -> String {
 
 #[test]
 fn test_return_from_match() {
-    assert_eq!(match_return(0), "zero");
-    assert_eq!(match_return(42), "non-zero");
+    assert_eq(match_return(0), "zero");
+    assert_eq(match_return(42), "non-zero");
 }
 
 // Return with no value from nested scope
@@ -110,9 +110,9 @@ fn bail_if_negative(x: int) -> int {
 
 #[test]
 fn test_nested_returns() {
-    assert_eq!(bail_if_negative(5), 5);
-    assert_eq!(bail_if_negative(-5), 5);
-    assert_eq!(bail_if_negative(-200), -100);
+    assert_eq(bail_if_negative(5), 5);
+    assert_eq(bail_if_negative(-5), 5);
+    assert_eq(bail_if_negative(-200), -100);
 }
 
 // Return from while loop
@@ -132,6 +132,6 @@ fn sum_until_limit(limit: int) -> int {
 
 #[test]
 fn test_return_from_while() {
-    assert_eq!(sum_until_limit(10), 10);
-    assert_eq!(sum_until_limit(10000), 5050);
+    assert_eq(sum_until_limit(10), 10);
+    assert_eq(sum_until_limit(10000), 5050);
 }

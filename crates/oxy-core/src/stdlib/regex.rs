@@ -144,7 +144,7 @@ mod tests {
     fn test_regex_is_match_true() {
         let out = run("fn main() {\n\
              let matched = std::regex::is_match(\"\\\\d+\", \"abc123def\");\n\
-             println!(\"{}\", matched);\n\
+             println(\"{}\", matched);\n\
              }");
         assert_eq!(out, "true\n");
     }
@@ -153,7 +153,7 @@ mod tests {
     fn test_regex_is_match_false() {
         let out = run("fn main() {\n\
              let matched = std::regex::is_match(\"\\\\d+\", \"abcdef\");\n\
-             println!(\"{}\", matched);\n\
+             println(\"{}\", matched);\n\
              }");
         assert_eq!(out, "false\n");
     }
@@ -163,9 +163,9 @@ mod tests {
         let out = run("fn main() {\n\
              let result = std::regex::find(\"\\\\d+\", \"abc123def\");\n\
              if let Some(m) = result {\n\
-             println!(\"{}\", m.text);\n\
-             println!(\"{}\", m.start);\n\
-             println!(\"{}\", m.end);\n\
+             println(\"{}\", m.text);\n\
+             println(\"{}\", m.start);\n\
+             println(\"{}\", m.end);\n\
              }\n\
              }");
         assert_eq!(out, "123\n3\n6\n");
@@ -176,9 +176,9 @@ mod tests {
         let out = run("fn main() {\n\
              let result = std::regex::find(\"\\\\d+\", \"abcdef\");\n\
              if let Some(m) = result {\n\
-             println!(\"found\");\n\
+             println(\"found\");\n\
              } else {\n\
-             println!(\"none\");\n\
+             println(\"none\");\n\
              }\n\
              }");
         assert_eq!(out, "none\n");
@@ -189,7 +189,7 @@ mod tests {
         let out = run("fn main() {\n\
              let matches = std::regex::find_all(\"\\\\d+\", \"a1b22c333\");\n\
              for m in matches {\n\
-             println!(\"{}\", m.text);\n\
+             println(\"{}\", m.text);\n\
              }\n\
              }");
         assert_eq!(out, "1\n22\n333\n");
@@ -201,8 +201,8 @@ mod tests {
             "fn main() {\n\
              let result = std::regex::captures(\"(?P<year>\\\\d{4})-(?P<month>\\\\d{2})\", \"date: 2024-07-01\");\n\
              if let Some(caps) = result {\n\
-             println!(\"{}\", caps.get(\"year\").unwrap());\n\
-             println!(\"{}\", caps.get(\"month\").unwrap());\n\
+             println(\"{}\", caps.get(\"year\").unwrap());\n\
+             println(\"{}\", caps.get(\"month\").unwrap());\n\
              }\n\
              }",
         );
@@ -214,9 +214,9 @@ mod tests {
         let out = run("fn main() {\n\
              let result = std::regex::captures(\"(\\\\d+)-(\\\\d+)\", \"no match here\");\n\
              if let Some(caps) = result {\n\
-             println!(\"found\");\n\
+             println(\"found\");\n\
              } else {\n\
-             println!(\"none\");\n\
+             println(\"none\");\n\
              }\n\
              }");
         assert_eq!(out, "none\n");
@@ -226,7 +226,7 @@ mod tests {
     fn test_regex_replace_first() {
         let out = run("fn main() {\n\
              let result = std::regex::replace(\"\\\\d+\", \"a1b2c3\", \"X\");\n\
-             println!(\"{}\", result);\n\
+             println(\"{}\", result);\n\
              }");
         assert_eq!(out, "aXb2c3\n");
     }
@@ -235,7 +235,7 @@ mod tests {
     fn test_regex_replace_all() {
         let out = run("fn main() {\n\
              let result = std::regex::replace_all(\"\\\\d+\", \"a1b2c3\", \"X\");\n\
-             println!(\"{}\", result);\n\
+             println(\"{}\", result);\n\
              }");
         assert_eq!(out, "aXbXcX\n");
     }
@@ -246,7 +246,7 @@ mod tests {
 fn main() {
     let parts = std::regex::split("[,;]+", "a,b;;c,d");
     for p in parts {
-        println!("{}", p);
+        println("{}", p);
     }
 }
 "#);

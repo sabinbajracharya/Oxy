@@ -40,10 +40,10 @@ fn main() {
 fn print_list(head: Option) {
     let mut curr = head;
     while let Some(node) = curr {
-        print!("{} ", node.val);
+        print("{} ", node.val);
         curr = node.next;
     }
-    println!("");
+    println("");
 }
 
 fn reverse_list(head: Option) -> Option {
@@ -61,15 +61,15 @@ fn reverse_list(head: Option) -> Option {
 
 #[test]
 fn test_reverse_empty() {
-    assert!(reverse_list(None).is_none());
+    assert(reverse_list(None).is_none());
 }
 
 #[test]
 fn test_reverse_single() {
     let n = ListNode::new(42);
     let result = reverse_list(Some(n));
-    assert_eq!(result.unwrap().val, 42);
-    assert!(result.unwrap().next.is_none());
+    assert_eq(result.unwrap().val, 42);
+    assert(result.unwrap().next.is_none());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn test_reverse_multiple() {
     n2.next = Some(n3);
     n1.next = Some(n2);
     let result = reverse_list(Some(n1));
-    assert_eq!(result.unwrap().val, 3);
+    assert_eq(result.unwrap().val, 3);
     let r2 = result.unwrap().next.unwrap();
-    assert_eq!(r2.val, 2);
+    assert_eq(r2.val, 2);
 }

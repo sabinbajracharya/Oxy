@@ -6,25 +6,25 @@ use super::*;
 
 #[test]
 fn test_array_literal() {
-    let output = run_and_capture("fn main() { let a = [1, 2, 3]; println!(\"{:?}\", a); }");
+    let output = run_and_capture("fn main() { let a = [1, 2, 3]; println(\"{:?}\", a); }");
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
 }
 
 #[test]
 fn test_empty_array() {
-    let output = run_and_capture("fn main() { let a = []; println!(\"{:?}\", a); }");
+    let output = run_and_capture("fn main() { let a = []; println(\"{:?}\", a); }");
     assert_eq!(output, vec!["[]\n"]);
 }
 
 #[test]
 fn test_vec_macro() {
-    let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{:?}\", v); }");
+    let output = run_and_capture("fn main() { let v = vec(10, 20, 30); println(\"{:?}\", v); }");
     assert_eq!(output, vec!["[10, 20, 30]\n"]);
 }
 
 #[test]
 fn test_vec_index() {
-    let output = run_and_capture("fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }");
+    let output = run_and_capture("fn main() { let v = vec(10, 20, 30); println(\"{}\", v[1]); }");
     assert_eq!(output, vec!["20\n"]);
 }
 
@@ -32,9 +32,9 @@ fn test_vec_index() {
 fn test_vec_push() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec![1, 2];
+let mut v = vec(1, 2);
 v.push(3);
-println!("{:?}", v);
+println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
@@ -44,9 +44,9 @@ println!("{:?}", v);
 fn test_vec_pop() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec![1, 2, 3];
+let mut v = vec(1, 2, 3);
 let x = v.pop();
-println!("{:?} {:?}", x, v);
+println("{:?} {:?}", x, v);
 }"#,
     );
     assert_eq!(output, vec!["Some(3) [1, 2]\n"]);
@@ -54,7 +54,7 @@ println!("{:?} {:?}", x, v);
 
 #[test]
 fn test_vec_len() {
-    let output = run_and_capture("fn main() { let v = vec![1, 2, 3]; println!(\"{}\", v.len()); }");
+    let output = run_and_capture("fn main() { let v = vec(1, 2, 3); println(\"{}\", v.len()); }");
     assert_eq!(output, vec!["3\n"]);
 }
 
@@ -63,8 +63,8 @@ fn test_vec_is_empty() {
     let output = run_and_capture(
         r#"fn main() {
 let a = [];
-let b = vec![1];
-println!("{} {}", a.is_empty(), b.is_empty());
+let b = vec(1);
+println("{} {}", a.is_empty(), b.is_empty());
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -74,8 +74,8 @@ println!("{} {}", a.is_empty(), b.is_empty());
 fn test_vec_contains() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec![1, 2, 3];
-println!("{} {}", v.contains(2), v.contains(5));
+let v = vec(1, 2, 3);
+println("{} {}", v.contains(2), v.contains(5));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -85,9 +85,9 @@ println!("{} {}", v.contains(2), v.contains(5));
 fn test_vec_index_assign() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec![1, 2, 3];
+let mut v = vec(1, 2, 3);
 v[1] = 99;
-println!("{:?}", v);
+println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[1, 99, 3]\n"]);
@@ -97,12 +97,12 @@ println!("{:?}", v);
 fn test_vec_iteration() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec![10, 20, 30];
+let v = vec(10, 20, 30);
 let mut sum = 0;
 for x in v {
     sum += x;
 }
-println!("{}", sum);
+println("{}", sum);
 }"#,
     );
     assert_eq!(output, vec!["60\n"]);
@@ -112,8 +112,8 @@ println!("{}", sum);
 fn test_vec_join() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec!["a", "b", "c"];
-println!("{}", v.join(", "));
+let v = vec("a", "b", "c");
+println("{}", v.join(", "));
 }"#,
     );
     assert_eq!(output, vec!["a, b, c\n"]);
@@ -121,7 +121,7 @@ println!("{}", v.join(", "));
 
 #[test]
 fn test_tuple_literal() {
-    let output = run_and_capture("fn main() { let t = (1, 2, 3); println!(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { let t = (1, 2, 3); println(\"{:?}\", t); }");
     assert_eq!(output, vec!["(1, 2, 3)\n"]);
 }
 
@@ -130,7 +130,7 @@ fn test_tuple_index() {
     let output = run_and_capture(
         r#"fn main() {
 let t = (10, "hello", true);
-println!("{} {} {}", t.0, t.1, t.2);
+println("{} {} {}", t.0, t.1, t.2);
 }"#,
     );
     assert_eq!(output, vec!["10 hello true\n"]);
@@ -138,19 +138,19 @@ println!("{} {} {}", t.0, t.1, t.2);
 
 #[test]
 fn test_empty_tuple() {
-    let output = run_and_capture("fn main() { let t = (); println!(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { let t = (); println(\"{:?}\", t); }");
     assert_eq!(output, vec!["()\n"]);
 }
 
 #[test]
 fn test_single_element_tuple() {
-    let output = run_and_capture("fn main() { let t = (42,); println!(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { let t = (42,); println(\"{:?}\", t); }");
     assert_eq!(output, vec!["(42,)\n"]);
 }
 
 #[test]
 fn test_string_len() {
-    let output = run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.len()); }"#);
+    let output = run_and_capture(r#"fn main() { let s = "hello"; println("{}", s.len()); }"#);
     assert_eq!(output, vec!["5\n"]);
 }
 
@@ -159,7 +159,7 @@ fn test_string_contains() {
     let output = run_and_capture(
         r#"fn main() {
 let s = "hello world";
-println!("{} {}", s.contains("world"), s.contains("xyz"));
+println("{} {}", s.contains("world"), s.contains("xyz"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -168,21 +168,21 @@ println!("{} {}", s.contains("world"), s.contains("xyz"));
 #[test]
 fn test_string_to_uppercase() {
     let output =
-        run_and_capture(r#"fn main() { let s = "hello"; println!("{}", s.to_uppercase()); }"#);
+        run_and_capture(r#"fn main() { let s = "hello"; println("{}", s.to_uppercase()); }"#);
     assert_eq!(output, vec!["HELLO\n"]);
 }
 
 #[test]
 fn test_string_to_lowercase() {
     let output =
-        run_and_capture(r#"fn main() { let s = "HELLO"; println!("{}", s.to_lowercase()); }"#);
+        run_and_capture(r#"fn main() { let s = "HELLO"; println("{}", s.to_lowercase()); }"#);
     assert_eq!(output, vec!["hello\n"]);
 }
 
 #[test]
 fn test_string_trim() {
     let output =
-        run_and_capture(r#"fn main() { let s = "  hello  "; println!(">{}<", s.trim()); }"#);
+        run_and_capture(r#"fn main() { let s = "  hello  "; println(">{}<", s.trim()); }"#);
     assert_eq!(output, vec![">hello<\n"]);
 }
 
@@ -191,7 +191,7 @@ fn test_string_starts_with() {
     let output = run_and_capture(
         r#"fn main() {
 let s = "hello world";
-println!("{} {}", s.starts_with("hello"), s.starts_with("world"));
+println("{} {}", s.starts_with("hello"), s.starts_with("world"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -202,7 +202,7 @@ fn test_string_ends_with() {
     let output = run_and_capture(
         r#"fn main() {
 let s = "hello world";
-println!("{} {}", s.ends_with("world"), s.ends_with("hello"));
+println("{} {}", s.ends_with("world"), s.ends_with("hello"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -213,7 +213,7 @@ fn test_string_replace() {
     let output = run_and_capture(
         r#"fn main() {
 let s = "hello world";
-println!("{}", s.replace("world", "oxy"));
+println("{}", s.replace("world", "oxy"));
 }"#,
     );
     assert_eq!(output, vec!["hello oxy\n"]);
@@ -225,7 +225,7 @@ fn test_string_split() {
         r#"fn main() {
 let s = "a,b,c";
 let parts = s.split(",");
-println!("{:?}", parts);
+println("{:?}", parts);
 }"#,
     );
     assert_eq!(output, vec!["[\"a\", \"b\", \"c\"]\n"]);
@@ -237,7 +237,7 @@ fn test_string_chars() {
         r#"fn main() {
 let s = "hi";
 let chars = s.chars();
-println!("{:?}", chars);
+println("{:?}", chars);
 }"#,
     );
     assert_eq!(output, vec!["['h', 'i']\n"]);
@@ -245,7 +245,7 @@ println!("{:?}", chars);
 
 #[test]
 fn test_string_repeat() {
-    let output = run_and_capture(r#"fn main() { println!("{}", "ab".repeat(3)); }"#);
+    let output = run_and_capture(r#"fn main() { println("{}", "ab".repeat(3)); }"#);
     assert_eq!(output, vec!["ababab\n"]);
 }
 
@@ -254,7 +254,7 @@ fn test_string_iteration() {
     let output = run_and_capture(
         r#"fn main() {
 for c in "abc" {
-    println!("{}", c);
+    println("{}", c);
 }
 }"#,
     );
@@ -265,8 +265,8 @@ for c in "abc" {
 fn test_vec_first_last() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec![10, 20, 30];
-println!("{:?} {:?}", v.first(), v.last());
+let v = vec(10, 20, 30);
+println("{:?} {:?}", v.first(), v.last());
 }"#,
     );
     assert_eq!(output, vec!["Some(10) Some(30)\n"]);
@@ -276,9 +276,9 @@ println!("{:?} {:?}", v.first(), v.last());
 fn test_vec_reverse() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec![1, 2, 3];
+let mut v = vec(1, 2, 3);
 v.reverse();
-println!("{:?}", v);
+println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[3, 2, 1]\n"]);
@@ -288,9 +288,9 @@ println!("{:?}", v);
 fn test_nested_vec() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec![vec![1, 2], vec![3, 4]];
-println!("{}", v[0][1]);
-println!("{:?}", v);
+let v = vec(vec(1, 2), vec(3, 4));
+println("{}", v[0][1]);
+println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["2\n", "[[1, 2], [3, 4]]\n"]);
@@ -300,10 +300,10 @@ println!("{:?}", v);
 fn test_debug_format_collections() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec!["hello", "world"];
-println!("{:?}", v);
+let v = vec("hello", "world");
+println("{:?}", v);
 let t = (1, "two", true);
-println!("{:?}", t);
+println("{:?}", t);
 }"#,
     );
     assert_eq!(
@@ -314,7 +314,7 @@ println!("{:?}", t);
 
 #[test]
 fn test_index_out_of_bounds() {
-    let result = run_compiled("fn main() { let v = vec![1, 2]; let x = v[5]; }");
+    let result = run_compiled("fn main() { let v = vec(1, 2); let x = v[5]; }");
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("out of bounds"), "actual error: {err}");
@@ -336,7 +336,7 @@ fn main() {
     let mut m = HashMap::new();
     m.insert("a", 1);
     m.insert("b", 2);
-    println!("{}", m.len());
+    println("{}", m.len());
 }
 "#,
     );
@@ -351,7 +351,7 @@ fn main() {
     let mut m = HashMap::new();
     m.insert("key", 42);
     let val = m.get("key");
-    println!("{}", val.unwrap());
+    println("{}", val.unwrap());
 }
 "#,
     );
@@ -365,7 +365,7 @@ fn test_hashmap_get_missing() {
 fn main() {
     let m = HashMap::new();
     let val = m.get("nope");
-    println!("{}", val.is_none());
+    println("{}", val.is_none());
 }
 "#,
     );
@@ -379,8 +379,8 @@ fn test_hashmap_contains_key() {
 fn main() {
     let mut m = HashMap::new();
     m.insert("x", 1);
-    println!("{}", m.contains_key("x"));
-    println!("{}", m.contains_key("y"));
+    println("{}", m.contains_key("x"));
+    println("{}", m.contains_key("y"));
 }
 "#,
     );
@@ -395,8 +395,8 @@ fn main() {
     let mut m = HashMap::new();
     m.insert("a", 10);
     let removed = m.remove("a");
-    println!("{}", removed.unwrap());
-    println!("{}", m.is_empty());
+    println("{}", removed.unwrap());
+    println("{}", m.is_empty());
 }
 "#,
     );
@@ -411,8 +411,8 @@ fn main() {
     let mut m = HashMap::new();
     m.insert("b", 2);
     m.insert("a", 1);
-    println!("{:?}", m.keys());
-    println!("{:?}", m.values());
+    println("{:?}", m.keys());
+    println("{:?}", m.values());
 }
 "#,
     );
@@ -426,7 +426,7 @@ fn test_hashmap_debug_format() {
 fn main() {
     let mut m = HashMap::new();
     m.insert("x", 1);
-    println!("{:?}", m);
+    println("{:?}", m);
 }
 "#,
     );
@@ -442,7 +442,7 @@ fn main() {
     m.insert("a", 1);
     m.insert("b", 2);
     for (k, v) in m {
-        println!("{}: {}", k, v);
+        println("{}: {}", k, v);
     }
 }
 "#,
@@ -456,7 +456,7 @@ fn test_hashmap_is_empty() {
         r#"
 fn main() {
     let m = HashMap::new();
-    println!("{}", m.is_empty());
+    println("{}", m.is_empty());
 }
 "#,
     );
@@ -472,7 +472,7 @@ fn main() {
     s.insert(1);
     s.insert(2);
     s.insert(1);
-    println!("{}", s.len());
+    println("{}", s.len());
 }
 "#,
     );
@@ -487,8 +487,8 @@ fn main() {
     let mut s = HashSet::new();
     s.insert("a");
     s.insert("b");
-    println!("{}", s.contains("a"));
-    println!("{}", s.contains("c"));
+    println("{}", s.contains("a"));
+    println("{}", s.contains("c"));
 }
 "#,
     );
@@ -503,9 +503,9 @@ fn main() {
     let mut s = HashSet::new();
     s.insert(1);
     s.insert(2);
-    println!("{}", s.remove(1));
-    println!("{}", s.len());
-    println!("{}", s.remove(3));
+    println("{}", s.remove(1));
+    println("{}", s.len());
+    println("{}", s.remove(3));
 }
 "#,
     );
@@ -518,7 +518,7 @@ fn test_hashset_is_empty() {
         r#"
 fn main() {
     let s = HashSet::new();
-    println!("{}", s.is_empty());
+    println("{}", s.is_empty());
 }
 "#,
     );
@@ -537,9 +537,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     let c = a.union(b);
-    println!("{}", c.len());
-    println!("{}", c.contains(1));
-    println!("{}", c.contains(3));
+    println("{}", c.len());
+    println("{}", c.contains(1));
+    println("{}", c.contains(3));
 }
 "#,
     );
@@ -558,9 +558,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     let c = a.intersection(b);
-    println!("{}", c.len());
-    println!("{}", c.contains(2));
-    println!("{}", c.contains(1));
+    println("{}", c.len());
+    println("{}", c.contains(2));
+    println("{}", c.contains(1));
 }
 "#,
     );
@@ -579,9 +579,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     let c = a.difference(b);
-    println!("{}", c.len());
-    println!("{}", c.contains(1));
-    println!("{}", c.contains(2));
+    println("{}", c.len());
+    println("{}", c.contains(1));
+    println("{}", c.contains(2));
 }
 "#,
     );
@@ -598,10 +598,10 @@ fn main() {
     s.insert(1);
     s.insert(2);
     let v = s.to_vec();
-    println!("{}", v.len());
+    println("{}", v.len());
     // to_vec returns sorted elements
-    println!("{}", v[0]);
-    println!("{}", v[2]);
+    println("{}", v[0]);
+    println("{}", v[2]);
 }
 "#,
     );
@@ -616,8 +616,8 @@ fn main() {
     let mut s = HashSet::new();
     s.insert(1);
     let c = s.clone();
-    println!("{}", c.len());
-    println!("{}", c.contains(1));
+    println("{}", c.len());
+    println("{}", c.contains(1));
 }
 "#,
     );
@@ -633,7 +633,7 @@ fn main() {
     s.insert(1);
     s.insert(2);
     for x in s {
-        println!("{}", x);
+        println("{}", x);
     }
 }
 "#,
@@ -650,8 +650,8 @@ fn main() {
     let mut s = HashSet::new();
     s.insert("hello");
     s.insert("world");
-    println!("{}", s.contains("hello"));
-    println!("{}", s.len());
+    println("{}", s.contains("hello"));
+    println("{}", s.len());
 }
 "#,
     );
@@ -667,7 +667,7 @@ fn main() {
     h.push(3);
     h.push(1);
     h.push(2);
-    println!("{}", h.len());
+    println("{}", h.len());
 }
 "#,
     );
@@ -684,7 +684,7 @@ fn main() {
     h.push(5);
     h.push(3);
     // peek returns max
-    println!("{}", h.peek().unwrap());
+    println("{}", h.peek().unwrap());
 }
 "#,
     );
@@ -701,10 +701,10 @@ fn main() {
     h.push(3);
     h.push(2);
     // pop returns max each time
-    println!("{}", h.pop().unwrap());
-    println!("{}", h.pop().unwrap());
-    println!("{}", h.pop().unwrap());
-    println!("{}", h.pop().is_none());
+    println("{}", h.pop().unwrap());
+    println("{}", h.pop().unwrap());
+    println("{}", h.pop().unwrap());
+    println("{}", h.pop().is_none());
 }
 "#,
     );
@@ -717,7 +717,7 @@ fn test_binary_heap_pop_empty() {
         r#"
 fn main() {
     let mut h = BinaryHeap::new();
-    println!("{}", h.pop().is_none());
+    println("{}", h.pop().is_none());
 }
 "#,
     );
@@ -734,9 +734,9 @@ fn main() {
     h.push(-3);
     h.push(-2);
     // max-heap on negated values = min-heap on original values
-    println!("{}", -(h.pop().unwrap()));
-    println!("{}", -(h.pop().unwrap()));
-    println!("{}", -(h.pop().unwrap()));
+    println("{}", -(h.pop().unwrap()));
+    println("{}", -(h.pop().unwrap()));
+    println("{}", -(h.pop().unwrap()));
 }
 "#,
     );
@@ -754,8 +754,8 @@ fn main() {
     h.push(2);
     let v = h.to_vec();
     // into_sorted_vec returns ascending order
-    println!("{}", v[0]);
-    println!("{}", v[2]);
+    println("{}", v[0]);
+    println("{}", v[2]);
 }
 "#,
     );
@@ -771,7 +771,7 @@ fn main() {
     d.push_back(1);
     d.push_back(2);
     d.push_front(0);
-    println!("{}", d.len());
+    println("{}", d.len());
 }
 "#,
     );
@@ -786,8 +786,8 @@ fn main() {
     let mut d = VecDeque::new();
     d.push_back(1);
     d.push_back(3);
-    println!("{}", d.front());
-    println!("{}", d.back());
+    println("{}", d.front());
+    println("{}", d.back());
 }
 "#,
     );
@@ -803,9 +803,9 @@ fn main() {
     d.push_back(1);
     d.push_back(2);
     d.push_back(3);
-    println!("{:?}", d.pop_front());
-    println!("{:?}", d.pop_back());
-    println!("{}", d.len());
+    println("{:?}", d.pop_front());
+    println("{:?}", d.pop_back());
+    println("{}", d.len());
 }
 "#,
     );
@@ -822,8 +822,8 @@ fn main() {
     d.push_back(2);
     d.push_back(3);
     let v = d.to_vec();
-    println!("{}", v[0]);
-    println!("{}", v[2]);
+    println("{}", v[0]);
+    println("{}", v[2]);
 }
 "#,
     );
@@ -835,9 +835,9 @@ fn test_turbofish_collect_vec() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = vec![1, 2, 3];
+                let v = vec(1, 2, 3);
                 let doubled = v.iter().map(|x| x * 2).collect::<Vec>();
-                println!("{:?}", doubled);
+                println("{:?}", doubled);
             }
             "#,
     );

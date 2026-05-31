@@ -30,21 +30,21 @@ mod database {
 fn test_public_field_accessible() {
     use database::Record;
     let r = Record::new("user".to_string(), 1234);
-    assert_eq!(r.name, "user");
+    assert_eq(r.name, "user");
 }
 
 #[test]
 fn test_private_field_via_accessor() {
     let r = database::make_admin();
-    assert_eq!(r.get_key(), 9999);
+    assert_eq(r.get_key(), 9999);
 }
 
 #[test]
 fn test_public_constructor() {
     use database::Record;
     let r = Record::new("test".to_string(), 42);
-    assert_eq!(r.name, "test");
-    assert_eq!(r.get_key(), 42);
+    assert_eq(r.name, "test");
+    assert_eq(r.get_key(), 42);
 }
 
 // === Struct with all public fields ===
@@ -63,16 +63,16 @@ mod geometry {
 #[test]
 fn test_pub_fields_directly_accessible() {
     let p = geometry::origin();
-    assert_eq!(p.x, 0.0);
-    assert_eq!(p.y, 0.0);
+    assert_eq(p.x, 0.0);
+    assert_eq(p.y, 0.0);
 }
 
 #[test]
 fn test_pub_struct_init_from_outside() {
     use geometry::Point;
     let p = Point { x: 1.0, y: 2.0 };
-    assert_eq!(p.x, 1.0);
-    assert_eq!(p.y, 2.0);
+    assert_eq(p.x, 1.0);
+    assert_eq(p.y, 2.0);
 }
 
 // === Mix of public and private fields ===
@@ -99,9 +99,9 @@ mod config {
 fn test_mixed_visibility_via_constructor() {
     use config::Settings;
     let s = Settings::new(true, 10);
-    assert_eq!(s.debug, true);
-    assert_eq!(s.max_connections, 10);
-    assert_eq!(s.get_counter(), 0);
+    assert_eq(s.debug, true);
+    assert_eq(s.max_connections, 10);
+    assert_eq(s.get_counter(), 0);
 }
 
 // === Negative tests: private fields NOT accessible from outside ===

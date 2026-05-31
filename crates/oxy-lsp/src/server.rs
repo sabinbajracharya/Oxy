@@ -85,10 +85,7 @@ impl OxyLsp {
             return None;
         }
 
-        // Include trailing `!` for macros like println!
-        if end < bytes.len() && bytes[end] == b'!' {
-            end += 1;
-        }
+        // No special handling for `!` — Oxy uses regular function calls.
 
         Some(line[start..end].to_string())
     }

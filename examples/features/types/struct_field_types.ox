@@ -13,22 +13,22 @@ struct Person {
 #[test]
 fn test_struct_init_matching_types() {
     let p = Point { x: 1.0, y: 2.0 };
-    assert_eq!(p.x, 1.0);
-    assert_eq!(p.y, 2.0);
+    assert_eq(p.x, 1.0);
+    assert_eq(p.y, 2.0);
 }
 
 #[test]
 fn test_struct_int_for_float_field_ok() {
     // Integer promotes to float — accepted.
     let p = Point { x: 1, y: 2 };
-    assert_eq!(p.x, 1.0);
+    assert_eq(p.x, 1.0);
 }
 
 #[test]
 fn test_struct_field_mut_assign_ok() {
     let mut p = Point { x: 0.0, y: 0.0 };
     p.x = 5.0;
-    assert_eq!(p.x, 5.0);
+    assert_eq(p.x, 5.0);
 }
 
 #[compile_error]

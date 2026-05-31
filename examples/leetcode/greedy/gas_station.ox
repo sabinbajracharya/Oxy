@@ -24,9 +24,9 @@
 // - Return -1 if total cost > total gas
 
 fn main() {
-    let gas = vec![1, 2, 3, 4, 5];
-    let cost = vec![3, 4, 5, 1, 2];
-    println!("{}", can_complete_circuit(gas, cost));
+    let gas = vec(1, 2, 3, 4, 5);
+    let cost = vec(3, 4, 5, 1, 2);
+    println("{}", can_complete_circuit(gas, cost));
 }
 
 fn can_complete_circuit(gas: Vec, cost: Vec) -> int {
@@ -50,14 +50,14 @@ fn can_complete_circuit(gas: Vec, cost: Vec) -> int {
 
 #[test]
 fn test_possible() {
-    let gas = vec![1, 2, 3, 4, 5];
-    let cost = vec![3, 4, 5, 1, 2];
-    assert_eq!(can_complete_circuit(gas, cost), 3);
+    let gas = vec(1, 2, 3, 4, 5);
+    let cost = vec(3, 4, 5, 1, 2);
+    assert_eq(can_complete_circuit(gas, cost), 3);
 }
 
 #[test]
 fn test_impossible() {
-    let gas = vec![2, 3, 4];
-    let cost = vec![3, 4, 3];
-    assert_eq!(can_complete_circuit(gas, cost), -1);
+    let gas = vec(2, 3, 4);
+    let cost = vec(3, 4, 3);
+    assert_eq(can_complete_circuit(gas, cost), -1);
 }

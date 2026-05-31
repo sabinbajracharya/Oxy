@@ -18,13 +18,13 @@ struct Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format!("Hello, I'm {}!", self.name)
+        format("Hello, I'm {}!", self.name)
     }
 }
 
 fn main() {
     let p = Person { name: String::from("Alice") };
-    println!("{}", p.greet());
+    println("{}", p.greet());
 }
 "#,
     );
@@ -56,7 +56,7 @@ impl Shape for Circle {
 
 fn main() {
     let c = Circle { radius: 5.0 };
-    println!("{}: {}", c.name(), c.area());
+    println("{}: {}", c.name(), c.area());
 }
 "#,
     );
@@ -70,7 +70,7 @@ fn test_trait_default_method() {
 trait Describable {
     fn name(self) -> String;
     fn describe(self) -> String {
-        format!("I am {}", self.name())
+        format("I am {}", self.name())
     }
 }
 
@@ -86,7 +86,7 @@ impl Describable for Dog {
 
 fn main() {
     let d = Dog { breed: String::from("Labrador") };
-    println!("{}", d.describe());
+    println("{}", d.describe());
 }
 "#,
     );
@@ -98,11 +98,11 @@ fn test_format_macro() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let s = format!("Hello, {}!", "world");
-    println!("{}", s);
+    let s = format("Hello, {}!", "world");
+    println("{}", s);
     let n = 42;
-    let msg = format!("The answer is {}", n);
-    println!("{}", msg);
+    let msg = format("The answer is {}", n);
+    println("{}", msg);
 }
 "#,
     );
@@ -134,7 +134,7 @@ fn main() {
     let a = Vec2::new(1.0, 2.0);
     let b = Vec2::new(3.0, 4.0);
     let c = a + b;
-    println!("{} {}", c.x, c.y);
+    println("{} {}", c.x, c.y);
 }
 "#,
     );
@@ -160,7 +160,7 @@ fn main() {
     let a = Vec2 { x: 2.0, y: 3.0 };
     let b = Vec2 { x: 4.0, y: 5.0 };
     let c = a * b;
-    println!("{} {}", c.x, c.y);
+    println("{} {}", c.x, c.y);
 }
 "#,
     );
@@ -178,7 +178,7 @@ fn identity<T>(x: T) -> T {
 fn main() {
     let a = identity(42);
     let b = identity("hello");
-    println!("{} {}", a, b);
+    println("{} {}", a, b);
 }
 "#,
     );
@@ -190,7 +190,7 @@ fn test_generic_function_with_bounds() {
     let out = run_and_capture(
         r#"
 fn print_val<T: Display>(x: T) {
-    println!("{}", x);
+    println("{}", x);
 }
 
 fn main() {
@@ -223,13 +223,13 @@ impl Article {
 
 impl Summary for Article {
     fn summarize(self) -> String {
-        format!("{}: {}", self.title, self.content)
+        format("{}: {}", self.title, self.content)
     }
 }
 
 fn main() {
     let a = Article::new(String::from("Oxy"), String::from("A Rust-like language"));
-    println!("{}", a.summarize());
+    println("{}", a.summarize());
 }
 "#,
     );
@@ -254,20 +254,20 @@ struct Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format!("Hi, I'm {}", self.name)
+        format("Hi, I'm {}", self.name)
     }
 }
 
 impl Farewell for Person {
     fn farewell(self) -> String {
-        format!("Goodbye from {}", self.name)
+        format("Goodbye from {}", self.name)
     }
 }
 
 fn main() {
     let p = Person { name: String::from("Bob") };
-    println!("{}", p.greet());
-    println!("{}", p.farewell());
+    println("{}", p.greet());
+    println("{}", p.farewell());
 }
 "#,
     );
@@ -280,7 +280,7 @@ fn test_string_from() {
         r#"
 fn main() {
     let s = String::from("hello");
-    println!("{}", s);
+    println("{}", s);
 }
 "#,
     );
@@ -313,7 +313,7 @@ impl Describe for Color {
 
 fn main() {
     let c = Color::Green;
-    println!("{}", c.describe());
+    println("{}", c.describe());
 }
 "#,
     );
@@ -327,7 +327,7 @@ fn test_clone_method_on_string() {
 fn main() {
     let s = String::from("hello");
     let s2 = s.clone();
-    println!("{} {}", s, s2);
+    println("{} {}", s, s2);
 }
 "#,
     );
@@ -341,7 +341,7 @@ fn test_type_alias() {
 type Meters = float;
 fn main() {
     let d: Meters = 42.0;
-    println!("{}", d);
+    println("{}", d);
 }
 "#,
     );
@@ -354,7 +354,7 @@ fn test_const() {
         r#"
 const MAX: int = 100;
 fn main() {
-    println!("{}", MAX);
+    println("{}", MAX);
 }
 "#,
     );
@@ -367,7 +367,7 @@ fn test_const_float() {
         r#"
 const PI: float = 3.14;
 fn main() {
-    println!("{}", PI);
+    println("{}", PI);
 }
 "#,
     );
@@ -380,7 +380,7 @@ fn test_const_no_type_ann() {
         r#"
 const GREETING = "hello";
 fn main() {
-    println!("{}", GREETING);
+    println("{}", GREETING);
 }
 "#,
     );
@@ -396,7 +396,7 @@ fn multiply(x: int) -> int {
     x * FACTOR
 }
 fn main() {
-    println!("{}", multiply(5));
+    println("{}", multiply(5));
 }
 "#,
     );
@@ -412,7 +412,7 @@ struct Point { x: float, y: float }
 
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
-    println!("{:?}", p);
+    println("{:?}", p);
 }
 "#,
     );
@@ -429,7 +429,7 @@ struct Point { x: float, y: float }
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
     let p2 = p.clone();
-    println!("{} {}", p2.x, p2.y);
+    println("{} {}", p2.x, p2.y);
 }
 "#,
     );
@@ -447,8 +447,8 @@ fn main() {
     let a = Point { x: 1.0, y: 2.0 };
     let b = Point { x: 1.0, y: 2.0 };
     let c = Point { x: 3.0, y: 4.0 };
-    println!("{}", a == b);
-    println!("{}", a == c);
+    println("{}", a == b);
+    println("{}", a == c);
 }
 "#,
     );
@@ -465,8 +465,8 @@ struct Color { r: int, g: int, b: int }
 fn main() {
     let c1 = Color { r: 255, g: 0, b: 0 };
     let c2 = c1.clone();
-    println!("{:?}", c1);
-    println!("{}", c1 == c2);
+    println("{:?}", c1);
+    println("{}", c1 == c2);
 }
 "#,
     );
@@ -482,7 +482,7 @@ struct Config { width: int, height: int, title: String }
 
 fn main() {
     let c = Config::default();
-    println!("{:?}", c);
+    println("{:?}", c);
 }
 "#,
     );
@@ -499,7 +499,7 @@ fn test_derive_enum_debug() {
 enum Color { Red, Green, Blue }
 
 fn main() {
-    println!("{:?}", Color::Red);
+    println("{:?}", Color::Red);
 }
 "#,
     );
@@ -514,8 +514,8 @@ fn test_derive_enum_partial_eq() {
 enum Direction { Up, Down, Left, Right }
 
 fn main() {
-    println!("{}", Direction::Up == Direction::Up);
-    println!("{}", Direction::Up == Direction::Down);
+    println("{}", Direction::Up == Direction::Up);
+    println("{}", Direction::Up == Direction::Down);
 }
 "#,
     );
@@ -533,7 +533,7 @@ struct Foo { x: int }
 fn main() {
     let f = Foo { x: 1 };
     let f2 = f.clone();
-    println!("{}", f2.x);
+    println("{}", f2.x);
 }
 "#,
     );
@@ -549,7 +549,7 @@ struct Foo { x: int }
 
 fn main() {
     let f = Foo { x: 42 };
-    println!("{}", f.x);
+    println("{}", f.x);
 }
 "#,
     );
@@ -566,7 +566,7 @@ enum Shape { Circle(float), Square(float) }
 fn main() {
     let s = Shape::Circle(5.0);
     let s2 = s.clone();
-    println!("{:?}", s2);
+    println("{:?}", s2);
 }
 "#,
     );
@@ -581,7 +581,7 @@ fn test_type_alias_struct() {
             type Pos = Point;
             fn main() {
                 let p = Pos { x: 1.0, y: 2.0 };
-                println!("{} {}", p.x, p.y);
+                println("{} {}", p.x, p.y);
             }
             "#,
     );
@@ -609,7 +609,7 @@ fn test_type_alias_associated_fn() {
             type P = Point;
             fn main() {
                 let p = P::origin();
-                println!("{} {}", p.x, p.y);
+                println("{} {}", p.x, p.y);
             }
             "#,
     );
@@ -622,9 +622,9 @@ fn test_trait_bound_inline() {
         r#"
             trait Greet { fn greet(self) -> String; }
             struct Dog { name: String }
-            impl Greet for Dog { fn greet(self) -> String { format!("Woof! I'm {}", self.name) } }
+            impl Greet for Dog { fn greet(self) -> String { format("Woof! I'm {}", self.name) } }
             fn say_hi<T: Greet>(item: T) {
-                println!("{}", item.greet());
+                println("{}", item.greet());
             }
             fn main() {
                 say_hi(Dog { name: "Rex".to_string() });

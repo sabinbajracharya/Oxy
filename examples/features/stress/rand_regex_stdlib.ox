@@ -10,13 +10,13 @@ fn test_rand_int_in_range() {
         if r < 1 || r > 6 { all_in_range = false; }
         i = i + 1;
     }
-    assert!(all_in_range);
+    assert(all_in_range);
 }
 
 #[test]
 fn test_rand_int_single_value() {
     let r = std::rand::rand_int(7, 7);
-    assert_eq!(r, 7);
+    assert_eq(r, 7);
 }
 
 // --- rand::range (half-open) ---
@@ -29,14 +29,14 @@ fn test_rand_range_in_bounds() {
         if r < 0 || r >= 10 { all_in = false; }
         i = i + 1;
     }
-    assert!(all_in);
+    assert(all_in);
 }
 
 // --- rand::random (float in [0, 1)) ---
 #[test]
 fn test_rand_random_float() {
     let r = std::rand::random();
-    assert!(r >= 0.0 && r < 1.0);
+    assert(r >= 0.0 && r < 1.0);
 }
 
 // --- rand::bool ---
@@ -44,36 +44,36 @@ fn test_rand_random_float() {
 fn test_rand_bool_returns_bool() {
     let b = std::rand::bool();
     // tautology — just verify the call doesn't error and returns a bool
-    assert!(b == true || b == false);
+    assert(b == true || b == false);
 }
 
 // --- regex: function-form API ---
 #[test]
 fn test_regex_is_match_true() {
     let r = std::regex::is_match("\\d+", "hello 42 world");
-    assert_eq!(r, true);
+    assert_eq(r, true);
 }
 
 #[test]
 fn test_regex_is_match_false() {
     let r = std::regex::is_match("\\d+", "hello world");
-    assert_eq!(r, false);
+    assert_eq(r, false);
 }
 
 #[test]
 fn test_regex_find_returns_some() {
     let m = std::regex::find("\\d+", "abc 42 def");
-    assert_eq!(m.is_some(), true);
+    assert_eq(m.is_some(), true);
 }
 
 #[test]
 fn test_regex_find_returns_none() {
     let m = std::regex::find("\\d+", "no digits here");
-    assert_eq!(m.is_none(), true);
+    assert_eq(m.is_none(), true);
 }
 
 #[test]
 fn test_regex_find_all_count() {
     let v: Vec<HashMap<String, String>> = std::regex::find_all("\\d+", "1 22 333");
-    assert_eq!(v.len(), 3);
+    assert_eq(v.len(), 3);
 }

@@ -22,7 +22,7 @@ impl Greet for Person {
 #[test]
 fn test_trait_basic() {
     let p = Person { name: "Alice" };
-    assert_eq!(p.greet(), "Hello, Alice");
+    assert_eq(p.greet(), "Hello, Alice");
 }
 
 // === Trait with Multiple Methods ===
@@ -49,8 +49,8 @@ impl Shape2D for Square {
 #[test]
 fn test_trait_multiple_methods() {
     let s = Square { side: 3.0 };
-    assert_eq!(s.area(), 9.0);
-    assert_eq!(s.perimeter(), 12.0);
+    assert_eq(s.area(), 9.0);
+    assert_eq(s.perimeter(), 12.0);
 }
 
 // === Trait with Default Method ===
@@ -77,8 +77,8 @@ impl Describable for Widget {
 #[test]
 fn test_trait_default_method() {
     let w = Widget { id: 1 };
-    assert_eq!(w.type_name(), "Widget");
-    assert_eq!(w.describe(), "no description");
+    assert_eq(w.type_name(), "Widget");
+    assert_eq(w.describe(), "no description");
 }
 
 // === Multiple Impls for Same Type ===
@@ -96,6 +96,6 @@ impl Identifiable for Widget {
 #[test]
 fn test_multiple_trait_impls() {
     let w = Widget { id: 99 };
-    assert_eq!(w.id(), 99);
-    assert_eq!(w.type_name(), "Widget");
+    assert_eq(w.id(), 99);
+    assert_eq(w.type_name(), "Widget");
 }

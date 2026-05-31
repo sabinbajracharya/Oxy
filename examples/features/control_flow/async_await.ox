@@ -34,27 +34,27 @@ fn sync_double(x: int) -> int { x * 2 }
 #[test]
 fn test_async_fn_returns_future() {
     let f = answer();
-    assert_eq!(f.await, 42);
+    assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_fn_with_params() {
     let f = add(3, 4);
-    assert_eq!(f.await, 7);
+    assert_eq(f.await, 7);
 }
 
 #[test]
 fn test_async_fn_multiple_calls() {
     let a = double(5);
     let b = double(10);
-    assert_eq!(a.await, 10);
-    assert_eq!(b.await, 20);
+    assert_eq(a.await, 10);
+    assert_eq(b.await, 20);
 }
 
 #[test]
 fn test_async_fn_string_return() {
     let f = greet("World".to_string());
-    assert_eq!(f.await, "Hello, World");
+    assert_eq(f.await, "Hello, World");
 }
 
 // --- await passthrough ---
@@ -62,13 +62,13 @@ fn test_async_fn_string_return() {
 #[test]
 fn test_await_on_plain_value_passes_through() {
     let x = 42;
-    assert_eq!(x.await, 42);
+    assert_eq(x.await, 42);
 }
 
 #[test]
 fn test_await_on_string_passes_through() {
     let s = "hello".to_string();
-    assert_eq!(s.await, "hello");
+    assert_eq(s.await, "hello");
 }
 
 // --- spawn ---
@@ -76,22 +76,22 @@ fn test_await_on_string_passes_through() {
 #[test]
 fn test_spawn_returns_join_handle() {
     let h = spawn(|| 42);
-    assert_eq!(h.await, 42);
+    assert_eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_capture() {
     let x = 10;
     let h = spawn(|| x * 2);
-    assert_eq!(h.await, 20);
+    assert_eq(h.await, 20);
 }
 
 #[test]
 fn test_spawn_multiple() {
     let a = spawn(|| 100);
     let b = spawn(|| 200);
-    assert_eq!(a.await, 100);
-    assert_eq!(b.await, 200);
+    assert_eq(a.await, 100);
+    assert_eq(b.await, 200);
 }
 
 // --- sleep ---
@@ -106,12 +106,12 @@ fn test_sleep_runs_without_error() {
 #[test]
 fn test_nested_async_calls() {
     let f = outer(5);
-    assert_eq!(f.await, 12);
+    assert_eq(f.await, 12);
 }
 
 #[test]
 fn test_async_fn_chain() {
-    assert_eq!(step3(1).await, 4);
+    assert_eq(step3(1).await, 4);
 }
 
 // --- await on non-Future from fn call ---
@@ -119,7 +119,7 @@ fn test_async_fn_chain() {
 #[test]
 fn test_await_on_sync_fn_result() {
     let v = sync_double(21);
-    assert_eq!(v.await, 42);
+    assert_eq(v.await, 42);
 }
 
 // --- compile_error: spawn with wrong arg count ---
@@ -201,14 +201,14 @@ fn await_spawn_wrong_type() {
 #[test]
 fn test_spawn_basic() {
     let h = spawn(|| 42);
-    assert_eq!(h.await, 42);
+    assert_eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_captured_var() {
     let x = 10;
     let h = spawn(|| x * 3);
-    assert_eq!(h.await, 30);
+    assert_eq(h.await, 30);
 }
 
 #[test]
@@ -217,9 +217,9 @@ fn test_spawn_multiple_independent() {
     let b = spawn(|| 200);
     let c = spawn(|| 300);
     // Results are collected in any order
-    assert_eq!(a.await, 100);
-    assert_eq!(b.await, 200);
-    assert_eq!(c.await, 300);
+    assert_eq(a.await, 100);
+    assert_eq(b.await, 200);
+    assert_eq(c.await, 300);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn test_spawn_sequential_await() {
     let r1 = a.await;
     let b = spawn(|| r1 + 1);
     let r2 = b.await;
-    assert_eq!(r2, 2);
+    assert_eq(r2, 2);
 }
 
 // --- sleep yields to scheduler ---
@@ -239,7 +239,7 @@ fn test_sleep_inside_spawn() {
         sleep(0);
         99
     });
-    assert_eq!(h.await, 99);
+    assert_eq(h.await, 99);
 }
 
 #[test]
@@ -252,8 +252,8 @@ fn test_sleep_multiple_spawns() {
         sleep(0);
         "b"
     });
-    assert_eq!(a.await, "a");
-    assert_eq!(b.await, "b");
+    assert_eq(a.await, "a");
+    assert_eq(b.await, "b");
 }
 
 // --- nested spawn ---
@@ -264,7 +264,7 @@ fn test_nested_spawn() {
         let inner = spawn(|| 42);
         inner.await
     });
-    assert_eq!(outer.await, 42);
+    assert_eq(outer.await, 42);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn test_spawn_chain() {
         let inner = spawn(|| 7);
         inner.await * 6
     });
-    assert_eq!(h.await, 42);
+    assert_eq(h.await, 42);
 }
 
 // --- await on plain values still pass-through ---
@@ -284,7 +284,7 @@ fn test_await_passthrough_inside_spawn() {
         let x = 42;
         x.await
     });
-    assert_eq!(h.await, 42);
+    assert_eq(h.await, 42);
 }
 
 // --- async fn inside spawn ---
@@ -295,7 +295,7 @@ fn test_async_fn_inside_spawn() {
         let f = answer();
         f.await
     });
-    assert_eq!(h.await, 42);
+    assert_eq(h.await, 42);
 }
 
 // --- spawn with string return ---
@@ -303,7 +303,7 @@ fn test_async_fn_inside_spawn() {
 #[test]
 fn test_spawn_string_result() {
     let h = spawn(|| "hello".to_string());
-    assert_eq!(h.await, "hello");
+    assert_eq(h.await, "hello");
 }
 
 // --- async methods on structs ---
@@ -338,21 +338,21 @@ impl Greeter {
 fn test_async_method_basic() {
     let c = Calculator::new(21);
     let f = c.compute();
-    assert_eq!(f.await, 42);
+    assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_with_param() {
     let c = Calculator::new(40);
     let f = c.add(2);
-    assert_eq!(f.await, 42);
+    assert_eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_string_return() {
     let g = Greeter { name: "World".to_string() };
     let f = g.greet();
-    assert_eq!(f.await, "Hello, World");
+    assert_eq(f.await, "Hello, World");
 }
 
 #[test]
@@ -361,23 +361,23 @@ fn test_async_method_multiple_calls() {
     let c2 = Calculator::new(20);
     let a = c1.compute();
     let b = c2.compute();
-    assert_eq!(a.await, 20);
-    assert_eq!(b.await, 40);
+    assert_eq(a.await, 20);
+    assert_eq(b.await, 40);
 }
 
 #[test]
 fn test_async_method_with_formal_param() {
     let g = Greeter { name: "Smith".to_string() };
     let f = g.greet_formal("Dr.".to_string());
-    assert_eq!(f.await, "Dr. Smith");
+    assert_eq(f.await, "Dr. Smith");
 }
 
 #[test]
 fn test_async_method_chain_with_sync() {
     let c = Calculator::new(21);
-    assert_eq!(c.sync_get(), 21);
+    assert_eq(c.sync_get(), 21);
     let f = c.compute();
-    assert_eq!(f.await, 42);
+    assert_eq(f.await, 42);
 }
 
 // --- type-checker: async method .await resolves to correct type ---

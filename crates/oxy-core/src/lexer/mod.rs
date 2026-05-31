@@ -1342,7 +1342,7 @@ mod tests {
         let src = r#"
 fn main() {
     let x: i64 = 42;
-    println!("value: {}", x);
+    println("value: {}", x);
 }
 "#;
         let tokens = tokenize(src).unwrap();
@@ -1363,9 +1363,9 @@ fn main() {
             &TokenKind::IntLiteral(42, IntegerSuffix::None)
         );
         assert_eq!(token_kinds[11], &TokenKind::Semicolon);
-        // println is an identifier, ! is Bang
+        // println is an identifier, followed by ( not !
         assert_eq!(token_kinds[12], &TokenKind::Ident("println".into()));
-        assert_eq!(token_kinds[13], &TokenKind::Bang);
+        assert_eq!(token_kinds[13], &TokenKind::LParen);
         assert!(matches!(token_kinds.last(), Some(&&TokenKind::Eof)));
     }
 

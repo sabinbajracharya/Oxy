@@ -15,7 +15,7 @@ mod math {
 }
 use math::add;
 fn main() {
-    println!("{}", add(3, 4));
+    println("{}", add(3, 4));
 }"#,
     );
     assert_eq!(output, vec!["7\n"]);
@@ -31,7 +31,7 @@ mod math {
     }
 }
 fn main() {
-    println!("{}", math::multiply(3, 4));
+    println("{}", math::multiply(3, 4));
 }"#,
     );
     assert_eq!(output, vec!["12\n"]);
@@ -43,16 +43,16 @@ fn test_use_glob_import() {
         r#"
 mod utils {
     pub fn greet(name: String) -> String {
-        format!("Hello, {}!", name)
+        format("Hello, {}!", name)
     }
     pub fn farewell(name: String) -> String {
-        format!("Goodbye, {}!", name)
+        format("Goodbye, {}!", name)
     }
 }
 use utils::*;
 fn main() {
-    println!("{}", greet("Alice"));
-    println!("{}", farewell("Bob"));
+    println("{}", greet("Alice"));
+    println("{}", farewell("Bob"));
 }"#,
     );
     assert_eq!(output, vec!["Hello, Alice!\n", "Goodbye, Bob!\n"]);
@@ -69,7 +69,7 @@ mod ops {
 }
 use ops::{add, sub};
 fn main() {
-    println!("{} {}", add(10, 3), sub(10, 3));
+    println("{} {}", add(10, 3), sub(10, 3));
 }"#,
     );
     assert_eq!(output, vec!["13 7\n"]);
@@ -86,14 +86,14 @@ mod geometry {
             Point { x, y }
         }
         pub fn to_string(self) -> String {
-            format!("({}, {})", self.x, self.y)
+            format("({}, {})", self.x, self.y)
         }
     }
 }
 use geometry::Point;
 fn main() {
     let p = Point::new(1.0, 2.0);
-    println!("{}", p.to_string());
+    println("{}", p.to_string());
 }"#,
     );
     assert_eq!(output, vec!["(1.0, 2.0)\n"]);
@@ -110,9 +110,9 @@ use colors::Color;
 fn main() {
     let c = Color::Red;
     match c {
-        Color::Red => println!("red"),
-        Color::Green => println!("green"),
-        Color::Blue => println!("blue"),
+        Color::Red => println("red"),
+        Color::Green => println("green"),
+        Color::Blue => println("blue"),
     }
 }"#,
     );
@@ -128,7 +128,7 @@ pub mod math {
 }
 use math::add;
 fn main() {
-    println!("{}", add(1, 2));
+    println("{}", add(1, 2));
 }"#,
     );
     assert_eq!(output, vec!["3\n"]);
@@ -140,7 +140,7 @@ fn test_pub_fn_accepted() {
         r#"
 pub fn helper() -> int { 42 }
 fn main() {
-    println!("{}", helper());
+    println("{}", helper());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -159,7 +159,7 @@ mod b {
 use a::foo;
 use b::bar;
 fn main() {
-    println!("{}", foo() + bar());
+    println("{}", foo() + bar());
 }"#,
     );
     assert_eq!(output, vec!["3\n"]);
@@ -178,7 +178,7 @@ mod inner {
 }
 use inner::call;
 fn main() {
-    println!("{}", call());
+    println("{}", call());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -194,7 +194,7 @@ mod types {
 }
 use types::make;
 fn main() {
-    println!("{}", make());
+    println("{}", make());
 }"#,
     );
     assert_eq!(output, vec!["10\n"]);
@@ -210,7 +210,7 @@ mod lib {
 }
 use lib::*;
 fn main() {
-    println!("{}", visible());
+    println("{}", visible());
 }"#,
     );
     assert_eq!(output, vec!["yes\n"]);
@@ -226,7 +226,7 @@ mod math {
 }
 use math::*;
 fn main() {
-    println!("{}", double(21));
+    println("{}", double(21));
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -242,7 +242,7 @@ mod math {
     pub fn triple(x: int) -> int { x * 3 }
 }
 fn main() {
-    println!("{}", triple(7));
+    println("{}", triple(7));
 }"#,
     );
     assert_eq!(output, vec!["21\n"]);
@@ -259,7 +259,7 @@ mod m {
 }
 use m::val;
 fn main() {
-    println!("{}", val());
+    println("{}", val());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -279,7 +279,7 @@ mod a {
 }
 use a::b::call;
 fn main() {
-    println!("{}", call());
+    println("{}", call());
 }"#,
     );
     assert_eq!(output, vec!["99\n"]);
@@ -297,7 +297,7 @@ mod middle {
 }
 use middle::msg;
 fn main() {
-    println!("{}", msg());
+    println("{}", msg());
 }"#,
     );
     assert_eq!(output, vec!["hi\n"]);
@@ -313,7 +313,7 @@ mod geom {
 use geom::Point;
 fn main() {
     let p = Point { x: 1.5, y: 2.5 };
-    println!("({}, {})", p.x, p.y);
+    println("({}, {})", p.x, p.y);
 }"#,
     );
     assert_eq!(output, vec!["(1.5, 2.5)\n"]);
@@ -328,7 +328,7 @@ mod math {
 }
 use math::add as sum;
 fn main() {
-    println!("{}", sum(10, 20));
+    println("{}", sum(10, 20));
 }"#,
     );
     assert_eq!(output, vec!["30\n"]);
@@ -344,7 +344,7 @@ mod ops {
 }
 use ops::{add as plus, sub as minus};
 fn main() {
-    println!("{} {}", plus(5, 3), minus(5, 3));
+    println("{} {}", plus(5, 3), minus(5, 3));
 }"#,
     );
     assert_eq!(output, vec!["8 2\n"]);
@@ -362,7 +362,7 @@ mod middle {
 }
 use middle::greeting;
 fn main() {
-    println!("{}", greeting());
+    println("{}", greeting());
 }"#,
     );
     assert_eq!(output, vec!["hello\n"]);
@@ -382,7 +382,7 @@ mod b {
 }
 use a::get_value;
 fn main() {
-    println!("{}", get_value());
+    println("{}", get_value());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -404,7 +404,7 @@ mod b {
 }
 use a::get_value;
 fn main() {
-    println!("{}", get_value());
+    println("{}", get_value());
 }"#,
     );
     assert_eq!(output, vec!["77\n"]);
@@ -422,7 +422,7 @@ mod m {
 }
 use m::outer;
 fn main() {
-    println!("{}", outer());
+    println("{}", outer());
 }"#,
     );
     assert_eq!(output, vec!["11\n"]);
@@ -442,7 +442,7 @@ mod middle {
 use middle::add;
 use middle::sub;
 fn main() {
-    println!("{} {}", add(10, 3), sub(10, 3));
+    println("{} {}", add(10, 3), sub(10, 3));
 }"#,
     );
     assert_eq!(output, vec!["13 7\n"]);
@@ -461,7 +461,7 @@ mod prelude {
 }
 use prelude::*;
 fn main() {
-    println!("{} {}", version(), name());
+    println("{} {}", version(), name());
 }"#,
     );
     assert_eq!(output, vec!["1 oxy\n"]);
@@ -477,7 +477,7 @@ mod m {
 }
 use m::val;
 fn main() {
-    println!("{}", val());
+    println("{}", val());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -497,7 +497,7 @@ mod a {
 }
 use a::b::call;
 fn main() {
-    println!("{}", call());
+    println("{}", call());
 }"#,
     );
     assert_eq!(output, vec!["99\n"]);
@@ -509,7 +509,7 @@ fn test_integer_type_annotation_accepts_unsuffixed_literal() {
         r#"
 fn main() {
     let x: int = 123123;
-    println!("{}", x);
+    println("{}", x);
 }"#,
     );
     assert_eq!(output, vec!["123123\n"]);
@@ -517,7 +517,7 @@ fn main() {
 
 #[test]
 fn test_pub_fn() {
-    run_compiled_capturing("pub fn greet() { println!(\"hello\"); } fn main() { greet(); }")
+    run_compiled_capturing("pub fn greet() { println(\"hello\"); } fn main() { greet(); }")
         .unwrap();
 }
 
@@ -551,7 +551,7 @@ mod database {
 fn main() {
     let r = database::make_record();
     let k = r.secret_key;
-    println!("{}", k);
+    println("{}", k);
 }"#,
     );
     assert!(result.is_err(), "should reject reading private field");
@@ -574,7 +574,7 @@ mod database {
 }
 fn main() {
     let r = database::Record { name: "x".to_string(), secret_key: 99 };
-    println!("{}", r.name);
+    println("{}", r.name);
 }"#,
     );
     assert!(
@@ -606,7 +606,7 @@ mod database {
 }
 fn main() {
     let r = database::make_record();
-    println!("{}", database::get_key(r));
+    println("{}", database::get_key(r));
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -624,8 +624,8 @@ mod shapes {
 }
 fn main() {
     let p = shapes::Point { x: 1.0, y: 2.0 };
-    println!("{}", p.x);
-    println!("{}", p.y);
+    println("{}", p.x);
+    println("{}", p.y);
 }"#,
     );
     assert_eq!(output, vec!["1.0\n", "2.0\n"]);
@@ -650,7 +650,7 @@ fn main() {
             _ => {},
         }
     }
-    println!("{}", hits);
+    println("{}", hits);
 }"#,
     );
     assert_eq!(output, vec!["7\n"]);
@@ -669,7 +669,7 @@ fn main() {
         None => 0,
     }).collect::<Vec<int>>();
     for v in doubled {
-        println!("{}", v);
+        println("{}", v);
     }
 }"#,
     );
@@ -688,7 +688,7 @@ fn main() {
     for n in [1, 2, 3, 4, 5] {
         add(n);
     }
-    println!("{}", total);
+    println("{}", total);
 }"#,
     );
     assert_eq!(output, vec!["15\n"]);
@@ -704,9 +704,9 @@ fn main() {
     let pairs = [(1, 2), (3, 4), (5, 6)];
     for (a, b) in pairs {
         match (a, b) {
-            (1, y) => println!("one {}", y),
-            (x, 4) => println!("{} four", x),
-            (x, y) => println!("{} {}", x, y),
+            (1, y) => println("one {}", y),
+            (x, 4) => println("{} four", x),
+            (x, y) => println("{} {}", x, y),
         }
     }
 }"#,
@@ -727,7 +727,7 @@ fn fib(n: int) -> int {
 fn main() {
     let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<Vec<int>>();
     for v in results {
-        println!("{}", v);
+        println("{}", v);
     }
 }"#,
     );

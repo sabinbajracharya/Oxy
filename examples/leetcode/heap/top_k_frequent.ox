@@ -23,8 +23,8 @@
 // - HashMap for counting: .get_or(key, 0) pattern
 
 fn main() {
-    let nums = vec![1, 1, 1, 2, 2, 3];
-    println!("{:?}", top_k_frequent(nums, 2));
+    let nums = vec(1, 1, 1, 2, 2, 3);
+    println("{:?}", top_k_frequent(nums, 2));
 }
 
 fn top_k_frequent(nums: Vec, k: int) -> Vec {
@@ -35,7 +35,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
         counts.insert(num, count + 1);
     }
     // Collect as (freq, num) pairs and sort by frequency descending
-    let mut pairs = vec![];
+    let mut pairs = vec();
     for (num, freq) in counts {
         pairs.push((freq, num));
     }
@@ -44,7 +44,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
         let (fb, _) = b;
         if fa > fb { -1 } else if fa < fb { 1 } else { 0 }
     });
-    let mut result = vec![];
+    let mut result = vec();
     let limit = if k < pairs.len() { k } else { pairs.len() };
     for i in 0..limit {
         let (_, num) = pairs[i];
@@ -55,14 +55,14 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
 
 #[test]
 fn test_example() {
-    let nums = vec![1, 1, 1, 2, 2, 3];
+    let nums = vec(1, 1, 1, 2, 2, 3);
     let result = top_k_frequent(nums, 2);
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(1));
-    assert!(result.contains(2));
+    assert_eq(result.len(), 2);
+    assert(result.contains(1));
+    assert(result.contains(2));
 }
 
 #[test]
 fn test_single() {
-    assert_eq!(top_k_frequent(vec![1], 1), vec![1]);
+    assert_eq(top_k_frequent(vec(1), 1), vec(1));
 }

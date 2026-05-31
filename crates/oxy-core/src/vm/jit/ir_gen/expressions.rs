@@ -228,8 +228,22 @@ impl IrGen {
                     return r;
                 }
 
-                // Route spawn / sleep / select and pipeline-friendly free
-                // functions to their FFI functions.
+                // `panic(msg)` is lowered to SetError + Terminator::Panic.
+                if fname == "panic" {
+                    let msg_reg = if let Some(&m) = arg_regs.first() {
+                        m
+                    } else {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::ConstString(r, String::new()));
+                        r
+                    };
+                    self.emit(IrOp::SetError(msg_reg));
+                    self.terminate(Terminator::Panic(msg_reg));
+                    return msg_reg;
+                }
+
+                // Route spawn / sleep / select, pipeline-friendly free
+                // functions, and former `!` macros to their FFI functions.
                 if let Some((ffi_func, immediates)) = match fname.as_str() {
                     "spawn" => Some(("oxy_spawn_ffi", vec![])),
                     "sleep" => Some(("oxy_sleep_ffi", vec![])),
@@ -243,6 +257,11 @@ impl IrGen {
                     "collect" => Some(("oxy_collect_ffi", vec![])),
                     "sort" => Some(("oxy_sort_ffi", vec![])),
                     "sort_by" => Some(("oxy_sort_by_ffi", vec![])),
+                    "println" => Some(("oxy_println_val", vec![args.len()])),
+                    "print" => Some(("oxy_print_val", vec![args.len()])),
+                    "format" => Some(("oxy_format", vec![args.len()])),
+                    "vec" => Some(("oxy_make_array", vec![args.len()])),
+                    "dbg" => Some(("oxy_dbg", vec![args.len()])),
                     _ => None,
                 } {
                     let r = self.alloc_reg();
@@ -252,6 +271,23 @@ impl IrGen {
                         args: arg_regs,
                         immediates,
                         strings: vec![],
+                    });
+                    return r;
+                }
+
+                // Route registry-based builtins (assert_eq, assert, etc.)
+                // through oxy_path_call_builtin.
+                if matches!(
+                    fname.as_str(),
+                    "assert_eq" | "assert_ne" | "assert" | "unimplemented"
+                ) {
+                    let r = self.alloc_reg();
+                    self.emit(IrOp::CallBuiltin {
+                        result: r,
+                        func: "oxy_path_call_builtin",
+                        args: arg_regs,
+                        immediates: vec![args.len()],
+                        strings: vec![fname],
                     });
                     return r;
                 }
@@ -773,49 +809,6 @@ impl IrGen {
                 r
             }
             Expr::Grouped(inner, _) => self.gen_expr(inner),
-            Expr::MacroCall { name, args, .. } => {
-                let mut arg_regs = Vec::new();
-                for a in args {
-                    arg_regs.push(self.gen_expr(a));
-                }
-
-                // panic!() is lowered to SetError + Terminator::Panic so the
-                // error exit is a real CFG edge, not an opaque FFI call.
-                if name == "panic" {
-                    let msg_reg = if let Some(&m) = arg_regs.first() {
-                        m
-                    } else {
-                        let r = self.alloc_reg();
-                        self.emit(IrOp::ConstString(r, String::new()));
-                        r
-                    };
-                    self.emit(IrOp::SetError(msg_reg));
-                    self.terminate(Terminator::Panic(msg_reg));
-                    return msg_reg; // dead; satisfies expression return type
-                }
-
-                let r = self.alloc_reg();
-                let (func, strings, extra_immediates) = match name.as_str() {
-                    "println" => ("oxy_println_val", vec![], vec![args.len()]),
-                    "print" => ("oxy_print_val", vec![], vec![args.len()]),
-                    "format" => ("oxy_format", vec![], vec![args.len()]),
-                    "vec" => ("oxy_make_array", vec![], vec![args.len()]),
-                    "dbg" => ("oxy_dbg", vec![], vec![args.len()]),
-                    _ => (
-                        "oxy_path_call_builtin",
-                        vec![name.clone()],
-                        vec![args.len()],
-                    ),
-                };
-                self.emit(IrOp::CallBuiltin {
-                    result: r,
-                    func,
-                    args: arg_regs,
-                    immediates: extra_immediates,
-                    strings,
-                });
-                r
-            }
             Expr::Repeat { value, count, .. } => {
                 let val_reg = self.gen_expr(value);
                 // Count is guaranteed to be a constant integer literal by the type

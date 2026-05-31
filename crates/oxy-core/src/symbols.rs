@@ -137,54 +137,54 @@ pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Built-in macros
+// Built-in free functions (formerly `!` macros)
 // ---------------------------------------------------------------------------
 
 pub const ALL_MACROS: &[MacroInfo] = &[
     MacroInfo {
-        name: "println!",
+        name: "println",
         detail: "Print with newline",
-        hover_text: "**println!(fmt, ...)** — Print to stdout with a newline",
+        hover_text: "**println(fmt, ...)** — Print to stdout with a newline",
     },
     MacroInfo {
-        name: "print!",
+        name: "print",
         detail: "Print without newline",
-        hover_text: "**print!(fmt, ...)** — Print to stdout without a newline",
+        hover_text: "**print(fmt, ...)** — Print to stdout without a newline",
     },
     MacroInfo {
-        name: "format!",
+        name: "format",
         detail: "Format a string",
-        hover_text: "**format!(fmt, ...)** — Format into a String",
+        hover_text: "**format(fmt, ...)** — Format into a String",
     },
     MacroInfo {
-        name: "eprintln!",
+        name: "eprintln",
         detail: "Print to stderr",
-        hover_text: "**eprintln!(fmt, ...)** — Print to stderr with a newline",
+        hover_text: "**eprintln(fmt, ...)** — Print to stderr with a newline",
     },
     MacroInfo {
-        name: "dbg!",
+        name: "dbg",
         detail: "Debug print",
-        hover_text: "**dbg!(expr)** — Debug-print an expression and return it",
+        hover_text: "**dbg(expr)** — Debug-print an expression and return it",
     },
     MacroInfo {
-        name: "panic!",
+        name: "panic",
         detail: "Panic with message",
-        hover_text: "**panic!(msg)** — Abort with an error message",
+        hover_text: "**panic(msg)** — Abort with an error message",
     },
     MacroInfo {
-        name: "todo!",
+        name: "todo",
         detail: "Mark unfinished code",
-        hover_text: "**todo!()** — Mark unfinished code (panics at runtime)",
+        hover_text: "**todo()** — Mark unfinished code (panics at runtime)",
     },
     MacroInfo {
-        name: "unimplemented!",
+        name: "unimplemented",
         detail: "Mark unimplemented code",
-        hover_text: "**unimplemented!()** — Mark unimplemented code (panics at runtime)",
+        hover_text: "**unimplemented()** — Mark unimplemented code (panics at runtime)",
     },
     MacroInfo {
-        name: "vec!",
+        name: "vec",
         detail: "Create a Vec",
-        hover_text: "**vec![items...]** — Create a Vec from elements",
+        hover_text: "**vec[items...]** — Create a Vec from elements",
     },
 ];
 

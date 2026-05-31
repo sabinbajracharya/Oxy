@@ -15,7 +15,7 @@ struct Point {
 
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
-    println!("{} {}", p.x, p.y);
+    println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -34,7 +34,7 @@ struct Point {
 fn main() {
     let mut p = Point { x: 1.0, y: 2.0 };
     p.x = 10.0;
-    println!("{} {}", p.x, p.y);
+    println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -56,7 +56,7 @@ impl Point {
     }
 
     fn display(self) {
-        println!("({}, {})", self.x, self.y);
+        println("({}, {})", self.x, self.y);
     }
 }
 
@@ -86,7 +86,7 @@ impl Rect {
 
 fn main() {
     let r = Rect { w: 5.0, h: 3.0 };
-    println!("{}", r.area());
+    println("{}", r.area());
 }
 "#,
     );
@@ -104,7 +104,7 @@ struct Point {
 
 fn main() {
     let p = Point { x: 1.0, y: 2.0 };
-    println!("{:?}", p);
+    println("{:?}", p);
 }
 "#,
     );
@@ -123,7 +123,7 @@ enum Color {
 
 fn main() {
     let c = Color::Red;
-    println!("{}", c);
+    println("{}", c);
 }
 "#,
     );
@@ -141,7 +141,7 @@ enum Shape {
 
 fn main() {
     let s = Shape::Circle(5.0);
-    println!("{}", s);
+    println("{}", s);
 }
 "#,
     );
@@ -168,9 +168,9 @@ impl Shape {
 
 fn main() {
     let s = Shape::Circle(5.0);
-    println!("{}", s.area());
+    println("{}", s.area());
     let r = Shape::Rectangle(4.0, 3.0);
-    println!("{}", r.area());
+    println("{}", r.area());
 }
 "#,
     );
@@ -189,13 +189,13 @@ enum E { Three(int, int, int), Four(int, int, int, int) }
 fn main() {
     let v = E::Three(10, 20, 30);
     match v {
-        E::Three(a, b, c) => println!("{} {} {}", a, b, c),
-        _ => println!("no"),
+        E::Three(a, b, c) => println("{} {} {}", a, b, c),
+        _ => println("no"),
     }
     let w = E::Four(1, 2, 3, 4);
     match w {
-        E::Four(a, b, c, d) => println!("{} {} {} {}", a, b, c, d),
-        _ => println!("no"),
+        E::Four(a, b, c, d) => println("{} {} {} {}", a, b, c, d),
+        _ => println("no"),
     }
 }
 "#,
@@ -223,8 +223,8 @@ fn describe(d: Direction) -> String {
 }
 
 fn main() {
-    println!("{}", describe(Direction::Up));
-    println!("{}", describe(Direction::Left));
+    println("{}", describe(Direction::Up));
+    println("{}", describe(Direction::Left));
 }
 "#,
     );
@@ -243,8 +243,8 @@ enum Shape {
 fn main() {
     let s = Shape::Circle(2.5);
     let p = Shape::Point;
-    println!("{:?}", s);
-    println!("{:?}", p);
+    println("{:?}", s);
+    println("{:?}", p);
 }
 "#,
     );
@@ -272,7 +272,7 @@ fn main() {
     let dx = p1.x - p2.x;
     let dy = p1.y - p2.y;
     let dist_sq = dx * dx + dy * dy;
-    println!("{}", dist_sq);
+    println("{}", dist_sq);
 }
 "#,
     );
@@ -299,7 +299,7 @@ impl Counter {
 
 fn main() {
     let c = Counter::new();
-    println!("{}", c.value());
+    println("{}", c.value());
 }
 "#,
     );
@@ -319,7 +319,7 @@ fn main() {
     let x = 1.0;
     let y = 2.0;
     let p = Point { x, y };
-    println!("{} {}", p.x, p.y);
+    println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -339,7 +339,7 @@ fn test_enum_impl_methods() {
                     }
                 }
             }
-            fn main() { println!("{}", Color::Red.name()); }
+            fn main() { println("{}", Color::Red.name()); }
             "#,
     );
     assert_eq!(output, vec!["red\n"]);
@@ -367,7 +367,7 @@ fn test_struct_field_mutation_via_method() {
                 let mut c = Counter::new();
                 c.inc();
                 c.inc();
-                println!("{}", c.count);
+                println("{}", c.count);
             }
             "#,
     );
@@ -384,7 +384,7 @@ fn test_struct_field_mutation_via_self_push() {
 
             impl Stack {
                 fn new() -> Self {
-                    Stack { items: vec![] }
+                    Stack { items: vec() }
                 }
 
                 fn push(self, val: int) {
@@ -396,8 +396,8 @@ fn test_struct_field_mutation_via_self_push() {
                 let mut s = Stack::new();
                 s.push(10);
                 s.push(20);
-                println!("{}", s.items.len());
-                println!("{}", s.items[0]);
+                println("{}", s.items.len());
+                println("{}", s.items[0]);
             }
             "#,
     );
@@ -410,8 +410,8 @@ fn test_listnode_new() {
         r#"
             fn main() {
                 let n = ListNode::new(5);
-                println!("{}", n.val);
-                println!("{}", n.next.is_none());
+                println("{}", n.val);
+                println("{}", n.next.is_none());
             }
             "#,
     );
@@ -424,9 +424,9 @@ fn test_treenode_new() {
         r#"
             fn main() {
                 let t = TreeNode::new(10);
-                println!("{}", t.val);
-                println!("{}", t.left.is_none());
-                println!("{}", t.right.is_none());
+                println("{}", t.val);
+                println("{}", t.left.is_none());
+                println("{}", t.right.is_none());
             }
             "#,
     );
@@ -441,8 +441,8 @@ fn test_listnode_linking() {
                 let mut head = ListNode::new(1);
                 let second = ListNode::new(2);
                 head.next = Some(second);
-                println!("{}", head.val);
-                println!("{}", head.next.unwrap().val);
+                println("{}", head.val);
+                println("{}", head.next.unwrap().val);
             }
             "#,
     );
@@ -459,9 +459,9 @@ fn test_treenode_linking() {
                 let right = TreeNode::new(7);
                 root.left = Some(left);
                 root.right = Some(right);
-                println!("{}", root.val);
-                println!("{}", root.left.unwrap().val);
-                println!("{}", root.right.unwrap().val);
+                println("{}", root.val);
+                println("{}", root.left.unwrap().val);
+                println("{}", root.right.unwrap().val);
             }
             "#,
     );

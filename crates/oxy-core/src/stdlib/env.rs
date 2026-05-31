@@ -106,9 +106,9 @@ mod tests {
 fn main() {
     let val = std::env::var("PATH");
     if let Some(v) = val {
-        println!("found");
+        println("found");
     } else {
-        println!("missing");
+        println("missing");
     }
 }
 "#);
@@ -121,9 +121,9 @@ fn main() {
 fn main() {
     let val = std::env::var("FERRITE_NONEXISTENT_VAR_XYZ_12345");
     if let Some(v) = val {
-        println!("found");
+        println("found");
     } else {
-        println!("none");
+        println("none");
     }
 }
 "#);
@@ -136,7 +136,7 @@ fn main() {
 fn main() {
     let vars = std::env::vars();
     let len = vars.len();
-    println!("{}", len > 0);
+    println("{}", len > 0);
 }
 "#);
         assert_eq!(out, "true\n");
@@ -149,9 +149,9 @@ fn main() {
     let result = std::env::current_dir();
     if let Ok(dir) = result {
         let len = dir.len();
-        println!("{}", len > 0);
+        println("{}", len > 0);
     } else {
-        println!("err");
+        println("err");
     }
 }
 "#);
@@ -165,9 +165,9 @@ fn main() {
     let result = std::env::home_dir();
     if let Some(dir) = result {
         let len = dir.len();
-        println!("{}", len > 0);
+        println("{}", len > 0);
     } else {
-        println!("none");
+        println("none");
     }
 }
 "#);

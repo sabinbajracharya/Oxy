@@ -114,6 +114,6 @@ fn validate_package_name(name: &str) -> TugResult<()> {
     Ok(())
 }
 
-const DEFAULT_MAIN: &str = "fn main() {\n    println!(\"Hello, Oxy!\");\n}\n";
+const DEFAULT_MAIN: &str = "fn main() {\n    println(\"Hello, Oxy!\");\n}\n";
 
 const DEFAULT_GITIGNORE: &str = "/target\n";
