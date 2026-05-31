@@ -102,6 +102,64 @@ impl TypeChecker {
     }
 
     /// Recursively register function return types with module prefix.
+    /// Shared logic for `Item::Impl` and `Item::ImplTrait` — both have the same
+    /// `FnDef`-based method registration.
+    pub(super) fn collect_impl_methods(
+        &mut self,
+        methods: &[crate::ast::FnDef],
+        type_name: &str,
+        prefix: &str,
+    ) {
+        let base = crate::ast::base_type_name(type_name);
+        let type_prefix = if prefix.is_empty() {
+            base.to_string()
+        } else {
+            format!("{}::{}", prefix, base)
+        };
+        let impl_generics = self.struct_generic_names(&type_prefix);
+        for method in methods {
+            let qualified = format!("{}::{}", type_prefix, method.name);
+            let unqualified = format!("{}::{}", base, method.name);
+            let ret_ty = if let Some(ref ann) = method.return_type {
+                self.resolve_annotation(ann)
+            } else {
+                TypeInfo::Unit
+            };
+            let ret_ty = if method.is_async {
+                TypeInfo::Future(Box::new(ret_ty))
+            } else {
+                ret_ty
+            };
+            let param_tys = self.resolve_param_types(method, &impl_generics);
+            let mut all_gen_names: Vec<String> = impl_generics.clone();
+            for p in &method.generic_params {
+                all_gen_names.push(p.name.clone());
+            }
+            if !all_gen_names.is_empty() {
+                let param_anns: Vec<TypeAnnotation> =
+                    method.params.iter().map(|p| p.type_ann.clone()).collect();
+                self.fn_generic_info.insert(
+                    qualified.clone(),
+                    (
+                        all_gen_names.clone(),
+                        param_anns.clone(),
+                        method.return_type.clone(),
+                    ),
+                );
+                self.fn_generic_info.insert(
+                    unqualified.clone(),
+                    (all_gen_names, param_anns, method.return_type.clone()),
+                );
+            }
+            self.fn_return_types
+                .insert(unqualified.clone(), ret_ty.clone());
+            self.fn_return_types.insert(qualified.clone(), ret_ty);
+            self.fn_param_types.insert(unqualified, param_tys.clone());
+            self.fn_param_types.insert(qualified.clone(), param_tys);
+            self.fn_defs.insert(qualified, method.clone());
+        }
+    }
+
     pub(super) fn collect_fn_types(&mut self, items: &[Item], prefix: &str) {
         let saved_stack = self.module_stack.clone();
         self.module_stack = if prefix.is_empty() {
@@ -169,112 +227,10 @@ impl TypeChecker {
                     }
                 }
                 Item::Impl(i) => {
-                    // Dispatch keys use the base type name (generics stripped),
-                    // matching how methods are registered in IR and resolved at
-                    // runtime. The impl's generics are already on each method.
-                    let base = i.base_type_name();
-                    let type_prefix = if prefix.is_empty() {
-                        base.to_string()
-                    } else {
-                        format!("{}::{}", prefix, base)
-                    };
-                    let impl_generics = self.struct_generic_names(&type_prefix);
-                    for method in &i.methods {
-                        let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", base, method.name);
-                        let ret_ty = if let Some(ref ann) = method.return_type {
-                            self.resolve_annotation(ann)
-                        } else {
-                            TypeInfo::Unit
-                        };
-                        // async fn returns Future<T> — .await unwraps it
-                        let ret_ty = if method.is_async {
-                            TypeInfo::Future(Box::new(ret_ty))
-                        } else {
-                            ret_ty
-                        };
-                        let param_tys = self.resolve_param_types(method, &impl_generics);
-                        // Store generic info for cross-param consistency checks
-                        // and return-type substitution.
-                        let mut all_gen_names: Vec<String> = impl_generics.clone();
-                        for p in &method.generic_params {
-                            all_gen_names.push(p.name.clone());
-                        }
-                        if !all_gen_names.is_empty() {
-                            let param_anns: Vec<TypeAnnotation> =
-                                method.params.iter().map(|p| p.type_ann.clone()).collect();
-                            self.fn_generic_info.insert(
-                                qualified.clone(),
-                                (
-                                    all_gen_names.clone(),
-                                    param_anns.clone(),
-                                    method.return_type.clone(),
-                                ),
-                            );
-                            self.fn_generic_info.insert(
-                                unqualified.clone(),
-                                (all_gen_names, param_anns, method.return_type.clone()),
-                            );
-                        }
-                        // Also register under unqualified type name (for use-aliased lookups)
-                        self.fn_return_types
-                            .insert(unqualified.clone(), ret_ty.clone());
-                        self.fn_return_types.insert(qualified.clone(), ret_ty);
-                        self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified.clone(), param_tys);
-                        self.fn_defs.insert(qualified, method.clone());
-                    }
+                    self.collect_impl_methods(&i.methods, i.base_type_name(), prefix);
                 }
                 Item::ImplTrait(i) => {
-                    let base = i.base_type_name();
-                    let type_prefix = if prefix.is_empty() {
-                        base.to_string()
-                    } else {
-                        format!("{}::{}", prefix, base)
-                    };
-                    let impl_generics = self.struct_generic_names(&type_prefix);
-                    for method in &i.methods {
-                        let qualified = format!("{}::{}", type_prefix, method.name);
-                        let unqualified = format!("{}::{}", base, method.name);
-                        let ret_ty = if let Some(ref ann) = method.return_type {
-                            self.resolve_annotation(ann)
-                        } else {
-                            TypeInfo::Unit
-                        };
-                        // async fn returns Future<T> — .await unwraps it
-                        let ret_ty = if method.is_async {
-                            TypeInfo::Future(Box::new(ret_ty))
-                        } else {
-                            ret_ty
-                        };
-                        let param_tys = self.resolve_param_types(method, &impl_generics);
-                        let mut all_gen_names: Vec<String> = impl_generics.clone();
-                        for p in &method.generic_params {
-                            all_gen_names.push(p.name.clone());
-                        }
-                        if !all_gen_names.is_empty() {
-                            let param_anns: Vec<TypeAnnotation> =
-                                method.params.iter().map(|p| p.type_ann.clone()).collect();
-                            self.fn_generic_info.insert(
-                                qualified.clone(),
-                                (
-                                    all_gen_names.clone(),
-                                    param_anns.clone(),
-                                    method.return_type.clone(),
-                                ),
-                            );
-                            self.fn_generic_info.insert(
-                                unqualified.clone(),
-                                (all_gen_names, param_anns, method.return_type.clone()),
-                            );
-                        }
-                        self.fn_return_types
-                            .insert(unqualified.clone(), ret_ty.clone());
-                        self.fn_return_types.insert(qualified.clone(), ret_ty);
-                        self.fn_param_types.insert(unqualified, param_tys.clone());
-                        self.fn_param_types.insert(qualified.clone(), param_tys);
-                        self.fn_defs.insert(qualified, method.clone());
-                    }
+                    self.collect_impl_methods(&i.methods, i.base_type_name(), prefix);
                 }
                 _ => {}
             }
