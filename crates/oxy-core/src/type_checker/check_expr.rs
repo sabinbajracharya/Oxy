@@ -220,10 +220,29 @@ impl TypeChecker {
         Ok(())
     }
 
-    /// Infers the type of an expression. This is a thin dispatcher: each
-    /// non-trivial variant is handled by a dedicated `infer_<variant>` method
-    /// below, so this `match` stays a readable table of the expression grammar.
+    /// Infers the type of an expression (inference mode — no expected type).
+    /// This is the public entry point used by statements, items, and callers
+    /// that don't have context about what type is expected.
     pub(super) fn infer_expr(&mut self, expr: &Expr) -> Result<TypeInfo, PipelineError> {
+        self.infer_expr_expected(expr, None)
+    }
+
+    /// Infers the type of an expression with an optional expected type
+    /// (bidirectional type checking). When `expected` is `Some`, the
+    /// checker can use it to:
+    /// - Auto-cast literals (e.g. `let x: float = 42`)
+    /// - Infer closure parameter types from the expected function signature
+    /// - Propagate context downward through grouped expressions
+    ///
+    /// This is a thin dispatcher: each non-trivial variant is handled by a
+    /// dedicated `infer_<variant>` method below, so this `match` stays a
+    /// readable table of the expression grammar.
+    #[allow(clippy::only_used_in_recursion)]
+    pub(super) fn infer_expr_expected(
+        &mut self,
+        expr: &Expr,
+        expected: Option<&TypeInfo>,
+    ) -> Result<TypeInfo, PipelineError> {
         match expr {
             Expr::IntLiteral(..) => Ok(TypeInfo::I64),
             Expr::FloatLiteral(..) => Ok(TypeInfo::F64),
@@ -268,7 +287,8 @@ impl TypeChecker {
                 span,
             } => self.infer_if_let(pattern, inner, guard, then_block, else_block, span),
 
-            Expr::Grouped(inner, _) => self.infer_expr(inner),
+            // Grouped expressions propagate the expected type inward.
+            Expr::Grouped(inner, _) => self.infer_expr_expected(inner, expected),
 
             Expr::Repeat { value, count, .. } => self.infer_repeat(value, count),
 
