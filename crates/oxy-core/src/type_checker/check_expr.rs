@@ -247,7 +247,19 @@ impl TypeChecker {
         expected: Option<&TypeInfo>,
     ) -> Result<TypeInfo, PipelineError> {
         match expr {
-            Expr::IntLiteral(..) => Ok(TypeInfo::I64),
+            // Literals: auto-cast to expected type when declared (e.g.
+            // `let x: float = 42` → infer 42 as float).
+            Expr::IntLiteral(..) => {
+                if let Some(expected) = expected {
+                    if expected.is_float() {
+                        return Ok(TypeInfo::F64);
+                    }
+                    if *expected == TypeInfo::U8 {
+                        return Ok(TypeInfo::U8);
+                    }
+                }
+                Ok(TypeInfo::I64)
+            }
             Expr::FloatLiteral(..) => Ok(TypeInfo::F64),
             Expr::BoolLiteral(..) => Ok(TypeInfo::Bool),
             Expr::StringLiteral(..) => Ok(TypeInfo::String),
@@ -295,7 +307,22 @@ impl TypeChecker {
 
             Expr::Repeat { value, count, .. } => self.infer_repeat(value, count),
 
-            Expr::Array { elements, span } => self.infer_array(elements, span),
+            Expr::Array { elements, span } => {
+                // Empty array with expected Vec/Array type: use expected
+                // element type so `let v: Vec<String> = []` works.
+                if elements.is_empty() {
+                    if let Some(expected) = expected {
+                        match expected {
+                            TypeInfo::Vec(elem) => return Ok(TypeInfo::Vec(elem.clone())),
+                            TypeInfo::Array(elem, _) => {
+                                return Ok(TypeInfo::Array(elem.clone(), 0))
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                self.infer_array(elements, span)
+            }
 
             Expr::Tuple { elements, .. } => self.infer_tuple(elements),
 

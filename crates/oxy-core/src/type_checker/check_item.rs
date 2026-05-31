@@ -16,7 +16,11 @@ impl TypeChecker {
                 } else {
                     TypeInfo::Unknown
                 };
-                let inferred = self.infer_expr(value)?;
+                let inferred = if declared != TypeInfo::Unknown {
+                    self.infer_expr_expected(value, Some(&declared))?
+                } else {
+                    self.infer_expr(value)?
+                };
                 if !declared.accepts(&inferred) {
                     return Err(PipelineError::TypeError {
                         message: format!(

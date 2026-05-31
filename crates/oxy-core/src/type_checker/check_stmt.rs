@@ -22,7 +22,11 @@ impl TypeChecker {
                     TypeInfo::Unknown
                 };
                 let inferred = if let Some(expr) = value {
-                    self.infer_expr(expr)?
+                    if declared != TypeInfo::Unknown {
+                        self.infer_expr_expected(expr, Some(&declared))?
+                    } else {
+                        self.infer_expr(expr)?
+                    }
                 } else {
                     TypeInfo::Unknown
                 };
@@ -52,7 +56,7 @@ impl TypeChecker {
                 // Skip check if inferred as Unit (control-flow expressions with explicit
                 // returns, e.g. `if x > 0 { return x; }`).
                 if !has_semicolon && *fn_ret != TypeInfo::Unknown {
-                    let inferred = self.infer_expr(expr)?;
+                    let inferred = self.infer_expr_expected(expr, Some(fn_ret))?;
                     if inferred != TypeInfo::Unit && !fn_ret.accepts(&inferred) {
                         let span = expr.span();
                         return Err(PipelineError::TypeError {

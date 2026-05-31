@@ -131,4 +131,62 @@ mod tests {
         );
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
+
+    // --- Phase 2.3: literal auto-cast to expected type ---
+
+    #[test]
+    fn test_int_literal_auto_casts_to_float() {
+        // `let x: float = 42` — int literal should auto-cast to float.
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let x: float = 42;
+                let y: float = 0;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_int_literal_auto_casts_to_byte() {
+        // `let b: byte = 0` — int literal should auto-cast to byte.
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let a: byte = 0;
+                let b: byte = 255;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_empty_array_typed_from_expected_vec() {
+        // `let v: Vec<String> = []` — empty array typed from expected Vec.
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v: Vec<String> = [];
+                let w: Vec<int> = [];
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_let_without_annotation_still_infers() {
+        // Without type annotation, `let x = 42` should infer int (default).
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let x = 42;
+                let y = x + 1;
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
 }
