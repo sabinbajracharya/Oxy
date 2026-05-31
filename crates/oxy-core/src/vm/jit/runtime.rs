@@ -28,6 +28,20 @@ pub(crate) fn wrap_to(v: i64, target: &Value) -> Value {
 
 // --- Arithmetic ---
 
+/// Macro generating integer-only binary ops: `$op` receives `(a.as_i64(), b.as_i64())`.
+macro_rules! integer_binary_op {
+    ($name:ident, $op:expr, $err:literal) => {
+        pub(crate) fn $name(a: Value, b: Value) -> Result<Value, String> {
+            if a.is_integer() && b.is_integer() {
+                let (a, b) = promote_ints(a, b);
+                Ok(wrap_to($op(a.as_i64(), b.as_i64()), &a))
+            } else {
+                Err($err.to_string())
+            }
+        }
+    };
+}
+
 pub(crate) fn vm_add(a: Value, b: Value) -> Result<Value, String> {
     if let (Value::String(sa), Value::String(sb)) = (&a, &b) {
         return Ok(Value::String(format!("{sa}{sb}")));
@@ -143,50 +157,19 @@ pub(crate) fn vm_bitnot(v: Value) -> Value {
     }
 }
 
-pub(crate) fn vm_bitand(a: Value, b: Value) -> Result<Value, String> {
-    if a.is_integer() && b.is_integer() {
-        let (a, b) = promote_ints(a, b);
-        Ok(wrap_to(a.as_i64() & b.as_i64(), &a))
-    } else {
-        Err("bitwise AND requires integers".to_string())
-    }
-}
-
-pub(crate) fn vm_bitor(a: Value, b: Value) -> Result<Value, String> {
-    if a.is_integer() && b.is_integer() {
-        let (a, b) = promote_ints(a, b);
-        Ok(wrap_to(a.as_i64() | b.as_i64(), &a))
-    } else {
-        Err("bitwise OR requires integers".to_string())
-    }
-}
-
-pub(crate) fn vm_bitxor(a: Value, b: Value) -> Result<Value, String> {
-    if a.is_integer() && b.is_integer() {
-        let (a, b) = promote_ints(a, b);
-        Ok(wrap_to(a.as_i64() ^ b.as_i64(), &a))
-    } else {
-        Err("bitwise XOR requires integers".to_string())
-    }
-}
-
-pub(crate) fn vm_shl(a: Value, b: Value) -> Result<Value, String> {
-    if a.is_integer() && b.is_integer() {
-        let shift = b.as_u64() as u32;
-        Ok(wrap_to(a.as_i64().wrapping_shl(shift), &a))
-    } else {
-        Err("shift left requires integers".to_string())
-    }
-}
-
-pub(crate) fn vm_shr(a: Value, b: Value) -> Result<Value, String> {
-    if a.is_integer() && b.is_integer() {
-        let shift = b.as_u64() as u32;
-        Ok(wrap_to(a.as_i64().wrapping_shr(shift), &a))
-    } else {
-        Err("shift right requires integers".to_string())
-    }
-}
+integer_binary_op!(vm_bitand, |a, b| a & b, "bitwise AND requires integers");
+integer_binary_op!(vm_bitor, |a, b| a | b, "bitwise OR requires integers");
+integer_binary_op!(vm_bitxor, |a, b| a ^ b, "bitwise XOR requires integers");
+integer_binary_op!(
+    vm_shl,
+    |a: i64, b: i64| a.wrapping_shl(b as u32),
+    "shift left requires integers"
+);
+integer_binary_op!(
+    vm_shr,
+    |a: i64, b: i64| a.wrapping_shr(b as u32),
+    "shift right requires integers"
+);
 
 // --- Cast helpers ---
 
