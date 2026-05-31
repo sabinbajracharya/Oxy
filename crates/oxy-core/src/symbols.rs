@@ -55,15 +55,10 @@ pub struct ModuleInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Keywords (from lexer/token.rs TokenKind::from_keyword)
+// Keywords — canonical list lives in lexer/token.rs next to from_keyword.
 // ---------------------------------------------------------------------------
 
-pub const KEYWORDS: &[&str] = &[
-    "let", "mut", "fn", "return", "if", "else", "while", "loop", "for", "in", "break", "continue",
-    "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self", "Self", "as", "ref",
-    "const", "static", "type", "where", "move", "async", "await", "dyn", "true", "false", "super",
-    "crate",
-];
+pub use crate::lexer::KEYWORDS;
 
 /// Markdown hover text for each keyword. Only includes keywords with useful docs.
 pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {

@@ -390,6 +390,15 @@ impl TokenKind {
     }
 }
 
+/// All keyword strings recognised by the lexer. Must stay in sync with
+/// `TokenKind::from_keyword`. Re-exported via `crate::symbols::KEYWORDS`.
+pub const KEYWORDS: &[&str] = &[
+    "let", "mut", "fn", "return", "if", "else", "while", "loop", "for", "in", "break", "continue",
+    "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self", "Self", "as", "ref",
+    "const", "static", "type", "where", "move", "async", "await", "dyn", "true", "false", "super",
+    "crate",
+];
+
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -4,7 +4,7 @@
 
 mod token;
 
-pub use token::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind};
+pub use token::{FloatSuffix, IntegerSuffix, Span, Token, TokenKind, KEYWORDS};
 
 use crate::errors::PipelineError;
 
