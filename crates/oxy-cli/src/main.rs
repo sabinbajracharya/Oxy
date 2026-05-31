@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::process;
 
 use colored::Colorize;
-use oxy_core::errors::{CallFrame, PipelineError};
+use oxy_core::errors::PipelineError;
+use oxy_core::vm::CallFrame;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

@@ -39,6 +39,8 @@ pub mod symbols;
 pub mod type_checker;
 /// Runtime value types and type metadata.
 pub mod types;
+/// General-purpose utility functions (edit distance, name suggestion).
+pub mod util;
 /// Stack-based virtual machine for executing compiled bytecode.
 pub mod vm;
 

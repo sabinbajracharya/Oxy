@@ -71,7 +71,7 @@ impl TypeChecker {
         let mut candidates: Vec<String> = Vec::new();
         self.env.borrow().collect_names(&mut candidates);
         candidates.extend(self.fn_return_types.keys().cloned());
-        let suggestion = crate::errors::suggest_name(name, candidates.iter().map(|s| s.as_str()));
+        let suggestion = crate::util::suggest_name(name, candidates.iter().map(|s| s.as_str()));
         let message = match suggestion {
             Some(s) => format!("undefined variable '{name}'; did you mean '{s}'?"),
             None => format!("undefined variable '{name}'"),

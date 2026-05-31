@@ -16,6 +16,27 @@ pub(crate) mod interp;
 pub(crate) mod jit;
 pub(crate) mod scheduler;
 
+/// A single frame in the call stack, recorded during VM execution.
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    /// Function name (or "<main>" for top-level).
+    pub name: String,
+    /// Source line where the call was made.
+    pub line: usize,
+    /// Source column where the call was made.
+    pub column: usize,
+}
+
+impl std::fmt::Display for CallFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "  in `{}` at line {}:{}",
+            self.name, self.line, self.column
+        )
+    }
+}
+
 /// Result of VM execution.
 pub enum VmResult {
     Value(Value),
