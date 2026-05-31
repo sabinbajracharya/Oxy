@@ -96,10 +96,12 @@ extern "C" fn oxy_set_result_local(ctx: *mut super::JitContext, slot: usize) {
 }
 
 use super::context::{JitContext, JitTables};
-use crate::types::Value;
+use crate::types::{IteratorState, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use cranelift_jit::JITBuilder;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Raw pointer to the run's captured-output buffer (mirrors `JitContext.output`).
 /// A null pointer means "print to stdout"; otherwise printed lines are pushed
@@ -1449,6 +1451,300 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
     }
 }
 
+// ── Pipeline-friendly free functions ────────────────────────────────────
+// Each free function (map, filter, fold, etc.) takes data as the first
+// argument and a closure as the second. They convert data to an iterable
+// sequence, apply the operation via jit_closure_invoker, and push the result.
+
+fn to_iter_rc(ctx: &mut JitContext, val: Value) -> Option<Rc<RefCell<IteratorState>>> {
+    match val {
+        Value::Iterator(rc) => Some(rc),
+        Value::Vec(vec_rc) => {
+            let data = vec_rc.borrow().clone();
+            Some(Rc::new(RefCell::new(IteratorState::VecSource {
+                data,
+                index: 0,
+            })))
+        }
+        other => {
+            let items = match other.into_iterable() {
+                Ok(v) => v,
+                Err(e) => {
+                    set_error(ctx, e);
+                    return None;
+                }
+            };
+            Some(Rc::new(RefCell::new(IteratorState::VecSource {
+                data: items,
+                index: 0,
+            })))
+        }
+    }
+}
+
+fn free_step(ctx: &mut JitContext, iter: &Rc<RefCell<IteratorState>>) -> Option<Value> {
+    match crate::vm::builtins::iterator::step(iter) {
+        Ok(v) => v,
+        Err(e) => {
+            set_error(ctx, e);
+            None
+        }
+    }
+}
+
+extern "C" fn oxy_map_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let f = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let mut result = Vec::new();
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &f, &[v]) {
+            Ok(mapped) => result.push(mapped),
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(result)))) };
+}
+
+extern "C" fn oxy_filter_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let pred = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let mut result = Vec::new();
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &pred, &[v.clone()]) {
+            Ok(cond) => {
+                if cond.is_truthy() {
+                    result.push(v);
+                }
+            }
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(result)))) };
+}
+
+extern "C" fn oxy_fold_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let f = unsafe { pop(ctx) };
+    let init = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let mut acc = init;
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &f, &[acc, v]) {
+            Ok(next) => acc = next,
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, acc) };
+}
+
+extern "C" fn oxy_any_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let pred = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &pred, &[v]) {
+            Ok(cond) => {
+                if cond.is_truthy() {
+                    unsafe { push(ctx, Value::Bool(true)) };
+                    return;
+                }
+            }
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, Value::Bool(false)) };
+}
+
+extern "C" fn oxy_all_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let pred = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &pred, &[v]) {
+            Ok(cond) => {
+                if !cond.is_truthy() {
+                    unsafe { push(ctx, Value::Bool(false)) };
+                    return;
+                }
+            }
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, Value::Bool(true)) };
+}
+
+extern "C" fn oxy_find_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let pred = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let iter = match to_iter_rc(ctx, data) {
+        Some(i) => i,
+        None => return,
+    };
+
+    while let Some(v) = free_step(ctx, &iter) {
+        match jit_closure_invoker(tables, output, &pred, &[v.clone()]) {
+            Ok(cond) => {
+                if cond.is_truthy() {
+                    unsafe {
+                        push(ctx, Value::some(v));
+                    }
+                    return;
+                }
+            }
+            Err(e) => {
+                set_error(ctx, e);
+                return;
+            }
+        }
+    }
+    unsafe { push(ctx, Value::none()) };
+}
+
+extern "C" fn oxy_collect_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let data = unsafe { pop(ctx) };
+
+    match data {
+        Value::Iterator(rc) => {
+            let mut result = Vec::new();
+            while let Some(v) = free_step(ctx, &rc) {
+                result.push(v);
+            }
+            unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(result)))) };
+        }
+        Value::Vec(_) => unsafe { push(ctx, data) },
+        other => unsafe {
+            push(ctx, Value::Vec(Rc::new(RefCell::new(vec![other]))));
+        },
+    }
+}
+
+extern "C" fn oxy_sort_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let data = unsafe { pop(ctx) };
+
+    match data {
+        Value::Vec(rc) => {
+            let mut vec_data = rc.borrow().clone();
+            vec_data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(vec_data)))) };
+        }
+        Value::Iterator(rc) => {
+            let mut vec_data = Vec::new();
+            while let Some(v) = free_step(ctx, &rc) {
+                vec_data.push(v);
+            }
+            vec_data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(vec_data)))) };
+        }
+        other => unsafe { push(ctx, other) },
+    }
+}
+
+extern "C" fn oxy_sort_by_ffi(ctx: *mut JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    let cmp_fn = unsafe { pop(ctx) };
+    let data = unsafe { pop(ctx) };
+    let tables = unsafe { &*ctx.tables };
+    let output = ctx.output;
+
+    let mut vec_data = match data {
+        Value::Vec(rc) => rc.borrow().clone(),
+        Value::Iterator(rc) => {
+            let mut v = Vec::new();
+            while let Some(val) = free_step(ctx, &rc) {
+                v.push(val);
+            }
+            v
+        }
+        other => {
+            unsafe { push(ctx, other) };
+            return;
+        }
+    };
+
+    vec_data.sort_by(|a, b| {
+        match jit_closure_invoker(tables, output, &cmp_fn, &[a.clone(), b.clone()]) {
+            Ok(ordering) => match ordering {
+                Value::I64(n) => {
+                    if n < 0 {
+                        std::cmp::Ordering::Less
+                    } else if n > 0 {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Equal
+                    }
+                }
+                _ => std::cmp::Ordering::Equal,
+            },
+            Err(_) => std::cmp::Ordering::Equal,
+        }
+    });
+
+    unsafe { push(ctx, Value::Vec(Rc::new(RefCell::new(vec_data)))) };
+}
+
 // ── Symbol registry ──────────────────────────────────────────────────
 
 /// What an `oxy_*` FFI function returns through the C ABI (independent of any
@@ -1609,6 +1905,15 @@ pub(crate) fn ffi_symbols() -> Vec<(&'static str, *const u8, FfiRet)> {
         ("oxy_spawn_ffi", oxy_spawn_ffi as _, Void),
         ("oxy_sleep_ffi", oxy_sleep_ffi as _, Void),
         ("oxy_select_ffi", oxy_select_ffi as _, Void),
+        ("oxy_map_ffi", oxy_map_ffi as _, Void),
+        ("oxy_filter_ffi", oxy_filter_ffi as _, Void),
+        ("oxy_fold_ffi", oxy_fold_ffi as _, Void),
+        ("oxy_any_ffi", oxy_any_ffi as _, Void),
+        ("oxy_all_ffi", oxy_all_ffi as _, Void),
+        ("oxy_find_ffi", oxy_find_ffi as _, Void),
+        ("oxy_collect_ffi", oxy_collect_ffi as _, Void),
+        ("oxy_sort_ffi", oxy_sort_ffi as _, Void),
+        ("oxy_sort_by_ffi", oxy_sort_by_ffi as _, Void),
     ]
 }
 

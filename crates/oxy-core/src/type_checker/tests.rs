@@ -402,4 +402,124 @@ mod tests {
             "expected type mismatch error, got: {err}"
         );
     }
+
+    // --- Phase 3.3: pipeline-friendly free functions ---
+
+    #[test]
+    fn test_free_fn_map_basic() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = map(v, |x| x * 2);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_filter() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3, 4];
+                let _ = filter(v, |x| x > 2);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_fold() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = fold(v, 0, |acc, x| acc + x);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_any_all() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = any(v, |x| x > 2);
+                let _ = all(v, |x| x > 0);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_find() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = find(v, |x| x > 1);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_collect() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = collect(v);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_sort() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                let v = vec![3, 1, 2];
+                let _ = sort(v);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_with_pipeline() {
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int = x * 2
+            fn is_positive(x: int) -> bool = x > 0
+            fn main() {
+                let v = vec![1, 2, 3];
+                // Pipeline chain using free functions
+                let _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_free_fn_wrong_arg_count_fails() {
+        let result = run_compiled(
+            r#"
+            fn main() { let _ = map(vec![1]); }
+            "#,
+        );
+        assert!(result.is_err(), "expected error (wrong arg count), got Ok");
+    }
 }

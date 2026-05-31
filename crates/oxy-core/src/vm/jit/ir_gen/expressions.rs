@@ -228,11 +228,21 @@ impl IrGen {
                     return r;
                 }
 
-                // Route spawn / sleep / select to their FFI functions.
+                // Route spawn / sleep / select and pipeline-friendly free
+                // functions to their FFI functions.
                 if let Some((ffi_func, immediates)) = match fname.as_str() {
                     "spawn" => Some(("oxy_spawn_ffi", vec![])),
                     "sleep" => Some(("oxy_sleep_ffi", vec![])),
                     "select" => Some(("oxy_select_ffi", vec![args.len()])),
+                    "map" => Some(("oxy_map_ffi", vec![])),
+                    "filter" => Some(("oxy_filter_ffi", vec![])),
+                    "fold" => Some(("oxy_fold_ffi", vec![])),
+                    "any" => Some(("oxy_any_ffi", vec![])),
+                    "all" => Some(("oxy_all_ffi", vec![])),
+                    "find" => Some(("oxy_find_ffi", vec![])),
+                    "collect" => Some(("oxy_collect_ffi", vec![])),
+                    "sort" => Some(("oxy_sort_ffi", vec![])),
+                    "sort_by" => Some(("oxy_sort_by_ffi", vec![])),
                     _ => None,
                 } {
                     let r = self.alloc_reg();

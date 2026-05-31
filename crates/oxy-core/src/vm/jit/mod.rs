@@ -209,6 +209,15 @@ fn ffi_decls() -> Vec<FfiDecl> {
         ("oxy_spawn_ffi", &[types::I64], None),
         ("oxy_sleep_ffi", &[types::I64], None),
         ("oxy_select_ffi", &[types::I64, types::I64], None),
+        ("oxy_map_ffi", &[types::I64], None),
+        ("oxy_filter_ffi", &[types::I64], None),
+        ("oxy_fold_ffi", &[types::I64], None),
+        ("oxy_any_ffi", &[types::I64], None),
+        ("oxy_all_ffi", &[types::I64], None),
+        ("oxy_find_ffi", &[types::I64], None),
+        ("oxy_collect_ffi", &[types::I64], None),
+        ("oxy_sort_ffi", &[types::I64], None),
+        ("oxy_sort_by_ffi", &[types::I64], None),
     ]
 }
 

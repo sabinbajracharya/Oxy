@@ -313,7 +313,7 @@ pub fn dispatch(
 
 /// Drive one step of an iterator, taking a fresh borrow each time. Returns
 /// `Err` if the iterator is already borrowed (re-entrant use from a closure).
-fn step(rc: &Rc<RefCell<IteratorState>>) -> Result<Option<Value>, String> {
+pub(crate) fn step(rc: &Rc<RefCell<IteratorState>>) -> Result<Option<Value>, String> {
     let mut state = rc
         .try_borrow_mut()
         .map_err(|_| "iterator is already in use".to_string())?;

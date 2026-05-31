@@ -96,10 +96,10 @@
 - [x] **Commit:** `feat: add single-line function syntax` (`a1902b2`)
 
 ### 3.3 Pipeline-friendly stdlib
-- [ ] Add free functions: `map(data, f)`, `filter(data, f)`, `fold(data, init, f)`
-- [ ] Add: `sort(data)`, `sort_by(data, f)`, `collect(data)`
-- [ ] Add: `find(data, pred)`, `any(data, pred)`, `all(data, pred)`
-- [ ] These share implementation with existing Iterator methods
+- [x] Add free functions: `map(data, f)`, `filter(data, f)`, `fold(data, init, f)`
+- [x] Add: `sort(data)`, `sort_by(data, f)`, `collect(data)`
+- [x] Add: `find(data, pred)`, `any(data, pred)`, `all(data, pred)`
+- [x] These share implementation with existing Iterator methods
 - [ ] **Commit:** `feat(stdlib): add pipeline-friendly free functions`
 
 ### 3.4 Remove all `!` macros — make them built-in functions

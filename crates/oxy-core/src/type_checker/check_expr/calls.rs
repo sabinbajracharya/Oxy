@@ -168,6 +168,117 @@ impl TypeChecker {
                         }
                         return Ok(inner.unwrap_or(TypeInfo::Unknown));
                     }
+                    // Free functions for pipeline-friendly stdlib.
+                    "map" | "filter" => {
+                        if args.len() != 2 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`{}` expects exactly 2 arguments (data, closure), found {}",
+                                    name,
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        self.infer_expr(&args[1])?;
+                        // map returns Vec<U>, filter returns Vec<T>
+                        return Ok(TypeInfo::Unknown);
+                    }
+                    "fold" => {
+                        if args.len() != 3 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`fold` expects exactly 3 arguments \
+                                     (data, init, closure), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        let init_ty = self.infer_expr(&args[1])?;
+                        self.infer_expr(&args[2])?;
+                        return Ok(init_ty);
+                    }
+                    "any" | "all" => {
+                        if args.len() != 2 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`{}` expects exactly 2 arguments (data, predicate), found {}",
+                                    name,
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        self.infer_expr(&args[1])?;
+                        return Ok(TypeInfo::Bool);
+                    }
+                    "find" => {
+                        if args.len() != 2 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`find` expects exactly 2 arguments \
+                                     (data, predicate), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        self.infer_expr(&args[1])?;
+                        return Ok(TypeInfo::Option(Box::new(TypeInfo::Unknown)));
+                    }
+                    "collect" => {
+                        if args.len() != 1 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`collect` expects exactly 1 argument (data), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        self.infer_expr(&args[0])?;
+                        return Ok(TypeInfo::Vec(Box::new(TypeInfo::Unknown)));
+                    }
+                    "sort" => {
+                        if args.len() != 1 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`sort` expects exactly 1 argument (data), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        let data_ty = self.infer_expr(&args[0])?;
+                        return Ok(data_ty);
+                    }
+                    "sort_by" => {
+                        if args.len() != 2 {
+                            return Err(PipelineError::TypeError {
+                                message: format!(
+                                    "`sort_by` expects exactly 2 arguments \
+                                     (data, comparator), found {}",
+                                    args.len()
+                                ),
+                                line: span.line,
+                                column: span.column,
+                            });
+                        }
+                        let data_ty = self.infer_expr(&args[0])?;
+                        self.infer_expr(&args[1])?;
+                        return Ok(data_ty);
+                    }
                     "http::fetch" | "http::fetch_post" => {
                         // async HTTP call → Future<HttpResponse>
                         let _ = arg_types; // validate args but don't constrain
