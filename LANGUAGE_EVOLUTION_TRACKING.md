@@ -100,7 +100,7 @@
 - [x] Add: `sort(data)`, `sort_by(data, f)`, `collect(data)`
 - [x] Add: `find(data, pred)`, `any(data, pred)`, `all(data, pred)`
 - [x] These share implementation with existing Iterator methods
-- [ ] **Commit:** `feat(stdlib): add pipeline-friendly free functions`
+- [x] **Commit:** `feat(stdlib): add pipeline-friendly free functions` (`4ff1353`)
 
 ### 3.4 Remove all `!` macros — make them built-in functions
 - [ ] Remove `!` token from macro call syntax in parser
