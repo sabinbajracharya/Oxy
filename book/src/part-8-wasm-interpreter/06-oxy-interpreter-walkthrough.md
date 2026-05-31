@@ -1,8 +1,11 @@
 # Oxy's Interpreter: A Full Walkthrough
 
-<!-- OPUS_FILL
-1-paragraph intro. "Open interp.rs. It's about 1,100 lines. Let's understand the key parts."
--->
+Time to read the real thing. The whole wasm interpreter lives in one file, `vm/interp.rs`, about
+1,100 lines — and remember, it compiles on *every* target, not just wasm, because that's what makes
+the exhaustive-match guard fire on native builds. Most of those lines are the big `exec_op` match;
+the rest is the small amount of scaffolding around it — the engine struct, the call helpers, the
+closure hook setup. Open it and let's walk the key parts, from `InterpEngine::compile` down through
+the dispatch helpers that do the actual work.
 
 **File:** `crates/oxy-core/src/vm/interp.rs`
 

@@ -1,11 +1,13 @@
 # Exercise: Add a New Op to Both Backends
 
-<!-- OPUS_FILL
-1-paragraph framing. Adding a feature that touches both backends is the acid test of
-understanding Part 8. This exercise walks you through it, guided by the compiler.
-"After this exercise, you have added a feature that works correctly on both the JIT and
-the wasm interpreter. That is the full pipeline."
--->
+This is the acid test of Part 8: add one feature and make it work *identically* on both backends.
+You'll add a new IR op and chase it through every layer it touches — the IR types, the interpreter,
+the FFI, the codegen, the pretty-printer, IR gen — with the exhaustive-match guard pointing you at
+each next stop and the parity test confirming the two backends agree at the end. When it's green,
+you won't just have read about "one feature, two backends, zero divergence" — you'll have done it,
+end to end, which is the whole pipeline of this book in a single exercise. Part B then has you
+deliberately *break* each guard so you can watch the immune system catch you, which is the fastest
+way to trust that it will.
 
 ## Part A: Add `IrOp::Abs` to both backends
 

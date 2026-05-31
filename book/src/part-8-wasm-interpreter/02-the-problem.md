@@ -1,10 +1,11 @@
 # The Problem: Cranelift Cannot Run in a Browser
 
-<!-- OPUS_FILL
-Write a 1-paragraph hook. Just frame the problem cleanly. "The JIT works great on native.
-And then someone asked: can we have a browser playground? And the answer was: not like this."
-Short and punchy — the solution chapter is where the content lives.
--->
+The JIT works beautifully on native. You run an `.ox` file, Cranelift turns it into machine code,
+the CPU runs it at full speed, everyone's happy. And then someone asks the reasonable question —
+*can we have a browser playground?* — and the honest answer is: not like this. Not with the JIT.
+The very mechanism that makes native execution fast is the one the browser sandbox flatly refuses.
+This short chapter is just about pinning down *exactly* where and how that refusal happens, because
+you have to see the wall clearly before the next chapter's way around it feels as clean as it is.
 
 ## What "running Oxy in the browser" requires
 

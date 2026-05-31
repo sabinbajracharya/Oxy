@@ -1,22 +1,26 @@
 # What Is WebAssembly and Why Does It Matter?
 
-<!-- OPUS_FILL
-Write a 3-paragraph hook.
-WebAssembly (wasm) is a binary instruction format that runs in browsers with near-native
-speed. It is the technology that lets complex applications (Figma, Google Earth, video
-editors) run at full performance in a browser tab.
+WebAssembly — wasm for short — is a binary instruction format that runs inside web browsers at
+something close to native speed. It's the reason a tab can hold Figma, or Google Earth, or a video
+editor, and have them feel like real applications instead of toys. Under the hood, the browser
+takes the compact wasm binary, compiles it to actual machine code for your CPU, and runs it fast.
+A lot of languages — C, C++, Rust, and more — can compile to wasm as a target, which is exactly
+why it became the universal "run anything in the browser" layer.
 
-The key property: wasm is a sandboxed environment. It cannot access the file system,
-network, or OS directly — only through APIs the browser provides. This is why Cranelift
-cannot run inside wasm: Cranelift needs to mmap executable memory, and wasm's sandbox
-prohibits that.
+But wasm buys that safety with a wall: it runs in a **sandbox**. A wasm program cannot touch the
+filesystem, the network, or the operating system directly. It can only do what the host browser
+explicitly hands it through an API. And that wall is precisely the thing that locks our JIT out.
+Cranelift's whole trick, from Part 7, is to allocate a chunk of memory, mark it executable with
+`mmap(PROT_EXEC)`, and jump into it — and "allocate your own executable memory" is exactly what a
+sandbox exists to forbid. On top of that, Cranelift emits code for the *host* CPU, but inside the
+browser the host is the wasm VM, which Cranelift has no backend for. The JIT simply cannot run
+there.
 
-For Oxy: the goal was a browser-based playground where users could write and run Oxy code
-without installing anything. Wasm makes this possible. The constraint: can't use the JIT.
-Need a different backend.
-
-End with the pivot: "The solution was elegant: don't compile to machine code. Walk the IR."
--->
+This matters because the goal was a browser playground — somewhere a curious person could type Oxy
+and hit Run without installing a thing, the way Rust, Go, and Kotlin all offer. Wasm is what makes
+that possible, and the JIT is what wasm won't allow. So Oxy needed a second way to execute. And the
+solution turned out to be almost suspiciously elegant: don't compile to machine code at all. Walk
+the IR.
 
 ## WebAssembly in one paragraph
 

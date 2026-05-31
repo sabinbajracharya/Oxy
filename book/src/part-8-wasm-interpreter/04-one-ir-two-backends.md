@@ -1,20 +1,28 @@
 # One IR, Two Backends: The Elegance of the Design
 
-<!-- OPUS_FILL
-Write a 3-paragraph narrative. This is the chapter where you step back and appreciate
-the architecture as a whole.
+Step back from the individual pieces for a moment and look at the shape of the whole thing, because
+this is where the architecture earns its keep. Oxy can implement a language feature *once* — as a
+single `oxy_*` function in the shared FFI — and both backends, the native JIT and the wasm
+interpreter, get it for free. Not "get it after you also write the wasm version." For free. The
+feature exists in one place, and two completely different execution engines reach the same code to
+run it. The table and the worked `Vec::retain` example below make this concrete, but the headline
+is that simple: one implementation, two backends, zero divergence.
 
-The elegance: you designed the system so that adding a new language feature requires
-exactly one implementation (in the FFI), and both backends get it for free.
+It's worth dwelling on how easily it could have gone the other way. The obvious approach to "run in
+the browser" would have been to keep the tree-walker around for wasm — JIT on native, walk the AST
+in the browser. That works, right up until you add a feature. Now `Vec::retain` needs a JIT path
+*and* a tree-walker path. Now there are two implementations of every method, drifting apart one bug
+fix at a time, two test suites or one awkward comparison harness, and a maintenance cost that
+doubles with every feature. Worse, the divergences are *silent*: a wasm-only bug just sits in the
+playground until someone happens to trip over it. That's not a hypothetical — it's exactly the trap
+the shared-runtime design exists to avoid.
 
-Compare to the alternative (two separate interpreters, or a JIT + tree-walker):
-in those approaches, every feature needs two implementations. Bugs diverge. Tests
-are backend-specific. Maintenance doubles.
-
-End with: "This is the payoff for the shared-runtime discipline. Every hard design
-choice (register IR, FFI-mediated runtime, the JitContext buffer) was made to enable
-exactly this: one place to implement features, two places to run them."
--->
+This is the payoff for a long chain of design discipline, and it's worth naming the debts being
+repaid. The register IR was chosen so both backends could consume one neutral format. The
+FFI-mediated runtime was chosen so semantics lived in exactly one place. The `JitContext` buffer
+was chosen so both executors could share the same calling convention. None of those choices was
+free, and at the time each looked like extra work. They were all, in the end, the same bet: build
+*one* place to implement features and *two* places to run them. This chapter is that bet paying out.
 
 ## The architecture table
 

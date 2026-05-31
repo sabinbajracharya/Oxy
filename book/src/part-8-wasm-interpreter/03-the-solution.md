@@ -1,15 +1,19 @@
 # The Solution: Interpret the Same IR
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-The solution is genuinely elegant. You already have an IR. The IR is just data.
-You can walk it. The runtime (FFI functions) is already shared.
-The only thing you need to write is the walking loop — and that's about 300 lines.
+Here's the realization that makes the whole problem dissolve: most of it was already solved. Look
+at what we built for the JIT and ask what actually depends on Cranelift. The IR? No — that's just
+data, a `Vec<IrFunction>`, a list of blocks holding instructions. The runtime semantics? No — those
+live in the shared `oxy_*` FFI functions, which are plain Rust that compiles anywhere, wasm
+included. The value representation, the `JitContext` buffer? Both pure Rust, both already shared.
+The *only* thing that genuinely needed Cranelift was the one step of turning IR into machine code.
+And if you don't have machine code, you don't have to *compile* the IR — you can just *walk* it.
 
-Frame it as: "What if the problem was mostly already solved? What if the hard part
-(the FFI, the value representation, the IR gen) was already there, shared?"
-The interpreter is not a second compiler — it is a second executor for the same IR.
--->
+That's the entire solution, and it's why the interpreter is so small. It is not a second compiler
+and it is not a second language implementation; it's a second *executor* for the exact same IR. The
+JIT turns `IrOp::Add` into a native `add` instruction; the interpreter sees `IrOp::Add` and calls
+`oxy_add` — the very same FFI function, just reached by a normal Rust call instead of compiled code.
+Walk the blocks, dispatch each op, follow the terminators. The hard parts were already there,
+shared, waiting. What was left to write was the walking loop, and it's about three hundred lines.
 
 ## The interpreter in 30 lines
 

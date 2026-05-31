@@ -1,20 +1,24 @@
 # The Closure-Invoker Hook
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook. This is the most architecturally interesting piece of the
-wasm interpreter, and it deserves careful explanation.
+This is the cleverest single piece of the wasm interpreter, and it solves a problem that the
+"just call the shared FFI" story quietly skips over. Most ops are easy: the interpreter calls
+`oxy_add`, `oxy_add` does its thing, done. But some builtins need to call back into *user* code.
+Think about `vec.map(|x| x * 2)`. The implementation of `map` lives in Rust, and somewhere in the
+middle of its loop it has to invoke that closure — code the user wrote, code that exists as an
+`IrFunction`. On native, the closure carries an index into the JIT's function-pointer table, and
+`map` just calls through it into compiled machine code. On wasm, that table is *empty* — there is
+no machine code, no native pointer to call. The closure is right there, but the runtime has no way
+to run it.
 
-The problem: higher-order builtins like `map` and `filter` are implemented in Rust.
-They need to call a user-provided closure. On native, they call it through the JIT's
-function pointer table. On wasm, the table is empty — no native pointers exist.
-
-The solution: a thread-local callback that the interpreter installs at startup.
-When the runtime needs to call a closure and the function table has no pointer,
-it calls the hook instead. The hook calls back into the interpreter.
-
-Frame it as: "The runtime doesn't know which backend is running it. The hook is how
-the interpreter announces 'when you need to call a function, call me.'"
--->
+The fix is a thread-local hook, and the framing that makes it click is this: the shared runtime
+doesn't know, and shouldn't know, which backend is driving it. So at startup the interpreter
+essentially leaves a note — *"when you need to call a user function and you can't find a native
+pointer, call me instead"* — by installing a callback that runs a function's IR through the
+interpreter. When `map`'s call into the closure misses the empty function table, it falls back to
+that hook, and the hook re-enters the interpreter to run the closure's body. One callback turns
+"the runtime can't reach user code on wasm" into "the runtime reaches user code the same way on
+both backends, it just lands in a different executor." It's the piece that closed the last parity
+gaps — higher-order builtins, async, user `Display::fmt` — and it's worth understanding in detail.
 
 ## The problem: callees inside the shared runtime
 

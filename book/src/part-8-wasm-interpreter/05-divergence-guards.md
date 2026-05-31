@@ -1,15 +1,21 @@
 # The Divergence Guards: How You Stop Backends from Drifting
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The guards are the system's immune response to divergence. Without them, backends drift
-silently: the JIT gets a feature, the interpreter misses it, and you only find out when
-someone runs the browser playground.
+"One feature, two backends, zero divergence" is a lovely promise, and the previous chapter made it
+sound like it falls out of the architecture for free. It doesn't, quite. Sharing the runtime makes
+divergence *unlikely*, but nothing about it makes divergence *impossible* — and the failure mode is
+nasty precisely because it's silent. You add an op to the IR and teach the JIT about it; the native
+tests pass; you ship. Months later someone opens the browser playground, hits a program that uses
+that op, and gets garbage, because the interpreter never learned the new op and nobody noticed. The
+gap between "works on my machine" and "works in the browser" is exactly where backends rot apart.
 
-Frame it as: three layers of defense, each catching a different class of divergence.
-These are not bureaucratic tests — they are the mechanisms that make "one feature,
-two backends" actually work in practice.
--->
+So Oxy treats divergence the way a body treats infection: with an immune system. Three layers of
+defense, each tuned to a different class of drift, each designed to turn a silent runtime
+divergence into a loud, early, unmissable failure. The first catches a missing op at *compile time*.
+The second catches a mismatched FFI surface at *test time*. The third runs the real corpus through
+both backends and catches any behavioral disagreement at *runtime*. These are not bureaucratic
+box-ticking tests — they are the actual mechanism that makes the previous chapter's promise true in
+practice rather than just in spirit. Take them away and "one feature, two backends" quietly becomes
+a lie.
 
 ## Guard 1: Exhaustive match (compile time)
 
