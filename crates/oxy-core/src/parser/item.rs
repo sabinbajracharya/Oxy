@@ -273,6 +273,35 @@ impl Parser {
             None
         };
 
+        // Single-line function body: `fn name(params) [-> Type] = expr`
+        if self.check(&TokenKind::Eq) {
+            self.advance(); // consume `=`
+            self.ctx.fn_name_stack.push(name.clone());
+            let expr = self.parse_expr(Precedence::None)?;
+            self.ctx.fn_name_stack.pop();
+
+            let expr_span = expr.span();
+            let body = Block {
+                stmts: vec![Stmt::Expr {
+                    expr,
+                    has_semicolon: false,
+                }],
+                span: expr_span,
+            };
+
+            return Ok(FnDef {
+                name,
+                is_async,
+                generic_params,
+                params,
+                return_type,
+                body,
+                attributes,
+                visibility: visibility.clone(),
+                span: self.merge_spans(start_span, expr_span),
+            });
+        }
+
         self.ctx.fn_name_stack.push(name.clone());
         let body = self.parse_block()?;
         self.ctx.fn_name_stack.pop();

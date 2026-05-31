@@ -328,4 +328,78 @@ mod tests {
             "expected type mismatch error, got: {err}"
         );
     }
+
+    // --- Phase 3.2: single-line function syntax `fn name(params) -> T = expr` ---
+
+    #[test]
+    fn test_single_line_fn_basic() {
+        // `fn double(x: int) -> int = x * 2` desugars to block with tail expr
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int = x * 2
+            fn main() { let _ = double(21); }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_single_line_fn_no_return_type() {
+        // `fn add(x: int, y: int) = x + y` — return type inferred
+        let result = run_compiled(
+            r#"
+            fn add(x: int, y: int) = x + y
+            fn main() { let _ = add(10, 32); }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_single_line_fn_with_generics() {
+        // Single-line with generic params
+        let result = run_compiled(
+            r#"
+            fn first<T>(v: Vec<T>) -> Option<T> =
+                if v.len() == 0 { None } else { Some(v[0]) }
+            fn main() {
+                let v = vec![1, 2, 3];
+                let _ = first(v);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_single_line_fn_pipeline_chain() {
+        // Single-line functions compose with pipelines
+        let result = run_compiled(
+            r#"
+            fn double(x: int) -> int = x * 2
+            fn add(a: int, b: int) -> int = a + b
+            fn main() {
+                let _ = 5 |> double() |> add(3);
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
+    #[test]
+    fn test_single_line_fn_type_mismatch_rejected() {
+        // Type mismatch in single-line fn should be caught
+        let result = run_compiled(
+            r#"
+            fn bad(x: int) -> int = "wrong"
+            fn main() { let _ = bad(1); }
+            "#,
+        );
+        assert!(result.is_err(), "expected type mismatch, got Ok");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("type mismatch"),
+            "expected type mismatch error, got: {err}"
+        );
+    }
 }

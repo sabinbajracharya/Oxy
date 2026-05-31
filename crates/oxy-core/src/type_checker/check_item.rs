@@ -79,6 +79,7 @@ impl TypeChecker {
             self.current_generics.push(g.clone());
         }
 
+        let return_type_is_none = f.return_type.is_none();
         let ret_ty = if let Some(ref ann) = f.return_type {
             let is_generic = match ann {
                 TypeAnnotation::Named { name, .. } => {
@@ -123,7 +124,8 @@ impl TypeChecker {
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
             self.validate_type_known(p_ty, param.span)?;
         }
-        self.fn_param_types.insert(fn_key, param_tys.clone());
+        self.fn_param_types
+            .insert(fn_key.clone(), param_tys.clone());
 
         let fn_env = TypeEnv::child(&self.env);
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
@@ -136,7 +138,28 @@ impl TypeChecker {
         self.env = fn_env;
         let saved_fn_return = std::mem::replace(&mut self.current_fn_return, ret_ty.clone());
 
-        let body_result = self.check_stmt_seq(&f.body.stmts, &ret_ty);
+        // When no return type is annotated, use Unknown as the expected type so
+        // the tail expression is not prematurely constrained. The actual return
+        // type is inferred from the body afterwards.
+        let body_expected = if return_type_is_none {
+            TypeInfo::Unknown
+        } else {
+            ret_ty.clone()
+        };
+        let body_result = self.check_stmt_seq(&f.body.stmts, &body_expected);
+
+        // Infer the return type from the body when no annotation is given.
+        if return_type_is_none && body_result.is_ok() {
+            let tail_ty = self.block_tail_type(&f.body)?;
+            if tail_ty != TypeInfo::Unit {
+                let inferred = if f.is_async {
+                    TypeInfo::Future(Box::new(tail_ty))
+                } else {
+                    tail_ty
+                };
+                self.fn_return_types.insert(fn_key.clone(), inferred);
+            }
+        }
 
         self.env = saved_env;
         self.current_generics = saved_generics;

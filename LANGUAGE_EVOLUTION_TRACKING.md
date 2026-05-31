@@ -90,9 +90,9 @@
 - [x] **Committed:** `feat: add pipeline operator |>`
 
 ### 3.2 Single-line function syntax
-- [ ] Parse `fn name(params) -> T = expr` — desugar to block with tail expr
-- [ ] Handle return type omission: `fn add(x, y) = x + y`
-- [ ] Add test file
+- [x] Parse `fn name(params) -> T = expr` — desugar to block with tail expr
+- [x] Handle return type omission: `fn add(x, y) = x + y`
+- [x] Add test file
 - [ ] **Commit:** `feat: add single-line function syntax`
 
 ### 3.3 Pipeline-friendly stdlib
