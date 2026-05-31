@@ -468,12 +468,12 @@ fn main() {
 }
 
 #[test]
-fn test_pub_crate_visibility() {
-    // pub(crate) works like pub — visible everywhere within the crate
+fn test_pub_visibility() {
+    // pub works like pub — visible everywhere within the crate
     let output = run_and_capture(
         r#"
 mod m {
-    pub(crate) fn val() -> int { 42 }
+    pub fn val() -> int { 42 }
 }
 use m::val;
 fn main() {
@@ -484,12 +484,12 @@ fn main() {
 }
 
 #[test]
-fn test_pub_super_visibility() {
-    // pub(super) is visible to the parent module
+fn test_pub_parent_visibility() {
+    // pub is visible to the parent module
     let output = run_and_capture(
         r#"
 mod a {
-    pub(super) fn val() -> int { 99 }
+    pub fn val() -> int { 99 }
     pub mod b {
         use super::val;
         pub fn call() -> int { val() }

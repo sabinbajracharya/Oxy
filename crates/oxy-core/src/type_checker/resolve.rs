@@ -596,17 +596,6 @@ fn enclosing_module(name: &str, module_vis: &HashMap<String, Visibility>) -> Str
     String::new()
 }
 
-/// Parent module: the module one level above the item's enclosing module.
-fn parent_module(name: &str, module_vis: &HashMap<String, Visibility>) -> String {
-    let enc = enclosing_module(name, module_vis);
-    if enc.is_empty() {
-        return String::new();
-    }
-    enc.rsplit_once("::")
-        .map(|(p, _)| p.to_string())
-        .unwrap_or_default()
-}
-
 /// Core visibility check: can `current_module` access an item with the given
 /// `visibility` that lives at `item_path` (a qualified name like `"api::secret"`)?
 fn is_visible_from(
@@ -617,13 +606,6 @@ fn is_visible_from(
 ) -> bool {
     match visibility {
         Visibility::Pub => true,
-        Visibility::PubCrate => true,
-        Visibility::PubSuper => {
-            let parent = parent_module(item_path, module_vis);
-            current_module.is_empty()
-                || current_module == parent
-                || current_module.starts_with(&format!("{parent}::"))
-        }
         Visibility::Private => {
             // For modules: accessible from parent and siblings.
             // For functions/structs: accessible only from same module

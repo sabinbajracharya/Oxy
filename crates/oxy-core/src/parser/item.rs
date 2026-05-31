@@ -8,21 +8,9 @@ impl Parser {
             attributes.push(self.parse_attribute()?);
         }
 
-        // Handle optional `pub` keyword with optional restriction: `pub`, `pub(crate)`, `pub(super)`
+        // Handle optional `pub` keyword
         let visibility = if self.match_token(&TokenKind::Pub) {
-            if self.match_token(&TokenKind::LParen) {
-                let vis = if self.match_token(&TokenKind::Crate) {
-                    Visibility::PubCrate
-                } else if self.match_token(&TokenKind::Super) {
-                    Visibility::PubSuper
-                } else {
-                    return Err(self.error("expected `crate` or `super` after `pub(`".to_string()));
-                };
-                self.expect(TokenKind::RParen)?;
-                vis
-            } else {
-                Visibility::Pub
-            }
+            Visibility::Pub
         } else {
             Visibility::Private
         };

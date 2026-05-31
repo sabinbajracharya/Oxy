@@ -29,21 +29,14 @@ pub use stmt::{Block, Stmt};
 pub enum Visibility {
     /// `pub` — visible everywhere.
     Pub,
-    /// `pub(crate)` — visible within the current crate.
-    PubCrate,
-    /// `pub(super)` — visible in the parent module.
-    PubSuper,
     /// Default — private to the current module.
     Private,
 }
 
 impl Visibility {
-    /// True for `pub`, `pub(crate)`, `pub(super)` — item is publicly accessible.
+    /// True for `pub` — item is publicly accessible.
     pub fn is_pub(&self) -> bool {
-        matches!(
-            self,
-            Visibility::Pub | Visibility::PubCrate | Visibility::PubSuper
-        )
+        matches!(self, Visibility::Pub)
     }
     /// True for everything except `Private` — item is visible outside its own module.
     pub fn is_visible(&self) -> bool {
@@ -53,8 +46,6 @@ impl Visibility {
     pub fn as_str(&self) -> &str {
         match self {
             Visibility::Pub => "pub",
-            Visibility::PubCrate => "pub(crate)",
-            Visibility::PubSuper => "pub(super)",
             Visibility::Private => "",
         }
     }

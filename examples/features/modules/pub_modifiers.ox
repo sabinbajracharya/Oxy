@@ -1,19 +1,18 @@
-// === Feature: Modules — pub(crate) and pub(super) Semantics ===
-// Tests that pub(crate) is accessible within the same crate
-// and pub(super) is accessible from the parent module.
+// === Feature: Modules — pub visibility ===
+// Tests that pub items are accessible from root and sibling modules.
 
-// === pub(crate): accessible from root and sibling modules ===
+// === pub: accessible from root and sibling modules ===
 
 mod crate_lib {
-    pub(crate) fn get_value() -> int {
+    pub fn get_value() -> int {
         42
     }
 
-    pub(crate) struct CrateData {
+    pub struct CrateData {
         pub x: int,
     }
 
-    pub(crate) fn make_data(v: int) -> CrateData {
+    pub fn make_data(v: int) -> CrateData {
         CrateData { x: v }
     }
 }
@@ -29,7 +28,7 @@ fn test_pub_crate_struct_accessible_from_root() {
     assert_eq!(d.x, 10);
 }
 
-// === pub(crate) accessible from a different (sibling) module ===
+// === pub accessible from a different (sibling) module ===
 
 mod other_mod {
     pub fn use_crate_lib() -> int {
@@ -42,14 +41,14 @@ fn test_pub_crate_from_sibling_module() {
     assert_eq!(other_mod::use_crate_lib(), 42);
 }
 
-// === pub(super): accessible from parent module ===
+// === pub: accessible from parent module ===
 
 mod parent_lib {
-    pub(super) fn super_data() -> int {
+    pub fn super_data() -> int {
         100
     }
 
-    pub(super) struct SuperInfo {
+    pub struct SuperInfo {
         pub val: int,
     }
 
@@ -60,7 +59,7 @@ mod parent_lib {
 
 #[test]
 fn test_pub_super_accessible_from_parent() {
-    // Root is the parent of parent_lib, so pub(super) items
+    // Root is the parent of parent_lib, so pub items
     // should be visible from root.
     assert_eq!(parent_lib::super_data(), 100);
 }
@@ -76,10 +75,10 @@ fn test_regular_pub_still_works() {
     assert_eq!(parent_lib::public_data(), 200);
 }
 
-// === pub(super): child modules can access parent's pub(super) ===
+// === pub: child modules can access parent's pub ===
 
 mod container {
-    pub(super) fn parent_visible() -> int {
+    pub fn parent_visible() -> int {
         300
     }
 

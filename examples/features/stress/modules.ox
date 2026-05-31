@@ -94,9 +94,9 @@ fn test_field_visibility_pub() {
     assert_eq!(hidden_fields::count(c2), 1);
 }
 
-// --- pub(crate) ---
+// --- pub ---
 mod crate_only {
-    pub(crate) fn shared() -> int { 99 }
+    pub fn shared() -> int { 99 }
     pub fn calls_shared() -> int { shared() }
 }
 
