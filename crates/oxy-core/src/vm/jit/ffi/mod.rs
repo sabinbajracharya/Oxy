@@ -638,14 +638,6 @@ extern "C" fn oxy_is_truthy(ctx: *mut JitContext) -> u8 {
     }
 }
 
-// ── Global state reset ──────────────────────────────────────────────
-
-/// Reset the async scheduler between compilations to prevent task state
-/// from leaking across test runs.
-pub(crate) fn reset_runtime_state() {
-    scheduler_lock().reset();
-}
-
 // ── Function calls ───────────────────────────────────────────────────
 
 // ── CalleeFrame: buffer lifecycle for JIT function calls ────────────────
@@ -1834,15 +1826,55 @@ extern "C" fn oxy_display_arg(ctx: *mut JitContext) {
 }
 // ── Async runtime ────────────────────────────────────────────────────
 
-/// Global scheduler for async task management.
-static SCHEDULER: std::sync::OnceLock<std::sync::Mutex<crate::vm::scheduler::Scheduler>> =
-    std::sync::OnceLock::new();
+// The scheduler is per-execution, not a global singleton.  A global singleton
+// caused test flakiness: `JitEngine::compile()` called `reset_runtime_state()`
+// which wiped tasks from a concurrently-executing test (Rust's test harness
+// runs tests in parallel on separate threads).
+//
+// Fix: each `JitVm::call_fn` / `Interpreter::run_function` installs a fresh
+// `Box<Scheduler>` into a thread-local via `SchedulerGuard`.  Parallel tests
+// are on separate threads, so their schedulers never interfere.  The guard
+// saves and restores the previous pointer (like `InvokerGuard`) so nested
+// runs compose correctly.
 
-pub(super) fn scheduler_lock() -> std::sync::MutexGuard<'static, crate::vm::scheduler::Scheduler> {
-    SCHEDULER
-        .get_or_init(|| std::sync::Mutex::new(crate::vm::scheduler::Scheduler::new()))
-        .lock()
-        .unwrap()
+thread_local! {
+    static CURRENT_SCHEDULER: std::cell::Cell<*mut crate::vm::scheduler::Scheduler> =
+        const { std::cell::Cell::new(std::ptr::null_mut()) };
+}
+
+/// RAII guard: allocates a `Scheduler` for the current thread's execution and
+/// restores whatever was installed before (supports nested/reentrant runs).
+pub(crate) struct SchedulerGuard {
+    // Owns the Box so the scheduler is freed when the guard is dropped.
+    // Never read directly — only held for its destructor.
+    #[allow(dead_code)]
+    scheduler: Box<crate::vm::scheduler::Scheduler>,
+    prev: *mut crate::vm::scheduler::Scheduler,
+}
+
+impl SchedulerGuard {
+    pub(crate) fn new() -> Self {
+        let scheduler = Box::new(crate::vm::scheduler::Scheduler::new());
+        let ptr: *mut _ = &*scheduler as *const _ as *mut _;
+        let prev = CURRENT_SCHEDULER.with(|c| c.replace(ptr));
+        Self { scheduler, prev }
+    }
+}
+
+impl Drop for SchedulerGuard {
+    fn drop(&mut self) {
+        CURRENT_SCHEDULER.with(|c| c.set(self.prev));
+        // `self.scheduler` is dropped here, freeing the heap allocation.
+    }
+}
+
+/// Obtain a reference to the current thread's scheduler.
+/// Panics if no `SchedulerGuard` is installed — callers are only reached
+/// during execution where the guard is always active.
+fn scheduler_ref() -> &'static mut crate::vm::scheduler::Scheduler {
+    let ptr = CURRENT_SCHEDULER.with(|c| c.get());
+    debug_assert!(!ptr.is_null(), "scheduler not installed for this thread");
+    unsafe { &mut *ptr }
 }
 
 thread_local! {
@@ -1920,7 +1952,7 @@ extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
         }
         Value::JoinHandle { task_id } => {
             // Tasks run eagerly in oxy_spawn_ffi, so the result is always ready.
-            let result = scheduler_lock().task_result(task_id);
+            let result = scheduler_ref().task_result(task_id);
             unsafe {
                 push(ctx, result.unwrap_or(Value::Unit));
             }
@@ -1988,12 +2020,11 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
             };
             let task_sleep = SLEEP_ACCUM.with(|a| a.replace(saved_accum));
 
-            let mut sched = scheduler_lock();
+            let sched = scheduler_ref();
             let task_id = sched.create_task();
             // Record the virtual completion time and the eagerly-computed result.
             sched.set_virtual_time(task_id, task_sleep);
             sched.complete(task_id, task_result);
-            drop(sched);
             unsafe {
                 push(ctx, Value::JoinHandle { task_id });
             }
@@ -2040,7 +2071,7 @@ extern "C" fn oxy_select_ffi(ctx: *mut JitContext, count: usize) {
     // completion time and pick the minimum; ties resolve to the earliest
     // argument for deterministic results.
     task_ids.reverse();
-    let sched = scheduler_lock();
+    let sched = scheduler_ref();
     let winner = task_ids
         .iter()
         .filter(|&&tid| sched.task_result(tid).is_some())

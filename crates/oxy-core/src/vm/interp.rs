@@ -74,8 +74,6 @@ pub(crate) struct InterpEngine {
 impl InterpEngine {
     /// Lower a type-checked program to register IR and build the engine.
     pub(crate) fn compile(program: &crate::ast::Program) -> Result<Self, String> {
-        ffi::reset_runtime_state();
-
         let mut ir = IrGen::new();
         ir.gen_program(program);
         let functions: Vec<IrFunction> = std::mem::take(&mut ir.functions);
@@ -165,10 +163,10 @@ impl<'e> Interpreter<'e> {
             Some(f) => f,
             None => return VmResult::Error(format!("function not found: {name}")),
         };
-        // Install this interpreter as the thread-local closure invoker for the
-        // whole run so higher-order built-ins and async eager-runs reached
-        // through the shared FFI can call back in and interpret their callees
-        // (the `fn_table` has no native pointer). Restored on drop.
+        // Install a fresh per-execution scheduler (no global state shared
+        // across parallel tests) and the closure-invoker hook. Both are
+        // restored via RAII guards on return.
+        let _sched = ffi::SchedulerGuard::new();
         let _invoker = self.install_invoker();
         let mut ctx = self.fresh_ctx(func.local_count);
         let disc = self.interpret(&mut ctx, func);

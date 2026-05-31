@@ -416,10 +416,6 @@ pub(crate) struct JitEngine {
 impl JitEngine {
     /// Build a JIT engine from a typed AST program.
     pub fn compile(program: &crate::ast::Program) -> Result<Self, String> {
-        // Reset the async scheduler so tasks from previous compilations
-        // don't leak into this run (the scheduler is a OnceLock singleton).
-        ffi::reset_runtime_state();
-
         // 1. Generate register IR + CFG
         let mut ir = ir_gen::IrGen::new();
         ir.gen_program(program);
@@ -592,6 +588,10 @@ impl JitVm {
     }
 
     fn call_fn(&self, ptr: *const u8, local_count: usize) -> VmResult {
+        // Install a fresh per-execution scheduler. Parallel tests run on
+        // separate threads, so each gets its own scheduler — no global reset
+        // can wipe tasks mid-execution.
+        let _sched = ffi::SchedulerGuard::new();
         let mut ctx = context::JitContext::new(local_count);
         ctx.result = crate::types::Value::Unit;
         ctx.tables = &self.engine.tables as *const context::JitTables;

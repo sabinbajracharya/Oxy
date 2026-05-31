@@ -41,12 +41,6 @@ impl Scheduler {
         }
     }
 
-    /// Reset all state — used between JitVm invocations when reusing the global scheduler.
-    pub fn reset(&mut self) {
-        self.tasks.clear();
-        self.next_id = 0;
-    }
-
     /// Register a new task and return its id.
     pub fn create_task(&mut self) -> TaskId {
         let id = self.next_id;
