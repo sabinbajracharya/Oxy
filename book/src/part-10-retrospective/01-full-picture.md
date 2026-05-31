@@ -1,16 +1,27 @@
 # The Full Picture: Every Layer Explained
 
-<!-- OPUS_FILL
-Write a 3-paragraph narrative that traces the full journey in one pass.
-Start from a single line of source text and follow it all the way to a CPU executing it.
-Name every layer, reference the part of the book where it was covered.
+We covered a lot of ground. Let's see what it looks like from up here.
 
-This should feel like looking down from a mountaintop — you can see the whole terrain.
-The road that was hard to walk is now small below you. The path is clear.
+Start with a single line of source — `let x = 2 + 3 * 4;` — and watch it fall through every layer
+you now know by name. The **lexer** (Part 1) chops the text into labeled tokens, knowing nothing of
+what they mean. The **parser** (Part 2) arranges those tokens into an AST, and in doing so quietly
+solves precedence by making the multiplication a subtree of the addition. The **type checker**
+(Part 4) walks that same tree asking not "what is the value" but "what is the type," and proves
+nothing impossible is being attempted. Then **IR gen** (Part 6) flattens the tree into register
+IR — named values, basic blocks, terminators — and from there the road forks. On native, the
+**Cranelift JIT** (Part 7) lowers that IR to real x86 or arm64 instructions, maps them executable,
+and the CPU runs them directly. In the browser, the **IR interpreter** (Part 8) walks the very same
+IR instead, calling the very same `oxy_*` runtime functions the JIT calls. Two destinations, one
+road for almost the entire trip.
 
-Make it feel earned. Not triumphant, just honest: "We covered a lot of ground.
-Let's see what it looks like from up here."
--->
+What's striking from this height is how little magic there turns out to be. Every layer is just a
+program that reads one representation and writes another: text to tokens, tokens to tree, tree to
+IR, IR to machine code. Each one can be opened, read, and understood on its own — the type checker
+doesn't need to know how Cranelift works, the lexer doesn't care that an interpreter exists. The
+road was hard to walk in places; the 129 failures of Part 7 were not a pleasant afternoon. But from
+the summit it's a clear path, and a short one: a handful of source files, each doing one honest
+transformation. That's the whole thing. The rest of this chapter lays the trip out one more time,
+layer by layer, so you can see the full descent in a single view.
 
 ## A single line, all the way down
 

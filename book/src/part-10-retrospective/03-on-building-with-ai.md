@@ -1,22 +1,46 @@
 # On Building with AI: The Real Story
 
-<!-- OPUS_FILL
-Write a 4-5 paragraph personal narrative about the experience of building Oxy with AI assistance.
+Let me talk to you directly for a moment, because this is the part of the book that's least like a
+tutorial and most like a confession. Oxy was built with an AI writing most of the implementation.
+Not as a gimmick, not as a demo — as the actual working method, across five-hundred-plus commits.
+The AI wrote the parser, the type checker, the IR gen, the JIT codegen, the interpreter. The human
+decided what to build, when to throw something away, and what the language *was*. That division is
+the honest center of this whole project, and it's worth being precise about what it felt like.
 
-This should be honest and grounded, not promotional. Hit these points:
-- The AI wrote the implementation; the human directed the architecture and made the calls
-- What that division felt like in practice (the human understood the "what" but not always the "how")
-- The surprising thing: the hardest decisions were never about code, they were about language design
-  (do we add references? do we keep the integer width zoo? do we retire the stack VM?)
-- The AI as an amplifier: 500+ commits in roughly 3 months would have taken years solo
-- The cost: when you don't write the code yourself, you don't always understand it
-  (this book exists partly because of that gap — understanding comes from re-reading and explaining)
-- The honest verdict: AI-assisted development is not magic. You still need to understand what you're building.
-  The AI writes the code. You still have to understand the compiler.
+What it felt like, most of the time, was understanding the *what* without always understanding the
+*how*. I knew Oxy needed a register IR and why; I did not, in the moment, always know exactly how
+the spill-slot bookkeeping in codegen worked. I knew the dual-backend design required divergence
+guards; the specific shape of the exhaustive-match enforcement was something the AI built and I
+approved. There's a peculiar vertigo to that — directing a system at a high level while the
+implementation details live somewhere you didn't personally put them. It's productive and slightly
+unnerving at once.
 
-Tone: honest, slightly rueful, but not negative. This is the most personal section of the book.
-It should feel like the author is speaking directly to the reader.
--->
+The genuinely surprising thing is what turned out to be hard. It was never the code. The AI could
+implement essentially any decision once it was made. The hard parts were the *decisions* — and
+every single one of them was about language design, not implementation. Should Oxy have references
+and borrows? (No — and holding that line was a real act of will, because it would have been easy to
+drift toward Rust.) Should we keep the integer width zoo? (No — three numeric types, on purpose.)
+Should we retire the stack VM after fifteen days of work? (Yes.) None of those is a question an AI
+can answer for you, because none of them has a *correct* answer — they have answers that are right
+*for the language you're trying to build*, and only a human holding the vision can make that call.
+
+So the AI was an amplifier, and a staggering one. Five hundred commits and a native-compiling
+language with a browser playground in roughly three months is not a solo-in-evenings timeline; it's
+a years timeline, compressed. But amplifiers have a cost, and here's the rueful part: when you don't
+write the code yourself, you don't automatically understand it. The decision lives in your memory;
+the *artifact* does not. The gap between "I directed this" and "I could explain this to a stranger"
+turned out to be wide, and closing it took deliberate work — which is, frankly, a large part of why
+this book exists. Explaining a system to someone else is the most reliable way to discover whether
+you actually understand it. Writing these chapters was where a lot of my own understanding finally
+caught up to the code.
+
+Which leads to the only verdict I'm confident in: AI-assisted development is not magic, and anyone
+selling it as magic is selling something. The AI writes the code, fast and well. It does not relieve
+you of the obligation to understand the system you're building, make the calls only you can make, or
+read what comes back and verify it means what you intended. The 129-failure stabilization was not
+solved by asking the AI to "fix it" — it was solved by reading IR traces and finding convention
+mismatches, the same way it would have been solved by hand. The tools changed. The thinking didn't.
+You still have to understand the compiler.
 
 ## What an AI-assisted project actually looks like
 

@@ -1,26 +1,32 @@
 # Your Turn: What Can You Build Now?
 
-<!-- OPUS_FILL
-Write a 3-4 paragraph closing narrative.
+This is the last page, so let's not be grand about it. You started this book believing, somewhere
+in the back of your mind, that compilers were built by a different kind of programmer. By now that
+belief should be gone, because you've watched the whole thing taken apart and seen that there was
+never a wizard behind the curtain — just five layers of transformation, each one a program that
+reads one representation and produces another. Text to tokens. Tokens to tree. Tree to IR. IR to
+machine code. That's the mythical creature, fully dissected, and it turns out to be made of the same
+parts as everything else you've ever written.
 
-This is the last page of the book. It should feel like the end of a journey — not triumphant,
-but settled. The reader has put in the work. They now understand how a JIT compiler works.
-What should they do with that?
+So here's what you can actually do now. You can open `crates/oxy-core/src/` and *read* it — not
+squint and hope, but navigate it, knowing which layer owns what and where to look when something
+breaks. That was the first goal of this book, and you have it. You can add a feature: find the right
+layer, write the `.ox` test first the way CLAUDE.md insists, watch it fail, fix the layer, watch it
+pass. And you can build your own language — you have the blueprint, the rough timeline, and, more
+importantly, the *judgment*, because you've seen which decisions are load-bearing and which are
+detours you can skip.
 
-Hit these points:
-- They can now read the Oxy codebase without AI assistance (that was Goal 1)
-- They can add a feature: find the right layer (lexer/parser/type checker/IR gen/codegen/FFI),
-  follow the TDD process from CLAUDE.md, write the .ox test first
-- They can build their own language: they have the blueprint now
-- The "mythical creature" framing from the book intro: the compiler is not mysterious anymore.
-  It is five layers of transformation, each of which is a program that reads one thing and
-  produces another. That's it.
-- A genuine send-off: building a compiler is one of the most satisfying things you can do
-  as a programmer. It takes everything: data structures, algorithms, type theory, systems
-  programming, language design. And at the end, you have something that runs.
+I'll be honest about why I hope you do. Building a compiler is one of the most satisfying things you
+can do as a programmer, because it refuses to let you specialize. It demands data structures and
+algorithms and a little type theory and some systems programming and, hardest of all, taste — the
+willingness to decide what your language *is* and what it deliberately refuses to be. It asks for
+everything you've got. And then, at the end, the thing *runs*. You type a program into something you
+built and a real CPU executes it. There are not many feelings in this craft quite like that one.
 
-Tone: warm, personal, not preachy. End with something memorable.
--->
+The compiler was never a mythical creature. It was always just five honest programs in a trench
+coat. Now you know how to build them.
+
+Now go build something.
 
 ## What you can do now
 

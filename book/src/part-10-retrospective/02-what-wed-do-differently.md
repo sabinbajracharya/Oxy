@@ -1,22 +1,39 @@
 # 500 Commits Later: What We'd Do Differently
 
-<!-- OPUS_FILL
-Write a 4-5 paragraph honest retrospective.
+Here is the honest version, the one you don't put in the README. If we started over tomorrow,
+knowing everything the last five hundred commits taught us, several things would go differently —
+and saying so plainly is more useful to you than pretending the path was straight. It wasn't. It
+was windy, and it worked, and those two facts coexist.
 
-This should be the most personal chapter in the book. Not hedged corporate lessons,
-but genuine "if we started over tomorrow, here's what we'd do differently."
+The tree-walker we wouldn't take back. It proved the language's semantics fast and cheap, and that
+was real value. But we'd jump to the register IR sooner than we did. The stack VM, on the other
+hand, was a genuine detour — fifteen days of solid work building a thing we then deleted whole,
+because Cranelift never wanted a stack in the first place. It wasn't *wrong*, exactly; it was the
+textbook next step after a tree-walker, and we took it on reflex. But if native code is the goal
+from the start, the stack VM is a station you can skip entirely, and we'd skip it.
 
-Points to hit:
-- The tree-walker was not wasted time, but we'd probably jump to register IR sooner
-- The stack VM was definitely an unnecessary detour (15 days, then removed)
-- The divergence guards should have been built from day 1, not after the first parity failure
-- The biggest investment that paid off most: the shared FFI runtime
-- The thing that would have helped most: IR traces earlier, as a debugging tool
-- The cost of 500+ commits that nobody else can read: the README-per-folder initiative was late
+The divergence guards are the clearest "build it on day one" lesson. The exhaustive match, the FFI
+consistency test, the parity run — all of those arrived *after* the JIT and interpreter had already
+had a chance to drift, which is to say after we'd already paid for their absence. The guards are not
+overhead; they're the only reason "one feature, two backends" is a true statement instead of an
+aspiration. They belong in the first commit of any dual-backend design, not bolted on once the
+backends have started disagreeing. The same goes for IR traces: `OXY_VM_TRACE=1` showed up
+mid-stabilization, and it would have turned hours of the 129-failure slog into minutes if it had
+existed from the day the IR did. Every compiler stage should be dumpable from the moment it exists.
+The cost is an afternoon; the payoff is every debugging session afterward.
 
-Tone: honest, a bit rueful, but not regretful. Every "mistake" was a real step that got us here.
-The path was windy but it worked.
--->
+Two more, briefly. The investment that paid off most was the shared FFI runtime — routing all real
+semantics through `oxy_*` functions was the decision that made the whole dual-backend architecture
+possible, and we'd make it again without hesitation. And the thing we deferred too long was
+documentation: the per-folder READMEs and the architecture docs came late, after the structure had
+already settled, which meant that for most of the project the only documentation was the code
+itself. That's fine while it all lives in one person's head; it's a tax on everyone who comes after,
+including your own future self.
+
+None of this is regret. Every one of those "mistakes" was a real step that got us to a working,
+tested, native-compiling language with a browser playground — and, not incidentally, taught us
+enough to write this book. The path being windy is *why* there's something worth saying here. We're
+just marking the shortcuts on the map so the next person can walk it straighter.
 
 ## The real lessons (not the sanitized ones)
 
