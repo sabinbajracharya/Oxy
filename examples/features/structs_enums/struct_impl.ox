@@ -4,15 +4,15 @@
 // transfer. Associated functions (no `self`) act as constructors.
 
 struct Counter {
-    count: int,
+    count: Int,
 }
 
 impl Counter {
-    fn new(initial: int) -> Counter {
+    fn new(initial: Int) -> Counter {
         Counter { count: initial }
     }
 
-    fn value(self) -> int {
+    fn value(self) -> Int {
         self.count
     }
 
@@ -51,16 +51,16 @@ fn test_impl_method_chaining() {
 // === Impl with Multiple Methods ===
 
 struct Rect {
-    width: int,
-    height: int,
+    width: Int,
+    height: Int,
 }
 
 impl Rect {
-    fn area(self) -> int {
+    fn area(self) -> Int {
         self.width * self.height
     }
 
-    fn perimeter(self) -> int {
+    fn perimeter(self) -> Int {
         2 * (self.width + self.height)
     }
 }
@@ -75,15 +75,15 @@ fn test_rect_methods() {
 // === Self Type in Return ===
 
 struct Wrapper {
-    value: int,
+    value: Int,
 }
 
 impl Wrapper {
-    fn wrap(v: int) -> Wrapper {
+    fn wrap(v: Int) -> Wrapper {
         Wrapper { value: v }
     }
 
-    fn unwrap(self) -> int {
+    fn unwrap(self) -> Int {
         self.value
     }
 }

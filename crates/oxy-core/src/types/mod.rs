@@ -417,25 +417,25 @@ impl Value {
     /// Returns the type name of this value for error messages.
     pub fn type_name(&self) -> String {
         match self {
-            // Surface integer types are just `int` and `byte` — the
+            // Surface integer types are just `Int` and `Byte` — the
             // dead-but-not-yet-removed width variants present under the
             // same surface names (unreachable from user code).
-            Value::I64(_) => "int".into(),
-            Value::U8(_) => "byte".into(),
-            Value::F64(_) => "float".into(),
+            Value::I64(_) => "Int".into(),
+            Value::U8(_) => "Byte".into(),
+            Value::F64(_) => "Float".into(),
             Value::Bool(_) => "bool".into(),
             Value::String(_) => "String".into(),
             Value::Char(_) => "char".into(),
             Value::Unit => "()".into(),
             Value::Function(_) => "fn".into(),
             Value::Range(_, _) => "Range".into(),
-            Value::Vec(_) => "Vec".into(),
+            Value::Vec(_) => "List".into(),
             Value::Array(_) => "Array".into(),
             Value::Tuple(_) => "tuple".into(),
             Value::Struct { name, .. } => name.clone(),
             Value::EnumVariant { enum_name, .. } => enum_name.clone(),
-            Value::HashMap(_) => "HashMap".into(),
-            Value::HashSet(_) => "HashSet".into(),
+            Value::HashMap(_) => "Map".into(),
+            Value::HashSet(_) => "Set".into(),
             Value::BTreeMap(_) => "BTreeMap".into(),
             Value::BTreeSet(_) => "BTreeSet".into(),
             Value::BinaryHeap(_) => "BinaryHeap".into(),
@@ -637,7 +637,7 @@ mod tests {
 
     #[test]
     fn test_type_name() {
-        assert_eq!(Value::I64(0).type_name(), "int");
+        assert_eq!(Value::I64(0).type_name(), "Int");
         assert_eq!(Value::String("".into()).type_name(), "String");
         assert_eq!(Value::Unit.type_name(), "()");
     }
@@ -742,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ord_vec() {
+    fn test_ord_list() {
         let a = Value::Vec(Rc::new(RefCell::new(vec![Value::I64(1), Value::I64(2)])));
         let b = Value::Vec(Rc::new(RefCell::new(vec![Value::I64(1), Value::I64(3)])));
         assert!(a < b); // works via PartialOrd → Ord delegation
@@ -814,7 +814,7 @@ mod tests {
     #[test]
     fn test_ord_struct_and_enum() {
         let s1 = Value::Struct {
-            name: "Point".into(),
+            name: "PoInt".into(),
             fields: {
                 let mut m = HashMap::new();
                 m.insert("x".into(), Value::I64(1));
@@ -823,7 +823,7 @@ mod tests {
             },
         };
         let s2 = Value::Struct {
-            name: "Point".into(),
+            name: "PoInt".into(),
             fields: {
                 let mut m = HashMap::new();
                 m.insert("x".into(), Value::I64(1));

@@ -23,7 +23,7 @@ fn test_array_repeat_with_expression() {
 
 #[test]
 fn test_array_type_annotation() {
-    let arr: [int; 3] = [10, 20, 30];
+    let arr: [Int; 3] = [10, 20, 30];
     assert_eq(arr.len(), 3);
     assert_eq(arr[0], 10);
     assert_eq(arr[1], 20);
@@ -54,7 +54,7 @@ fn test_array_equality() {
 
 #[test]
 fn test_nested_array() {
-    let matrix: [[int; 2]; 2] = [[1, 2], [3, 4]];
+    let matrix: [[Int; 2]; 2] = [[1, 2], [3, 4]];
     assert_eq(matrix[0][0], 1);
     assert_eq(matrix[0][1], 2);
     assert_eq(matrix[1][0], 3);

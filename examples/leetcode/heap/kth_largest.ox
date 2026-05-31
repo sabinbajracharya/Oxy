@@ -23,11 +23,11 @@
 // - For min-heap behavior, negate values
 
 fn main() {
-    let nums = vec(3, 2, 1, 5, 6, 4);
+    let nums = list(3, 2, 1, 5, 6, 4);
     println("{}", find_kth_largest(nums, 2));
 }
 
-fn find_kth_largest(nums: Vec, k: int) -> int {
+fn find_kth_largest(nums: List, k: Int) -> Int {
     let mut heap = BinaryHeap::new();
     for num in nums {
         heap.push(num);
@@ -42,15 +42,15 @@ fn find_kth_largest(nums: Vec, k: int) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq(find_kth_largest(vec(3, 2, 1, 5, 6, 4), 2), 5);
+    assert_eq(find_kth_largest(list(3, 2, 1, 5, 6, 4), 2), 5);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(find_kth_largest(vec(1), 1), 1);
+    assert_eq(find_kth_largest(list(1), 1), 1);
 }
 
 #[test]
 fn test_all_same() {
-    assert_eq(find_kth_largest(vec(7, 7, 7, 7), 2), 7);
+    assert_eq(find_kth_largest(list(7, 7, 7, 7), 2), 7);
 }

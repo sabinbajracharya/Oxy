@@ -3,13 +3,13 @@
 
 fn main() {}
 
-fn take_int(x: int) -> int { x }
+fn take_int(x: Int) -> Int { x }
 fn take_string(s: String) -> String { s }
 
 struct HttpResponse {
-    status: int,
+    status: Int,
     body: String,
-    headers: HashMap<String, String>,
+    headers: Map<String, String>,
 }
 
 fn expect_response(r: HttpResponse) -> HttpResponse { r }
@@ -36,13 +36,13 @@ fn test_fetch_post_type_flows_through_await() {
 fn fetch_wrong_type_through_await() {
     let f = http::fetch("https://example.com".to_string());   // Future<HttpResponse>
     let r = f.await;                                           // HttpResponse
-    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ int
+    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
 }
 
 #[compile_error]
 fn fetch_post_wrong_type_through_await() {
     let f = http::fetch_post("https://example.com".to_string(), "data".to_string());
     let r = f.await;
-    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ int
+    let _ = take_int(r);                                       // ERROR: HttpResponse ≠ Int
 }
 

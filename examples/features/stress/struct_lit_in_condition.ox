@@ -2,8 +2,8 @@
 // `if score < MAX { ... }` must NOT treat `MAX { ... }` as a struct
 // initializer — even when MAX is uppercase, like a typical constant.
 
-const MAX_SIZE: int = 100;
-const THRESHOLD: int = 50;
+const MAX_SIZE: Int = 100;
+const THRESHOLD: Int = 50;
 
 #[test]
 fn test_const_in_if_condition() {
@@ -38,7 +38,7 @@ fn test_const_in_while_condition() {
     assert_eq(i, 6);
 }
 
-const LIMIT: int = 5;
+const LIMIT: Int = 5;
 
 #[test]
 fn test_uppercase_const_in_for_range() {
@@ -50,7 +50,7 @@ fn test_uppercase_const_in_for_range() {
 }
 
 // Sanity: struct literals still work outside header positions.
-struct Pt { x: int, y: int }
+struct Pt { x: Int, y: Int }
 #[test]
 fn test_struct_init_still_works_outside_headers() {
     let p = Pt { x: 1, y: 2 };

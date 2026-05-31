@@ -137,19 +137,6 @@ impl Parser {
                     self.expect_ident()?
                 };
 
-                // `name!(...)` or `name![...]` — macro syntax is no longer supported.
-                // Oxy uses regular function calls instead.
-                if self.check(&TokenKind::Bang) {
-                    return Err(PipelineError::Parser {
-                        message: format!(
-                            "macro syntax `!` is no longer supported. Use `{name}(...)` \
-                             instead of `{name}!(...)`",
-                        ),
-                        line: span.line,
-                        column: span.column,
-                    });
-                }
-
                 // Check for path: `Name::...`
                 if self.check(&TokenKind::ColonColon) {
                     self.advance();

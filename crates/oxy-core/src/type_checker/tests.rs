@@ -7,10 +7,10 @@ mod tests {
     fn test_valid_code_passes_type_checking() {
         let result = run_compiled(
             r#"
-            fn add(x: int, y: int) -> int { x + y }
+            fn add(x: Int, y: Int) -> Int { x + y }
             fn main() {
-                let a: int = 42;
-                let b: int = add(a, 10);
+                let a: Int = 42;
+                let b: Int = add(a, 10);
                 let c: String = "hello";
             }
             "#,
@@ -23,7 +23,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x: int = "not a number";
+                let x: Int = "not a number";
             }
             "#,
         );
@@ -32,14 +32,14 @@ mod tests {
             err.contains("type mismatch"),
             "expected type mismatch, got: {err}"
         );
-        assert!(err.contains("int"), "expected int in error, got: {err}");
+        assert!(err.contains("Int"), "expected Int in error, got: {err}");
     }
 
     #[test]
     fn test_return_type_mismatch_fails() {
         let result = run_compiled(
             r#"
-            fn foo() -> int { "wrong" }
+            fn foo() -> Int { "wrong" }
             fn main() { foo(); }
             "#,
         );
@@ -68,7 +68,7 @@ mod tests {
     fn test_const_type_mismatch_fails() {
         let result = run_compiled(
             r#"
-            const X: int = "wrong";
+            const X: Int = "wrong";
             fn main() {}
             "#,
         );
@@ -88,9 +88,9 @@ mod tests {
         // x: int from the expected function signature.
         let result = run_compiled(
             r#"
-            fn apply_int(f: fn(int) -> int, x: int) -> int { f(x) }
+            fn apply_Int(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
             fn main() {
-                let _ = apply_int(|x| x * 2, 21);
+                let _ = apply_Int(|x| x * 2, 21);
             }
             "#,
         );
@@ -103,10 +103,10 @@ mod tests {
         // with the expected type, the type checker should reject it.
         let result = run_compiled(
             r#"
-            fn apply_int(f: fn(int) -> int, x: int) -> int { f(x) }
+            fn apply_Int(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
             fn main() {
-                // |x: float| ... produces fn(float) -> ?, not fn(int) -> int
-                let _ = apply_int(|x: float| x * 2.0, 21);
+                // |x: Float| ... produces fn(Float) -> ?, not fn(Int) -> Int
+                let _ = apply_Int(|x: Float| x * 2.0, 21);
             }
             "#,
         );
@@ -123,7 +123,7 @@ mod tests {
         // Multi-param closures should infer all params from expected type.
         let result = run_compiled(
             r#"
-            fn fold_two(a: int, b: int, f: fn(int, int) -> int) -> int { f(a, b) }
+            fn fold_two(a: Int, b: Int, f: fn(Int, Int) -> Int) -> Int { f(a, b) }
             fn main() {
                 let _ = fold_two(10, 32, |acc, x| acc + x);
             }
@@ -140,8 +140,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let x: float = 42;
-                let y: float = 0;
+                let x: Float = 42;
+                let y: Float = 0;
             }
             "#,
         );
@@ -154,8 +154,8 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let a: byte = 0;
-                let b: byte = 255;
+                let a: Byte = 0;
+                let b: Byte = 255;
             }
             "#,
         );
@@ -163,13 +163,13 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_array_typed_from_expected_vec() {
+    fn test_empty_array_typed_from_expected_list() {
         // `let v: Vec<String> = []` — empty array typed from expected Vec.
         let result = run_compiled(
             r#"
             fn main() {
-                let v: Vec<String> = [];
-                let w: Vec<int> = [];
+                let v: List<String> = [];
+                let w: List<Int> = [];
             }
             "#,
         );
@@ -198,12 +198,12 @@ mod tests {
         // return Option<int>.
         let result = run_compiled(
             r#"
-            fn first_elem<T>(v: Vec<T>) -> Option<T> {
+            fn first_elem<T>(v: List<T>) -> Option<T> {
                 if v.len() == 0 { None } else { Some(v[0]) }
             }
             fn main() {
-                let x = first_elem(vec(1, 2, 3));
-                // x should be Option<int>
+                let x = first_elem(list(1, 2, 3));
+                // x should be Option<Int>
                 let _ = x.unwrap() + 1;
             }
             "#,
@@ -218,9 +218,9 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                // Expected type fn(int) -> int flows into closure via
+                // Expected type fn(Int) -> Int flows into closure via
                 // bidirectional inference from the let annotation.
-                let f: fn(int) -> int = |x| x * 2;
+                let f: fn(Int) -> Int = |x| x * 2;
                 let _ = f(21);
             }
             "#,
@@ -234,11 +234,11 @@ mod tests {
         // params inferred, and the return type flows from the body.
         let result = run_compiled(
             r#"
-            fn map_vec(v: Vec<int>, f: fn(int) -> int) -> Vec<int> { v.map(f) }
+            fn map_list(v: List<Int>, f: fn(Int) -> Int) -> List<Int> { v.map(f) }
             fn main() {
-                let v = vec(1, 2, 3);
-                // Closure |x| x + 1: x inferred as int from fn(int) -> int
-                let result = map_vec(v, |x| x + 1);
+                let v = list(1, 2, 3);
+                // Closure |x| x + 1: x inferred as Int from fn(Int) -> Int
+                let result = map_list(v, |x| x + 1);
                 let _ = result;
             }
             "#,
@@ -253,7 +253,7 @@ mod tests {
         // `5 |> double()` desugars to `double(5)`
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int { x * 2 }
+            fn double(x: Int) -> Int { x * 2 }
             fn main() {
                 let r = 5 |> double();
                 let _ = r;
@@ -268,7 +268,7 @@ mod tests {
         // `5 |> add(3)` desugars to `add(5, 3)`
         let result = run_compiled(
             r#"
-            fn add(a: int, b: int) -> int { a + b }
+            fn add(a: Int, b: Int) -> Int { a + b }
             fn main() {
                 let r = 5 |> add(3);
                 let _ = r;
@@ -283,8 +283,8 @@ mod tests {
         // `5 |> double() |> add(3)` desugars to `add(double(5), 3)`
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int { x * 2 }
-            fn add(a: int, b: int) -> int { a + b }
+            fn double(x: Int) -> Int { x * 2 }
+            fn add(a: Int, b: Int) -> Int { a + b }
             fn main() {
                 let r = 5 |> double() |> add(3);
                 let _ = r;
@@ -299,7 +299,7 @@ mod tests {
         // `21 |> double` desugars to `double(21)`
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int { x * 2 }
+            fn double(x: Int) -> Int { x * 2 }
             fn main() {
                 let r = 21 |> double;
                 let _ = r;
@@ -314,7 +314,7 @@ mod tests {
         // `s |> doubler` where s is a String and doubler expects int
         let result = run_compiled(
             r#"
-            fn doubler(x: int) -> int { x * 2 }
+            fn doubler(x: Int) -> Int { x * 2 }
             fn main() {
                 let s = "hello";
                 let _ = s |> doubler;
@@ -336,7 +336,7 @@ mod tests {
         // `fn double(x: int) -> int = x * 2` desugars to block with tail expr
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int = x * 2
+            fn double(x: Int) -> Int = x * 2
             fn main() { let _ = double(21); }
             "#,
         );
@@ -348,7 +348,7 @@ mod tests {
         // `fn add(x: int, y: int) = x + y` — return type inferred
         let result = run_compiled(
             r#"
-            fn add(x: int, y: int) = x + y
+            fn add(x: Int, y: Int) = x + y
             fn main() { let _ = add(10, 32); }
             "#,
         );
@@ -360,10 +360,10 @@ mod tests {
         // Single-line with generic params
         let result = run_compiled(
             r#"
-            fn first<T>(v: Vec<T>) -> Option<T> =
+            fn first<T>(v: List<T>) -> Option<T> =
                 if v.len() == 0 { None } else { Some(v[0]) }
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = first(v);
             }
             "#,
@@ -376,8 +376,8 @@ mod tests {
         // Single-line functions compose with pipelines
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int = x * 2
-            fn add(a: int, b: int) -> int = a + b
+            fn double(x: Int) -> Int = x * 2
+            fn add(a: Int, b: Int) -> Int = a + b
             fn main() {
                 let _ = 5 |> double() |> add(3);
             }
@@ -391,7 +391,7 @@ mod tests {
         // Type mismatch in single-line fn should be caught
         let result = run_compiled(
             r#"
-            fn bad(x: int) -> int = "wrong"
+            fn bad(x: Int) -> Int = "wrong"
             fn main() { let _ = bad(1); }
             "#,
         );
@@ -410,7 +410,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = map(v, |x| x * 2);
             }
             "#,
@@ -423,7 +423,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3, 4);
+                let v = list(1, 2, 3, 4);
                 let _ = filter(v, |x| x > 2);
             }
             "#,
@@ -436,7 +436,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = fold(v, 0, |acc, x| acc + x);
             }
             "#,
@@ -449,7 +449,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = any(v, |x| x > 2);
                 let _ = all(v, |x| x > 0);
             }
@@ -463,7 +463,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = find(v, |x| x > 1);
             }
             "#,
@@ -476,7 +476,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 let _ = collect(v);
             }
             "#,
@@ -489,7 +489,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = vec(3, 1, 2);
+                let v = list(3, 1, 2);
                 let _ = sort(v);
             }
             "#,
@@ -501,10 +501,10 @@ mod tests {
     fn test_free_fn_with_pipeline() {
         let result = run_compiled(
             r#"
-            fn double(x: int) -> int = x * 2
-            fn is_positive(x: int) -> bool = x > 0
+            fn double(x: Int) -> Int = x * 2
+            fn is_positive(x: Int) -> bool = x > 0
             fn main() {
-                let v = vec(1, 2, 3);
+                let v = list(1, 2, 3);
                 // Pipeline chain using free functions
                 let _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
             }
@@ -517,7 +517,7 @@ mod tests {
     fn test_free_fn_wrong_arg_count_fails() {
         let result = run_compiled(
             r#"
-            fn main() { let _ = map(vec(1)); }
+            fn main() { let _ = map(list(1)); }
             "#,
         );
         assert!(result.is_err(), "expected error (wrong arg count), got Ok");

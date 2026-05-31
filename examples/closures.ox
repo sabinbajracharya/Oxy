@@ -1,11 +1,11 @@
 // Oxy Closures & Higher-Order Functions Example
 // Demonstrates closure syntax, variable capture, and iterator methods
 
-fn apply(f: Fn, x: int) -> int {
+fn apply(f: Fn, x: Int) -> Int {
     f(x)
 }
 
-fn make_adder(n: int) -> Fn {
+fn make_adder(n: Int) -> Fn {
     |x| x + n
 }
 
@@ -15,7 +15,7 @@ fn main() {
     println("double(5) = {}", double(5));
 
     // Closure with type annotations
-    let add = |a: int, b: int| -> int { a + b };
+    let add = |a: Int, b: Int| -> Int { a + b };
     println("add(3, 4) = {}", add(3, 4));
 
     // No-param closure
@@ -40,10 +40,10 @@ fn main() {
     let greet2 = || format("hello {}", name);
     println("{}", greet2());
 
-    // Vec iterator methods
+    // List iterator methods
     println("\n=== Iterator Methods ===");
 
-    let numbers = vec(1, 2, 3, 4, 5);
+    let numbers = list(1, 2, 3, 4, 5);
 
     // map
     let doubled = numbers.map(|x| x * 2);
@@ -70,7 +70,7 @@ fn main() {
     println("find(>3): {:?}", found);
 
     // enumerate
-    let words = vec("foo", "bar", "baz");
+    let words = list("foo", "bar", "baz");
     let indexed = words.enumerate();
     println("enumerate: {:?}", indexed);
 
@@ -80,8 +80,8 @@ fn main() {
     println("");
 
     // flat_map
-    let nested = vec(1, 2, 3);
-    let flat = nested.flat_map(|x| vec(x, x * 10));
+    let nested = list(1, 2, 3);
+    let flat = nested.flat_map(|x| list(x, x * 10));
     println("flat_map: {:?}", flat);
 
     // position

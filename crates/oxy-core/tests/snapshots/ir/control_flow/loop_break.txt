@@ -4,7 +4,7 @@ fn main() -> () {
     jump bb1
 
   bb1(preds: bb0):
-    v0 = const.int 42
+    v0 = const.Int 42
     store.local $0, v0
     jump bb2
 

@@ -725,7 +725,7 @@ impl<'src> Lexer<'src> {
             return Err(PipelineError::Lexer {
                 message: format!(
                     "literal suffix `{suffix_str}` is not supported in Oxy. \
-                     Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
+                     Use a typed binding or `as` cast: `let x: Int = …` or `… as Byte`."
                 ),
                 line: self.line,
                 column: self.column,
@@ -733,7 +733,7 @@ impl<'src> Lexer<'src> {
         }
         if is_float {
             let val: f64 = num_str.parse().map_err(|_| PipelineError::Lexer {
-                message: format!("invalid float literal '{num_str}'"),
+                message: format!("invalid Float literal '{num_str}'"),
                 line: self.line,
                 column: self.column,
             })?;
@@ -881,7 +881,7 @@ impl<'src> Lexer<'src> {
             return Err(PipelineError::Lexer {
                 message: format!(
                     "literal suffix `{suffix}` is not supported in Oxy. \
-                     Use a typed binding or `as` cast: `let x: int = …` or `… as byte`."
+                     Use a typed binding or `as` cast: `let x: Int = …` or `… as Byte`."
                 ),
                 line: self.line,
                 column: self.column,
@@ -1442,10 +1442,10 @@ fn main() {
     #[test]
     fn test_struct_definition() {
         assert_eq!(
-            kinds("struct Point { x: f64, y: f64 }"),
+            kinds("struct PoInt { x: f64, y: f64 }"),
             vec![
                 TokenKind::Struct,
-                TokenKind::Ident("Point".into()),
+                TokenKind::Ident("PoInt".into()),
                 TokenKind::LBrace,
                 TokenKind::Ident("x".into()),
                 TokenKind::Colon,

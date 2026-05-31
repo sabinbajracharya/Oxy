@@ -203,7 +203,7 @@ pub(super) extern "C" fn oxy_push_closure(
             .map(|n| crate::ast::Param {
                 name: n.clone(),
                 type_ann: crate::ast::TypeAnnotation::Named {
-                    name: "int".into(),
+                    name: "Int".into(),
                     generic_args: vec![],
                     span: placeholder_span,
                 },

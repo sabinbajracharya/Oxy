@@ -30,7 +30,7 @@ fn test_regex_find_none() {
 #[test]
 fn test_regex_find_all_count() {
     let re = std::regex::Regex::new("\\d+");
-    let v: Vec<String> = re.find_all("1 22 333");
+    let v: List<String> = re.find_all("1 22 333");
     assert_eq(v.len(), 3);
     assert_eq(v[0], "1");
     assert_eq(v[1], "22");
@@ -56,7 +56,7 @@ fn test_regex_reuse() {
     // A single Regex value reused across many calls works.
     let re = std::regex::Regex::new("\\d");
     let mut count = 0;
-    for s in vec("abc", "1", "a2", "33") {
+    for s in list("abc", "1", "a2", "33") {
         if re.is_match(s) { count = count + 1; }
     }
     assert_eq(count, 3);

@@ -84,14 +84,14 @@ impl TypeChecker {
                     // single replacement they should use instead.
                     let suggestion = match name.as_str() {
                         "i8" | "i16" | "i32" | "i64" | "u16" | "u32" | "u64" | "isize"
-                        | "usize" => Some("int"),
-                        "u8" => Some("byte"),
-                        "f32" | "f64" => Some("float"),
+                        | "usize" => Some("Int"),
+                        "u8" => Some("Byte"),
+                        "f32" | "f64" => Some("Float"),
                         _ => None,
                     };
                     let message = match suggestion {
                         Some(repl) => format!(
-                            "`{name}` is not an Oxy type — use `{repl}` instead. Oxy has only `int`, `byte`, and `float`."
+                            "`{name}` is not an Oxy type — use `{repl}` instead. Oxy has only `Int`, `Byte`, and `Float`."
                         ),
                         None => format!("unknown type `{name}`"),
                     };

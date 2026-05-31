@@ -120,24 +120,24 @@
 - [x] **Commit:** `refactor: remove ! macro syntax — all built-ins are functions`
 
 ### 3.5 Type naming — consistency + `Vec` → `List`
-- [ ] Research: Gleam/Elm use uppercase types (`Int`, `String`, `Bool`, `List`), Lua untyped
-- [ ] Current inconsistency: `int`/`byte`/`float` lowercase vs `String`/`Vec`/`HashMap` uppercase
-- [ ] Decision: unify to **UppercaseCamel types** (Gleam/Elm convention):
+- [x] Research: Gleam/Elm use uppercase types (`Int`, `String`, `Bool`, `List`), Lua untyped
+- [x] Current inconsistency: `int`/`byte`/`float` lowercase vs `String`/`Vec`/`HashMap` uppercase
+- [x] Decision: unify to **UppercaseCamel types** (Gleam/Elm convention):
   - `int` → `Int`, `byte` → `Byte`, `float` → `Float`
   - `String` → unchanged, `Bool` → unchanged
   - `Vec<T>` → `List<T>` ("list" is universal; "vec" is Rust/C++ jargon)
   - `HashMap<K,V>` → `Map<K,V>`, `HashSet<T>` → `Set<T>`
   - `Option<T>`, `Result<T,E>` — unchanged
-  - `BTreeMap`, `BTreeSet`, `BinaryHeap`, `VecDeque` — rename TBD or keep
-- [ ] **Rationale:** Uppercase avoids `map`-type-vs-`map`-function conflict. Matches
+  - `BTreeMap`, `BTreeSet`, `BinaryHeap`, `VecDeque` — kept
+- [x] **Rationale:** Uppercase avoids `map`-type-vs-`map`-function conflict. Matches
   Gleam and Elm conventions the user referenced. Visually distinguishes types from values.
-- [ ] Update `symbols.rs` (ALL_TYPES, type name constants, MethodInfo lists)
-- [ ] Update `type_checker/mod.rs` (from_name, display_name)
-- [ ] Update all `.ox` test files (mechanical: `int`→`Int`, `byte`→`Byte`, `float`→`Float`, `Vec`→`List`, `HashMap`→`Map`, `HashSet`→`Set`)
-- [ ] Update VM test files
-- [ ] Update LSP (completions, hover docs)
+- [x] Update `symbols.rs` (ALL_TYPES, type name constants, MethodInfo lists)
+- [x] Update `type_checker/mod.rs` (from_name, display_name)
+- [x] Update all `.ox` test files (mechanical: `int`→`Int`, `byte`→`Byte`, `float`→`Float`, `Vec`→`List`, `HashMap`→`Map`, `HashSet`→`Set`)
+- [x] Update VM test files
+- [x] Update LSP (completions, hover docs)
 - [ ] Update VS Code extension (syntax highlighting)
-- [ ] **Commit:** `refactor: rename types for consistency — Vec→List, int→Int, etc.`
+- [x] **Commit:** `refactor: rename types for consistency — Vec→List, int→Int, etc.`
 
 ---
 

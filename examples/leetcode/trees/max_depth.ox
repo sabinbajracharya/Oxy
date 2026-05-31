@@ -20,7 +20,7 @@
 // - DFS uses O(h) stack space, BFS would use O(w) queue space
 
 struct TreeNode {
-    val: int,
+    val: Int,
     left: Option,
     right: Option,
 }
@@ -36,7 +36,7 @@ fn main() {
     println("{}", max_depth(Some(root)));
 }
 
-fn max_depth(root: Option) -> int {
+fn max_depth(root: Option) -> Int {
     if let Some(node) = root {
         let left = max_depth(node.left);
         let right = max_depth(node.right);

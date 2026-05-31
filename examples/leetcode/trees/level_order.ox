@@ -1,6 +1,6 @@
 // === Problem: Binary Tree Level Order Traversal (LeetCode #102) ===
 // Return the level order traversal (BFS) of a binary tree's node values.
-// Each level is a separate Vec.
+// Each level is a separate List.
 //
 // === Pattern: BFS with Queue ===
 // Use a VecDeque as a queue. Process nodes level by level. For each level,
@@ -23,7 +23,7 @@
 // - Track level_size before processing each level
 
 struct TreeNode {
-    val: int,
+    val: Int,
     left: Option,
     right: Option,
 }
@@ -41,8 +41,8 @@ fn main() {
     }
 }
 
-fn level_order(root: Option) -> Vec {
-    let mut result = vec();
+fn level_order(root: Option) -> List {
+    let mut result = list();
     if root.is_none() {
         return result;
     }
@@ -50,7 +50,7 @@ fn level_order(root: Option) -> Vec {
     queue.push_back(root.unwrap());
     while !queue.is_empty() {
         let level_size = queue.len();
-        let mut level = vec();
+        let mut level = list();
         for _i in 0..level_size {
             let mut node = queue.pop_front().unwrap();
             level.push(node.val);
@@ -76,9 +76,9 @@ fn test_example() {
     root.right = Some(r);
     let result = level_order(Some(root));
     assert_eq(result.len(), 3);
-    assert_eq(result[0], vec(3));
-    assert_eq(result[1], vec(9, 20));
-    assert_eq(result[2], vec(15, 7));
+    assert_eq(result[0], list(3));
+    assert_eq(result[1], list(9, 20));
+    assert_eq(result[2], list(15, 7));
 }
 
 #[test]

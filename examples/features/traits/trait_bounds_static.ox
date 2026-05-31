@@ -6,8 +6,8 @@ trait Zero {
     fn zero() -> Self;
 }
 
-impl Zero for int {
-    fn zero() -> int {
+impl Zero for Int {
+    fn zero() -> Int {
         0
     }
 }
@@ -18,6 +18,6 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_trait_static_method_bound() {
-    let z = make_zero::<int>();
+    let z = make_zero::<Int>();
     assert_eq(z, 0);
 }

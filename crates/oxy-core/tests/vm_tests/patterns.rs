@@ -9,7 +9,7 @@ fn test_for_destructure_vec_of_tuples() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let pairs = vec((1, "a"), (2, "b"));
+    let pairs = list((1, "a"), (2, "b"));
     for (num, letter) in pairs {
         println("{} {}", num, letter);
     }
@@ -35,7 +35,7 @@ fn test_let_tuple_destructure() {
 fn test_let_slice_destructure() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(10, 20);
+            let v = list(10, 20);
             let [x, y] = v;
             println("{} {}", x, y);
             }"#,
@@ -48,7 +48,7 @@ fn test_vec_empty_macro() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut v = vec();
+                let mut v = list();
                 println("{}", v.len());
                 v.push(42);
                 println("{}", v.len());
@@ -73,11 +73,11 @@ fn test_use_import_shortcut() {
 }
 
 #[test]
-fn test_range_slicing_vec() {
+fn test_range_slicing_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = vec(10, 20, 30, 40, 50);
+                let v = list(10, 20, 30, 40, 50);
                 let a = v[1..4];
                 println("{} {} {}", a[0], a[1], a[2]);
                 let b = v[..2];
@@ -106,11 +106,11 @@ fn test_range_slicing_string() {
 }
 
 #[test]
-fn test_clone_vec() {
+fn test_clone_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = vec(1, 2, 3);
+                let a = list(1, 2, 3);
                 let mut b = a.clone();
                 b.push(4);
                 // .clone() is a deep copy — mutations don't propagate
@@ -126,7 +126,7 @@ fn test_vec_shared_mutation() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = vec(1, 2, 3);
+                let a = list(1, 2, 3);
                 let mut b = a;        // shared via Rc — no deep copy
                 b.push(4);            // mutation visible through both
                 println("{} {}", a.len(), b.len());
@@ -155,7 +155,7 @@ fn test_hashmap_index_access() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut m = HashMap::new();
+                let mut m = Map::new();
                 m.insert("name", "Oxy");
                 m.insert("version", "0.1");
                 println("{}", m["name"]);
@@ -204,7 +204,7 @@ fn test_match_guard_with_binding() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let values = vec(1, -2, 3, -4, 5);
+                let values = list(1, -2, 3, -4, 5);
                 let mut pos = 0;
                 let mut neg = 0;
                 for v in values {
@@ -225,21 +225,21 @@ fn test_match_guard_with_binding() {
 fn test_operator_overload_add() {
     let output = run_and_capture(
         r#"
-            struct Point { x: int, y: int }
+            struct PoInt { x: Int, y: Int }
 
             trait Add {
-                fn add(self, other: Point) -> Point;
+                fn add(self, other: PoInt) -> PoInt;
             }
 
-            impl Add for Point {
-                fn add(self, other: Point) -> Point {
-                    Point { x: self.x + other.x, y: self.y + other.y }
+            impl Add for PoInt {
+                fn add(self, other: PoInt) -> PoInt {
+                    PoInt { x: self.x + other.x, y: self.y + other.y }
                 }
             }
 
             fn main() {
-                let a = Point { x: 1, y: 2 };
-                let b = Point { x: 3, y: 4 };
+                let a = PoInt { x: 1, y: 2 };
+                let b = PoInt { x: 3, y: 4 };
                 let c = a + b;
                 println("{} {}", c.x, c.y);
             }
@@ -252,25 +252,25 @@ fn test_operator_overload_add() {
 fn test_impl_display() {
     let output = run_and_capture(
         r#"
-            struct Point { x: int, y: int }
+            struct PoInt { x: Int, y: Int }
 
             trait Display {
                 fn fmt(self) -> String;
             }
 
-            impl Display for Point {
+            impl Display for PoInt {
                 fn fmt(self) -> String {
                     format("({}, {})", self.x, self.y)
                 }
             }
 
             fn main() {
-                let p = Point { x: 3, y: 4 };
-                println("Point is: {}", p);
+                let p = PoInt { x: 3, y: 4 };
+                println("PoInt is: {}", p);
             }
             "#,
     );
-    assert_eq!(output, vec!["Point is: (3, 4)\n"]);
+    assert_eq!(output, vec!["PoInt is: (3, 4)\n"]);
 }
 
 #[test]

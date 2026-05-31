@@ -7,7 +7,7 @@ fn main() {}
 
 // === Guard passes ===
 
-fn positive_only(opt: Option<int>) -> int {
+fn positive_only(opt: Option<Int>) -> Int {
     if let Some(v) = opt && v > 0 {
         v
     } else {
@@ -32,7 +32,7 @@ fn test_iflet_guard_none_fails_pattern() {
 
 // === Guard without else ===
 
-fn extract_positive(opt: Option<int>) -> int {
+fn extract_positive(opt: Option<Int>) -> Int {
     let mut result = 0;
     if let Some(v) = opt && v > 0 {
         result = v;
@@ -57,7 +57,7 @@ fn test_iflet_guard_no_else_none() {
 
 // === Result with guard ===
 
-fn ok_in_range(r: Result<int, String>) -> bool {
+fn ok_in_range(r: Result<Int, String>) -> bool {
     if let Ok(n) = r && n >= 0 && n < 100 {
         true
     } else {
@@ -112,7 +112,7 @@ fn test_iflet_guard_string_none() {
 
 // === Guard with else if chain ===
 
-fn classify(opt: Option<int>) -> String {
+fn classify(opt: Option<Int>) -> String {
     if let Some(v) = opt && v > 100 {
         "big".to_string()
     } else if let Some(v) = opt && v > 0 {

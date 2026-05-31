@@ -21,7 +21,7 @@
 // - Simple and avoids state management issues
 
 struct ListNode {
-    val: int,
+    val: Int,
     next: Option,
 }
 

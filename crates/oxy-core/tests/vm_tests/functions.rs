@@ -8,7 +8,7 @@ use super::*;
 fn test_function_call() {
     let output = run_and_capture(
         r#"
-fn add(a: int, b: int) -> int {
+fn add(a: Int, b: Int) -> Int {
     a + b
 }
 
@@ -25,7 +25,7 @@ fn main() {
 fn test_function_return() {
     let output = run_and_capture(
         r#"
-fn early(x: int) -> int {
+fn early(x: Int) -> Int {
     if x > 0 {
         return x;
     }
@@ -45,7 +45,7 @@ fn main() {
 fn test_tail_expression() {
     let output = run_and_capture(
         r#"
-fn double(x: int) -> int {
+fn double(x: Int) -> Int {
     x * 2
 }
 
@@ -61,7 +61,7 @@ fn main() {
 fn test_wrong_arg_count() {
     let result = run_compiled(
         r#"
-fn foo(a: int) -> int { a }
+fn foo(a: Int) -> Int { a }
 fn main() { foo(1, 2); }
 "#,
     );
@@ -76,7 +76,7 @@ fn main() { foo(1, 2); }
 fn test_recursive_function() {
     let output = run_and_capture(
         r#"
-fn factorial(n: int) -> int {
+fn factorial(n: Int) -> Int {
     if n <= 1 {
         return 1;
     }

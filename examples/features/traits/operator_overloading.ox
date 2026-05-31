@@ -5,8 +5,8 @@
 // === Add Operator ===
 
 struct Vec2 {
-    x: float,
-    y: float,
+    x: Float,
+    y: Float,
 }
 
 impl Add for Vec2 {
@@ -88,7 +88,7 @@ fn test_neg_operator() {
 
 // === Rem (modulo) Operator ===
 
-struct WrappedInt(int);
+struct WrappedInt(Int);
 
 impl Rem for WrappedInt {
     fn rem(self, other: WrappedInt) -> WrappedInt {
@@ -123,7 +123,7 @@ fn test_div_operator() {
 // === Operator on Enum ===
 
 struct BoxedInt {
-    val: int,
+    val: Int,
 }
 
 impl Add for BoxedInt {

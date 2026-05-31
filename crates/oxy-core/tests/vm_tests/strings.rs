@@ -188,7 +188,7 @@ fn test_fstring_escaped_braces() {
 #[test]
 fn test_fstring_method_call() {
     let out = run_and_capture(
-        r#"fn main() { let v = vec(1, 2, 3); println("{}", f"len = {v.len()}"); }"#,
+        r#"fn main() { let v = list(1, 2, 3); println("{}", f"len = {v.len()}"); }"#,
     );
     assert_eq!(out, vec!["len = 3\n"]);
 }
@@ -196,7 +196,7 @@ fn test_fstring_method_call() {
 #[test]
 fn test_fstring_nested_function() {
     let out = run_and_capture(
-        r#"fn double(x: int) -> int { x * 2 } fn main() { println("{}", f"double(5) = {double(5)}"); }"#,
+        r#"fn double(x: Int) -> Int { x * 2 } fn main() { println("{}", f"double(5) = {double(5)}"); }"#,
     );
     assert_eq!(out, vec!["double(5) = 10\n"]);
 }

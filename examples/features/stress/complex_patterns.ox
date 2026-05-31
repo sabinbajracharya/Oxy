@@ -1,10 +1,10 @@
 // === STRESS: complex pattern matching combinations ===
 
 enum Event {
-    Click(int, int),
+    Click(Int, Int),
     KeyPress(char),
     Quit,
-    Resize { w: int, h: int },
+    Resize { w: Int, h: Int },
 }
 
 // --- match with multiple data extraction ---
@@ -46,8 +46,8 @@ fn test_match_guards_on_binding() {
 
 // --- match with literal in tuple position ---
 enum Op {
-    Add(int, int),
-    Inc(int),
+    Add(Int, Int),
+    Inc(Int),
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn test_match_literal_in_tuple_pos() {
 // --- nested match ---
 #[test]
 fn test_deeply_nested_match() {
-    let o: Option<Result<int, String>> = Some(Ok(42));
+    let o: Option<Result<Int, String>> = Some(Ok(42));
     let v = match o {
         Some(r) => match r {
             Ok(n) => n,
@@ -79,9 +79,9 @@ fn test_deeply_nested_match() {
 fn test_match_returns_closure() {
     let pick = 1;
     let f = match pick {
-        0 => |x: int| x + 1,
-        1 => |x: int| x * 2,
-        _ => |x: int| x,
+        0 => |x: Int| x + 1,
+        1 => |x: Int| x * 2,
+        _ => |x: Int| x,
     };
     assert_eq(f(5), 10);
 }
@@ -100,7 +100,7 @@ fn test_match_on_bool() {
 // --- match with all-pattern coverage ---
 enum Trio { A, B, C }
 
-fn trio_to_int(t: Trio) -> int {
+fn trio_to_int(t: Trio) -> Int {
     match t {
         Trio::A => 1,
         Trio::B => 2,
@@ -116,7 +116,7 @@ fn test_trio_exhaustive() {
 }
 
 // --- match on Option<T> from fn ---
-fn safe_div(a: int, b: int) -> Option<int> {
+fn safe_div(a: Int, b: Int) -> Option<Int> {
     if b == 0 { None } else { Some(a / b) }
 }
 
@@ -147,7 +147,7 @@ fn test_match_or_pattern_strings() {
 }
 
 // --- match inside fn returning tuple ---
-fn classify(n: int) -> (String, int) {
+fn classify(n: Int) -> (String, Int) {
     match n {
         0 => ("zero".to_string(), 0),
         n if n < 0 => ("neg".to_string(), -n),
@@ -175,7 +175,7 @@ fn test_match_returning_tuple_neg() {
 fn test_match_in_for_body() {
     let mut hits = 0;
     let mut misses = 0;
-    for n in vec(1, 2, 3, 4, 5) {
+    for n in list(1, 2, 3, 4, 5) {
         match n % 2 {
             0 => hits = hits + 1,
             _ => misses = misses + 1,
@@ -188,7 +188,7 @@ fn test_match_in_for_body() {
 // --- if-let chained with else ---
 #[test]
 fn test_if_let_else_chain() {
-    let opt: Option<int> = None;
+    let opt: Option<Int> = None;
     let r = if let Some(x) = opt {
         x * 10
     } else {

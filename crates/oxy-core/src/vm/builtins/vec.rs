@@ -25,7 +25,7 @@ where
         symbols::vec_m::LEN => Ok(Value::I64(rc.borrow().len() as i64)),
         symbols::vec_m::IS_EMPTY => Ok(Value::Bool(rc.borrow().is_empty())),
         symbols::vec_m::CONTAINS => {
-            let val = args.first().ok_or("Vec::contains takes 1 argument")?;
+            let val = args.first().ok_or("List::contains takes 1 argument")?;
             Ok(Value::Bool(rc.borrow().contains(val)))
         }
         symbols::vec_m::PUSH => {
@@ -52,7 +52,7 @@ where
                     Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
-                .ok_or("Vec::get requires an integer index")?;
+                .ok_or("List::get requires an integer index")?;
             match rc.borrow().get(idx) {
                 Some(val) => Ok(Value::some(val.clone())),
                 None => Ok(Value::none()),
@@ -65,7 +65,7 @@ where
                     Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
-                .ok_or("Vec::insert requires an integer index")?;
+                .ok_or("List::insert requires an integer index")?;
             let val = args.get(1).cloned().unwrap_or(Value::Unit);
             let len = rc.borrow().len();
             rc.borrow_mut().insert(idx.min(len), val);
@@ -78,7 +78,7 @@ where
                     Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
-                .ok_or("Vec::remove requires an integer index")?;
+                .ok_or("List::remove requires an integer index")?;
             if idx < rc.borrow().len() {
                 Ok(rc.borrow_mut().remove(idx))
             } else {
@@ -122,7 +122,7 @@ where
             Ok(Value::Unit)
         }
         symbols::vec_m::EXTEND => {
-            let other = args.first().ok_or("Vec::extend takes 1 argument")?;
+            let other = args.first().ok_or("List::extend takes 1 argument")?;
             match other {
                 Value::Vec(other_rc) => {
                     rc.borrow_mut().extend(other_rc.borrow().clone());
@@ -144,7 +144,7 @@ where
                     Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
-                .ok_or("Vec::chunks requires an integer size")?;
+                .ok_or("List::chunks requires an integer size")?;
             let chunks: Vec<Value> = rc
                 .borrow()
                 .chunks(n.max(1))
@@ -159,7 +159,7 @@ where
                     Value::I64(n) => Some(*n as usize),
                     _ => None,
                 })
-                .ok_or("Vec::windows requires an integer size")?;
+                .ok_or("List::windows requires an integer size")?;
             let windows: Vec<Value> = rc
                 .borrow()
                 .windows(n.max(1))
@@ -233,7 +233,7 @@ where
             }
             Ok(Value::Unit)
         }
-        _ => Err(format!("no method '{}' on type Vec", method)),
+        _ => Err(format!("no method '{}' on type List", method)),
     }
 }
 

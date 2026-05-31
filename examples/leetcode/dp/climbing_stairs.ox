@@ -25,7 +25,7 @@ fn main() {
     println("{}", climb_stairs(5));
 }
 
-fn climb_stairs(n: int) -> int {
+fn climb_stairs(n: Int) -> Int {
     if n <= 2 {
         return n;
     }

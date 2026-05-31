@@ -8,7 +8,7 @@ trait AsText {
     fn as_text(self) -> String;
 }
 
-impl AsText for int {
+impl AsText for Int {
     fn as_text(self) -> String {
         self.to_string()
     }
@@ -30,8 +30,8 @@ trait Doublable {
     fn double(self) -> Self;
 }
 
-impl Doublable for int {
-    fn double(self) -> int {
+impl Doublable for Int {
+    fn double(self) -> Int {
         self * 2
     }
 }

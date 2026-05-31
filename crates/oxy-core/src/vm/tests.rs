@@ -44,7 +44,7 @@ mod tests {
     // --- Index tests ---
 
     #[test]
-    fn test_compiled_index_vec() {
+    fn test_compiled_index_list() {
         let source = r#"
         fn main() {
             let arr = [10, 20, 30];
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn test_compiled_function_call() {
         let source = r#"
-        fn add(x: int, y: int) -> int { x + y }
+        fn add(x: Int, y: Int) -> Int { x + y }
         fn main() {
             let r = add(3, 4);
             println("{}", r);
@@ -365,7 +365,7 @@ mod tests {
     fn test_compiled_simple_if_no_recursion() {
         // Non-recursive else branch — should work
         let source = r#"
-        fn check(n: int) -> int {
+        fn check(n: Int) -> Int {
             if n <= 1 { n } else { 99 }
         }
         fn main() {
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn test_compiled_fib_2() {
         let source = r#"
-        fn fib(n: int) -> int {
+        fn fib(n: Int) -> Int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() { println("{}", fib(2)); }
@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn test_compiled_fibonacci() {
         let source = r#"
-        fn fib(n: int) -> int {
+        fn fib(n: Int) -> Int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn test_compiled_if_else() {
         let source = r#"
-        fn is_even(n: int) -> bool {
+        fn is_even(n: Int) -> bool {
             if n % 2 == 0 { true } else { false }
         }
         fn main() {
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn test_compiled_vs_interpreted_equivalent() {
         let source = r#"
-        fn fib(n: int) -> int {
+        fn fib(n: Int) -> Int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
@@ -592,8 +592,8 @@ mod tests {
     #[test]
     fn test_compiled_struct_and_enum_define() {
         let source = r#"
-        struct Point { x: int, y: int }
-        enum Shape { Circle, Square(int) }
+        struct PoInt { x: Int, y: Int }
+        enum Shape { Circle, Square(Int) }
         fn main() {
             println("ok");
         }
@@ -611,7 +611,7 @@ mod tests {
     #[test]
     fn test_compiled_impl_method() {
         let source = r#"
-        struct Counter { n: int }
+        struct Counter { n: Int }
         impl Counter {
             fn inc(self) -> Counter {
                 Counter { n: self.n + 1 }
@@ -632,9 +632,9 @@ mod tests {
     #[test]
     fn test_compiled_self_ref() {
         let source = r#"
-        struct Value { x: int }
+        struct Value { x: Int }
         impl Value {
-            fn get(self) -> int {
+            fn get(self) -> Int {
                 self.x
             }
         }
@@ -711,7 +711,7 @@ mod tests {
     #[test]
     fn test_compiled_match_enum_variant() {
         let source = r#"
-        enum Opt { Some(int), None }
+        enum Opt { Some(Int), None }
         fn main() {
             let x = Opt::Some(10);
             let r = match x {
@@ -736,7 +736,7 @@ mod tests {
     #[test]
     fn test_compiled_if_let_some() {
         let source = r#"
-        enum Opt { Some(int), None }
+        enum Opt { Some(Int), None }
         fn main() {
             let x = Opt::Some(42);
             if let Opt::Some(v) = x {
@@ -753,7 +753,7 @@ mod tests {
     #[test]
     fn test_compiled_if_let_none_else() {
         let source = r#"
-        enum Opt { Some(int), None }
+        enum Opt { Some(Int), None }
         fn main() {
             let x = Opt::None;
             if let Opt::Some(v) = x {
@@ -823,14 +823,14 @@ mod tests {
     fn test_compiled_pathcall_hashmap_new() {
         let source = r#"
         fn main() {
-            let m = HashMap::new();
+            let m = Map::new();
             println("{}", m.len());
         }
         "#;
         let result = run_compiled_capturing(source);
         assert!(
             result.is_ok(),
-            "pathcall HashMap::new failed: {:?}",
+            "pathcall Map::new failed: {:?}",
             result.err()
         );
         let (_, output) = result.unwrap();
@@ -843,7 +843,7 @@ mod tests {
     fn test_compiled_inline_module_call() {
         let source = r#"
         mod math {
-            pub fn double(x: int) -> int { x * 2 }
+            pub fn double(x: Int) -> Int { x * 2 }
         }
         fn main() {
             println("{}", math::double(21));
@@ -864,7 +864,7 @@ mod tests {
         let source = r#"
         mod outer {
             pub mod inner {
-                pub fn val() -> int { 99 }
+                pub fn val() -> Int { 99 }
             }
         }
         fn main() {
@@ -881,7 +881,7 @@ mod tests {
     fn test_compiled_module_with_use() {
         let source = r#"
         mod calc {
-            pub fn triple(x: int) -> int { x * 3 }
+            pub fn triple(x: Int) -> Int { x * 3 }
         }
         use calc::triple;
         fn main() {
@@ -898,10 +898,10 @@ mod tests {
     fn test_compiled_module_chain() {
         let source = r#"
         mod a {
-            pub fn one() -> int { 1 }
+            pub fn one() -> Int { 1 }
         }
         mod b {
-            pub fn two() -> int { a::one() + a::one() }
+            pub fn two() -> Int { a::one() + a::one() }
         }
         fn main() {
             println("{}", b::two());
@@ -917,7 +917,7 @@ mod tests {
     fn test_compiled_iter_any() {
         let source = r#"
         fn main() {
-            let v = vec(1, 2, 3);
+            let v = list(1, 2, 3);
             let r = v.iter().any(|x| x == 2);
             println("{}", r);
         }

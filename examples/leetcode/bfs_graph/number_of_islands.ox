@@ -17,16 +17,16 @@
 // - "Islands" → DFS + grid modification
 
 fn main() {
-    let grid = vec(
-        vec('1', '1', '1', '1', '0'),
-        vec('1', '1', '0', '1', '0'),
-        vec('1', '1', '0', '0', '0'),
-        vec('0', '0', '0', '0', '0')
+    let grid = list(
+        list('1', '1', '1', '1', '0'),
+        list('1', '1', '0', '1', '0'),
+        list('1', '1', '0', '0', '0'),
+        list('0', '0', '0', '0', '0')
     );
     println("{}", num_islands(grid));
 }
 
-fn dfs(grid: Vec, i: int, j: int) -> Vec {
+fn dfs(grid: List, i: Int, j: Int) -> List {
     let rows = grid.len();
     let cols = grid[0].len();
     if i < 0 || i >= rows || j < 0 || j >= cols {
@@ -47,7 +47,7 @@ fn dfs(grid: Vec, i: int, j: int) -> Vec {
     g
 }
 
-fn num_islands(grid: Vec) -> int {
+fn num_islands(grid: List) -> Int {
     if grid.len() == 0 {
         return 0;
     }
@@ -68,22 +68,22 @@ fn num_islands(grid: Vec) -> int {
 
 #[test]
 fn test_example() {
-    let grid = vec(
-        vec('1', '1', '1', '1', '0'),
-        vec('1', '1', '0', '1', '0'),
-        vec('1', '1', '0', '0', '0'),
-        vec('0', '0', '0', '0', '0')
+    let grid = list(
+        list('1', '1', '1', '1', '0'),
+        list('1', '1', '0', '1', '0'),
+        list('1', '1', '0', '0', '0'),
+        list('0', '0', '0', '0', '0')
     );
     assert_eq(num_islands(grid), 1);
 }
 
 #[test]
 fn test_multiple() {
-    let grid = vec(
-        vec('1', '1', '0', '0', '0'),
-        vec('1', '1', '0', '0', '0'),
-        vec('0', '0', '1', '0', '0'),
-        vec('0', '0', '0', '1', '1')
+    let grid = list(
+        list('1', '1', '0', '0', '0'),
+        list('1', '1', '0', '0', '0'),
+        list('0', '0', '1', '0', '0'),
+        list('0', '0', '0', '1', '1')
     );
     assert_eq(num_islands(grid), 3);
 }

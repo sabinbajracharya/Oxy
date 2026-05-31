@@ -1,15 +1,15 @@
 // Example: Modules & Use Statements in Oxy
 
 mod math {
-    fn add(a: int, b: int) -> int {
+    fn add(a: Int, b: Int) -> Int {
         a + b
     }
 
-    fn multiply(a: int, b: int) -> int {
+    fn multiply(a: Int, b: Int) -> Int {
         a * b
     }
 
-    fn factorial(n: int) -> int {
+    fn factorial(n: Int) -> Int {
         if n <= 1 {
             1
         } else {
@@ -20,16 +20,16 @@ mod math {
 
 mod geometry {
     struct Point {
-        x: float,
-        y: float,
+        x: Float,
+        y: Float,
     }
 
     impl Point {
-        fn new(x: float, y: float) -> Self {
+        fn new(x: Float, y: Float) -> Self {
             Point { x, y }
         }
 
-        fn distance(self, other: Point) -> float {
+        fn distance(self, other: Point) -> Float {
             let dx = self.x - other.x;
             let dy = self.y - other.y;
             (dx * dx + dy * dy).sqrt()
@@ -37,12 +37,12 @@ mod geometry {
     }
 
     enum Shape {
-        Circle(float),
-        Rectangle(float, float),
+        Circle(Float),
+        Rectangle(Float, Float),
     }
 
     impl Shape {
-        fn area(self) -> float {
+        fn area(self) -> Float {
             match self {
                 Shape::Circle(r) => 3.14159 * r * r,
                 Shape::Rectangle(w, h) => w * h,

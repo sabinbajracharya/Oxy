@@ -92,8 +92,8 @@ fn test_for_in_inclusive_range() {
     assert_eq(sum, 10);
 }
 #[test]
-fn test_for_in_vec() {
-    let v = vec(10, 20, 30, 40);
+fn test_for_in_list() {
+    let v = list(10, 20, 30, 40);
     let mut sum = 0;
     for x in v {
         sum = sum + x;
@@ -205,7 +205,7 @@ fn test_labeled_continue_outer() {
 // --- if-let ---
 #[test]
 fn test_if_let_some() {
-    let x: Option<int> = Some(7);
+    let x: Option<Int> = Some(7);
     let mut got = 0;
     if let Some(v) = x {
         got = v;
@@ -214,7 +214,7 @@ fn test_if_let_some() {
 }
 #[test]
 fn test_if_let_none_skips() {
-    let x: Option<int> = None;
+    let x: Option<Int> = None;
     let mut got = -1;
     if let Some(v) = x {
         got = v;
@@ -223,15 +223,15 @@ fn test_if_let_none_skips() {
 }
 #[test]
 fn test_if_let_else() {
-    let x: Option<int> = None;
+    let x: Option<Int> = None;
     let n = if let Some(v) = x { v } else { 99 };
     assert_eq(n, 99);
 }
 
-// --- while-let with Vec.pop ---
+// --- while-let with List.pop ---
 #[test]
-fn test_while_let_pops_vec() {
-    let mut v = vec(1, 2, 3, 4);
+fn test_while_let_pops_list() {
+    let mut v = list(1, 2, 3, 4);
     let mut sum = 0;
     while let Some(x) = v.pop() {
         sum = sum + x;
@@ -245,7 +245,7 @@ fn test_while_let_pops_vec() {
 fn test_and_short_circuits() {
     // Nested fn declared inside a test body — Oxy hoists nested items to
     // top-level with a mangled name and aliases them locally.
-    fn always_false(_c: int) -> bool { false }
+    fn always_false(_c: Int) -> bool { false }
     let r = always_false(99) && (true || true);
     assert_eq(r, false);
 }
@@ -256,7 +256,7 @@ fn test_or_short_circuits() {
 }
 
 // --- return-as-expression in nested positions ---
-fn early_return_in_if(b: bool) -> int {
+fn early_return_in_if(b: bool) -> Int {
     if b { return 42; }
     -1
 }
@@ -265,7 +265,7 @@ fn test_early_return_taken() { assert_eq(early_return_in_if(true), 42); }
 #[test]
 fn test_early_return_not_taken() { assert_eq(early_return_in_if(false), -1); }
 
-fn early_return_in_loop() -> int {
+fn early_return_in_loop() -> Int {
     for i in 0..100 {
         if i == 5 { return i * 2; }
     }
@@ -274,7 +274,7 @@ fn early_return_in_loop() -> int {
 #[test]
 fn test_return_from_for() { assert_eq(early_return_in_loop(), 10); }
 
-fn return_from_while() -> int {
+fn return_from_while() -> Int {
     let mut i = 0;
     while i < 100 {
         if i == 7 { return i; }

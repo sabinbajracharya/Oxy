@@ -72,17 +72,17 @@ impl TypeInfo {
 
     pub fn name(&self) -> &str {
         match self {
-            TypeInfo::I64 => "int",
-            TypeInfo::U8 => "byte",
-            TypeInfo::F64 => "float",
+            TypeInfo::I64 => "Int",
+            TypeInfo::U8 => "Byte",
+            TypeInfo::F64 => "Float",
             TypeInfo::Bool => "bool",
             TypeInfo::String => "String",
             TypeInfo::Char => "char",
             TypeInfo::Unit => "()",
             // Parameterized containers print their bare head — callers that
             // want the full `Vec<T>` form should use `display_name()`.
-            TypeInfo::Vec(_) => "Vec",
-            TypeInfo::HashMap(..) => "HashMap",
+            TypeInfo::Vec(_) => "List",
+            TypeInfo::HashMap(..) => "Map",
             TypeInfo::BTreeMap(..) => "BTreeMap",
             TypeInfo::Option(_) => "Option",
             TypeInfo::Result(..) => "Result",
@@ -95,13 +95,13 @@ impl TypeInfo {
         }
     }
 
-    /// Owned, fully-parameterized display name (e.g. `Vec<i64>`).
+    /// Owned, fully-parameterized display name (e.g. `List<Int>`).
     pub fn display_name(&self) -> String {
         match self {
-            TypeInfo::Vec(t) => format!("Vec<{}>", t.display_name()),
+            TypeInfo::Vec(t) => format!("List<{}>", t.display_name()),
             TypeInfo::Option(t) => format!("Option<{}>", t.display_name()),
             TypeInfo::HashMap(k, v) => {
-                format!("HashMap<{}, {}>", k.display_name(), v.display_name())
+                format!("Map<{}, {}>", k.display_name(), v.display_name())
             }
             TypeInfo::BTreeMap(k, v) => {
                 format!("BTreeMap<{}, {}>", k.display_name(), v.display_name())
@@ -209,12 +209,12 @@ impl TypeInfo {
             }
         }
         match name {
-            // Oxy has exactly two integer types: `int` (= i64 internally)
-            // and `byte` (= u8). The Rust-style width zoo was retired in
+            // Oxy has exactly two integer types: `Int` (= i64 internally)
+            // and `Byte` (= u8). The Rust-style width zoo was retired in
             // favour of a single sensible default — see CLAUDE.md.
-            "int" => TypeInfo::I64,
-            "byte" => TypeInfo::U8,
-            "float" => TypeInfo::F64,
+            "Int" => TypeInfo::I64,
+            "Byte" => TypeInfo::U8,
+            "Float" => TypeInfo::F64,
             "bool" => TypeInfo::Bool,
             "String" | "str" => TypeInfo::String,
             "char" => TypeInfo::Char,
@@ -223,10 +223,8 @@ impl TypeInfo {
                 ret: Box::new(TypeInfo::Unknown),
             },
             "()" | "Unit" => TypeInfo::Unit,
-            "Vec" => TypeInfo::Vec(Box::new(TypeInfo::Unknown)),
-            "HashMap" => {
-                TypeInfo::HashMap(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown))
-            }
+            "List" => TypeInfo::Vec(Box::new(TypeInfo::Unknown)),
+            "Map" => TypeInfo::HashMap(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown)),
             "BTreeMap" => {
                 TypeInfo::BTreeMap(Box::new(TypeInfo::Unknown), Box::new(TypeInfo::Unknown))
             }

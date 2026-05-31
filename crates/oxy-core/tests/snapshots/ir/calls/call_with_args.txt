@@ -1,4 +1,4 @@
-fn add(a: int, b: int) -> int {
+fn add(a: Int, b: Int) -> Int {
   locals: 2
   bb0(entry):
     v0 = load.local $0
@@ -10,8 +10,8 @@ fn add(a: int, b: int) -> int {
 fn main() -> () {
   locals: 1
   bb0(entry):
-    v0 = const.int 3
-    v1 = const.int 4
+    v0 = const.Int 3
+    v1 = const.Int 4
     v2 = call @oxy_push_named_fn() str["add"]
     v3 = call @oxy_call_closure(v2, v0, v1) imm[2]
     store.local $0, v3

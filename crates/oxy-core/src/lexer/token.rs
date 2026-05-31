@@ -286,7 +286,7 @@ impl TokenKind {
     pub fn description(&self) -> &'static str {
         match self {
             Self::IntLiteral(_, _) => "integer literal",
-            Self::FloatLiteral(_, _) => "float literal",
+            Self::FloatLiteral(_, _) => "Float literal",
             Self::StringLiteral(_) => "string literal",
             Self::CharLiteral(_) => "character literal",
             Self::FStringLiteral(_) => "f-string literal",

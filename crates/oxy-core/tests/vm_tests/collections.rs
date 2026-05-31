@@ -18,13 +18,13 @@ fn test_empty_array() {
 
 #[test]
 fn test_vec_macro() {
-    let output = run_and_capture("fn main() { let v = vec(10, 20, 30); println(\"{:?}\", v); }");
+    let output = run_and_capture("fn main() { let v = list(10, 20, 30); println(\"{:?}\", v); }");
     assert_eq!(output, vec!["[10, 20, 30]\n"]);
 }
 
 #[test]
 fn test_vec_index() {
-    let output = run_and_capture("fn main() { let v = vec(10, 20, 30); println(\"{}\", v[1]); }");
+    let output = run_and_capture("fn main() { let v = list(10, 20, 30); println(\"{}\", v[1]); }");
     assert_eq!(output, vec!["20\n"]);
 }
 
@@ -32,7 +32,7 @@ fn test_vec_index() {
 fn test_vec_push() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec(1, 2);
+let mut v = list(1, 2);
 v.push(3);
 println("{:?}", v);
 }"#,
@@ -44,7 +44,7 @@ println("{:?}", v);
 fn test_vec_pop() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec(1, 2, 3);
+let mut v = list(1, 2, 3);
 let x = v.pop();
 println("{:?} {:?}", x, v);
 }"#,
@@ -54,7 +54,7 @@ println("{:?} {:?}", x, v);
 
 #[test]
 fn test_vec_len() {
-    let output = run_and_capture("fn main() { let v = vec(1, 2, 3); println(\"{}\", v.len()); }");
+    let output = run_and_capture("fn main() { let v = list(1, 2, 3); println(\"{}\", v.len()); }");
     assert_eq!(output, vec!["3\n"]);
 }
 
@@ -63,7 +63,7 @@ fn test_vec_is_empty() {
     let output = run_and_capture(
         r#"fn main() {
 let a = [];
-let b = vec(1);
+let b = list(1);
 println("{} {}", a.is_empty(), b.is_empty());
 }"#,
     );
@@ -74,7 +74,7 @@ println("{} {}", a.is_empty(), b.is_empty());
 fn test_vec_contains() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3);
+let v = list(1, 2, 3);
 println("{} {}", v.contains(2), v.contains(5));
 }"#,
     );
@@ -85,7 +85,7 @@ println("{} {}", v.contains(2), v.contains(5));
 fn test_vec_index_assign() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec(1, 2, 3);
+let mut v = list(1, 2, 3);
 v[1] = 99;
 println("{:?}", v);
 }"#,
@@ -97,7 +97,7 @@ println("{:?}", v);
 fn test_vec_iteration() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(10, 20, 30);
+let v = list(10, 20, 30);
 let mut sum = 0;
 for x in v {
     sum += x;
@@ -112,7 +112,7 @@ println("{}", sum);
 fn test_vec_join() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec("a", "b", "c");
+let v = list("a", "b", "c");
 println("{}", v.join(", "));
 }"#,
     );
@@ -265,7 +265,7 @@ for c in "abc" {
 fn test_vec_first_last() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(10, 20, 30);
+let v = list(10, 20, 30);
 println("{:?} {:?}", v.first(), v.last());
 }"#,
     );
@@ -276,7 +276,7 @@ println("{:?} {:?}", v.first(), v.last());
 fn test_vec_reverse() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = vec(1, 2, 3);
+let mut v = list(1, 2, 3);
 v.reverse();
 println("{:?}", v);
 }"#,
@@ -285,10 +285,10 @@ println("{:?}", v);
 }
 
 #[test]
-fn test_nested_vec() {
+fn test_nested_list() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(vec(1, 2), vec(3, 4));
+let v = list(list(1, 2), list(3, 4));
 println("{}", v[0][1]);
 println("{:?}", v);
 }"#,
@@ -300,7 +300,7 @@ println("{:?}", v);
 fn test_debug_format_collections() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec("hello", "world");
+let v = list("hello", "world");
 println("{:?}", v);
 let t = (1, "two", true);
 println("{:?}", t);
@@ -314,7 +314,7 @@ println("{:?}", t);
 
 #[test]
 fn test_index_out_of_bounds() {
-    let result = run_compiled("fn main() { let v = vec(1, 2); let x = v[5]; }");
+    let result = run_compiled("fn main() { let v = list(1, 2); let x = v[5]; }");
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("out of bounds"), "actual error: {err}");
@@ -333,7 +333,7 @@ fn test_hashmap_new_and_insert() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
     println("{}", m.len());
@@ -348,7 +348,7 @@ fn test_hashmap_get() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("key", 42);
     let val = m.get("key");
     println("{}", val.unwrap());
@@ -363,7 +363,7 @@ fn test_hashmap_get_missing() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let m = HashMap::new();
+    let m = Map::new();
     let val = m.get("nope");
     println("{}", val.is_none());
 }
@@ -377,7 +377,7 @@ fn test_hashmap_contains_key() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("x", 1);
     println("{}", m.contains_key("x"));
     println("{}", m.contains_key("y"));
@@ -392,7 +392,7 @@ fn test_hashmap_remove() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("a", 10);
     let removed = m.remove("a");
     println("{}", removed.unwrap());
@@ -408,7 +408,7 @@ fn test_hashmap_keys_values() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("b", 2);
     m.insert("a", 1);
     println("{:?}", m.keys());
@@ -424,7 +424,7 @@ fn test_hashmap_debug_format() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("x", 1);
     println("{:?}", m);
 }
@@ -438,7 +438,7 @@ fn test_hashmap_iteration() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
     for (k, v) in m {
@@ -455,7 +455,7 @@ fn test_hashmap_is_empty() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let m = HashMap::new();
+    let m = Map::new();
     println("{}", m.is_empty());
 }
 "#,
@@ -468,7 +468,7 @@ fn test_hashset_new_and_insert() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert(1);
     s.insert(2);
     s.insert(1);
@@ -484,7 +484,7 @@ fn test_hashset_contains() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert("a");
     s.insert("b");
     println("{}", s.contains("a"));
@@ -500,7 +500,7 @@ fn test_hashset_remove() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert(1);
     s.insert(2);
     println("{}", s.remove(1));
@@ -517,7 +517,7 @@ fn test_hashset_is_empty() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let s = HashSet::new();
+    let s = Set::new();
     println("{}", s.is_empty());
 }
 "#,
@@ -530,10 +530,10 @@ fn test_hashset_union() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut a = HashSet::new();
+    let mut a = Set::new();
     a.insert(1);
     a.insert(2);
-    let mut b = HashSet::new();
+    let mut b = Set::new();
     b.insert(2);
     b.insert(3);
     let c = a.union(b);
@@ -551,10 +551,10 @@ fn test_hashset_intersection() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut a = HashSet::new();
+    let mut a = Set::new();
     a.insert(1);
     a.insert(2);
-    let mut b = HashSet::new();
+    let mut b = Set::new();
     b.insert(2);
     b.insert(3);
     let c = a.intersection(b);
@@ -572,10 +572,10 @@ fn test_hashset_difference() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut a = HashSet::new();
+    let mut a = Set::new();
     a.insert(1);
     a.insert(2);
-    let mut b = HashSet::new();
+    let mut b = Set::new();
     b.insert(2);
     b.insert(3);
     let c = a.difference(b);
@@ -589,11 +589,11 @@ fn main() {
 }
 
 #[test]
-fn test_hashset_to_vec() {
+fn test_hashset_to_list() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert(3);
     s.insert(1);
     s.insert(2);
@@ -613,7 +613,7 @@ fn test_hashset_clone() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert(1);
     let c = s.clone();
     println("{}", c.len());
@@ -629,7 +629,7 @@ fn test_hashset_iteration() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert(1);
     s.insert(2);
     for x in s {
@@ -647,7 +647,7 @@ fn test_hashset_string_elements() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut s = HashSet::new();
+    let mut s = Set::new();
     s.insert("hello");
     s.insert("world");
     println("{}", s.contains("hello"));
@@ -744,7 +744,7 @@ fn main() {
 }
 
 #[test]
-fn test_binary_heap_to_vec() {
+fn test_binary_heap_to_list() {
     let output = run_and_capture(
         r#"
 fn main() {
@@ -813,7 +813,7 @@ fn main() {
 }
 
 #[test]
-fn test_vec_deque_to_vec() {
+fn test_vec_deque_to_list() {
     let output = run_and_capture(
         r#"
 fn main() {
@@ -831,12 +831,12 @@ fn main() {
 }
 
 #[test]
-fn test_turbofish_collect_vec() {
+fn test_turbofish_collect_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = vec(1, 2, 3);
-                let doubled = v.iter().map(|x| x * 2).collect::<Vec>();
+                let v = list(1, 2, 3);
+                let doubled = v.iter().map(|x| x * 2).collect::<List>();
                 println("{:?}", doubled);
             }
             "#,

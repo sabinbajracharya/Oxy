@@ -3,7 +3,7 @@
 //
 // === Pattern: Backtracking ===
 // Build permutations by choosing one unused element at a time. Track which
-// elements are used with a Vec<bool>. With shared mutable collections (Rc),
+// elements are used with a List<bool>. With shared mutable collections (Rc),
 // passing by value shares the underlying data — mutations propagate.
 //
 // === Intuition ===
@@ -16,14 +16,14 @@
 // - Shared mutable collections let us use classic push/pop/recurse/undo
 
 fn main() {
-    let nums = vec(1, 2, 3);
+    let nums = list(1, 2, 3);
     let result = permute(nums);
     for p in result {
         println("{:?}", p);
     }
 }
 
-fn backtrack(nums: Vec, current: Vec, used: Vec, result: Vec) {
+fn backtrack(nums: List, current: List, used: List, result: List) {
     if current.len() == nums.len() {
         result.push(current.clone());
         return;
@@ -41,29 +41,29 @@ fn backtrack(nums: Vec, current: Vec, used: Vec, result: Vec) {
     }
 }
 
-fn permute(nums: Vec) -> Vec {
+fn permute(nums: List) -> List {
     let n = nums.len();
-    let mut used = vec();
+    let mut used = list();
     let mut i = 0;
     while i < n {
         used.push(false);
         i = i + 1;
     }
-    let result = vec();
-    let current = vec();
+    let result = list();
+    let current = list();
     backtrack(nums, current, used, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = permute(vec(1, 2, 3));
+    let result = permute(list(1, 2, 3));
     assert_eq(result.len(), 6);
 }
 
 #[test]
 fn test_single() {
-    let result = permute(vec(1));
+    let result = permute(list(1));
     assert_eq(result.len(), 1);
-    assert_eq(result[0], vec(1));
+    assert_eq(result[0], list(1));
 }

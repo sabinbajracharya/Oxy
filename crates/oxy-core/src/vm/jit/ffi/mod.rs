@@ -728,7 +728,7 @@ extern "C" fn oxy_method_call(
         }
     }
 
-    // Fall back to built-in dispatch. Built-in receivers (Vec, String, …) are
+    // Fall back to built-in dispatch. Built-in receivers (List, String, …) are
     // either value types or already `Rc<RefCell>`-shared, so they're never the
     // cell-wrapped mutable receivers the user-method path relies on — dispatch on
     // the unwrapped value so a celled mutable local (e.g. `let mut v = vec![]`)
@@ -824,7 +824,7 @@ fn dispatch_builtin_method(
     method_name: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
-    // Unwrap Cell for method dispatch. The inner value (e.g. Vec, HashMap)
+    // Unwrap Cell for method dispatch. The inner value (e.g. List, Map)
     // has its own interior mutability via Rc<RefCell<>>, so mutations
     // through the clone are visible to the original Cell owner.
     let receiver = match receiver {

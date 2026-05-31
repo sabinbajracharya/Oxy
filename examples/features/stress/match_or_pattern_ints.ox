@@ -1,6 +1,6 @@
 // === STRESS: match with or-pattern on integer literals + ranges + guards ===
 
-fn describe(n: int) -> String {
+fn describe(n: Int) -> String {
     match n {
         0 => "zero".to_string(),
         1 | 2 => "one or two".to_string(),
@@ -26,7 +26,7 @@ fn test_negative() { assert_eq(describe(-3), "negative"); }
 // The guard-fail-then-prelude-Pop bug only manifested when the surrounding
 // caller had values on its stack that the spurious Pop could eat. Exercise
 // it explicitly with a multi-arg println-style call wrapping the match.
-fn wrap(n: int) -> String {
+fn wrap(n: Int) -> String {
     format("{}: {}", n, describe(n))
 }
 

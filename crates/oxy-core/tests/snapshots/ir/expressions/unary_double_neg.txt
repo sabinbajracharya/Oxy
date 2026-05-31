@@ -1,7 +1,7 @@
 fn main() -> () {
   locals: 2
   bb0(entry):
-    v0 = const.int 5
+    v0 = const.Int 5
     store.local $0, v0
     v1 = load.local $0
     v2 = neg v1

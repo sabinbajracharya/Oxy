@@ -382,7 +382,7 @@ impl IrGen {
             let slot = self.alloc_local(&param.name);
             if let TypeAnnotation::Named { name, .. } = &param.type_ann {
                 self.local_types.insert(slot, name.clone());
-                if name == "byte" {
+                if name == "Byte" {
                     let loaded = self.alloc_reg();
                     self.emit(IrOp::LoadLocal(loaded, slot));
                     let coerced = self.coerce_reg(loaded, &param.type_ann);

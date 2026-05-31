@@ -18,21 +18,21 @@
 // - Stack + extra property → second stack or pair elements
 //
 // === Tips ===
-// - Use struct with two Vec fields
+// - Use struct with two List fields
 // - get_min() on empty stack can return None
 // - push/pop update both stacks in sync
 
 struct MinStack {
-    data: Vec,
-    mins: Vec,
+    data: List,
+    mins: List,
 }
 
 impl MinStack {
     fn new() -> Self {
-        MinStack { data: vec(), mins: vec() }
+        MinStack { data: list(), mins: list() }
     }
 
-    fn push(self, val: int) {
+    fn push(self, val: Int) {
         self.data.push(val);
         let min_val = if self.mins.is_empty() || val < self.mins.last().unwrap() {
             val
@@ -47,11 +47,11 @@ impl MinStack {
         self.mins.pop();
     }
 
-    fn top(self) -> int {
+    fn top(self) -> Int {
         self.data.last().unwrap()
     }
 
-    fn get_min(self) -> int {
+    fn get_min(self) -> Int {
         self.mins.last().unwrap()
     }
 }

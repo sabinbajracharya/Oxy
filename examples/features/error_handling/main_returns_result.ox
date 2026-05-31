@@ -4,11 +4,11 @@
 // (The CLI-level reporting is verified out-of-band; here we just verify
 // that the type checker / compiler accept the pattern.)
 
-fn fails() -> Result<int, String> {
+fn fails() -> Result<Int, String> {
     Err("boom".to_string())
 }
 
-fn ok_value() -> Result<int, String> {
+fn ok_value() -> Result<Int, String> {
     Ok(42)
 }
 

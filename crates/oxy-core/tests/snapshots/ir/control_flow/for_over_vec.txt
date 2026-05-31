@@ -1,12 +1,12 @@
 fn main() -> () {
   locals: 4
   bb0(entry):
-    v0 = const.int 1
-    v1 = const.int 2
-    v2 = const.int 3
+    v0 = const.Int 1
+    v1 = const.Int 2
+    v2 = const.Int 3
     v3 = call @oxy_make_array(v0, v1, v2) imm[3]
     store.local $0, v3
-    v4 = const.int 0
+    v4 = const.Int 0
     store.local $1, v4
     v5 = load.local $0
     v6 = call @oxy_make_iter(v5)

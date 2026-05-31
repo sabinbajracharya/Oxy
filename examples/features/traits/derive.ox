@@ -6,8 +6,8 @@
 
 #[derive(Default)]
 struct Point {
-    x: int,
-    y: int,
+    x: Int,
+    y: Int,
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_derive_default_named() {
 #[derive(Default)]
 struct Config {
     host: String,
-    port: int,
+    port: Int,
 }
 
 impl Default for Config {
@@ -45,9 +45,9 @@ fn test_derive_default_overridden() {
 
 #[derive(Default)]
 struct Pos3 {
-    x: float,
-    y: float,
-    z: float,
+    x: Float,
+    y: Float,
+    z: Float,
 }
 
 #[test]
@@ -62,8 +62,8 @@ fn test_derive_default_3d() {
 
 #[derive(Default)]
 struct Mixed {
-    int_val: int,
-    float_val: float,
+    int_val: Int,
+    float_val: Float,
     string_val: String,
     bool_val: bool,
 }
@@ -81,7 +81,7 @@ fn test_derive_default_mixed() {
 
 #[derive(Default)]
 struct Counter {
-    value: int,
+    value: Int,
 }
 
 #[test]

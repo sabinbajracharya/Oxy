@@ -1,13 +1,13 @@
 fn main() -> () {
   locals: 3
   bb0(entry):
-    v0 = const.int 0
+    v0 = const.Int 0
     store.local $0, v0
     jump bb1
 
   bb1(preds: bb0, bb10):
     v1 = load.local $0
-    v2 = const.int 3
+    v2 = const.Int 3
     v3 = lt v1, v2
     branch v3 -> bb3, bb2
 
@@ -16,19 +16,19 @@ fn main() -> () {
     ret v4
 
   bb3(preds: bb1):
-    v5 = const.int 0
+    v5 = const.Int 0
     store.local $1, v5
     jump bb4
 
   bb4(preds: bb3, bb8):
     v6 = load.local $1
-    v7 = const.int 3
+    v7 = const.Int 3
     v8 = lt v6, v7
     branch v8 -> bb5, bb10
 
   bb5(preds: bb4):
     v9 = load.local $1
-    v10 = const.int 1
+    v10 = const.Int 1
     v11 = eq v9, v10
     branch v11 -> bb9, bb6
 
@@ -44,7 +44,7 @@ fn main() -> () {
   bb8(preds: bb7):
     v14 = load.local $2
     v15 = load.local $1
-    v16 = const.int 1
+    v16 = const.Int 1
     v17 = add v15, v16
     store.local $1, v17
     jump bb4
@@ -55,7 +55,7 @@ fn main() -> () {
 
   bb10(preds: bb4, bb9):
     v19 = load.local $0
-    v20 = const.int 1
+    v20 = const.Int 1
     v21 = add v19, v20
     store.local $0, v21
     jump bb1

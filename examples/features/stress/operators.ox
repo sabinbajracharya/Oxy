@@ -2,7 +2,7 @@
 
 // --- Add for custom struct ---
 #[derive(Clone, Debug, PartialEq)]
-struct V2 { x: int, y: int }
+struct V2 { x: Int, y: Int }
 
 impl Add for V2 {
     fn add(self, other: V2) -> V2 {
@@ -36,7 +36,7 @@ fn test_sub_for_struct() {
 }
 
 // --- Mul for custom struct (scalar) ---
-struct Scaled { s: int }
+struct Scaled { s: Int }
 impl Mul for V2 {
     fn mul(self, other: V2) -> V2 {
         V2 { x: self.x * other.x, y: self.y * other.y }
@@ -95,7 +95,7 @@ fn test_chained_add() {
 }
 
 // --- Self in impl ---
-struct Counter1 { val: int }
+struct Counter1 { val: Int }
 
 impl Counter1 {
     fn new() -> Self { Counter1 { val: 0 } }
@@ -111,15 +111,15 @@ fn test_self_in_impl() {
 }
 
 // --- self vs mut self ---
-struct Bag { items: Vec<int> }
+struct Bag { items: List<Int> }
 
 impl Bag {
-    fn new() -> Bag { Bag { items: vec() } }
-    fn add(self, x: int) -> Bag {
+    fn new() -> Bag { Bag { items: list() } }
+    fn add(self, x: Int) -> Bag {
         self.items.push(x);
         self
     }
-    fn count(self) -> int { self.items.len() }
+    fn count(self) -> Int { self.items.len() }
 }
 
 #[test]
@@ -135,8 +135,8 @@ fn test_mut_self_in_method() {
 struct Util;
 
 impl Util {
-    fn double(n: int) -> int { n * 2 }
-    fn triple(n: int) -> int { n * 3 }
+    fn double(n: Int) -> Int { n * 2 }
+    fn triple(n: Int) -> Int { n * 3 }
 }
 
 #[test]
@@ -146,12 +146,12 @@ fn test_static_methods() {
 }
 
 // --- Builder pattern ---
-struct Config { name: String, retries: int }
+struct Config { name: String, retries: Int }
 
 impl Config {
     fn new() -> Config { Config { name: "".to_string(), retries: 0 } }
     fn name(self, n: String) -> Config { self.name = n; self }
-    fn retries(self, r: int) -> Config { self.retries = r; self }
+    fn retries(self, r: Int) -> Config { self.retries = r; self }
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn test_builder_pattern() {
 // --- ordering — comparisons on i64 ---
 #[test]
 fn test_int_ordering_in_data() {
-    let mut v = vec(3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5);
+    let mut v = list(3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5);
     v.sort();
     assert_eq(v[0], 1);
     assert_eq(v[v.len() - 1], 9);
@@ -173,7 +173,7 @@ fn test_int_ordering_in_data() {
 // --- ordering on String ---
 #[test]
 fn test_string_ordering() {
-    let mut v = vec("banana".to_string(), "apple".to_string(), "cherry".to_string());
+    let mut v = list("banana".to_string(), "apple".to_string(), "cherry".to_string());
     v.sort();
     assert_eq(v[0], "apple");
     assert_eq(v[1], "banana");

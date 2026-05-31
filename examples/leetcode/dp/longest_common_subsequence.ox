@@ -27,12 +27,12 @@ fn main() {
     println("{}", longest_common_subsequence("abcde", "ace"));
 }
 
-fn longest_common_subsequence(text1: String, text2: String) -> int {
+fn longest_common_subsequence(text1: String, text2: String) -> Int {
     let m = text1.len();
     let n = text2.len();
     // Use two rows for O(n) space
-    let mut prev = vec();
-    let mut cur = vec();
+    let mut prev = list();
+    let mut cur = list();
     let mut j = 0;
     while j <= n {
         prev.push(0);

@@ -164,8 +164,8 @@ fn serialize_op(op: &IrOp, reg_names: &HashMap<Reg, usize>) -> String {
     };
 
     match op {
-        IrOp::ConstInt(dst, n) => format!("{} = const.int {}", r(dst), n),
-        IrOp::ConstFloat(dst, n) => format!("{} = const.float {}", r(dst), fmt_float(*n)),
+        IrOp::ConstInt(dst, n) => format!("{} = const.Int {}", r(dst), n),
+        IrOp::ConstFloat(dst, n) => format!("{} = const.Float {}", r(dst), fmt_float(*n)),
         IrOp::ConstBool(dst, b_val) => format!("{} = const.bool {}", r(dst), b_val),
         IrOp::ConstChar(dst, c) => format!("{} = const.char '{}'", r(dst), escape_char(*c)),
         IrOp::ConstUnit(dst) => format!("{} = const.unit", r(dst)),

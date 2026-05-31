@@ -6,13 +6,13 @@
 enum Color { Red, Green, Blue }
 
 enum Shape {
-    Circle(float),
-    Rect { w: float, h: float },
-    Triangle(float, float, float),
+    Circle(Float),
+    Rect { w: Float, h: Float },
+    Triangle(Float, Float, Float),
     Nothing,
 }
 
-struct Point { x: int, y: int }
+struct Point { x: Int, y: Int }
 
 // --- 1. literal patterns ---
 #[test]
@@ -302,8 +302,8 @@ fn test_match_in_loop() {
 // --- 20. Option match ---
 #[test]
 fn test_match_option() {
-    let some_v: Option<int> = Some(42);
-    let none_v: Option<int> = None;
+    let some_v: Option<Int> = Some(42);
+    let none_v: Option<Int> = None;
     let a = match some_v {
         Some(x) => x,
         None => -1,
@@ -319,8 +319,8 @@ fn test_match_option() {
 // --- 21. Result match ---
 #[test]
 fn test_match_result() {
-    let ok: Result<int, String> = Ok(7);
-    let err: Result<int, String> = Err("nope".to_string());
+    let ok: Result<Int, String> = Ok(7);
+    let err: Result<Int, String> = Err("nope".to_string());
     let a = match ok {
         Ok(x) => x,
         Err(_) => 0,

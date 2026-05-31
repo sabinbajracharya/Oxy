@@ -10,16 +10,16 @@
 // === Intuition ===
 // A sliding window expands right one character at a time. If the new
 // character is already in the window, shrink from the left until it's gone.
-// The window is always valid (all unique). Use a HashMap to store each
+// The window is always valid (all unique). Use a Map to store each
 // character's last position for O(1) "shrink to" jumping.
 //
 // === Pattern Recognition ===
 // - "Longest substring with property X" → sliding window
-// - "Without repeating" → HashSet or HashMap of window contents
+// - "Without repeating" → Set or Map of window contents
 // - Window validity check O(1) → remove leftmost char on shrink
 //
 // === Tips ===
-// - HashMap<char, int> for char → index mapping
+// - Map<char, Int> for char → index mapping
 // - When duplicate found, jump left past the previous occurrence
 // - max_len = max(max_len, right - left + 1)
 
@@ -28,8 +28,8 @@ fn main() {
     println("{}", length_of_longest_substring("bbbbb"));
 }
 
-fn length_of_longest_substring(s: String) -> int {
-    let mut seen = HashMap::new();
+fn length_of_longest_substring(s: String) -> Int {
+    let mut seen = Map::new();
     let mut left = 0;
     let mut max_len = 0;
     let mut right = 0;

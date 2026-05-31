@@ -1,13 +1,13 @@
 // === Feature: struct field type checking on init and assignment ===
 
 struct Point {
-    x: float,
-    y: float,
+    x: Float,
+    y: Float,
 }
 
 struct Person {
     name: String,
-    age: int,
+    age: Int,
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn test_struct_init_matching_types() {
 
 #[test]
 fn test_struct_int_for_float_field_ok() {
-    // Integer promotes to float — accepted.
+    // Integer promotes to Float — accepted.
     let p = Point { x: 1, y: 2 };
     assert_eq(p.x, 1.0);
 }

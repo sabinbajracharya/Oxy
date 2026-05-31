@@ -16,11 +16,11 @@ fn main() {
 
     // Insert data with parameterized queries (prevents SQL injection)
     db.execute("INSERT INTO users (name, email, age) VALUES (?1, ?2, ?3)",
-        vec("Alice", "alice@example.com", 30));
+        list("Alice", "alice@example.com", 30));
     db.execute("INSERT INTO users (name, email, age) VALUES (?1, ?2, ?3)",
-        vec("Bob", "bob@example.com", 25));
+        list("Bob", "bob@example.com", 25));
     db.execute("INSERT INTO users (name, email, age) VALUES (?1, ?2, ?3)",
-        vec("Charlie", "charlie@example.com", 35));
+        list("Charlie", "charlie@example.com", 35));
 
     println("Last insert ID: {}", db.last_insert_id());
 
@@ -37,7 +37,7 @@ fn main() {
 
     // Query with parameters
     println("\nUsers older than 28:");
-    let older = db.query("SELECT name, age FROM users WHERE age > ?1", vec(28));
+    let older = db.query("SELECT name, age FROM users WHERE age > ?1", list(28));
     for user in older {
         println("  {} (age {})",
             user.get("name").unwrap(),
@@ -45,18 +45,18 @@ fn main() {
     }
 
     // Query a single row
-    let bob = db.query_row("SELECT name, email FROM users WHERE name = ?1", vec("Bob"));
+    let bob = db.query_row("SELECT name, email FROM users WHERE name = ?1", list("Bob"));
     match bob {
         Some(row) => println("\nFound Bob: {}", row.get("email").unwrap()),
         None => println("\nBob not found"),
     }
 
     // Update and check affected rows
-    let updated = db.execute("UPDATE users SET age = ?1 WHERE name = ?2", vec(26, "Bob"));
+    let updated = db.execute("UPDATE users SET age = ?1 WHERE name = ?2", list(26, "Bob"));
     println("\nUpdated {} row(s)", updated);
 
     // Delete
-    let deleted = db.execute("DELETE FROM users WHERE age > ?1", vec(30));
+    let deleted = db.execute("DELETE FROM users WHERE age > ?1", list(30));
     println("Deleted {} row(s)", deleted);
 
     db.close();

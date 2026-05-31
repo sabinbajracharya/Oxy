@@ -2,7 +2,7 @@
 
 fn main() {
     // === Vectors ===
-    let mut numbers = vec(1, 2, 3, 4, 5);
+    let mut numbers = list(1, 2, 3, 4, 5);
     println("Numbers: {:?}", numbers);
     println("Length: {}", numbers.len());
 
@@ -30,7 +30,7 @@ fn main() {
     println("arr[1] = {}", arr[1]);
 
     // Nested vectors
-    let matrix = vec(vec(1, 2, 3), vec(4, 5, 6), vec(7, 8, 9));
+    let matrix = list(list(1, 2, 3), list(4, 5, 6), list(7, 8, 9));
     println("Matrix[1][2] = {}", matrix[1][2]);
 
     // === Tuples ===

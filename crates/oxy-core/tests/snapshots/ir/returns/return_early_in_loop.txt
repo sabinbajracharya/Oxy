@@ -1,7 +1,7 @@
-fn find(n: int) -> int {
+fn find(n: Int) -> Int {
   locals: 3
   bb0(entry):
-    v0 = const.int 0
+    v0 = const.Int 0
     store.local $1, v0
     jump bb1
 
@@ -12,13 +12,13 @@ fn find(n: int) -> int {
     branch v3 -> bb3, bb2
 
   bb2(preds: bb1):
-    v4 = const.int 1
+    v4 = const.Int 1
     v5 = neg v4
     ret v5
 
   bb3(preds: bb1):
     v6 = load.local $1
-    v7 = const.int 3
+    v7 = const.Int 3
     v8 = eq v6, v7
     branch v8 -> bb7, bb4
 
@@ -34,7 +34,7 @@ fn find(n: int) -> int {
   bb6(preds: bb5):
     v11 = load.local $2
     v12 = load.local $1
-    v13 = const.int 1
+    v13 = const.Int 1
     v14 = add v12, v13
     store.local $1, v14
     jump bb1

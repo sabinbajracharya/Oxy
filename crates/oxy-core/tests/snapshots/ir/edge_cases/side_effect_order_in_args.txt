@@ -1,14 +1,14 @@
-fn f() -> int {
+fn f() -> Int {
   locals: 0
   bb0(entry):
-    v0 = const.int 1
+    v0 = const.Int 1
     ret v0
 }
 
-fn g() -> int {
+fn g() -> Int {
   locals: 0
   bb0(entry):
-    v0 = const.int 2
+    v0 = const.Int 2
     ret v0
 }
 

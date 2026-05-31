@@ -4,15 +4,15 @@
 // top level (Pop on empty is a no-op) but corrupts the *caller's* frame in
 // recursive calls. Each call to a function with `println` would silently
 // consume a value from its caller's stack, eventually leading to bizarre
-// runtime errors like "cannot add () and int" or a VM-level subtract overflow.
+// runtime errors like "cannot add () and Int" or a VM-level subtract overflow.
 
-fn go(n: int) -> int {
+fn go(n: Int) -> Int {
     if n <= 0 { return 0; }
     println("step {}", n);
     go(n - 1) + 1
 }
 
-fn pick(n: int) -> int {
+fn pick(n: Int) -> Int {
     if n <= 0 { return 0; }
     match n {
         1 => 1,
@@ -20,7 +20,7 @@ fn pick(n: int) -> int {
     }
 }
 
-fn classify(n: int) -> int {
+fn classify(n: Int) -> Int {
     match n {
         0 => 10,
         1 => 20,
@@ -28,7 +28,7 @@ fn classify(n: int) -> int {
     }
 }
 
-fn fib_match(n: int) -> int {
+fn fib_match(n: Int) -> Int {
     if n <= 1 { return n; }
     println("fib({})", n);
     match n {
@@ -37,7 +37,7 @@ fn fib_match(n: int) -> int {
     }
 }
 
-fn label(n: int) -> String {
+fn label(n: Int) -> String {
     if n <= 0 { return "done".to_string(); }
     let _ = format("{}", n);
     label(n - 1)

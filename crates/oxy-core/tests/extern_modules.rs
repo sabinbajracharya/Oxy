@@ -25,9 +25,9 @@ fn unique_dir(label: &str) -> PathBuf {
 #[test]
 fn mod_resolves_sibling_file() {
     let dir = unique_dir("sibling-file");
-    std::fs::write(dir.join("greet.ox"), "pub fn yo() -> int { 42 }\n").unwrap();
+    std::fs::write(dir.join("greet.ox"), "pub fn yo() -> Int { 42 }\n").unwrap();
     let main = dir.join("main.ox");
-    let source = "mod greet;\nfn main() -> int { greet::yo() }\n";
+    let source = "mod greet;\nfn main() -> Int { greet::yo() }\n";
     std::fs::write(&main, source).unwrap();
 
     let v = run_compiled_with_options(source, Some(main.to_str().unwrap()), HashMap::new())
@@ -40,9 +40,9 @@ fn mod_resolves_sibling_file() {
 fn mod_resolves_sibling_mod_directory() {
     let dir = unique_dir("sibling-dir");
     std::fs::create_dir_all(dir.join("greet")).unwrap();
-    std::fs::write(dir.join("greet/mod.ox"), "pub fn yo() -> int { 7 }\n").unwrap();
+    std::fs::write(dir.join("greet/mod.ox"), "pub fn yo() -> Int { 7 }\n").unwrap();
     let main = dir.join("main.ox");
-    let source = "mod greet;\nfn main() -> int { greet::yo() }\n";
+    let source = "mod greet;\nfn main() -> Int { greet::yo() }\n";
     std::fs::write(&main, source).unwrap();
 
     let v = run_compiled_with_options(source, Some(main.to_str().unwrap()), HashMap::new())
@@ -56,10 +56,10 @@ fn mod_resolves_via_externs() {
     let dir = unique_dir("ext");
     let ext_dir = unique_dir("ext-source");
     let ext_file = ext_dir.join("lib.ox");
-    std::fs::write(&ext_file, "pub fn yo() -> int { 99 }\n").unwrap();
+    std::fs::write(&ext_file, "pub fn yo() -> Int { 99 }\n").unwrap();
 
     let main = dir.join("main.ox");
-    let source = "mod greet;\nfn main() -> int { greet::yo() }\n";
+    let source = "mod greet;\nfn main() -> Int { greet::yo() }\n";
     std::fs::write(&main, source).unwrap();
 
     let mut externs = HashMap::new();
@@ -75,14 +75,14 @@ fn mod_resolves_via_externs() {
 #[test]
 fn externs_take_precedence_over_siblings() {
     let dir = unique_dir("precedence");
-    std::fs::write(dir.join("greet.ox"), "pub fn yo() -> int { 1 }\n").unwrap();
+    std::fs::write(dir.join("greet.ox"), "pub fn yo() -> Int { 1 }\n").unwrap();
 
     let ext_dir = unique_dir("precedence-ext");
     let ext_file = ext_dir.join("real.ox");
-    std::fs::write(&ext_file, "pub fn yo() -> int { 2 }\n").unwrap();
+    std::fs::write(&ext_file, "pub fn yo() -> Int { 2 }\n").unwrap();
 
     let main = dir.join("main.ox");
-    let source = "mod greet;\nfn main() -> int { greet::yo() }\n";
+    let source = "mod greet;\nfn main() -> Int { greet::yo() }\n";
     std::fs::write(&main, source).unwrap();
 
     let mut externs = HashMap::new();
@@ -99,7 +99,7 @@ fn externs_take_precedence_over_siblings() {
 fn missing_module_errors_with_extern_hint() {
     let dir = unique_dir("missing");
     let main = dir.join("main.ox");
-    let source = "mod missing;\nfn main() -> int { 0 }\n";
+    let source = "mod missing;\nfn main() -> Int { 0 }\n";
     std::fs::write(&main, source).unwrap();
 
     let err = run_compiled_with_options(source, Some(main.to_str().unwrap()), HashMap::new())
@@ -120,7 +120,7 @@ fn missing_module_errors_with_extern_hint() {
 fn extern_with_bad_path_errors() {
     let dir = unique_dir("bad-extern");
     let main = dir.join("main.ox");
-    let source = "mod missing;\nfn main() -> int { 0 }\n";
+    let source = "mod missing;\nfn main() -> Int { 0 }\n";
     std::fs::write(&main, source).unwrap();
 
     let mut externs = HashMap::new();
@@ -144,7 +144,7 @@ fn run_tests_with_externs() {
     let dir = unique_dir("test-externs");
     let ext_dir = unique_dir("test-externs-ext");
     let ext_file = ext_dir.join("helper.ox");
-    std::fs::write(&ext_file, "pub fn answer() -> int { 42 }\n").unwrap();
+    std::fs::write(&ext_file, "pub fn answer() -> Int { 42 }\n").unwrap();
 
     let main = dir.join("main.ox");
     let source = "mod helper;\n#[test]\nfn t() { let x = helper::answer(); }\n";

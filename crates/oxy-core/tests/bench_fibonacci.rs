@@ -3,7 +3,7 @@ use std::time::Instant;
 use oxy_core::vm::run_compiled;
 
 const FIB_SOURCE: &str = r#"
-fn fib(n: int) -> int {
+fn fib(n: Int) -> Int {
     if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
 }
 fn main() {

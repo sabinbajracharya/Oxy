@@ -58,11 +58,11 @@ pub(crate) fn print_help() {
     );
     println!("{}:", "Options".bold());
     println!(
-        "  {}           Print version information",
+        "  {}           PrInt version information",
         "-V, --version".cyan()
     );
     println!(
-        "  {}              Print this help message",
+        "  {}              PrInt this help message",
         "-h, --help".cyan()
     );
 }

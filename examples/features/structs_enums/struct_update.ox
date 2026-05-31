@@ -5,8 +5,8 @@
 fn main() {}
 
 struct Point {
-    x: int,
-    y: int,
+    x: Int,
+    y: Int,
 }
 
 // === Basic update — change one field ===
@@ -52,9 +52,9 @@ fn test_full_copy() {
 // === Three-field struct ===
 
 struct Config {
-    width: int,
-    height: int,
-    depth: int,
+    width: Int,
+    height: Int,
+    depth: Int,
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn test_chained_updates() {
 
 // === Base is an expression (function return) ===
 
-fn make_point(x: int, y: int) -> Point {
+fn make_point(x: Int, y: Int) -> Point {
     Point { x, y }
 }
 

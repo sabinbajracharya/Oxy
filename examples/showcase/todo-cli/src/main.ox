@@ -48,7 +48,7 @@ fn main() {
             return;
         }
         let text = args.positionals.get(1).unwrap().to_string();
-        let exec_result = db_exec(handle, "INSERT INTO todos (text) VALUES (?1)", vec(text));
+        let exec_result = db_exec(handle, "INSERT INTO todos (text) VALUES (?1)", list(text));
         let id = db_last_id(handle);
         match exec_result {
             Ok(_) => success("added todo #" + id.to_string()),
@@ -89,7 +89,7 @@ fn main() {
         let id_result = id_str.parse_int();
         match id_result {
             Ok(id) => {
-                let exec_result = db_exec(handle, "UPDATE todos SET done = 1 WHERE id = ?1", vec(id));
+                let exec_result = db_exec(handle, "UPDATE todos SET done = 1 WHERE id = ?1", list(id));
                 match exec_result {
                     Ok(rows) => {
                         if rows > 0 {
@@ -113,7 +113,7 @@ fn main() {
         let id_result = id_str.parse_int();
         match id_result {
             Ok(id) => {
-                let exec_result = db_exec(handle, "DELETE FROM todos WHERE id = ?1", vec(id));
+                let exec_result = db_exec(handle, "DELETE FROM todos WHERE id = ?1", list(id));
                 match exec_result {
                     Ok(rows) => {
                         if rows > 0 {

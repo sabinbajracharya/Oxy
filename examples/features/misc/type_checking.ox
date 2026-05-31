@@ -7,7 +7,7 @@
 mod data {
     pub struct Entry {
         pub name: String,
-        pub count: int,
+        pub count: Int,
     }
 
     pub fn make_entry() -> Entry {
@@ -27,7 +27,7 @@ fn test_field_access_returns_string() {
 #[test]
 fn test_field_access_returns_i64() {
     let e = data::make_entry();
-    let c: int = e.count;
+    let c: Int = e.count;
     assert_eq(c, 42);
 }
 
@@ -35,16 +35,16 @@ fn test_field_access_returns_i64() {
 
 mod shapes {
     pub struct Rect {
-        pub w: int,
-        pub h: int,
+        pub w: Int,
+        pub h: Int,
     }
 
     impl Rect {
-        pub fn new(w: int, h: int) -> Rect {
+        pub fn new(w: Int, h: Int) -> Rect {
             Rect { w, h }
         }
 
-        pub fn area(self) -> int {
+        pub fn area(self) -> Int {
             self.w * self.h
         }
     }
@@ -90,14 +90,14 @@ fn test_string_index_type() {
 // === Type Annotation on PathCall Return ===
 
 mod calc {
-    pub fn value() -> int {
+    pub fn value() -> Int {
         100
     }
 }
 
 #[test]
 fn test_path_call_return_type() {
-    let v: int = calc::value();
+    let v: Int = calc::value();
     assert_eq(v, 100);
 }
 
@@ -105,7 +105,7 @@ fn test_path_call_return_type() {
 
 mod outer_mod {
     pub struct Inner {
-        pub val: int,
+        pub val: Int,
     }
 
     pub struct Outer {
@@ -122,6 +122,6 @@ use outer_mod::Outer;
 #[test]
 fn test_nested_field_access() {
     let o = outer_mod::make();
-    let v: int = o.inner.val;
+    let v: Int = o.inner.val;
     assert_eq(v, 99);
 }

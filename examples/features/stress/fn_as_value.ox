@@ -1,11 +1,11 @@
 // === STRESS: function as value (named fn passed to higher-order fn) ===
 
-fn apply(f: fn(int) -> int, x: int) -> int {
+fn apply(f: fn(Int) -> Int, x: Int) -> Int {
     f(x)
 }
 
-fn square(x: int) -> int { x * x }
-fn neg(x: int) -> int { -x }
+fn square(x: Int) -> Int { x * x }
+fn neg(x: Int) -> Int { -x }
 
 #[test]
 fn test_named_fn_as_arg() {
@@ -24,9 +24,9 @@ fn test_pass_different_named_fns() {
 }
 
 // --- two-arg fn pointer ---
-fn apply2(f: fn(int, int) -> int, a: int, b: int) -> int { f(a, b) }
-fn add(a: int, b: int) -> int { a + b }
-fn mul(a: int, b: int) -> int { a * b }
+fn apply2(f: fn(Int, Int) -> Int, a: Int, b: Int) -> Int { f(a, b) }
+fn add(a: Int, b: Int) -> Int { a + b }
+fn mul(a: Int, b: Int) -> Int { a * b }
 
 #[test]
 fn test_two_arg_fn_pointer() {
@@ -35,7 +35,7 @@ fn test_two_arg_fn_pointer() {
 }
 
 // --- fn returning fn (closure as return value) ---
-fn make_adder(n: int) -> fn(int) -> int {
+fn make_adder(n: Int) -> fn(Int) -> Int {
     |x| x + n
 }
 
@@ -45,10 +45,10 @@ fn test_fn_returns_closure() {
     assert_eq(add5(3), 8);
 }
 
-// --- fn stored in a Vec ---
+// --- fn stored in a List ---
 #[test]
-fn test_fns_in_vec() {
-    let ops: Vec<fn(int) -> int> = vec(square, neg);
+fn test_fns_in_list() {
+    let ops: List<fn(Int) -> Int> = list(square, neg);
     let r0 = ops[0](6);
     let r1 = ops[1](6);
     assert_eq(r0, 36);

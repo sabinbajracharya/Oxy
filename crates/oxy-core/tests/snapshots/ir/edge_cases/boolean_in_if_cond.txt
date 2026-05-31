@@ -5,7 +5,7 @@ fn main() -> () {
     store.local $0, v0
     v1 = const.bool false
     store.local $1, v1
-    v2 = const.int 0
+    v2 = const.Int 0
     store.local $2, v2
     v3 = load.local $0
     branch v3 -> bb2, bb1
@@ -32,7 +32,7 @@ fn main() -> () {
     jump bb7
 
   bb6(preds: bb4):
-    v9 = const.int 1
+    v9 = const.Int 1
     store.local $2, v9
     v10 = const.unit
     jump bb7

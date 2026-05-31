@@ -2,7 +2,7 @@
 
 #[test]
 fn test_vec_known_method_ok() {
-    let v: Vec<int> = vec(1, 2, 3);
+    let v: List<Int> = list(1, 2, 3);
     assert_eq(v.len(), 3);
 }
 
@@ -14,13 +14,13 @@ fn test_string_known_method_ok() {
 
 #[compile_error]
 fn test_vec_unknown_field_rejected() {
-    let v: Vec<int> = vec(1, 2, 3);
+    let v: List<Int> = list(1, 2, 3);
     let _ = v.bogus_field;
 }
 
 #[compile_error]
 fn test_array_unknown_field_rejected() {
-    let arr: [int; 2] = [1, 2];
+    let arr: [Int; 2] = [1, 2];
     let _ = arr.sdfsdf;
 }
 
@@ -32,6 +32,6 @@ fn test_string_unknown_field_rejected() {
 
 #[compile_error]
 fn test_int_unknown_field_rejected() {
-    let n: int = 42;
+    let n: Int = 42;
     let _ = n.foo;
 }

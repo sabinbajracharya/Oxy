@@ -23,7 +23,7 @@ fn test_multiple_params() {
 
 #[test]
 fn test_type_annotations() {
-    let multiply = |x: int, y: int| x * y;
+    let multiply = |x: Int, y: Int| x * y;
     assert_eq(multiply(6, 7), 42);
 }
 
@@ -31,7 +31,7 @@ fn test_type_annotations() {
 
 #[test]
 fn test_return_type_annotation() {
-    let identity = |x: int| -> int { x };
+    let identity = |x: Int| -> Int { x };
     assert_eq(identity(99), 99);
 }
 
@@ -47,7 +47,7 @@ fn test_empty_closure() {
 
 #[test]
 fn test_block_body() {
-    let compute = |x: int| -> int {
+    let compute = |x: Int| -> Int {
         let y = x * 2;
         y + 1
     };
@@ -75,7 +75,7 @@ fn test_closure() {
 
 #[test]
 fn test_closure_inline() {
-    let v = vec(1, 2, 3);
+    let v = list(1, 2, 3);
     let doubled = v.map(|x| x * 2);
     assert_eq(doubled.len(), 3);
 }

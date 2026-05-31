@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::types::Value;
 
-map_dispatch!(HashMap, hashmap_m, "HashMap", true);
+map_dispatch!(HashMap, hashmap_m, "Map", true);
 
 /// Helper to build a HashMap value from Rust types.
 pub fn from_iter(entries: impl IntoIterator<Item = (Value, Value)>) -> Value {

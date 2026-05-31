@@ -76,7 +76,7 @@ pub(crate) struct IrGen {
     /// turbofish instantiation (e.g. `make_zero::<int>()`).
     generic_fns: std::collections::HashMap<String, (crate::ast::FnDef, String)>,
     /// Active type-parameter → concrete-type substitution while lowering a
-    /// monomorphized instance (e.g. `{T: "int"}`), so `T::zero()` resolves to
+    /// monomorphized instance (e.g. `{T: "Int"}`), so `T::zero()` resolves to
     /// `int::zero()`. Empty when lowering a non-generic function.
     type_subst: std::collections::HashMap<String, String>,
     /// Monomorphized instance names already emitted, for deduplication.
@@ -90,7 +90,7 @@ pub(crate) struct IrGen {
     /// prefix (sibling call) only when such a function actually exists.
     fn_names: std::collections::HashSet<String>,
     /// Type name of the impl block currently being lowered (e.g. "Counter" or
-    /// "shapes::Point"). `Self` in a method body — both `Self { .. }` struct
+    /// "shapes::PoInt"). `Self` in a method body — both `Self { .. }` struct
     /// literals and `Self::assoc()` paths — resolves to this name so the value
     /// carries its concrete struct name for method dispatch. `None` outside a
     /// method body.
@@ -196,7 +196,7 @@ impl IrGen {
     /// Returns the (possibly new) register holding the coerced value.
     fn coerce_reg(&mut self, reg: Reg, type_ann: &TypeAnnotation) -> Reg {
         match type_ann {
-            TypeAnnotation::Named { name, .. } if name == "byte" => {
+            TypeAnnotation::Named { name, .. } if name == "Byte" => {
                 let result = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {
                     result,

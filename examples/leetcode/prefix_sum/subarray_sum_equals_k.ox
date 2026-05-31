@@ -2,35 +2,35 @@
 // Given an array of integers and an integer k, return the total number
 // of contiguous subarrays that sum to k.
 //
-// === Pattern: Prefix Sum + HashMap ===
+// === Pattern: Prefix Sum + Map ===
 // Let prefix[i] = sum of nums[0..i]. Then subarray sum(i,j] = prefix[j] - prefix[i].
 // We want prefix[j] - prefix[i] = k, i.e., prefix[i] = prefix[j] - k.
 // Count how many times each prefix sum has been seen.
 //
 // === Intuition ===
 // As we scan, maintain a running sum. At each step, check if (sum - k)
-// exists in the HashMap of previously seen prefix sums. If it's been
+// exists in the Map of previously seen prefix sums. If it's been
 // seen count times, that many subarrays ending here sum to k.
 //
 // === Pattern Recognition ===
-// - "Subarray sum equals K" → prefix sum + HashMap
+// - "Subarray sum equals K" → prefix sum + Map
 // - "Count subarrays with property" → track cumulative sums
 // - Works with negative numbers (unlike sliding window)
 //
 // === Tips ===
-// - Initialize HashMap with {0: 1} for subarrays starting at index 0
+// - Initialize Map with {0: 1} for subarrays starting at index 0
 // - Works with negative numbers — prefix sum handles it
 // - O(n) time, O(n) space
 
 fn main() {
-    let nums = vec(1, 1, 1);
+    let nums = list(1, 1, 1);
     println("{}", subarray_sum(nums, 2));
 }
 
-fn subarray_sum(nums: Vec, k: int) -> int {
+fn subarray_sum(nums: List, k: Int) -> Int {
     let mut count = 0;
     let mut sum = 0;
-    let mut seen = HashMap::new();
+    let mut seen = Map::new();
     seen.insert(0, 1);
     for num in nums {
         sum = sum + num;
@@ -44,16 +44,16 @@ fn subarray_sum(nums: Vec, k: int) -> int {
 
 #[test]
 fn test_example() {
-    assert_eq(subarray_sum(vec(1, 1, 1), 2), 2);
+    assert_eq(subarray_sum(list(1, 1, 1), 2), 2);
 }
 
 #[test]
 fn test_negative() {
-    assert_eq(subarray_sum(vec(1, -1, 0), 0), 3);
+    assert_eq(subarray_sum(list(1, -1, 0), 0), 3);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(subarray_sum(vec(5), 5), 1);
-    assert_eq(subarray_sum(vec(5), 3), 0);
+    assert_eq(subarray_sum(list(5), 5), 1);
+    assert_eq(subarray_sum(list(5), 3), 0);
 }

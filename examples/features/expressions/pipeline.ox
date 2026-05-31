@@ -1,9 +1,9 @@
 // Pipeline operator `|>` examples — desugars `x |> f(args)` to `f(x, args)`.
 // Verified via Rust-side type checker tests and manual CLI runs.
 
-fn double(x: int) -> int { x * 2 }
-fn add(a: int, b: int) -> int { a + b }
-fn multiply(a: int, b: int) -> int { a * b }
+fn double(x: Int) -> Int { x * 2 }
+fn add(a: Int, b: Int) -> Int { a + b }
+fn multiply(a: Int, b: Int) -> Int { a * b }
 
 fn main() {
     let r1 = 5 |> double();

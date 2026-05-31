@@ -6,8 +6,8 @@
 
 use cli_utils;
 
-fn extract_hrefs(html: String) -> Vec<String> {
-    let mut urls = vec();
+fn extract_hrefs(html: String) -> List<String> {
+    let mut urls = list();
     let rx_result = Regex::new(r#"href="([^"]*)""#);
     match rx_result {
         Ok(rx) => {
@@ -25,8 +25,8 @@ fn extract_hrefs(html: String) -> Vec<String> {
     urls
 }
 
-fn extract_matches(html: String, pattern: String) -> Vec<String> {
-    let mut results = vec();
+fn extract_matches(html: String, pattern: String) -> List<String> {
+    let mut results = list();
     let rx_result = Regex::new(pattern);
     match rx_result {
         Ok(rx) => {

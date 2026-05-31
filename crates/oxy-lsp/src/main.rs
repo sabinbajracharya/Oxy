@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_word_at_position() {
-        let source = "fn hello(x: int) {}";
+        let source = "fn hello(x: Int) {}";
         let word = OxyLsp::word_at_position(source, Position::new(0, 3));
         assert_eq!(word, Some("hello".to_string()));
 
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(word, Some("fn".to_string()));
 
         let word = OxyLsp::word_at_position(source, Position::new(0, 12));
-        assert_eq!(word, Some("int".to_string()));
+        assert_eq!(word, Some("Int".to_string()));
     }
 
     #[test]
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_builtin_hover() {
-        assert!(builtin_hover("int").is_some());
+        assert!(builtin_hover("Int").is_some());
         assert!(builtin_hover("println").is_some());
         assert!(builtin_hover("unknown").is_none());
     }

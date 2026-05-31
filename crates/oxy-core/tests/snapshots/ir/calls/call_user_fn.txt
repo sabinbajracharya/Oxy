@@ -1,8 +1,8 @@
-fn double(x: int) -> int {
+fn double(x: Int) -> Int {
   locals: 1
   bb0(entry):
     v0 = load.local $0
-    v1 = const.int 2
+    v1 = const.Int 2
     v2 = mul v0, v1
     ret v2
 }
@@ -10,7 +10,7 @@ fn double(x: int) -> int {
 fn main() -> () {
   locals: 1
   bb0(entry):
-    v0 = const.int 5
+    v0 = const.Int 5
     v1 = call @oxy_push_named_fn() str["double"]
     v2 = call @oxy_call_closure(v1, v0) imm[1]
     store.local $0, v2

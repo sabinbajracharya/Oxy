@@ -1,15 +1,15 @@
 fn main() -> () {
   locals: 3
   bb0(entry):
-    v0 = const.int 2
+    v0 = const.Int 2
     store.local $0, v0
     v1 = load.local $0
-    v2 = const.int 1
+    v2 = const.Int 1
     v3 = eq v1, v2
     branch v3 -> bb5, bb1
 
   bb1(preds: bb0):
-    v4 = const.int 2
+    v4 = const.Int 2
     v5 = eq v1, v4
     branch v5 -> bb4, bb2
 
@@ -18,15 +18,15 @@ fn main() -> () {
     branch v6 -> bb3, bb3
 
   bb3(preds: bb2):
-    v7 = const.int 0
+    v7 = const.Int 0
     jump bb7
 
   bb4(preds: bb1):
-    v8 = const.int 20
+    v8 = const.Int 20
     jump bb6
 
   bb5(preds: bb0):
-    v9 = const.int 10
+    v9 = const.Int 10
     jump bb6
 
   bb6(preds: bb4, bb5):

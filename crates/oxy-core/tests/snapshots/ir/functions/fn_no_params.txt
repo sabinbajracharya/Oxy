@@ -1,7 +1,7 @@
-fn greet() -> int {
+fn greet() -> Int {
   locals: 0
   bb0(entry):
-    v0 = const.int 42
+    v0 = const.Int 42
     ret v0
 }
 

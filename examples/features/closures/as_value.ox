@@ -24,19 +24,19 @@ fn test_reassign_variable() {
 
 // === Pass as Argument to Function ===
 
-fn apply_twice(f: fn(int) -> int, x: int) -> int {
+fn apply_twice(f: fn(Int) -> Int, x: Int) -> Int {
     f(f(x))
 }
 
 #[test]
 fn test_pass_as_argument() {
-    let double = |x: int| x * 2;
+    let double = |x: Int| x * 2;
     assert_eq(apply_twice(double, 5), 20);
 }
 
 // === Return from Function ===
 
-fn make_adder(n: int) -> fn(int) -> int {
+fn make_adder(n: Int) -> fn(Int) -> Int {
     |x| x + n
 }
 
@@ -49,7 +49,7 @@ fn test_return_from_function() {
 
 // === Multiple Closures from Same Factory ===
 
-fn make_multiplier(factor: int) -> fn(int) -> int {
+fn make_multiplier(factor: Int) -> fn(Int) -> Int {
     |x| x * factor
 }
 
@@ -61,13 +61,13 @@ fn test_closure_factory() {
     assert_eq(triple(10), 30);
 }
 
-// === Closure Stored in Vec ===
+// === Closure Stored in List ===
 
 #[test]
-fn test_closure_in_vec() {
-    let add_one = |x: int| x + 1;
-    let double = |x: int| x * 2;
-    let ops = vec(add_one, double);
+fn test_closure_in_list() {
+    let add_one = |x: Int| x + 1;
+    let double = |x: Int| x * 2;
+    let ops = list(add_one, double);
     let result = ops[0](10);
     assert_eq(result, 11);
 }

@@ -52,10 +52,10 @@ fn test_for_string() {
     assert(chars.len() > 0);
 }
 
-// === For over Vec ===
+// === For over List ===
 
 #[test]
-fn test_for_vec() {
+fn test_for_list() {
     let items = "a,b,c".split(",");
     let mut count = 0;
     for item in items {

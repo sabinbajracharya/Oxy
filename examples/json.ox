@@ -2,7 +2,7 @@
 
 struct Person {
     name: String,
-    age: int,
+    age: Int,
 }
 
 enum Status {
@@ -19,14 +19,14 @@ fn main() {
     println("{}", json::serialize("hello world").unwrap());
     println("{}", json::serialize(()).unwrap());
 
-    // --- Serialize a Vec ---
-    println("\n=== Vec ===");
-    let numbers = vec(1, 2, 3, 4, 5);
+    // --- Serialize a List ---
+    println("\n=== List ===");
+    let numbers = list(1, 2, 3, 4, 5);
     println("{}", json::serialize(numbers).unwrap());
 
-    // --- Serialize a HashMap ---
-    println("\n=== HashMap ===");
-    let mut config = HashMap::new();
+    // --- Serialize a Map ---
+    println("\n=== Map ===");
+    let mut config = Map::new();
     config.insert("host", "localhost");
     config.insert("port", "8080");
     println("{}", json::serialize(config).unwrap());
@@ -42,7 +42,7 @@ fn main() {
 
     // --- Pretty printing ---
     println("\n=== Pretty Print ===");
-    let data = vec(1, 2, 3);
+    let data = list(1, 2, 3);
     println("{}", json::to_string_pretty(data).unwrap());
 
     // --- Deserialize JSON ---
@@ -57,7 +57,7 @@ fn main() {
 
     // --- Round-trip ---
     println("\n=== Round-trip ===");
-    let original = vec(100, 200, 300);
+    let original = list(100, 200, 300);
     let json_str = json::serialize(original).unwrap();
     println("JSON:   {}", json_str);
     let restored = json::deserialize(json_str).unwrap();
@@ -65,7 +65,7 @@ fn main() {
 
     // --- .to_json() method ---
     println("\n=== .to_json() method ===");
-    let v = vec(1, 2, 3);
+    let v = list(1, 2, 3);
     println("{}", v.to_json().unwrap());
 
     // --- Typed deserialization ---

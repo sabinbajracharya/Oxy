@@ -1,7 +1,7 @@
 // === Feature: method-call & path-call argument type checking ===
 
 struct Counter {
-    count: int,
+    count: Int,
 }
 
 impl Counter {
@@ -9,7 +9,7 @@ impl Counter {
         Counter { count: 0 }
     }
 
-    fn add(self, n: int) -> int {
+    fn add(self, n: Int) -> Int {
         self.count + n
     }
 
@@ -65,7 +65,7 @@ fn test_method_call_too_many_args_rejected() {
 // free fn invoked via path should be checked the same way.
 
 mod math {
-    pub fn scale(n: int, factor: int) -> int {
+    pub fn scale(n: Int, factor: Int) -> Int {
         n * factor
     }
 }

@@ -18,7 +18,7 @@
 // - Valid parentheses, HTML tags, XML validation all use this pattern
 //
 // === Tips ===
-// - Vec::pop() returns an Option
+// - List::pop() returns an Option
 // - Early return on size mismatch or wrong closer
 // - Empty string is valid
 
@@ -28,7 +28,7 @@ fn main() {
 }
 
 fn is_valid(s: String) -> bool {
-    let mut stack = vec();
+    let mut stack = list();
     for ch in s {
         if ch == '(' || ch == '[' || ch == '{' {
             stack.push(ch);

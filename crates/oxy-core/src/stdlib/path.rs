@@ -192,7 +192,7 @@ mod tests {
     fn test_path_join_two() {
         let out = run(r#"
 fn main() {
-    let p = std::path::join(vec("a".to_string(), "b".to_string()));
+    let p = std::path::join(list("a".to_string(), "b".to_string()));
     println("{}", p);
 }
 "#);

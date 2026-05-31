@@ -162,7 +162,7 @@ fn main() {
 fn test_fibonacci() {
     let output = run_and_capture(
         r#"
-fn fib(n: int) -> int {
+fn fib(n: Int) -> Int {
     if n <= 1 {
         n
     } else {
@@ -201,12 +201,12 @@ fn test_type_annotation_narrowing() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: int = 127;
-    let b: int = 32767;
-    let c: int = 100000;
-    let d: byte = 255;
-    let e: int = 60000;
-    let f: int = 3000000000;
+    let a: Int = 127;
+    let b: Int = 32767;
+    let c: Int = 100000;
+    let d: Byte = 255;
+    let e: Int = 60000;
+    let f: Int = 3000000000;
     println("{} {} {} {} {} {}", a, b, c, d, e, f);
 }"#,
     );
@@ -226,11 +226,11 @@ fn test_byte_wraps_modulo_256() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: byte = 255;
-    let r1: byte = a + 1;     // 256 -> wraps to 0 on store
-    let r2: byte = a + 45;    // 300 -> wraps to 44 on store
-    let b: byte = 0;
-    let r3: byte = b - 1;     // -1 -> wraps to 255 on store
+    let a: Byte = 255;
+    let r1: Byte = a + 1;     // 256 -> wraps to 0 on store
+    let r2: Byte = a + 45;    // 300 -> wraps to 44 on store
+    let b: Byte = 0;
+    let r3: Byte = b - 1;     // -1 -> wraps to 255 on store
     println("{}", r1);
     println("{}", r2);
     println("{}", r3);
@@ -244,9 +244,9 @@ fn test_as_cast_narrowing_to_byte() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 300 as byte);      // 300 mod 256 = 44
-    println("{}", (-1) as byte);     // wraps to 255
-    println("{}", 256 as byte);      // wraps to 0
+    println("{}", 300 as Byte);      // 300 mod 256 = 44
+    println("{}", (-1) as Byte);     // wraps to 255
+    println("{}", 256 as Byte);      // wraps to 0
 }"#,
     );
     assert_eq!(output, vec!["44\n", "255\n", "0\n"]);
@@ -257,9 +257,9 @@ fn test_as_cast_widening_byte_to_int() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let b: byte = 200;
-    println("{}", b as int);
-    println("{}", (b as int) * 100);
+    let b: Byte = 200;
+    println("{}", b as Int);
+    println("{}", (b as Int) * 100);
 }"#,
     );
     assert_eq!(output, vec!["200\n", "20000\n"]);
@@ -271,15 +271,15 @@ fn test_literal_coercion_to_all_types() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let a: int = 42;
-    let b: int = 42;
-    let c: int = 42;
-    let d: int = 42;
-    let e: byte = 42;
-    let f: int = 42;
-    let g: int = 42;
-    let h: int = 42;
-    let sum = a as int + b as int + c as int + d + e as int + f as int + g as int + h as int;
+    let a: Int = 42;
+    let b: Int = 42;
+    let c: Int = 42;
+    let d: Int = 42;
+    let e: Byte = 42;
+    let f: Int = 42;
+    let g: Int = 42;
+    let h: Int = 42;
+    let sum = a as Int + b as Int + c as Int + d + e as Int + f as Int + g as Int + h as Int;
     println("{}", sum);
 }"#,
     );
@@ -288,19 +288,19 @@ fn main() {
 
 #[test]
 fn test_as_cast_int_to_float() {
-    let output = run_and_capture(r#"fn main() { let x = 42 as float; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 42 as Float; println("{}", x); }"#);
     assert_eq!(output, vec!["42.0\n"]);
 }
 
 #[test]
 fn test_as_cast_float_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 3.9 as int; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 3.9 as Int; println("{}", x); }"#);
     assert_eq!(output, vec!["3\n"]);
 }
 
 #[test]
 fn test_as_cast_char_to_int() {
-    let output = run_and_capture(r#"fn main() { let x = 'a' as int; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { let x = 'a' as Int; println("{}", x); }"#);
     assert_eq!(output, vec!["97\n"]);
 }
 

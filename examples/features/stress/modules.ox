@@ -1,13 +1,13 @@
 // === STRESS: modules — nesting, visibility, use globs / aliases ===
 
 mod math {
-    pub fn add(a: int, b: int) -> int { a + b }
-    pub fn sub(a: int, b: int) -> int { a - b }
-    fn _private_helper(n: int) -> int { n * 2 }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
+    pub fn sub(a: Int, b: Int) -> Int { a - b }
+    fn _private_helper(n: Int) -> Int { n * 2 }
 
     pub mod advanced {
-        pub fn square(n: int) -> int { n * n }
-        pub fn cube(n: int) -> int { n * n * n }
+        pub fn square(n: Int) -> Int { n * n }
+        pub fn cube(n: Int) -> Int { n * n * n }
     }
 }
 
@@ -43,9 +43,9 @@ fn test_use_alias() {
 
 // --- use group ---
 mod ops {
-    pub fn one() -> int { 1 }
-    pub fn two() -> int { 2 }
-    pub fn three() -> int { 3 }
+    pub fn one() -> Int { 1 }
+    pub fn two() -> Int { 2 }
+    pub fn three() -> Int { 3 }
 }
 
 use ops::{one, two, three};
@@ -58,10 +58,10 @@ fn test_use_group() {
 // --- module-private struct ---
 mod data {
     pub struct PubBox {
-        pub value: int,
+        pub value: Int,
     }
 
-    pub fn new(v: int) -> PubBox { PubBox { value: v } }
+    pub fn new(v: Int) -> PubBox { PubBox { value: v } }
 }
 
 #[test]
@@ -73,8 +73,8 @@ fn test_pub_struct_pub_field() {
 // --- field visibility within module ---
 mod hidden_fields {
     pub struct Counter {
-        pub visible: int,
-        count: int,
+        pub visible: Int,
+        count: Int,
     }
     pub fn new() -> Counter { Counter { visible: 0, count: 0 } }
     pub fn bump(c: Counter) -> Counter {
@@ -82,7 +82,7 @@ mod hidden_fields {
         c.visible = c.visible + 1;
         c
     }
-    pub fn count(c: Counter) -> int { c.count }
+    pub fn count(c: Counter) -> Int { c.count }
 }
 
 #[test]
@@ -96,8 +96,8 @@ fn test_field_visibility_pub() {
 
 // --- pub ---
 mod crate_only {
-    pub fn shared() -> int { 99 }
-    pub fn calls_shared() -> int { shared() }
+    pub fn shared() -> Int { 99 }
+    pub fn calls_shared() -> Int { shared() }
 }
 
 #[test]

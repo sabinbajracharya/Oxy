@@ -1,4 +1,4 @@
-// String::find(pat) -> Option<int>
+// String::find(pat) -> Option<Int>
 // Returns the character index of the first occurrence of `pat`, or None.
 
 #[test]

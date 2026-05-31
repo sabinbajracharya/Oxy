@@ -1,15 +1,15 @@
 // Supporting module for file_modules.ox — loaded via `mod mymath;`
 // This file must be valid standalone (no external dependencies).
 
-pub fn add(a: int, b: int) -> int {
+pub fn add(a: Int, b: Int) -> Int {
     a + b
 }
 
-pub fn sub(a: int, b: int) -> int {
+pub fn sub(a: Int, b: Int) -> Int {
     a - b
 }
 
-pub fn fib(n: int) -> int {
+pub fn fib(n: Int) -> Int {
     if n <= 1 {
         n
     } else {
@@ -18,16 +18,16 @@ pub fn fib(n: int) -> int {
 }
 
 pub struct Point {
-    pub x: float,
-    pub y: float,
+    pub x: Float,
+    pub y: Float,
 }
 
 pub enum Operation {
-    Add(int, int),
-    Mul(int, int),
+    Add(Int, Int),
+    Mul(Int, Int),
 }
 
-pub fn execute(op: Operation) -> int {
+pub fn execute(op: Operation) -> Int {
     match op {
         Operation::Add(a, b) => a + b,
         Operation::Mul(a, b) => a * b,

@@ -493,11 +493,11 @@ fn print_help() {
         "--dump-ir <file>".cyan()
     );
     println!(
-        "  {}           Print version information",
+        "  {}           PrInt version information",
         "-V, --version".cyan()
     );
     println!(
-        "  {}              Print this help message",
+        "  {}              PrInt this help message",
         "-h, --help".cyan()
     );
 }

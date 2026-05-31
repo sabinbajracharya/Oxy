@@ -32,7 +32,7 @@ fn test_rand_range_in_bounds() {
     assert(all_in);
 }
 
-// --- rand::random (float in [0, 1)) ---
+// --- rand::random (Float in [0, 1)) ---
 #[test]
 fn test_rand_random_float() {
     let r = std::rand::random();
@@ -74,6 +74,6 @@ fn test_regex_find_returns_none() {
 
 #[test]
 fn test_regex_find_all_count() {
-    let v: Vec<HashMap<String, String>> = std::regex::find_all("\\d+", "1 22 333");
+    let v: List<Map<String, String>> = std::regex::find_all("\\d+", "1 22 333");
     assert_eq(v.len(), 3);
 }

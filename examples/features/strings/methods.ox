@@ -278,7 +278,7 @@ fn test_method_chain() {
 
 #[test]
 fn test_chain_after_len() {
-    // len() returns int, not a string — but other methods chain on strings
+    // len() returns Int, not a string — but other methods chain on strings
     let s = "  hi  ".trim();
     assert_eq(s.len(), 2);
 }

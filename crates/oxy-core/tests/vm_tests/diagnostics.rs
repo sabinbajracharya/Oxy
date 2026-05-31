@@ -8,7 +8,7 @@ use super::*;
 fn test_recursion_limit() {
     let output = run_and_capture(
         r#"
-fn recurse(n: int) -> int {
+fn recurse(n: Int) -> Int {
     if n == 0 { 0 } else { 1 + recurse(n - 1) }
 }
 fn main() {

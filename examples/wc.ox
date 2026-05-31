@@ -9,7 +9,7 @@ fn count(text: String, want_lines: bool, want_words: bool, want_chars: bool) -> 
     let lines = text.lines().collect().len();
     let words = text.split_whitespace().collect().len();
     let chars = text.len();
-    let mut parts = vec();
+    let mut parts = list();
     if want_lines {
         parts.push(lines.to_string());
     }
@@ -54,7 +54,7 @@ fn main() {
         }
     }
     if args.positionals.len() > 1 {
-        let mut parts = vec();
+        let mut parts = list();
         if lines { parts.push(total_lines.to_string()); }
         if words { parts.push(total_words.to_string()); }
         if chars { parts.push(total_chars.to_string()); }

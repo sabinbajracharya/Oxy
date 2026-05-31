@@ -1,6 +1,6 @@
 // === Feature: Strings — Indexing & Slicing ===
 // Strings support bracket-index `s[i]` returning a Char, and range-slicing
-// `s[a..b]` returning a String. Both use character-based (not byte-based)
+// `s[a..b]` returning a String. Both use character-based (not Byte-based)
 // positions, matching Rust's `.chars().nth()` semantics.
 
 // === Single Character Index: s[i] ===

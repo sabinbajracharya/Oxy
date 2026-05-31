@@ -62,7 +62,7 @@ impl IrGen {
     /// already module-resolved path whose first N-1 segments name a type (e.g.
     /// `["Direction", "Up"]` or `["P", "origin"]`), rewrite that type portion
     /// through the alias map so the call resolves to the real enum/struct
-    /// (`["Dir", "Up"]`, `["Point", "origin"]`). Non-alias paths pass through.
+    /// (`["Dir", "Up"]`, `["PoInt", "origin"]`). Non-alias paths pass through.
     pub(super) fn resolve_type_alias_in_path(&self, segments: &[String]) -> Vec<String> {
         if segments.len() < 2 {
             return segments.to_vec();
@@ -211,10 +211,10 @@ impl IrGen {
                         .map(Self::type_ann_to_type_info)
                         .collect();
                     match name.as_str() {
-                        "Vec" => TypeInfo::Vec(Box::new(
+                        "List" => TypeInfo::Vec(Box::new(
                             args.first().cloned().unwrap_or(TypeInfo::Unknown),
                         )),
-                        "HashMap" => TypeInfo::HashMap(
+                        "Map" => TypeInfo::HashMap(
                             Box::new(args.first().cloned().unwrap_or(TypeInfo::Unknown)),
                             Box::new(args.get(1).cloned().unwrap_or(TypeInfo::Unknown)),
                         ),

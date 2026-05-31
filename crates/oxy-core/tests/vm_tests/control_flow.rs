@@ -27,7 +27,7 @@ fn test_if_else() {
 fn test_if_else_if() {
     let output = run_and_capture(
         r#"
-fn classify(x: int) -> int {
+fn classify(x: Int) -> Int {
     if x > 0 {
         1
     } else if x < 0 {
@@ -339,7 +339,7 @@ fn main() {
 fn test_loop_in_function() {
     let output = run_and_capture(
         r#"
-fn find_first_multiple(n: int, target: int) -> int {
+fn find_first_multiple(n: Int, target: Int) -> Int {
     let mut i = 1;
     loop {
         if i * n >= target {

@@ -12,7 +12,7 @@ mod inner {
     }
 
     pub struct Data {
-        pub value: int,
+        pub value: Int,
     }
 }
 
@@ -66,7 +66,7 @@ fn test_pub_use_glob_reexport() {
 // === Re-export chain ===
 
 mod layer1 {
-    pub fn value() -> int {
+    pub fn value() -> Int {
         42
     }
 }

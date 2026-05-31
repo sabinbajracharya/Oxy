@@ -22,7 +22,7 @@
 // - Return the node itself (now inverted)
 
 struct TreeNode {
-    val: int,
+    val: Int,
     left: Option,
     right: Option,
 }

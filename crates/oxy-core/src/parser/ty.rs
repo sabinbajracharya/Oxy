@@ -31,7 +31,7 @@ impl Parser {
         if self.check(&TokenKind::Amp) {
             return Err(self.error(
                 "references are not supported in Oxy. Drop the `&` (use `T` instead \
-                 of `&T`, `Vec<T>` instead of `&[T]`, `String` instead of `&str`). \
+                 of `&T`, `List<T>` instead of `&[T]`, `String` instead of `&str`). \
                  Oxy has no borrow checker — see CLAUDE.md."
                     .to_string(),
             ));

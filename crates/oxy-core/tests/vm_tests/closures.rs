@@ -8,7 +8,7 @@ use super::*;
 fn test_closure_basic() {
     let output = run_and_capture(
         r#"fn main() {
-let add = |a: int, b: int| a + b;
+let add = |a: Int, b: Int| a + b;
 println("{}", add(3, 4));
 }"#,
     );
@@ -41,7 +41,7 @@ println("{}", greet());
 fn test_closure_block_body() {
     let output = run_and_capture(
         r#"fn main() {
-let compute = |x: int| {
+let compute = |x: Int| {
     let y = x * 2;
     y + 1
 };
@@ -66,7 +66,7 @@ println("{}", multiply(5));
 #[test]
 fn test_closure_as_argument() {
     let output = run_and_capture(
-        r#"fn apply(f: Fn, x: int) -> int {
+        r#"fn apply(f: Fn, x: Int) -> Int {
     f(x)
 }
 fn main() {
@@ -80,7 +80,7 @@ fn main() {
 #[test]
 fn test_closure_returned_from_function() {
     let output = run_and_capture(
-        r#"fn make_adder(n: int) -> Fn {
+        r#"fn make_adder(n: Int) -> Fn {
     |x| x + n
 }
 fn main() {
@@ -107,7 +107,7 @@ println("{}", greet());
 fn test_vec_map() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3);
+let v = list(1, 2, 3);
 let doubled = v.map(|x| x * 2).collect();
 println("{:?}", doubled);
 }"#,
@@ -119,7 +119,7 @@ println("{:?}", doubled);
 fn test_vec_filter() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3, 4, 5);
+let v = list(1, 2, 3, 4, 5);
 let evens = v.filter(|x| x % 2 == 0).collect();
 println("{:?}", evens);
 }"#,
@@ -131,7 +131,7 @@ println("{:?}", evens);
 fn test_vec_for_each() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(10, 20, 30);
+let v = list(10, 20, 30);
 v.for_each(|x| println("{}", x));
 }"#,
     );
@@ -142,7 +142,7 @@ v.for_each(|x| println("{}", x));
 fn test_vec_fold() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3, 4);
+let v = list(1, 2, 3, 4);
 let sum = v.fold(0, |acc, x| acc + x);
 println("{}", sum);
 }"#,
@@ -154,7 +154,7 @@ println("{}", sum);
 fn test_vec_any_all() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3, 4, 5);
+let v = list(1, 2, 3, 4, 5);
 println("{}", v.any(|x| x > 4));
 println("{}", v.all(|x| x > 0));
 println("{}", v.all(|x| x > 3));
@@ -167,7 +167,7 @@ println("{}", v.all(|x| x > 3));
 fn test_vec_find() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3, 4, 5);
+let v = list(1, 2, 3, 4, 5);
 let found = v.find(|x| x > 3);
 println("{:?}", found);
 let not_found = v.find(|x| x > 10);
@@ -181,7 +181,7 @@ println("{:?}", not_found);
 fn test_vec_enumerate() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec("a", "b", "c");
+let v = list("a", "b", "c");
 let pairs = v.enumerate().collect();
 println("{:?}", pairs);
 }"#,
@@ -193,7 +193,7 @@ println("{:?}", pairs);
 fn test_vec_chain_map_filter() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3, 4, 5);
+let v = list(1, 2, 3, 4, 5);
 let result = v.map(|x| x * 2).filter(|x| x > 4).collect();
 println("{:?}", result);
 }"#,
@@ -205,8 +205,8 @@ println("{:?}", result);
 fn test_vec_flat_map() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3);
-let result = v.flat_map(|x| vec(x, x * 10)).collect();
+let v = list(1, 2, 3);
+let result = v.flat_map(|x| list(x, x * 10)).collect();
 println("{:?}", result);
 }"#,
     );
@@ -217,7 +217,7 @@ println("{:?}", result);
 fn test_vec_position() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(10, 20, 30);
+let v = list(10, 20, 30);
 println("{:?}", v.position(|x| x == 20));
 println("{:?}", v.position(|x| x == 99));
 }"#,
@@ -233,8 +233,8 @@ fn test_bitwise_op_inside_closure() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let v = vec(0xFF, 0x0F, 0xF0);
-    let masked: Vec<int> = v.iter().map(|x| x & 0x0F).collect::<Vec<_>>();
+    let v = list(0xFF, 0x0F, 0xF0);
+    let masked: List<Int> = v.iter().map(|x| x & 0x0F).collect::<List<_>>();
     for m in masked { println("{}", m); }
 }
 "#,
@@ -250,11 +250,11 @@ fn test_enum_match_inside_closure() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let opts = vec(Some(1), None, Some(3));
-    let unwrapped: Vec<int> = opts.iter().map(|o| match o {
+    let opts = list(Some(1), None, Some(3));
+    let unwrapped: List<Int> = opts.iter().map(|o| match o {
         Some(v) => v,
         None => 0,
-    }).collect::<Vec<_>>();
+    }).collect::<List<_>>();
     for u in unwrapped { println("{}", u); }
 }
 "#,
@@ -269,7 +269,7 @@ fn test_option_map_with_closure() {
 let val = Some(5);
 let doubled = val.map(|x| x * 2);
 println("{:?}", doubled);
-let none_val: Option<int> = None;
+let none_val: Option<Int> = None;
 let mapped = none_val.map(|x| x * 2);
 println("{:?}", mapped);
 }"#,
@@ -281,7 +281,7 @@ println("{:?}", mapped);
 fn test_result_map_with_closure() {
     let output = run_and_capture(
         r#"fn main() {
-let val: Result<int, String> = Ok(5);
+let val: Result<Int, String> = Ok(5);
 let doubled = val.map(|x| x * 2);
 println("{:?}", doubled);
 }"#,
@@ -293,7 +293,7 @@ println("{:?}", doubled);
 fn test_closure_as_method_callback() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3);
+let v = list(1, 2, 3);
 let sum = v.fold(0, |acc, x| acc + x);
 let product = v.fold(1, |acc, x| acc * x);
 println("{} {}", sum, product);
@@ -306,7 +306,7 @@ println("{} {}", sum, product);
 fn test_iter_collect() {
     let output = run_and_capture(
         r#"fn main() {
-let v = vec(1, 2, 3);
+let v = list(1, 2, 3);
 let v2 = v.iter().collect();
 println("{:?}", v2);
 }"#,
@@ -318,8 +318,8 @@ println("{:?}", v2);
 fn test_vec_zip() {
     let output = run_and_capture(
         r#"fn main() {
-            let a = vec(1, 2, 3);
-            let b = vec("a", "b", "c");
+            let a = list(1, 2, 3);
+            let b = list("a", "b", "c");
             let zipped = a.zip(b).collect();
             println("{:?}", zipped);
             }"#,
@@ -331,7 +331,7 @@ fn test_vec_zip() {
 fn test_vec_take_skip() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(1, 2, 3, 4, 5);
+            let v = list(1, 2, 3, 4, 5);
             let first = v.take(3).collect();
             let rest = v.skip(2).collect();
             println("{:?} {:?}", first, rest);
@@ -344,8 +344,8 @@ fn test_vec_take_skip() {
 fn test_vec_chain() {
     let output = run_and_capture(
         r#"fn main() {
-            let a = vec(1, 2);
-            let b = vec(3, 4);
+            let a = list(1, 2);
+            let b = list(3, 4);
             let c = a.chain(b).collect();
             println("{:?}", c);
             }"#,
@@ -357,7 +357,7 @@ fn test_vec_chain() {
 fn test_vec_flatten() {
     let output = run_and_capture(
         r#"fn main() {
-            let nested = vec(vec(1, 2), vec(3, 4));
+            let nested = list(list(1, 2), list(3, 4));
             let flat = nested.flatten().collect();
             println("{:?}", flat);
             }"#,
@@ -369,7 +369,7 @@ fn test_vec_flatten() {
 fn test_vec_sum() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(1, 2, 3, 4, 5);
+            let v = list(1, 2, 3, 4, 5);
             println("{}", v.sum());
             }"#,
     );
@@ -380,7 +380,7 @@ fn test_vec_sum() {
 fn test_vec_rev() {
     let output = run_and_capture(
         r#"fn main() {
-            let mut v = vec(1, 2, 3);
+            let mut v = list(1, 2, 3);
             v.rev();
             println("{:?}", v);
             }"#,
@@ -392,7 +392,7 @@ fn test_vec_rev() {
 fn test_vec_sort() {
     let output = run_and_capture(
         r#"fn main() {
-            let mut v = vec(3, 1, 4, 1, 5);
+            let mut v = list(3, 1, 4, 1, 5);
             v.sort();
             println("{:?}", v);
             }"#,
@@ -404,7 +404,7 @@ fn test_vec_sort() {
 fn test_vec_sort_by() {
     let output = run_and_capture(
         r#"fn main() {
-            let mut v = vec(3, 1, 4, 1, 5);
+            let mut v = list(3, 1, 4, 1, 5);
             v.sort_by(|a, b| b - a);
             println("{:?}", v);
             }"#,
@@ -416,7 +416,7 @@ fn test_vec_sort_by() {
 fn test_vec_sort_by_key() {
     let output = run_and_capture(
         r#"fn main() {
-            let mut v = vec("aa", "b", "ccc");
+            let mut v = list("aa", "b", "ccc");
             v.sort_by_key(|s| s.len());
             println("{:?}", v);
             }"#,
@@ -428,7 +428,7 @@ fn test_vec_sort_by_key() {
 fn test_vec_dedup() {
     let output = run_and_capture(
         r#"fn main() {
-            let mut v = vec(1, 1, 2, 2, 3);
+            let mut v = list(1, 1, 2, 2, 3);
             v.dedup();
             println("{:?}", v);
             }"#,
@@ -440,7 +440,7 @@ fn test_vec_dedup() {
 fn test_vec_min_max() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(3, 1, 4, 1, 5);
+            let v = list(3, 1, 4, 1, 5);
             println("{:?} {:?}", v.min(), v.max());
             }"#,
     );
@@ -451,7 +451,7 @@ fn test_vec_min_max() {
 fn test_vec_windows() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(1, 2, 3, 4);
+            let v = list(1, 2, 3, 4);
             let w = v.windows(2);
             println("{:?}", w);
             }"#,
@@ -463,7 +463,7 @@ fn test_vec_windows() {
 fn test_vec_chunks() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(1, 2, 3, 4, 5);
+            let v = list(1, 2, 3, 4, 5);
             let c = v.chunks(2);
             println("{:?}", c);
             }"#,
@@ -475,7 +475,7 @@ fn test_vec_chunks() {
 fn test_iterator_chaining() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = vec(1, 2, 3, 4, 5, 6);
+            let v = list(1, 2, 3, 4, 5, 6);
             let result = v.filter(|x| x % 2 == 0).collect().map(|x| x * 10).sum();
             println("{}", result);
             }"#,

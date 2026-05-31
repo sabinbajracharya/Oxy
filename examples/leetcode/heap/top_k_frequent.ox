@@ -3,7 +3,7 @@
 // elements. Answer is guaranteed to be unique.
 //
 // === Pattern: Heap (Priority Queue) ===
-// Count frequencies with a HashMap, then use a min-heap of size k to
+// Count frequencies with a Map, then use a min-heap of size k to
 // track the top-k elements by frequency. Alternatively, sort by frequency
 // and take the top k.
 //
@@ -20,22 +20,22 @@
 // === Tips ===
 // - BinaryHeap is a max-heap; negate values for min-heap behavior
 // - Or sort by frequency and take last k
-// - HashMap for counting: .get_or(key, 0) pattern
+// - Map for counting: .get_or(key, 0) pattern
 
 fn main() {
-    let nums = vec(1, 1, 1, 2, 2, 3);
+    let nums = list(1, 1, 1, 2, 2, 3);
     println("{:?}", top_k_frequent(nums, 2));
 }
 
-fn top_k_frequent(nums: Vec, k: int) -> Vec {
+fn top_k_frequent(nums: List, k: Int) -> List {
     // Count frequencies
-    let mut counts = HashMap::new();
+    let mut counts = Map::new();
     for num in nums {
         let count = counts.get(num).unwrap_or(0);
         counts.insert(num, count + 1);
     }
     // Collect as (freq, num) pairs and sort by frequency descending
-    let mut pairs = vec();
+    let mut pairs = list();
     for (num, freq) in counts {
         pairs.push((freq, num));
     }
@@ -44,7 +44,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
         let (fb, _) = b;
         if fa > fb { -1 } else if fa < fb { 1 } else { 0 }
     });
-    let mut result = vec();
+    let mut result = list();
     let limit = if k < pairs.len() { k } else { pairs.len() };
     for i in 0..limit {
         let (_, num) = pairs[i];
@@ -55,7 +55,7 @@ fn top_k_frequent(nums: Vec, k: int) -> Vec {
 
 #[test]
 fn test_example() {
-    let nums = vec(1, 1, 1, 2, 2, 3);
+    let nums = list(1, 1, 1, 2, 2, 3);
     let result = top_k_frequent(nums, 2);
     assert_eq(result.len(), 2);
     assert(result.contains(1));
@@ -64,5 +64,5 @@ fn test_example() {
 
 #[test]
 fn test_single() {
-    assert_eq(top_k_frequent(vec(1), 1), vec(1));
+    assert_eq(top_k_frequent(list(1), 1), list(1));
 }

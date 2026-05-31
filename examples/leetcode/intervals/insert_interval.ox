@@ -23,16 +23,16 @@
 // - Empty input → just return [new_interval]
 
 fn main() {
-    let intervals = vec(vec(1, 3), vec(6, 9));
-    let new_interval = vec(2, 5);
+    let intervals = list(list(1, 3), list(6, 9));
+    let new_interval = list(2, 5);
     let result = insert(intervals, new_interval);
     for r in result {
         println("{:?}", r);
     }
 }
 
-fn insert(intervals: Vec, new_interval: Vec) -> Vec {
-    let mut result = vec();
+fn insert(intervals: List, new_interval: List) -> List {
+    let mut result = list();
     let n = intervals.len();
     let mut i = 0;
     // Phase 1: add all before overlap
@@ -62,21 +62,21 @@ fn insert(intervals: Vec, new_interval: Vec) -> Vec {
 
 #[test]
 fn test_example() {
-    let intervals = vec(vec(1, 3), vec(6, 9));
-    let result = insert(intervals, vec(2, 5));
-    assert_eq(result, vec(vec(1, 5), vec(6, 9)));
+    let intervals = list(list(1, 3), list(6, 9));
+    let result = insert(intervals, list(2, 5));
+    assert_eq(result, list(list(1, 5), list(6, 9)));
 }
 
 #[test]
 fn test_no_overlap() {
-    let intervals = vec(vec(1, 2), vec(5, 6));
-    let result = insert(intervals, vec(3, 4));
-    assert_eq(result, vec(vec(1, 2), vec(3, 4), vec(5, 6)));
+    let intervals = list(list(1, 2), list(5, 6));
+    let result = insert(intervals, list(3, 4));
+    assert_eq(result, list(list(1, 2), list(3, 4), list(5, 6)));
 }
 
 #[test]
 fn test_merge_all() {
-    let intervals = vec(vec(1, 3), vec(4, 6));
-    let result = insert(intervals, vec(2, 5));
-    assert_eq(result, vec(vec(1, 6)));
+    let intervals = list(list(1, 3), list(4, 6));
+    let result = insert(intervals, list(2, 5));
+    assert_eq(result, list(list(1, 6)));
 }

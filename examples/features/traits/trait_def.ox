@@ -27,16 +27,16 @@ fn test_basic_trait() {
 // === Trait on Enum ===
 
 trait Area {
-    fn area(self) -> float;
+    fn area(self) -> Float;
 }
 
 enum Shape {
-    Circle(float),
-    Rectangle(float, float),
+    Circle(Float),
+    Rectangle(Float, Float),
 }
 
 impl Area for Shape {
-    fn area(self) -> float {
+    fn area(self) -> Float {
         match self {
             Shape::Circle(r) => 3.14 * r * r,
             Shape::Rectangle(w, h) => w * h,
@@ -59,7 +59,7 @@ trait Calculator {
     fn sub(self, other: Self) -> Self;
 }
 
-struct Num(int);
+struct Num(Int);
 
 impl Calculator for Num {
     fn add(self, other: Num) -> Num {
@@ -90,7 +90,7 @@ trait Describe {
 
 struct Book {
     title: String,
-    year: int,
+    year: Int,
 }
 
 impl Describe for Book {
@@ -116,18 +116,18 @@ trait Chain {
     fn add_ten(self) -> Self;
 }
 
-impl Chain for int {
-    fn double(self) -> int {
+impl Chain for Int {
+    fn double(self) -> Int {
         self * 2
     }
-    fn add_ten(self) -> int {
+    fn add_ten(self) -> Int {
         self + 10
     }
 }
 
 #[test]
 fn test_trait_method_chain() {
-    let x: int = 5;
+    let x: Int = 5;
     assert_eq(x.double().add_ten(), 20);
     assert_eq(x.add_ten().double(), 30);
 }

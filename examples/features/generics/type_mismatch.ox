@@ -26,7 +26,7 @@ fn sum_both<T>(a: T, b: T) -> T {
 
 #[test]
 fn test_same_generic_param_same_type_ok() {
-    // Both args int → should compile
+    // Both args Int → should compile
     let _r = sum_both(1, 2);
 }
 
@@ -38,7 +38,7 @@ fn test_same_generic_param_string_ok() {
 
 #[compile_error]
 fn test_same_generic_param_int_and_string_rejected() {
-    // T bound to int for first arg, String for second → type mismatch
+    // T bound to Int for first arg, String for second → type mismatch
     let _r = sum_both(5, "SABOM".to_string());
 }
 
@@ -56,15 +56,15 @@ fn test_same_generic_param_bool_and_int_rejected() {
 
 #[compile_error]
 fn test_same_generic_param_vars_mixed_types_rejected() {
-    let a: int = 5;
+    let a: Int = 5;
     let b: String = "world".to_string();
     let _r = sum_both(a, b);
 }
 
 #[test]
 fn test_same_generic_param_vars_same_type_ok() {
-    let a: int = 5;
-    let b: int = 10;
+    let a: Int = 5;
+    let b: Int = 10;
     let _r = sum_both(a, b);
 }
 
@@ -102,7 +102,7 @@ struct Pair<A, B> {
 
 #[test]
 fn test_different_generic_params_different_types_ok() {
-    // A=int, B=String — different generic params, should compile
+    // A=Int, B=String — different generic params, should compile
     let p = make_pair(42, "hello".to_string());
     assert_eq(p.first, 42);
     assert_eq(p.second, "hello");
@@ -110,7 +110,7 @@ fn test_different_generic_params_different_types_ok() {
 
 #[test]
 fn test_different_generic_params_same_type_ok() {
-    // A=int, B=int — different params can be same concrete type
+    // A=Int, B=Int — different params can be same concrete type
     let p = make_pair(42, 100);
     assert_eq(p.first, 42);
     assert_eq(p.second, 100);
@@ -145,7 +145,7 @@ fn test_choose_same_type_ok() {
 
 #[compile_error]
 fn test_choose_mixed_type_rejected() {
-    let _r = choose(10, "not int".to_string());
+    let _r = choose(10, "not Int".to_string());
 }
 
 // === Generic with concrete trailing param ===
@@ -193,12 +193,12 @@ enum MyResult<T, E> {
 
 #[test]
 fn test_result_ok_ok() {
-    let _r: MyResult<int, String> = MyResult::Ok(42);
+    let _r: MyResult<Int, String> = MyResult::Ok(42);
 }
 
 #[test]
 fn test_result_err_ok() {
-    let _r: MyResult<int, String> = MyResult::Err("oops".to_string());
+    let _r: MyResult<Int, String> = MyResult::Err("oops".to_string());
 }
 
 // === Impl block method with generics, type mismatch ===
@@ -244,7 +244,7 @@ fn id_t<T>(x: T) -> T {
 
 #[test]
 fn test_turbofish_correct_type_ok() {
-    let x = id_t::<int>(42);
+    let x = id_t::<Int>(42);
     assert_eq(x, 42);
 }
 

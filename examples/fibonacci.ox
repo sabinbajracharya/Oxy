@@ -1,5 +1,5 @@
 // fibonacci.ox — Recursive Fibonacci in Oxy
-fn fib(n: int) -> int {
+fn fib(n: Int) -> Int {
     if n <= 1 {
         n
     } else {

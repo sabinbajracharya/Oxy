@@ -166,7 +166,7 @@ fn test_while_let() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let mut v = vec(1, 2, 3);
+    let mut v = list(1, 2, 3);
     while let Some(val) = v.pop() {
         println("{}", val);
     }
@@ -292,7 +292,7 @@ fn main() {
 fn test_option_map() {
     let out = run_and_capture(
         r#"
-fn double(x: int) -> int { x * 2 }
+fn double(x: Int) -> Int { x * 2 }
 
 fn main() {
     let x = Some(21);
@@ -312,7 +312,7 @@ fn main() {
 fn test_result_map() {
     let out = run_and_capture(
         r#"
-fn double(x: int) -> int { x * 2 }
+fn double(x: Int) -> Int { x * 2 }
 
 fn main() {
     let x = Ok(21);
@@ -359,7 +359,7 @@ fn main() {
 fn test_option_function_return() {
     let out = run_and_capture(
         r#"
-fn find_item(items: Vec, target: int) -> Option {
+fn find_item(items: List, target: Int) -> Option {
     for i in 0..items.len() {
         if items[i] == target {
             return Some(i);
@@ -369,7 +369,7 @@ fn find_item(items: Vec, target: int) -> Option {
 }
 
 fn main() {
-    let items = vec(10, 20, 30, 40);
+    let items = list(10, 20, 30, 40);
     let result = find_item(items, 30);
     match result {
         Some(idx) => println("found at {}", idx),
@@ -385,7 +385,7 @@ fn main() {
 fn test_try_operator_option() {
     let out = run_and_capture(
         r#"
-fn get_first(v: Vec) -> Option {
+fn get_first(v: List) -> Option {
     if v.is_empty() {
         None
     } else {
@@ -394,7 +394,7 @@ fn get_first(v: Vec) -> Option {
 }
 
 fn process() -> Option {
-    let v = vec(10, 20, 30);
+    let v = list(10, 20, 30);
     let first = get_first(v)?;
     Some(first * 2)
 }
@@ -445,7 +445,7 @@ fn test_int_parse() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = int::parse("42");
+    let r = Int::parse("42");
     println("{}", r.unwrap());
 }
 "#,
@@ -458,7 +458,7 @@ fn test_int_parse_invalid() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = int::parse("abc");
+    let r = Int::parse("abc");
     println("{}", r.is_err());
 }
 "#,
@@ -471,7 +471,7 @@ fn test_float_parse() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let r = float::parse("3.14");
+    let r = Float::parse("3.14");
     println("{}", r.unwrap());
 }
 "#,
@@ -484,8 +484,8 @@ fn test_int_parse_hex() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", int::parse("0xFF").unwrap());
-    println("{}", int::parse("0x10").unwrap());
+    println("{}", Int::parse("0xFF").unwrap());
+    println("{}", Int::parse("0x10").unwrap());
 }
 "#,
     );

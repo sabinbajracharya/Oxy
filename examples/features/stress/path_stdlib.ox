@@ -122,7 +122,7 @@ fn test_with_file_name_replace() {
 fn test_join_two_parts() {
     let s = sep();
     let expected = "a" + s + "b";
-    let p = std::path::join(vec("a".to_string(), "b".to_string()));
+    let p = std::path::join(list("a".to_string(), "b".to_string()));
     assert_eq(p, expected);
 }
 
@@ -130,7 +130,7 @@ fn test_join_two_parts() {
 fn test_join_three_parts() {
     let s = sep();
     let expected = "a" + s + "b" + s + "c.txt";
-    let p = std::path::join(vec(
+    let p = std::path::join(list(
         "a".to_string(),
         "b".to_string(),
         "c.txt".to_string(),
@@ -141,13 +141,13 @@ fn test_join_three_parts() {
 #[test]
 fn test_join_absolute_resets() {
     // PathBuf::push of an absolute resets the buffer — this matches Rust.
-    let p = std::path::join(vec("a".to_string(), "/b".to_string()));
+    let p = std::path::join(list("a".to_string(), "/b".to_string()));
     assert_eq(p, "/b");
 }
 
 #[test]
 fn test_join_empty_vec_is_empty() {
-    let p = std::path::join(vec());
+    let p = std::path::join(list());
     assert_eq(p, "");
 }
 

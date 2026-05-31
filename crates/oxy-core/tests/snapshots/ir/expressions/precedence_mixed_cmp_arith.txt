@@ -1,11 +1,11 @@
 fn main() -> () {
   locals: 1
   bb0(entry):
-    v0 = const.int 1
-    v1 = const.int 2
+    v0 = const.Int 1
+    v1 = const.Int 2
     v2 = add v0, v1
-    v3 = const.int 3
-    v4 = const.int 4
+    v3 = const.Int 3
+    v4 = const.Int 4
     v5 = mul v3, v4
     v6 = lt v2, v5
     store.local $0, v6

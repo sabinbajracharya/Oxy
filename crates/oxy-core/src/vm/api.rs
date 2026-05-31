@@ -461,10 +461,10 @@ pub fn gen_ir_snapshot(source: &str) -> Result<String, String> {
 /// `VMRuntime::builtin_method`.
 pub fn dispatched_type_names() -> Vec<&'static str> {
     vec![
-        "Vec",
+        "List",
         "String",
-        "HashMap",
-        "HashSet",
+        "Map",
+        "Set",
         "BTreeMap",
         "BTreeSet",
         "VecDeque",

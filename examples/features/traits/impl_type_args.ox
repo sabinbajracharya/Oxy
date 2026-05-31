@@ -1,6 +1,6 @@
 // === Feature: Traits — Impl Type Arguments ===
 // Tests that impl headers can specify concrete type arguments,
-// e.g. `impl MyStruct<int>` (inherent) and `impl From<int> for MyType` (trait).
+// e.g. `impl MyStruct<Int>` (inherent) and `impl From<Int> for MyType` (trait).
 
 // === Inherent impl with concrete type args ===
 
@@ -9,27 +9,27 @@ struct Pair<A, B> {
     second: B,
 }
 
-impl Pair<int, int> {
-    fn sum(self) -> int {
+impl Pair<Int, Int> {
+    fn sum(self) -> Int {
         self.first + self.second
     }
 
-    fn make(a: int, b: int) -> Pair<int, int> {
+    fn make(a: Int, b: Int) -> Pair<Int, Int> {
         Pair { first: a, second: b }
     }
 }
 
 #[test]
 fn test_inherent_impl_with_type_args() {
-    let p = Pair::<int, int>::make(10, 20);
+    let p = Pair::<Int, Int>::make(10, 20);
     assert_eq(p.sum(), 30);
 }
 
 // === Inherent impl on non-generic struct (no type args) still works ===
 
 struct Point {
-    x: float,
-    y: float,
+    x: Float,
+    y: Float,
 }
 
 impl Point {

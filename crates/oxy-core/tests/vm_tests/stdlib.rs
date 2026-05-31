@@ -75,10 +75,10 @@ fn test_json_serialize_string_escapes() {
 }
 
 #[test]
-fn test_json_serialize_vec() {
+fn test_json_serialize_list() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = vec(1, 2, 3);
+    let v = list(1, 2, 3);
     let j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
@@ -90,7 +90,7 @@ fn test_json_serialize_vec() {
 fn test_json_serialize_hashmap() {
     let output = run_and_capture(
         r#"fn main() {
-    let mut m = HashMap::new();
+    let mut m = Map::new();
     m.insert("alpha", 1);
     m.insert("beta", 2);
     let j = json::serialize(m).unwrap();
@@ -104,12 +104,12 @@ fn test_json_serialize_hashmap() {
 fn test_json_serialize_struct() {
     let output = run_and_capture(
         r#"
-struct Point {
-    x: int,
-    y: int,
+struct PoInt {
+    x: Int,
+    y: Int,
 }
 fn main() {
-    let p = Point { x: 10, y: 20 };
+    let p = PoInt { x: 10, y: 20 };
     let j = json::serialize(p).unwrap();
     println("{}", j);
 }"#,
@@ -125,7 +125,7 @@ enum Color {
     Red,
     Green,
     Blue,
-    Rgb(int, int, int),
+    Rgb(Int, Int, Int),
 }
 fn main() {
     let a = json::serialize(Color::Red).unwrap();
@@ -172,7 +172,7 @@ fn test_json_serialize_option_result() {
 fn test_json_serialize_nested() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = vec(vec(1, 2), vec(3, 4));
+    let v = list(list(1, 2), list(3, 4));
     let j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
@@ -184,7 +184,7 @@ fn test_json_serialize_nested() {
 fn test_json_serialize_pretty() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = vec(1, 2, 3);
+    let v = list(1, 2, 3);
     let j = json::to_string_pretty(v).unwrap();
     println("{}", j);
 }"#,
@@ -254,7 +254,7 @@ fn test_json_deserialize_nested() {
 fn test_json_roundtrip() {
     let output = run_and_capture(
         r#"fn main() {
-    let original = vec(1, 2, 3);
+    let original = list(1, 2, 3);
     let json_str = json::serialize(original).unwrap();
     let parsed = json::deserialize(json_str).unwrap();
     println("{:?}", parsed);
@@ -267,7 +267,7 @@ fn test_json_roundtrip() {
 fn test_json_to_json_method() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = vec(1, 2, 3);
+    let v = list(1, 2, 3);
     let j = v.to_json().unwrap();
     println("{}", j);
     let n = 42;
@@ -298,7 +298,7 @@ fn test_json_from_struct() {
         r#"
 struct Person {
     name: String,
-    age: int,
+    age: Int,
 }
 fn main() {
     let json_str = "{\"name\": \"Alice\", \"age\": 30}";
@@ -375,7 +375,7 @@ fn test_http_post_json_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut data = HashMap::new();
+    let mut data = Map::new();
     data.insert("key", "value");
     let result = http::post_json("not-a-valid-url", data);
     match result {
@@ -392,7 +392,7 @@ fn test_http_put_json_invalid_url() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let mut data = HashMap::new();
+    let mut data = Map::new();
     data.insert("key", "value");
     let result = http::put_json("not-a-valid-url", data);
     match result {

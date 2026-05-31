@@ -9,7 +9,7 @@ fn test_inline_module() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn add(a: int, b: int) -> int {
+    pub fn add(a: Int, b: Int) -> Int {
         a + b
     }
 }
@@ -26,7 +26,7 @@ fn test_module_path_call() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn multiply(a: int, b: int) -> int {
+    pub fn multiply(a: Int, b: Int) -> Int {
         a * b
     }
 }
@@ -63,9 +63,9 @@ fn test_use_group_import() {
     let output = run_and_capture(
         r#"
 mod ops {
-    pub fn add(a: int, b: int) -> int { a + b }
-    pub fn sub(a: int, b: int) -> int { a - b }
-    pub fn mul(a: int, b: int) -> int { a * b }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
+    pub fn sub(a: Int, b: Int) -> Int { a - b }
+    pub fn mul(a: Int, b: Int) -> Int { a * b }
 }
 use ops::{add, sub};
 fn main() {
@@ -80,19 +80,19 @@ fn test_module_with_struct() {
     let output = run_and_capture(
         r#"
 mod geometry {
-    pub struct Point { x: float, y: float }
-    impl Point {
-        pub fn new(x: float, y: float) -> Self {
-            Point { x, y }
+    pub struct PoInt { x: Float, y: Float }
+    impl PoInt {
+        pub fn new(x: Float, y: Float) -> Self {
+            PoInt { x, y }
         }
         pub fn to_string(self) -> String {
             format("({}, {})", self.x, self.y)
         }
     }
 }
-use geometry::Point;
+use geometry::PoInt;
 fn main() {
-    let p = Point::new(1.0, 2.0);
+    let p = PoInt::new(1.0, 2.0);
     println("{}", p.to_string());
 }"#,
     );
@@ -124,7 +124,7 @@ fn test_pub_keyword_accepted() {
     let output = run_and_capture(
         r#"
 pub mod math {
-    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
 }
 use math::add;
 fn main() {
@@ -138,7 +138,7 @@ fn main() {
 fn test_pub_fn_accepted() {
     let output = run_and_capture(
         r#"
-pub fn helper() -> int { 42 }
+pub fn helper() -> Int { 42 }
 fn main() {
     println("{}", helper());
 }"#,
@@ -151,10 +151,10 @@ fn test_multiple_modules() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn foo() -> int { 1 }
+    pub fn foo() -> Int { 1 }
 }
 mod b {
-    pub fn bar() -> int { 2 }
+    pub fn bar() -> Int { 2 }
 }
 use a::foo;
 use b::bar;
@@ -170,11 +170,11 @@ fn test_use_inside_module() {
     let output = run_and_capture(
         r#"
 mod outer {
-    pub fn value() -> int { 42 }
+    pub fn value() -> Int { 42 }
 }
 mod inner {
     use outer::value;
-    pub fn call() -> int { value() }
+    pub fn call() -> Int { value() }
 }
 use inner::call;
 fn main() {
@@ -189,7 +189,7 @@ fn test_type_alias_inside_module() {
     let output = run_and_capture(
         r#"
 mod types {
-    pub type Num = int;
+    pub type Num = Int;
     pub fn make() -> Num { 10 }
 }
 use types::make;
@@ -222,7 +222,7 @@ fn test_glob_after_module_definition() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn double(x: int) -> int { x * 2 }
+    pub fn double(x: Int) -> Int { x * 2 }
 }
 use math::*;
 fn main() {
@@ -239,7 +239,7 @@ fn test_glob_before_module_definition() {
         r#"
 use math::*;
 mod math {
-    pub fn triple(x: int) -> int { x * 3 }
+    pub fn triple(x: Int) -> Int { x * 3 }
 }
 fn main() {
     println("{}", triple(7));
@@ -254,7 +254,7 @@ fn test_self_in_use_path() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn val() -> int { 42 }
+    pub fn val() -> Int { 42 }
     pub use self::val;
 }
 use m::val;
@@ -271,10 +271,10 @@ fn test_super_in_use_path() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn val() -> int { 99 }
+    pub fn val() -> Int { 99 }
     pub mod b {
         use super::val;
-        pub fn call() -> int { val() }
+        pub fn call() -> Int { val() }
     }
 }
 use a::b::call;
@@ -308,11 +308,11 @@ fn test_struct_init_with_use_import() {
     let output = run_and_capture(
         r#"
 mod geom {
-    pub struct Point { pub x: float, pub y: float }
+    pub struct PoInt { pub x: Float, pub y: Float }
 }
-use geom::Point;
+use geom::PoInt;
 fn main() {
-    let p = Point { x: 1.5, y: 2.5 };
+    let p = PoInt { x: 1.5, y: 2.5 };
     println("({}, {})", p.x, p.y);
 }"#,
     );
@@ -324,7 +324,7 @@ fn test_use_as_rename_simple() {
     let output = run_and_capture(
         r#"
 mod math {
-    pub fn add(a: int, b: int) -> int { a + b }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
 }
 use math::add as sum;
 fn main() {
@@ -339,8 +339,8 @@ fn test_use_as_rename_group() {
     let output = run_and_capture(
         r#"
 mod ops {
-    pub fn add(a: int, b: int) -> int { a + b }
-    pub fn sub(a: int, b: int) -> int { a - b }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
+    pub fn sub(a: Int, b: Int) -> Int { a - b }
 }
 use ops::{add as plus, sub as minus};
 fn main() {
@@ -373,12 +373,12 @@ fn test_sibling_module_path_call() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn get_value() -> int {
+    pub fn get_value() -> Int {
         b::helper()
     }
 }
 mod b {
-    pub fn helper() -> int { 42 }
+    pub fn helper() -> Int { 42 }
 }
 use a::get_value;
 fn main() {
@@ -393,13 +393,13 @@ fn test_sibling_module_nested_path_call() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn get_value() -> int {
+    pub fn get_value() -> Int {
         b::c::deep()
     }
 }
 mod b {
     pub mod c {
-        pub fn deep() -> int { 77 }
+        pub fn deep() -> Int { 77 }
     }
 }
 use a::get_value;
@@ -415,10 +415,10 @@ fn test_self_qualified_path_call_in_module() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn outer() -> int {
+    pub fn outer() -> Int {
         m::inner()
     }
-    pub fn inner() -> int { 11 }
+    pub fn inner() -> Int { 11 }
 }
 use m::outer;
 fn main() {
@@ -433,8 +433,8 @@ fn test_pub_use_glob_re_export() {
     let output = run_and_capture(
         r#"
 mod inner {
-    pub fn add(a: int, b: int) -> int { a + b }
-    pub fn sub(a: int, b: int) -> int { a - b }
+    pub fn add(a: Int, b: Int) -> Int { a + b }
+    pub fn sub(a: Int, b: Int) -> Int { a - b }
 }
 mod middle {
     pub use inner::*;
@@ -453,7 +453,7 @@ fn test_pub_use_glob_re_export_single_import() {
     let output = run_and_capture(
         r#"
 mod lib {
-    pub fn version() -> int { 1 }
+    pub fn version() -> Int { 1 }
     pub fn name() -> String { "oxy".to_string() }
 }
 mod prelude {
@@ -473,7 +473,7 @@ fn test_pub_visibility() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn val() -> int { 42 }
+    pub fn val() -> Int { 42 }
 }
 use m::val;
 fn main() {
@@ -489,10 +489,10 @@ fn test_pub_parent_visibility() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn val() -> int { 99 }
+    pub fn val() -> Int { 99 }
     pub mod b {
         use super::val;
-        pub fn call() -> int { val() }
+        pub fn call() -> Int { val() }
     }
 }
 use a::b::call;
@@ -508,7 +508,7 @@ fn test_integer_type_annotation_accepts_unsuffixed_literal() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let x: int = 123123;
+    let x: Int = 123123;
     println("{}", x);
 }"#,
     );
@@ -524,7 +524,7 @@ fn test_pub_fn() {
 #[test]
 fn test_pub_struct() {
     run_compiled_capturing(
-        "pub struct Point { pub x: int, pub y: int } fn main() { let p = Point { x: 1, y: 2 }; }",
+        "pub struct PoInt { pub x: Int, pub y: Int } fn main() { let p = PoInt { x: 1, y: 2 }; }",
     )
     .unwrap();
 }
@@ -542,7 +542,7 @@ fn test_cannot_read_private_field_from_outside_module() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: int,
+        secret_key: Int,
     }
     pub fn make_record() -> Record {
         Record { name: "x".to_string(), secret_key: 42 }
@@ -569,7 +569,7 @@ fn test_cannot_write_private_field_in_struct_init_from_outside() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: int,
+        secret_key: Int,
     }
 }
 fn main() {
@@ -595,9 +595,9 @@ fn test_can_access_private_field_inside_same_module() {
 mod database {
     pub struct Record {
         pub name: String,
-        secret_key: int,
+        secret_key: Int,
     }
-    pub fn get_key(r: Record) -> int {
+    pub fn get_key(r: Record) -> Int {
         r.secret_key  // Allowed: inside the same module
     }
     pub fn make_record() -> Record {
@@ -617,13 +617,13 @@ fn test_pub_fields_always_accessible() {
     let output = run_and_capture(
         r#"
 mod shapes {
-    pub struct Point {
-        pub x: float,
-        pub y: float,
+    pub struct PoInt {
+        pub x: Float,
+        pub y: Float,
     }
 }
 fn main() {
-    let p = shapes::Point { x: 1.0, y: 2.0 };
+    let p = shapes::PoInt { x: 1.0, y: 2.0 };
     println("{}", p.x);
     println("{}", p.y);
 }"#,
@@ -667,7 +667,7 @@ fn main() {
     let doubled = xs.iter().map(|x| match x {
         Some(n) => n * 2,
         None => 0,
-    }).collect::<Vec<int>>();
+    }).collect::<List<Int>>();
     for v in doubled {
         println("{}", v);
     }
@@ -684,7 +684,7 @@ fn test_closure_mutating_captured_in_loop() {
         r#"
 fn main() {
     let mut total = 0;
-    let add = |x: int| { total = total + x; };
+    let add = |x: Int| { total = total + x; };
     for n in [1, 2, 3, 4, 5] {
         add(n);
     }
@@ -720,12 +720,12 @@ fn test_recursive_call_inside_closure() {
     // frame-stack discipline between the iterator builtin path and nested calls.
     let output = run_and_capture(
         r#"
-fn fib(n: int) -> int {
+fn fib(n: Int) -> Int {
     if n < 2 { return n; }
     fib(n - 1) + fib(n - 2)
 }
 fn main() {
-    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<Vec<int>>();
+    let results = [5, 6, 7].iter().map(|x| fib(x)).collect::<List<Int>>();
     for v in results {
         println("{}", v);
     }

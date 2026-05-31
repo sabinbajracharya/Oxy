@@ -4,7 +4,7 @@
 //
 // === Pattern: Hash Map (Encoding) ===
 // Anagrams share a canonical "signature" — the sorted string. Sort each
-// word's characters and use that as the HashMap key.
+// word's characters and use that as the Map key.
 //
 // === Intuition ===
 // Two words are anagrams iff they have the same sorted form.
@@ -12,17 +12,17 @@
 // Build a map from sorted form → list of originals.
 //
 // === Pattern Recognition ===
-// - "Group by some shared property" → compute a key, use HashMap<String, Vec>
+// - "Group by some shared property" → compute a key, use Map<String, List>
 // - Anagrams → sorted string key
 // - Isomorphic strings → character mapping pattern
 //
 // === Tips ===
 // - Sort characters to get a canonical anagram key
 // - Use sort_by with .code() for char ordering
-// - Vec::join("") to reconstruct the key string
+// - List::join("") to reconstruct the key string
 
 fn main() {
-    let strs = vec("eat", "tea", "tan", "ate", "nat", "bat");
+    let strs = list("eat", "tea", "tan", "ate", "nat", "bat");
     let groups = group_anagrams(strs);
     for g in groups {
         println("{:?}", g);
@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn sort_string(s: String) -> String {
-    let mut chars = vec();
+    let mut chars = list();
     for ch in s {
         chars.push(ch);
     }
@@ -43,11 +43,11 @@ fn sort_string(s: String) -> String {
     chars.join("")
 }
 
-fn group_anagrams(strs: Vec) -> Vec {
-    let mut map = HashMap::new();
+fn group_anagrams(strs: List) -> List {
+    let mut map = Map::new();
     for s in strs {
         let key = sort_string(s);
-        let mut group = map.get(key.clone()).unwrap_or(vec());
+        let mut group = map.get(key.clone()).unwrap_or(list());
         group.push(s);
         map.insert(key, group);
     }
@@ -56,14 +56,14 @@ fn group_anagrams(strs: Vec) -> Vec {
 
 #[test]
 fn test_basic() {
-    let strs = vec("eat", "tea", "tan", "ate", "nat", "bat");
+    let strs = list("eat", "tea", "tan", "ate", "nat", "bat");
     let result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }
 
 #[test]
 fn test_single_word() {
-    let strs = vec("abc");
+    let strs = list("abc");
     let result = group_anagrams(strs);
     assert_eq(result.len(), 1);
     assert_eq(result[0].len(), 1);
@@ -71,7 +71,7 @@ fn test_single_word() {
 
 #[test]
 fn test_no_anagrams() {
-    let strs = vec("abc", "def", "ghi");
+    let strs = list("abc", "def", "ghi");
     let result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }

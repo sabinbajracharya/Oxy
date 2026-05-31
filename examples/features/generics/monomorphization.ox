@@ -8,8 +8,8 @@ trait Zero {
     fn zero() -> Self;
 }
 
-impl Zero for int {
-    fn zero() -> int {
+impl Zero for Int {
+    fn zero() -> Int {
         0
     }
 }
@@ -20,22 +20,22 @@ fn make_zero<T: Zero>() -> T {
 
 #[test]
 fn test_mono_single_impl() {
-    let z = make_zero::<int>();
+    let z = make_zero::<Int>();
     assert_eq(z, 0);
 }
 
 // === Monomorphization: Single Type Arg, Multiple Impls ===
 
-impl Zero for float {
-    fn zero() -> float {
+impl Zero for Float {
+    fn zero() -> Float {
         0.0
     }
 }
 
 #[test]
 fn test_mono_multi_impl_different_types() {
-    let i: int = make_zero::<int>();
-    let f: float = make_zero::<float>();
+    let i: Int = make_zero::<Int>();
+    let f: Float = make_zero::<Float>();
     assert_eq(i, 0);
     assert_eq(f, 0.0);
 }
@@ -45,8 +45,8 @@ fn test_mono_multi_impl_different_types() {
 
 #[test]
 fn test_mono_dedup() {
-    let a = make_zero::<int>();
-    let b = make_zero::<int>();
+    let a = make_zero::<Int>();
+    let b = make_zero::<Int>();
     assert_eq(a, 0);
     assert_eq(b, 0);
 }
@@ -57,8 +57,8 @@ trait DefaultValue {
     fn default_val() -> Self;
 }
 
-impl DefaultValue for int {
-    fn default_val() -> int {
+impl DefaultValue for Int {
+    fn default_val() -> Int {
         42
     }
 }
@@ -84,7 +84,7 @@ fn make_pair<A: DefaultValue, B: DefaultValue>() -> Pair<A, B>
 
 #[test]
 fn test_mono_multi_type_args() {
-    let p = make_pair::<int, String>();
+    let p = make_pair::<Int, String>();
     assert_eq(p.first, 42);
     assert_eq(p.second, "hello");
 }
@@ -97,7 +97,7 @@ fn identity<T>(x: T) -> T {
 
 #[test]
 fn test_mono_with_inference() {
-    let a = identity::<int>(10);
+    let a = identity::<Int>(10);
     let b = identity("hello".to_string());
     assert_eq(a, 10);
     assert_eq(b, "hello");

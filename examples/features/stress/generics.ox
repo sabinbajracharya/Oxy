@@ -52,43 +52,43 @@ fn returns_value<T>(x: T) -> T { x }
 
 #[test]
 fn test_turbofish_explicit() {
-    let n: int = returns_value::<int>(42);
+    let n: Int = returns_value::<Int>(42);
     assert_eq(n, 42);
 }
 
-// --- generic over Vec ---
-fn first_elem<T>(v: Vec<T>) -> Option<T> {
+// --- generic over List ---
+fn first_elem<T>(v: List<T>) -> Option<T> {
     if v.len() == 0 { None } else { Some(v[0]) }
 }
 
 #[test]
 fn test_generic_over_vec_int() {
-    assert_eq(first_elem(vec(1, 2, 3)), Some(1));
+    assert_eq(first_elem(list(1, 2, 3)), Some(1));
 }
 #[test]
 fn test_generic_over_vec_empty() {
-    let v: Vec<int> = vec();
+    let v: List<Int> = list();
     assert_eq(first_elem(v), None);
 }
 
 // --- nested generic types ---
 #[test]
 fn test_vec_of_option_int() {
-    let v: Vec<Option<int>> = vec(Some(1), None, Some(3));
+    let v: List<Option<Int>> = list(Some(1), None, Some(3));
     assert_eq(v.len(), 3);
 }
 #[test]
 fn test_option_of_vec_int() {
-    let o: Option<Vec<int>> = Some(vec(1, 2, 3));
+    let o: Option<List<Int>> = Some(list(1, 2, 3));
     assert_eq(o.is_some(), true);
 }
 
-// --- HashMap<K, V> ---
-use std::collections::HashMap;
+// --- Map<K, V> ---
+use std::collections::Map;
 
 #[test]
 fn test_hashmap_string_int() {
-    let mut m: HashMap<String, int> = HashMap::new();
+    let mut m: Map<String, Int> = Map::new();
     m.insert("a".to_string(), 1);
     m.insert("b".to_string(), 2);
     assert_eq(m.get("a"), Some(1));
@@ -97,8 +97,8 @@ fn test_hashmap_string_int() {
 
 // --- generic struct method (concrete impl) ---
 struct Box1<T> { v: T }
-impl Box1<int> {
-    fn get_int(self) -> int { self.v }
+impl Box1<Int> {
+    fn get_int(self) -> Int { self.v }
 }
 #[test]
 fn test_generic_struct_concrete_method() {
@@ -107,12 +107,12 @@ fn test_generic_struct_concrete_method() {
 }
 
 // --- turbofish on PathCall ---
-struct Stash<T> { items: Vec<T> }
-impl Stash<int> {
-    fn new() -> Stash<int> { Stash { items: vec() } }
+struct Stash<T> { items: List<T> }
+impl Stash<Int> {
+    fn new() -> Stash<Int> { Stash { items: list() } }
 }
 #[test]
 fn test_turbofish_on_path_call() {
-    let s: Stash<int> = Stash::<int>::new();
+    let s: Stash<Int> = Stash::<Int>::new();
     assert_eq(s.items.len(), 0);
 }

@@ -69,7 +69,7 @@ fn test_bool_to_string() {
 }
 #[test]
 fn test_float_to_string() {
-    let f: float = 3.5;
+    let f: Float = 3.5;
     assert_eq(f.to_string(), "3.5");
 }
 
@@ -116,7 +116,7 @@ fn test_string_trim() {
 #[test]
 fn test_string_split() {
     let s = "a,b,c".to_string();
-    let parts: Vec<String> = s.split(",").collect();
+    let parts: List<String> = s.split(",").collect();
     assert_eq(parts.len(), 3);
     assert_eq(parts[0], "a");
     assert_eq(parts[1], "b");
@@ -126,7 +126,7 @@ fn test_string_split() {
 #[test]
 fn test_string_split_empty_segments() {
     let s = "a,,b".to_string();
-    let parts: Vec<String> = s.split(",").collect();
+    let parts: List<String> = s.split(",").collect();
     assert_eq(parts.len(), 3);
     assert_eq(parts[1], "");
 }
@@ -152,9 +152,9 @@ fn test_chars_count() {
 }
 
 #[test]
-fn test_chars_collect_vec() {
+fn test_chars_collect_list() {
     let s = "abc".to_string();
-    let v: Vec<char> = s.chars().collect();
+    let v: List<char> = s.chars().collect();
     assert_eq(v.len(), 3);
     assert_eq(v[0], 'a');
     assert_eq(v[2], 'c');

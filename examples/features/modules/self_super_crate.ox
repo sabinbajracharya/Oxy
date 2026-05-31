@@ -71,21 +71,21 @@ fn test_deep_path() {
 // === super::super for going up two levels ===
 
 mod level1 {
-    pub fn l1_fn() -> int {
+    pub fn l1_fn() -> Int {
         1
     }
 
     pub mod level2 {
-        pub fn l2_fn() -> int {
+        pub fn l2_fn() -> Int {
             2
         }
 
         pub mod level3 {
-            pub fn l3_fn() -> int {
+            pub fn l3_fn() -> Int {
                 3
             }
 
-            pub fn call_l1_via_super_super() -> int {
+            pub fn call_l1_via_super_super() -> Int {
                 super::super::l1_fn()
             }
         }

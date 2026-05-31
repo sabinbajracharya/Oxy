@@ -2,10 +2,10 @@
 // Desugars to `fn name(params) [-> Type] { expr }` at parse time.
 // Verified via Rust-side type checker tests.
 
-fn double(x: int) -> int = x * 2
-fn add(a: int, b: int) -> int = a + b
-fn multiply(a: int, b: int) -> int = a * b
-fn square(x: int) -> int = x * x
+fn double(x: Int) -> Int = x * 2
+fn add(a: Int, b: Int) -> Int = a + b
+fn multiply(a: Int, b: Int) -> Int = a * b
+fn square(x: Int) -> Int = x * x
 
 // No return type annotation — inferred from body
 fn greet(name: String) = "Hello, " + name

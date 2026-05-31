@@ -143,12 +143,12 @@ mod expressions {
 
     #[test]
     fn const_int() {
-        assert_ir_snapshot("expressions/const_int", "let x = 42;");
+        assert_ir_snapshot("expressions/const_Int", "let x = 42;");
     }
 
     #[test]
     fn const_float() {
-        assert_ir_snapshot("expressions/const_float", "let x = 3.14;");
+        assert_ir_snapshot("expressions/const_Float", "let x = 3.14;");
     }
 
     #[test]
@@ -223,7 +223,7 @@ mod expressions {
 
     #[test]
     fn const_negative_int() {
-        assert_ir_snapshot("expressions/const_negative_int", "let x = -100;");
+        assert_ir_snapshot("expressions/const_negative_Int", "let x = -100;");
     }
 
     #[test]
@@ -246,7 +246,7 @@ mod expressions {
 
     #[test]
     fn arithmetic_float() {
-        assert_ir_snapshot("expressions/arithmetic_float", "let x = 1.5 + 2.5;");
+        assert_ir_snapshot("expressions/arithmetic_Float", "let x = 1.5 + 2.5;");
     }
 
     #[test]
@@ -312,7 +312,7 @@ mod variables {
 
     #[test]
     fn let_with_type_ann() {
-        assert_ir_snapshot("variables/let_with_type_ann", "let x: int = 10;");
+        assert_ir_snapshot("variables/let_with_type_ann", "let x: Int = 10;");
     }
 
     #[test]
@@ -452,7 +452,7 @@ mod control_flow {
     }
 
     #[test]
-    fn for_over_vec() {
+    fn for_over_list() {
         // Array literal → oxy_make_iter (no oxy_make_range step, unlike for_range).
         assert_ir_snapshot(
             "control_flow/for_over_vec",
@@ -470,7 +470,7 @@ mod functions {
     fn fn_no_params() {
         assert_ir_snapshot_raw(
             "functions/fn_no_params",
-            "fn greet() -> int {\n    42\n}\nfn main() {}",
+            "fn greet() -> Int {\n    42\n}\nfn main() {}",
         );
     }
 
@@ -478,7 +478,7 @@ mod functions {
     fn fn_with_params() {
         assert_ir_snapshot_raw(
             "functions/fn_with_params",
-            "fn add(a: int, b: int) -> int {\n    a + b\n}\nfn main() {}",
+            "fn add(a: Int, b: Int) -> Int {\n    a + b\n}\nfn main() {}",
         );
     }
 
@@ -486,7 +486,7 @@ mod functions {
     fn fn_explicit_return() {
         assert_ir_snapshot_raw(
             "functions/fn_explicit_return",
-            "fn abs(x: int) -> int {\n    if x < 0 { return -x; }\n    x\n}\nfn main() {}",
+            "fn abs(x: Int) -> Int {\n    if x < 0 { return -x; }\n    x\n}\nfn main() {}",
         );
     }
 
@@ -494,7 +494,7 @@ mod functions {
     fn fn_multiple_returns() {
         assert_ir_snapshot_raw(
             "functions/fn_multiple_returns",
-            r#"fn classify(x: int) -> String {
+            r#"fn classify(x: Int) -> String {
     if x < 0 { return "negative"; }
     if x == 0 { return "zero"; }
     "positive"
@@ -507,7 +507,7 @@ fn main() {}"#,
     fn closure_basic() {
         assert_ir_snapshot(
             "functions/closure_basic",
-            "let add = |a: int, b: int| a + b;\nlet r = add(1, 2);",
+            "let add = |a: Int, b: Int| a + b;\nlet r = add(1, 2);",
         );
     }
 
@@ -515,7 +515,7 @@ fn main() {}"#,
     fn fn_recursive() {
         assert_ir_snapshot_raw(
             "functions/fn_recursive",
-            "fn fact(n: int) -> int {\n    if n <= 1 { return 1; }\n    n * fact(n - 1)\n}\nfn main() {}",
+            "fn fact(n: Int) -> Int {\n    if n <= 1 { return 1; }\n    n * fact(n - 1)\n}\nfn main() {}",
         );
     }
 
@@ -524,7 +524,7 @@ fn main() {}"#,
         // The generated IrFunction must have a non-empty `captures:` header line.
         assert_ir_snapshot(
             "functions/closure_with_captures",
-            "let y = 10;\nlet add_y = |x: int| x + y;\nlet r = add_y(5);",
+            "let y = 10;\nlet add_y = |x: Int| x + y;\nlet r = add_y(5);",
         );
     }
 
@@ -532,7 +532,7 @@ fn main() {}"#,
     fn fn_async() {
         assert_ir_snapshot_raw(
             "functions/fn_async",
-            "async fn delay() -> int { 42 }\nfn main() {}",
+            "async fn delay() -> Int { 42 }\nfn main() {}",
         );
     }
 
@@ -556,7 +556,7 @@ mod calls {
     fn call_user_fn() {
         assert_ir_snapshot_raw(
             "calls/call_user_fn",
-            "fn double(x: int) -> int { x * 2 }\nfn main() {\n    let r = double(5);\n}",
+            "fn double(x: Int) -> Int { x * 2 }\nfn main() {\n    let r = double(5);\n}",
         );
     }
 
@@ -564,7 +564,7 @@ mod calls {
     fn call_with_args() {
         assert_ir_snapshot_raw(
             "calls/call_with_args",
-            "fn add(a: int, b: int) -> int { a + b }\nfn main() {\n    let r = add(3, 4);\n}",
+            "fn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    let r = add(3, 4);\n}",
         );
     }
 
@@ -580,7 +580,7 @@ mod calls {
     fn method_call_vec_push() {
         assert_ir_snapshot(
             "calls/method_call_vec_push",
-            "let mut v: Vec<int> = Vec::new();\nv.push(1);\nv.push(2);",
+            "let mut v: List<Int> = List::new();\nv.push(1);\nv.push(2);",
         );
     }
 
@@ -594,7 +594,7 @@ mod calls {
         // Arg registers: double(1) and double(2) are fully resolved before add() is called.
         assert_ir_snapshot_raw(
             "calls/call_nested_args",
-            "fn double(x: int) -> int { x * 2 }\nfn add(a: int, b: int) -> int { a + b }\nfn main() {\n    let r = add(double(1), double(2));\n}",
+            "fn double(x: Int) -> Int { x * 2 }\nfn add(a: Int, b: Int) -> Int { a + b }\nfn main() {\n    let r = add(double(1), double(2));\n}",
         );
     }
 
@@ -639,7 +639,7 @@ mod assignment {
         // Field assignment lowers to oxy_field_store, not StoreLocal.
         assert_ir_snapshot_raw(
             "assignment/assign_field",
-            "struct Point { x: int, y: int }\nfn main() {\n    let mut p = Point { x: 1, y: 2 };\n    p.x = 10;\n}",
+            "struct PoInt { x: Int, y: Int }\nfn main() {\n    let mut p = PoInt { x: 1, y: 2 };\n    p.x = 10;\n}",
         );
     }
 
@@ -664,7 +664,7 @@ mod assignment {
         // This is ir_gen/mod.rs:1207-1208: val_reg = gen_expr(value) then target_reg = gen_expr(target).
         assert_ir_snapshot_raw(
             "assignment/compound_assign_eval_order",
-            "fn get() -> int { 42 }\nfn main() {\n    let mut x = 0;\n    x += get();\n}",
+            "fn get() -> Int { 42 }\nfn main() {\n    let mut x = 0;\n    x += get();\n}",
         );
     }
 }
@@ -679,7 +679,7 @@ mod returns {
         // Last expression without semicolon: lowers to Return, same as explicit `return`.
         assert_ir_snapshot_raw(
             "returns/return_implicit_tail",
-            "fn sum(a: int, b: int) -> int { a + b }\nfn main() {}",
+            "fn sum(a: Int, b: Int) -> Int { a + b }\nfn main() {}",
         );
     }
 
@@ -689,7 +689,7 @@ mod returns {
         // no back-edge Jump follows (the block is already terminated).
         assert_ir_snapshot_raw(
             "returns/return_early_in_loop",
-            "fn find(n: int) -> int {\n    let mut i = 0;\n    while i < n {\n        if i == 3 { return i; }\n        i = i + 1;\n    }\n    -1\n}\nfn main() {}",
+            "fn find(n: Int) -> Int {\n    let mut i = 0;\n    while i < n {\n        if i == 3 { return i; }\n        i = i + 1;\n    }\n    -1\n}\nfn main() {}",
         );
     }
 
@@ -714,7 +714,7 @@ mod edge_cases {
         // inc(x) result reg + dbl(x) result reg * const.int 2.
         assert_ir_snapshot_raw(
             "edge_cases/nested_arith_calls",
-            "fn inc(x: int) -> int { x + 1 }\nfn dbl(x: int) -> int { x * 2 }\nfn main() {\n    let x = 3;\n    let y = inc(x) + dbl(x) * 2;\n}",
+            "fn inc(x: Int) -> Int { x + 1 }\nfn dbl(x: Int) -> Int { x * 2 }\nfn main() {\n    let x = 3;\n    let y = inc(x) + dbl(x) * 2;\n}",
         );
     }
 
@@ -723,7 +723,7 @@ mod edge_cases {
         // f() and g() are both called before the add: left arg materialised first.
         assert_ir_snapshot_raw(
             "edge_cases/side_effect_order_in_args",
-            "fn f() -> int { 1 }\nfn g() -> int { 2 }\nfn main() {\n    let x = f() + g();\n}",
+            "fn f() -> Int { 1 }\nfn g() -> Int { 2 }\nfn main() {\n    let x = f() + g();\n}",
         );
     }
 

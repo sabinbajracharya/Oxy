@@ -36,16 +36,16 @@ fn test_trait_multiple_methods() {
     let out = run_and_capture(
         r#"
 trait Shape {
-    fn area(self) -> float;
+    fn area(self) -> Float;
     fn name(self) -> String;
 }
 
 struct Circle {
-    radius: float,
+    radius: Float,
 }
 
 impl Shape for Circle {
-    fn area(self) -> float {
+    fn area(self) -> Float {
         3.14159 * self.radius * self.radius
     }
 
@@ -114,12 +114,12 @@ fn test_operator_overloading_add() {
     let out = run_and_capture(
         r#"
 struct Vec2 {
-    x: float,
-    y: float,
+    x: Float,
+    y: Float,
 }
 
 impl Vec2 {
-    fn new(x: float, y: float) -> Self {
+    fn new(x: Float, y: Float) -> Self {
         Vec2 { x, y }
     }
 }
@@ -146,8 +146,8 @@ fn test_operator_overloading_mul() {
     let out = run_and_capture(
         r#"
 struct Vec2 {
-    x: float,
-    y: float,
+    x: Float,
+    y: Float,
 }
 
 impl Mul for Vec2 {
@@ -338,7 +338,7 @@ fn main() {
 fn test_type_alias() {
     let output = run_and_capture(
         r#"
-type Meters = float;
+type Meters = Float;
 fn main() {
     let d: Meters = 42.0;
     println("{}", d);
@@ -352,7 +352,7 @@ fn main() {
 fn test_const() {
     let output = run_and_capture(
         r#"
-const MAX: int = 100;
+const MAX: Int = 100;
 fn main() {
     println("{}", MAX);
 }
@@ -365,7 +365,7 @@ fn main() {
 fn test_const_float() {
     let output = run_and_capture(
         r#"
-const PI: float = 3.14;
+const PI: Float = 3.14;
 fn main() {
     println("{}", PI);
 }
@@ -391,8 +391,8 @@ fn main() {
 fn test_const_used_in_function() {
     let output = run_and_capture(
         r#"
-const FACTOR: int = 10;
-fn multiply(x: int) -> int {
+const FACTOR: Int = 10;
+fn multiply(x: Int) -> Int {
     x * FACTOR
 }
 fn main() {
@@ -408,15 +408,15 @@ fn test_derive_debug() {
     let out = run_and_capture(
         r#"
 #[derive(Debug)]
-struct Point { x: float, y: float }
+struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let p = Point { x: 1.0, y: 2.0 };
+    let p = PoInt { x: 1.0, y: 2.0 };
     println("{:?}", p);
 }
 "#,
     );
-    assert_eq!(out, vec!["Point { x: 1.0, y: 2.0 }\n"]);
+    assert_eq!(out, vec!["PoInt { x: 1.0, y: 2.0 }\n"]);
 }
 
 #[test]
@@ -424,10 +424,10 @@ fn test_derive_clone() {
     let out = run_and_capture(
         r#"
 #[derive(Clone)]
-struct Point { x: float, y: float }
+struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let p = Point { x: 1.0, y: 2.0 };
+    let p = PoInt { x: 1.0, y: 2.0 };
     let p2 = p.clone();
     println("{} {}", p2.x, p2.y);
 }
@@ -441,12 +441,12 @@ fn test_derive_partial_eq() {
     let out = run_and_capture(
         r#"
 #[derive(PartialEq)]
-struct Point { x: float, y: float }
+struct PoInt { x: Float, y: Float }
 
 fn main() {
-    let a = Point { x: 1.0, y: 2.0 };
-    let b = Point { x: 1.0, y: 2.0 };
-    let c = Point { x: 3.0, y: 4.0 };
+    let a = PoInt { x: 1.0, y: 2.0 };
+    let b = PoInt { x: 1.0, y: 2.0 };
+    let c = PoInt { x: 3.0, y: 4.0 };
     println("{}", a == b);
     println("{}", a == c);
 }
@@ -460,7 +460,7 @@ fn test_derive_multiple() {
     let out = run_and_capture(
         r#"
 #[derive(Debug, Clone, PartialEq)]
-struct Color { r: int, g: int, b: int }
+struct Color { r: Int, g: Int, b: Int }
 
 fn main() {
     let c1 = Color { r: 255, g: 0, b: 0 };
@@ -478,7 +478,7 @@ fn test_derive_default() {
     let out = run_and_capture(
         r#"
 #[derive(Default, Debug)]
-struct Config { width: int, height: int, title: String }
+struct Config { width: Int, height: Int, title: String }
 
 fn main() {
     let c = Config::default();
@@ -528,7 +528,7 @@ fn test_no_derive_clone_error() {
     // This test verifies the current behavior.
     let out = run_and_capture(
         r#"
-struct Foo { x: int }
+struct Foo { x: Int }
 
 fn main() {
     let f = Foo { x: 1 };
@@ -545,7 +545,7 @@ fn test_attribute_ignored_unknown() {
     let out = run_and_capture(
         r#"
 #[serde(rename_all)]
-struct Foo { x: int }
+struct Foo { x: Int }
 
 fn main() {
     let f = Foo { x: 42 };
@@ -561,7 +561,7 @@ fn test_derive_enum_clone() {
     let out = run_and_capture(
         r#"
 #[derive(Clone, Debug)]
-enum Shape { Circle(float), Square(float) }
+enum Shape { Circle(Float), Square(Float) }
 
 fn main() {
     let s = Shape::Circle(5.0);
@@ -577,8 +577,8 @@ fn main() {
 fn test_type_alias_struct() {
     let output = run_and_capture(
         r#"
-            struct Point { x: float, y: float }
-            type Pos = Point;
+            struct PoInt { x: Float, y: Float }
+            type Pos = PoInt;
             fn main() {
                 let p = Pos { x: 1.0, y: 2.0 };
                 println("{} {}", p.x, p.y);
@@ -604,9 +604,9 @@ fn test_type_alias_enum() {
 fn test_type_alias_associated_fn() {
     let output = run_and_capture(
         r#"
-            struct Point { x: float, y: float }
-            impl Point { fn origin() -> Point { Point { x: 0.0, y: 0.0 } } }
-            type P = Point;
+            struct PoInt { x: Float, y: Float }
+            impl PoInt { fn origin() -> PoInt { PoInt { x: 0.0, y: 0.0 } } }
+            type P = PoInt;
             fn main() {
                 let p = P::origin();
                 println("{} {}", p.x, p.y);

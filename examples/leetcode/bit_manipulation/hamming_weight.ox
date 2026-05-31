@@ -26,7 +26,7 @@ fn main() {
     println("{}", hamming_weight(128));
 }
 
-fn hamming_weight(n: int) -> int {
+fn hamming_weight(n: Int) -> Int {
     let mut count = 0;
     let mut x = n;
     while x != 0 {

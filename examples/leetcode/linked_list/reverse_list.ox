@@ -22,7 +22,7 @@
 // - Single node list → return itself
 
 struct ListNode {
-    val: int,
+    val: Int,
     next: Option,
 }
 

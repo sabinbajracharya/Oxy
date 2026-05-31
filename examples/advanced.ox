@@ -1,18 +1,18 @@
 // Advanced Oxy features demo
 
-type Distance = float;
+type Distance = Float;
 type Name = String;
 
-const MAX_ITEMS: int = 10;
-const VERSION: int = 1;
+const MAX_ITEMS: Int = 10;
+const VERSION: Int = 1;
 
 fn main() {
     // Constants
     println("Max items: {}", MAX_ITEMS);
     println("Version: {}", VERSION);
 
-    // HashMap
-    let mut scores = HashMap::new();
+    // Map
+    let mut scores = Map::new();
     scores.insert("alice", 95);
     scores.insert("bob", 87);
     scores.insert("carol", 92);
@@ -23,13 +23,13 @@ fn main() {
     println("Keys: {:?}", scores.keys());
     println("Count: {}", scores.len());
 
-    // HashMap iteration with destructuring
+    // Map iteration with destructuring
     for (name, score) in scores {
         println("  {} scored {}", name, score);
     }
 
     // Tuple destructuring in for loops
-    let pairs = vec((1, "one"), (2, "two"), (3, "three"));
+    let pairs = list((1, "one"), (2, "two"), (3, "three"));
     for (num, word) in pairs {
         println("{} = {}", num, word);
     }

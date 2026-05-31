@@ -7,7 +7,7 @@
 
 use cli_utils;
 
-fn count_level(text: String, level: String) -> int {
+fn count_level(text: String, level: String) -> Int {
     let mut count = 0;
     for line in text.lines() {
         if line.contains(level) {
@@ -51,7 +51,7 @@ fn filter_pattern(text: String, pattern: String, show_filename: bool, filename: 
     }
 }
 
-fn count_pattern(text: String, pattern: String) -> int {
+fn count_pattern(text: String, pattern: String) -> Int {
     let rx_result = Regex::new(pattern);
     match rx_result {
         Ok(rx) => {

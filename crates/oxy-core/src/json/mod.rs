@@ -675,7 +675,7 @@ impl JsonParser {
             num_str
                 .parse::<f64>()
                 .map(Value::F64)
-                .map_err(|e| format!("invalid float: {e}"))
+                .map_err(|e| format!("invalid Float: {e}"))
         } else {
             num_str
                 .parse::<i64>()

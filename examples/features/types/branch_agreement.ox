@@ -31,8 +31,8 @@ fn test_if_else_with_unit_arms_ok() {
 
 #[test]
 fn test_if_else_int_compatibility_ok() {
-    // int and int are compatible at the binding level via int promotion.
-    let n: int = 5;
+    // Int and Int are compatible at the binding level via Int promotion.
+    let n: Int = 5;
     let v = if n > 0 { 10 } else { 20 };
     assert_eq(v, 10);
 }

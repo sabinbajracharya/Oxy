@@ -22,7 +22,7 @@ fn test_closure_empty_body() {
 
 // === Closure with Return Type Annotation (matching) ===
 
-fn make_increment() -> fn(int) -> int {
+fn make_increment() -> fn(Int) -> Int {
     |x| x + 1
 }
 
@@ -36,14 +36,14 @@ fn test_closure_with_matching_return_annotation() {
 
 #[test]
 fn test_closure_with_param_type_annotations() {
-    let mul = |x: int, y: int| x * y;
+    let mul = |x: Int, y: Int| x * y;
     assert_eq(mul(3, 4), 12);
 }
 
 // === Closure with Both Param and Return Type Annotations ===
 
-fn make_doubler() -> fn(int) -> int {
-    |x: int| -> int { x * 2 }
+fn make_doubler() -> fn(Int) -> Int {
+    |x: Int| -> Int { x * 2 }
 }
 
 #[test]
@@ -56,8 +56,8 @@ fn test_closure_with_both_annotations() {
 
 #[test]
 fn test_nested_closure() {
-    let outer = |x: int| {
-        let inner = |y: int| x + y;
+    let outer = |x: Int| {
+        let inner = |y: Int| x + y;
         inner(x)
     };
     assert_eq(outer(5), 10);
@@ -67,7 +67,7 @@ fn test_nested_closure() {
 
 #[test]
 fn test_store_in_variable_with_fn_annotation() {
-    let op: Fn = |x: int| -> int { x + 10 };
+    let op: Fn = |x: Int| -> Int { x + 10 };
     assert_eq(op(3), 13);
 }
 
@@ -75,12 +75,12 @@ fn test_store_in_variable_with_fn_annotation() {
 
 #[compile_error]
 fn test_closure_return_type_mismatch_on_variable() {
-    // Variable declared as fn(int) -> bool, but closure returns int
-    let f: fn(int) -> bool = |x: int| x + 1;
+    // Variable declared as fn(Int) -> bool, but closure returns Int
+    let f: fn(Int) -> bool = |x: Int| x + 1;
 }
 
 #[compile_error]
 fn test_closure_own_return_type_mismatch() {
-    // Closure declares -> bool but body returns int
+    // Closure declares -> bool but body returns Int
     let _ = || -> bool { 42 };
 }

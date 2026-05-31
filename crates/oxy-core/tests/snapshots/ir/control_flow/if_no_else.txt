@@ -1,7 +1,7 @@
 fn main() -> () {
   locals: 2
   bb0(entry):
-    v0 = const.int 0
+    v0 = const.Int 0
     store.local $0, v0
     v1 = const.bool true
     branch v1 -> bb2, bb1
@@ -11,7 +11,7 @@ fn main() -> () {
     jump bb3
 
   bb2(preds: bb0):
-    v3 = const.int 1
+    v3 = const.Int 1
     store.local $0, v3
     v4 = const.unit
     jump bb3

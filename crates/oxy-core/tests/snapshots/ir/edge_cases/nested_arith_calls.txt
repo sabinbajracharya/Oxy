@@ -1,17 +1,17 @@
-fn dbl(x: int) -> int {
+fn dbl(x: Int) -> Int {
   locals: 1
   bb0(entry):
     v0 = load.local $0
-    v1 = const.int 2
+    v1 = const.Int 2
     v2 = mul v0, v1
     ret v2
 }
 
-fn inc(x: int) -> int {
+fn inc(x: Int) -> Int {
   locals: 1
   bb0(entry):
     v0 = load.local $0
-    v1 = const.int 1
+    v1 = const.Int 1
     v2 = add v0, v1
     ret v2
 }
@@ -19,7 +19,7 @@ fn inc(x: int) -> int {
 fn main() -> () {
   locals: 2
   bb0(entry):
-    v0 = const.int 3
+    v0 = const.Int 3
     store.local $0, v0
     v1 = load.local $0
     v2 = call @oxy_push_named_fn() str["inc"]
@@ -27,7 +27,7 @@ fn main() -> () {
     v4 = load.local $0
     v5 = call @oxy_push_named_fn() str["dbl"]
     v6 = call @oxy_call_closure(v5, v4) imm[1]
-    v7 = const.int 2
+    v7 = const.Int 2
     v8 = mul v6, v7
     v9 = add v3, v8
     store.local $1, v9

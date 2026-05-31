@@ -286,7 +286,7 @@ impl TypeChecker {
                     "format" => {
                         return Ok(TypeInfo::String);
                     }
-                    "vec" => {
+                    "list" => {
                         let mut leader = TypeInfo::Unknown;
                         for (i, t) in arg_types.iter().enumerate() {
                             if *t == TypeInfo::Unknown {
@@ -305,7 +305,7 @@ impl TypeChecker {
                             }
                             let espan = args[i].span();
                             return Err(PipelineError::TypeError {
-                                message: format!("`vec` has mixed element types: element {} is `{}`, expected `{}`", i + 1, t.name(), leader.name()),
+                                message: format!("`list` has mixed element types: element {} is `{}`, expected `{}`", i + 1, t.name(), leader.name()),
                                 line: espan.line, column: espan.column,
                             });
                         }
@@ -481,7 +481,7 @@ impl TypeChecker {
                 if matches!(obj_ty, TypeInfo::Array(..)) && self.is_array_mutator(method) {
                     return Err(PipelineError::TypeError {
                                 message: format!(
-                                    "method `{method}` is not available on fixed-size arrays; convert to `Vec` first"
+                                    "method `{method}` is not available on fixed-size arrays; convert to `List` first"
                                 ),
                                 line: span.line,
                                 column: span.column,

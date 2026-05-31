@@ -6,28 +6,28 @@ fn main() {}
 
 // --- async fn definitions (must be at top level) ---
 
-async fn answer() -> int { 42 }
+async fn answer() -> Int { 42 }
 
-async fn add(a: int, b: int) -> int { a + b }
+async fn add(a: Int, b: Int) -> Int { a + b }
 
-async fn double(x: int) -> int { x * 2 }
+async fn double(x: Int) -> Int { x * 2 }
 
 async fn greet(name: String) -> String { "Hello, ".to_string() + name }
 
-async fn inner(x: int) -> int { x + 1 }
+async fn inner(x: Int) -> Int { x + 1 }
 
-async fn outer(x: int) -> int {
+async fn outer(x: Int) -> Int {
     let f = inner(x);
     f.await * 2
 }
 
-async fn step1(x: int) -> int { x + 1 }
+async fn step1(x: Int) -> Int { x + 1 }
 
-async fn step2(x: int) -> int { step1(x).await + 1 }
+async fn step2(x: Int) -> Int { step1(x).await + 1 }
 
-async fn step3(x: int) -> int { step2(x).await + 1 }
+async fn step3(x: Int) -> Int { step2(x).await + 1 }
 
-fn sync_double(x: int) -> int { x * 2 }
+fn sync_double(x: Int) -> Int { x * 2 }
 
 // --- async fn basics ---
 
@@ -155,28 +155,28 @@ fn spawn_non_closure() {
 
 // --- type-checker: .await resolves to the correct type ---
 
-fn take_int(x: int) -> int { x }
+fn take_int(x: Int) -> Int { x }
 
 fn take_string(s: String) -> String { s }
 
 #[test]
 fn test_await_future_type_flows_to_callee() {
-    let f = answer();          // Future<int>
-    let v = f.await;           // int (unwrapped by type checker)
-    let _ = take_int(v);       // OK: int → int
+    let f = answer();          // Future<Int>
+    let v = f.await;           // Int (unwrapped by type checker)
+    let _ = take_int(v);       // OK: Int → Int
 }
 
 #[test]
 fn test_await_spawn_type_flows_to_callee() {
-    let h = spawn(|| 42);      // JoinHandle<int>
-    let v = h.await;           // int
+    let h = spawn(|| 42);      // JoinHandle<Int>
+    let v = h.await;           // Int
     let _ = take_int(v);       // OK
 }
 
 #[test]
 fn test_await_plain_value_passthrough() {
     let x = 42;
-    let v = x.await;           // passthrough: int
+    let v = x.await;           // passthrough: Int
     let _ = take_int(v);       // OK
 }
 
@@ -184,16 +184,16 @@ fn test_await_plain_value_passthrough() {
 
 #[compile_error]
 fn await_future_wrong_type() {
-    let f = answer();          // Future<int>
-    let v = f.await;           // int
-    let _ = take_string(v);    // ERROR: int does not match String
+    let f = answer();          // Future<Int>
+    let v = f.await;           // Int
+    let _ = take_string(v);    // ERROR: Int does not match String
 }
 
 #[compile_error]
 fn await_spawn_wrong_type() {
-    let h = spawn(|| 42);      // JoinHandle<int>
-    let v = h.await;           // int
-    let _ = take_string(v);    // ERROR: int does not match String
+    let h = spawn(|| 42);      // JoinHandle<Int>
+    let v = h.await;           // Int
+    let _ = take_string(v);    // ERROR: Int does not match String
 }
 
 // --- event-loop spawn: correctness ---
@@ -309,17 +309,17 @@ fn test_spawn_string_result() {
 // --- async methods on structs ---
 
 struct Calculator {
-    value: int,
+    value: Int,
 }
 
 impl Calculator {
-    fn new(v: int) -> Calculator { Calculator { value: v } }
+    fn new(v: Int) -> Calculator { Calculator { value: v } }
 
-    async fn compute(self) -> int { self.value * 2 }
+    async fn compute(self) -> Int { self.value * 2 }
 
-    async fn add(self, other: int) -> int { self.value + other }
+    async fn add(self, other: Int) -> Int { self.value + other }
 
-    fn sync_get(self) -> int { self.value }
+    fn sync_get(self) -> Int { self.value }
 }
 
 struct Greeter {
@@ -385,9 +385,9 @@ fn test_async_method_chain_with_sync() {
 #[test]
 fn test_async_method_type_flows_to_callee() {
     let c = Calculator::new(42);
-    let f = c.compute();       // Future<int>
-    let v = f.await;           // int
-    let _ = take_int(v);       // OK: int → int
+    let f = c.compute();       // Future<Int>
+    let v = f.await;           // Int
+    let _ = take_int(v);       // OK: Int → Int
 }
 
 // --- compile_error: type mismatch across async method .await ---
@@ -397,5 +397,5 @@ fn async_method_wrong_type() {
     let g = Greeter { name: "Test".to_string() };
     let f = g.greet();         // Future<String>
     let v = f.await;           // String
-    let _ = take_int(v);       // ERROR: String does not match int
+    let _ = take_int(v);       // ERROR: String does not match Int
 }

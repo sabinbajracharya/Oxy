@@ -51,17 +51,17 @@ fn test_string_methods_in_symbols() {
 
 #[test]
 fn test_vec_methods_in_symbols() {
-    check_builtins_in_symbols(builtins::vec::method_names(), "Vec");
+    check_builtins_in_symbols(builtins::vec::method_names(), "List");
 }
 
 #[test]
 fn test_hashmap_methods_in_symbols() {
-    check_builtins_in_symbols(builtins::hashmap::method_names(), "HashMap");
+    check_builtins_in_symbols(builtins::hashmap::method_names(), "Map");
 }
 
 #[test]
 fn test_hashset_methods_in_symbols() {
-    check_builtins_in_symbols(builtins::hashset::method_names(), "HashSet");
+    check_builtins_in_symbols(builtins::hashset::method_names(), "Set");
 }
 
 #[test]
@@ -127,17 +127,17 @@ fn test_symbols_in_string_builtins() {
 
 #[test]
 fn test_symbols_in_vec_builtins() {
-    check_symbols_in_builtins(builtins::vec::method_names(), "Vec");
+    check_symbols_in_builtins(builtins::vec::method_names(), "List");
 }
 
 #[test]
 fn test_symbols_in_hashmap_builtins() {
-    check_symbols_in_builtins(builtins::hashmap::method_names(), "HashMap");
+    check_symbols_in_builtins(builtins::hashmap::method_names(), "Map");
 }
 
 #[test]
 fn test_symbols_in_hashset_builtins() {
-    check_symbols_in_builtins(builtins::hashset::method_names(), "HashSet");
+    check_symbols_in_builtins(builtins::hashset::method_names(), "Set");
 }
 
 #[test]
@@ -229,10 +229,10 @@ fn test_type_name_constants() {
 fn test_primitive_types_not_empty() {
     assert!(!symbols::PRIMITIVE_TYPES.is_empty());
     let names: Vec<&str> = symbols::PRIMITIVE_TYPES.iter().map(|(n, _)| *n).collect();
-    assert!(names.contains(&"int"));
-    assert!(names.contains(&"float"));
+    assert!(names.contains(&"Int"));
+    assert!(names.contains(&"Float"));
     assert!(names.contains(&"String"));
-    assert!(names.contains(&"Vec"));
+    assert!(names.contains(&"List"));
     assert!(names.contains(&"bool"));
 }
 
@@ -294,7 +294,7 @@ fn test_macros_not_empty() {
     assert!(!symbols::ALL_MACROS.is_empty());
     let names: Vec<&str> = symbols::ALL_MACROS.iter().map(|m| m.name).collect();
     assert!(names.contains(&"println"));
-    assert!(names.contains(&"vec"));
+    assert!(names.contains(&"list"));
     assert!(names.contains(&"format"));
 }
 

@@ -1,7 +1,7 @@
-fn delay() -> int async {
+fn delay() -> Int async {
   locals: 0
   bb0(entry):
-    v0 = const.int 42
+    v0 = const.Int 42
     ret v0
 }
 

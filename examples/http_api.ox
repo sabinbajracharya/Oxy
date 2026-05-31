@@ -14,7 +14,7 @@ fn main() {
     }
 
     // POST with JSON
-    let mut user = HashMap::new();
+    let mut user = Map::new();
     user.insert("name", "Alice");
     user.insert("email", "alice@example.com");
 

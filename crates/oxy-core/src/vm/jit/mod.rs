@@ -394,9 +394,9 @@ fn make_default_impl(s: &crate::ast::StructDef) -> Option<crate::ast::ImplBlock>
 /// Pick a zero-like default expression for a type name.
 fn default_value_for_type(type_name: &str, span: crate::lexer::Span) -> crate::ast::Expr {
     match type_name {
-        "int" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
-        "float" => crate::ast::Expr::FloatLiteral(0.0, crate::lexer::FloatSuffix::None, span),
-        "byte" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
+        "Int" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
+        "Float" => crate::ast::Expr::FloatLiteral(0.0, crate::lexer::FloatSuffix::None, span),
+        "Byte" => crate::ast::Expr::IntLiteral(0, crate::lexer::IntegerSuffix::None, span),
         "bool" => crate::ast::Expr::BoolLiteral(false, span),
         "char" => crate::ast::Expr::CharLiteral('\0', span),
         "String" => crate::ast::Expr::StringLiteral(String::new(), span),

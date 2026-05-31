@@ -6,8 +6,8 @@
 // === Named Struct Definition ===
 
 struct Point {
-    x: int,
-    y: int,
+    x: Int,
+    y: Int,
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_struct_shorthand_init() {
 
 // === Tuple Struct ===
 
-struct Pair(int, String);
+struct Pair(Int, String);
 
 #[test]
 fn test_tuple_struct_field_access() {

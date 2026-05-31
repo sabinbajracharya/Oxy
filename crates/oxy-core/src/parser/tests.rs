@@ -10,14 +10,6 @@ fn parse_fn_body(src: &str) -> Vec<Stmt> {
     f.body.stmts.clone()
 }
 
-fn parse_fn_body_result(src: &str) -> Result<Vec<Stmt>, crate::errors::PipelineError> {
-    let program = parse(src)?;
-    let Item::Function(f) = &program.items[0] else {
-        panic!("expected function item");
-    };
-    Ok(f.body.stmts.clone())
-}
-
 /// Extract a FnDef from the first item.
 fn parse_fn(src: &str) -> FnDef {
     let program = parse(src).unwrap();
@@ -212,21 +204,6 @@ fn test_function_call_no_args() {
         panic!("expected Call");
     };
     assert!(args.is_empty());
-}
-
-// === Macro calls ===
-
-#[test]
-fn test_macro_syntax_rejected() {
-    // Build the source dynamically to prevent auto-fixers from removing the `!`
-    let src = format!("fn main() {{ {}!(\"hello {{}}\", x); }}", "println");
-    let result = parse_fn_body_result(&src);
-    assert!(result.is_err(), "expected parse error for `!` macro syntax");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("no longer supported"),
-        "expected 'no longer supported' error, got: {err}"
-    );
 }
 
 #[test]
@@ -688,7 +665,7 @@ fn test_empty_tuple() {
 
 #[test]
 fn test_vec_as_regular_call() {
-    let stmts = parse_fn_body("fn main() { vec(1, 2, 3); }");
+    let stmts = parse_fn_body("fn main() { list(1, 2, 3); }");
     let Stmt::Expr { expr, .. } = &stmts[0] else {
         panic!();
     };
@@ -698,16 +675,8 @@ fn test_vec_as_regular_call() {
     let Expr::Ident(name, _) = callee.as_ref() else {
         panic!("expected Ident callee");
     };
-    assert_eq!(name, "vec");
+    assert_eq!(name, "list");
     assert_eq!(args.len(), 3);
-}
-
-#[test]
-fn test_vec_brackets_macro_rejected() {
-    // Build dynamically to prevent auto-fixers from removing the `!`
-    let src = format!("fn main() {{ {}![1, 2, 3]; }}", "vec");
-    let result = parse_fn_body_result(&src);
-    assert!(result.is_err(), "expected parse error for `!` macro syntax");
 }
 
 #[test]
@@ -741,7 +710,7 @@ fn test_chained_index() {
 fn test_struct_def() {
     let program = parse(
         r#"
-struct Point {
+struct PoInt {
     x: f64,
     y: f64,
 }
@@ -752,7 +721,7 @@ fn main() {}
     let Item::Struct(s) = &program.items[0] else {
         panic!("expected struct");
     };
-    assert_eq!(s.name, "Point");
+    assert_eq!(s.name, "PoInt");
     assert!(matches!(&s.kind, StructKind::Named(fields) if fields.len() == 2));
 }
 
@@ -763,7 +732,7 @@ fn test_enum_def() {
 enum Shape {
     Circle(f64),
     Rectangle(f64, f64),
-    Point,
+    PoInt,
 }
 fn main() {}
 "#,
@@ -782,11 +751,11 @@ fn main() {}
 fn test_impl_block() {
     let program = parse(
         r#"
-struct Point { x: f64, y: f64 }
+struct PoInt { x: f64, y: f64 }
 
-impl Point {
+impl PoInt {
     fn new(x: f64, y: f64) -> Self {
-        Point { x, y }
+        PoInt { x, y }
     }
 }
 fn main() {}
@@ -796,30 +765,30 @@ fn main() {}
     let Item::Impl(i) = &program.items[1] else {
         panic!("expected impl");
     };
-    assert_eq!(i.type_name, "Point");
+    assert_eq!(i.type_name, "PoInt");
     assert_eq!(i.methods.len(), 1);
     assert_eq!(i.methods[0].name, "new");
 }
 
 #[test]
 fn test_struct_init_expr() {
-    let stmts = parse_fn_body("fn main() { let p = Point { x: 1.0, y: 2.0 }; }");
+    let stmts = parse_fn_body("fn main() { let p = PoInt { x: 1.0, y: 2.0 }; }");
     let Stmt::Let {
         value: Some(expr), ..
     } = &stmts[0]
     else {
         panic!("expected let with value");
     };
-    assert!(matches!(expr, Expr::StructInit { name, .. } if name == "Point"));
+    assert!(matches!(expr, Expr::StructInit { name, .. } if name == "PoInt"));
 }
 
 #[test]
 fn test_path_call_expr() {
-    let stmts = parse_fn_body("fn main() { Point::new(1.0, 2.0); }");
+    let stmts = parse_fn_body("fn main() { PoInt::new(1.0, 2.0); }");
     let Stmt::Expr { expr, .. } = &stmts[0] else {
         panic!();
     };
-    assert!(matches!(expr, Expr::PathCall { path, .. } if path == &["Point", "new"]));
+    assert!(matches!(expr, Expr::PathCall { path, .. } if path == &["PoInt", "new"]));
 }
 
 #[test]
@@ -1314,7 +1283,7 @@ fn test_turbofish_method() {
 
 #[test]
 fn test_turbofish_nested() {
-    let program = parse("fn main() { let x = obj.collect::<Vec<i64>>(); }").unwrap();
+    let program = parse("fn main() { let x = obj.collect::<List<i64>>(); }").unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected fn")
     };

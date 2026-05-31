@@ -66,7 +66,7 @@ pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
         "let" => Some("Bind a value to a variable.\n\n```oxy\nlet x = 42;\nlet mut y = 0;\n```"),
         "mut" => Some("Mark a variable as mutable."),
         "fn" => Some("Declare a function.\n\n```oxy\nfn add(a: i64, b: i64) -> i64 { a + b }\n```"),
-        "struct" => Some("Define a struct type.\n\n```oxy\nstruct Point { x: f64, y: f64 }\n```"),
+        "struct" => Some("Define a struct type.\n\n```oxy\nstruct PoInt { x: f64, y: f64 }\n```"),
         "enum" => Some("Define an enum type.\n\n```oxy\nenum Color { Red, Green, Blue }\n```"),
         "impl" => Some("Implement methods on a type."),
         "trait" => Some("Define a trait (interface)."),
@@ -97,19 +97,19 @@ pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
 
 /// Canonical name for Oxy's only signed integer type (`int` = 64-bit
 /// internally). The constant name keeps `I64` to mirror the underlying
-/// `IntegerWidth::I64`/`Value::I64` storage, but the *string* is `"int"`.
-pub const I64_TYPE: &str = "int";
-pub const BYTE_TYPE: &str = "byte";
+/// `IntegerWidth::I64`/`Value::I64` storage, but the *string* is `"Int"`.
+pub const I64_TYPE: &str = "Int";
+pub const BYTE_TYPE: &str = "Byte";
 /// Canonical name for Oxy's only float type (`float` = 64-bit internally).
-pub const F64_TYPE: &str = "float";
+pub const F64_TYPE: &str = "Float";
 pub const STRING_TYPE: &str = "String";
 pub const BOOL_TYPE: &str = "bool";
 pub const CHAR_TYPE: &str = "char";
 pub const OPTION_TYPE: &str = "Option";
 pub const RESULT_TYPE: &str = "Result";
-pub const VEC_TYPE: &str = "Vec";
-pub const HASHMAP_TYPE: &str = "HashMap";
-pub const HASHSET_TYPE: &str = "HashSet";
+pub const VEC_TYPE: &str = "List";
+pub const HASHMAP_TYPE: &str = "Map";
+pub const HASHSET_TYPE: &str = "Set";
 pub const BTREEMAP_TYPE: &str = "BTreeMap";
 pub const BTREESET_TYPE: &str = "BTreeSet";
 pub const ITERATOR_TYPE: &str = "Iterator";
@@ -120,15 +120,15 @@ pub const UNIT_TYPE: &str = "()";
 // ---------------------------------------------------------------------------
 
 pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
-    ("int", "Signed integer (64-bit wrapping)"),
-    ("byte", "Unsigned 8-bit integer (wraps modulo 256)"),
-    ("float", "64-bit floating point"),
+    ("Int", "Signed integer (64-bit wrapping)"),
+    ("Byte", "Unsigned 8-bit integer (wraps modulo 256)"),
+    ("Float", "64-bit floating point"),
     ("bool", "Boolean type (true / false)"),
     ("char", "Unicode scalar value"),
     ("String", "Owned UTF-8 string"),
-    ("Vec", "Growable array type"),
-    ("HashMap", "Hash map collection"),
-    ("HashSet", "Hash set collection"),
+    ("List", "Growable array type"),
+    ("Map", "Hash map collection"),
+    ("Set", "Hash set collection"),
     ("BTreeMap", "Ordered map collection"),
     ("BTreeSet", "Ordered set collection"),
     ("Option", "Optional value: Some(T) or None"),
@@ -143,13 +143,13 @@ pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
 pub const ALL_MACROS: &[MacroInfo] = &[
     MacroInfo {
         name: "println",
-        detail: "Print with newline",
-        hover_text: "**println(fmt, ...)** — Print to stdout with a newline",
+        detail: "PrInt with newline",
+        hover_text: "**println(fmt, ...)** — PrInt to stdout with a newline",
     },
     MacroInfo {
         name: "print",
-        detail: "Print without newline",
-        hover_text: "**print(fmt, ...)** — Print to stdout without a newline",
+        detail: "PrInt without newline",
+        hover_text: "**print(fmt, ...)** — PrInt to stdout without a newline",
     },
     MacroInfo {
         name: "format",
@@ -158,8 +158,8 @@ pub const ALL_MACROS: &[MacroInfo] = &[
     },
     MacroInfo {
         name: "eprintln",
-        detail: "Print to stderr",
-        hover_text: "**eprintln(fmt, ...)** — Print to stderr with a newline",
+        detail: "PrInt to stderr",
+        hover_text: "**eprintln(fmt, ...)** — PrInt to stderr with a newline",
     },
     MacroInfo {
         name: "dbg",
@@ -182,9 +182,9 @@ pub const ALL_MACROS: &[MacroInfo] = &[
         hover_text: "**unimplemented()** — Mark unimplemented code (panics at runtime)",
     },
     MacroInfo {
-        name: "vec",
-        detail: "Create a Vec",
-        hover_text: "**vec[items...]** — Create a Vec from elements",
+        name: "list",
+        detail: "Create a List",
+        hover_text: "**list(items...)** — Create a List from elements",
     },
 ];
 
@@ -202,7 +202,7 @@ macro_rules! methods {
 
 pub const STRING_METHODS: &[MethodInfo] = methods![
     "char_at": "(i: i64) -> char" => "Return the character at index `i`.",
-    "chars": "() -> Vec<char>" => "Return a Vec of characters.",
+    "chars": "() -> List<char>" => "Return a List of characters.",
     "clone": "() -> String" => "Create a copy of the string.",
     "contains": "(pat: String) -> bool" => "Check if the string contains `pat`.",
     "ends_with": "(pat: String) -> bool" => "Check if the string ends with `pat`.",
@@ -228,16 +228,16 @@ pub const STRING_METHODS: &[MethodInfo] = methods![
 // --- Vec ---
 
 pub const VEC_METHODS: &[MethodInfo] = methods![
-    "chunks": "(size: i64) -> Vec<Vec<T>>" => "Split into chunks of `size` elements.",
+    "chunks": "(size: i64) -> List<List<T>>" => "Split into chunks of `size` elements.",
     "clear": "()" => "Remove all elements.",
-    "clone": "() -> Vec<T>" => "Create a shallow copy.",
-    "contains": "(val: T) -> bool" => "Check if the Vec contains `val`.",
+    "clone": "() -> List<T>" => "Create a shallow copy.",
+    "contains": "(val: T) -> bool" => "Check if the List contains `val`.",
     "dedup": "()" => "Remove consecutive duplicate elements.",
-    "extend": "(other: Vec<T>)" => "Append all elements from `other`.",
+    "extend": "(other: List<T>)" => "Append all elements from `other`.",
     "first": "() -> Option<T>" => "Return the first element, or None if empty.",
     "get": "(i: i64) -> Option<T>" => "Return the element at index `i`, or None.",
     "insert": "(i: i64, val: T)" => "Insert `val` at index `i`.",
-    "is_empty": "() -> bool" => "Check if the Vec is empty.",
+    "is_empty": "() -> bool" => "Check if the List is empty.",
     "iter": "() -> Iterator" => "Return an iterator over the elements.",
     "join": "(sep: String) -> String" => "Join the string representations with `sep`.",
     "last": "() -> Option<T>" => "Return the last element, or None if empty.",
@@ -252,37 +252,37 @@ pub const VEC_METHODS: &[MethodInfo] = methods![
     "sort": "()" => "Sort the elements in ascending order.",
     "sort_by": "(fn: (T, T) -> i64)" => "Sort using a custom comparator closure.",
     "sort_by_key": "(fn: (T) -> K)" => "Sort by the key produced by the closure.",
-    "windows": "(size: i64) -> Vec<Vec<T>>" => "Return sliding windows of `size` elements.",
+    "windows": "(size: i64) -> List<List<T>>" => "Return sliding windows of `size` elements.",
 ];
 
 // --- HashMap ---
 
 pub const HASHMAP_METHODS: &[MethodInfo] = methods![
-    "clone": "() -> HashMap<K, V>" => "Create a shallow copy.",
+    "clone": "() -> Map<K, V>" => "Create a shallow copy.",
     "contains_key": "(key: K) -> bool" => "Check if the key exists.",
     "get": "(key: K) -> Option<V>" => "Return the value for `key`, or None.",
     "get_or": "(key: K, default: V) -> V" => "Return the value for `key`, or `default`.",
     "insert": "(key: K, val: V) -> Option<V>" => "Insert a key-value pair.",
     "is_empty": "() -> bool" => "Check if the map is empty.",
-    "keys": "() -> Vec<K>" => "Return a sorted Vec of all keys.",
+    "keys": "() -> List<K>" => "Return a sorted List of all keys.",
     "len": "() -> i64" => "Return the number of entries.",
     "remove": "(key: K) -> Option<V>" => "Remove and return the value for `key`.",
-    "values": "() -> Vec<V>" => "Return a sorted Vec of all values.",
+    "values": "() -> List<V>" => "Return a sorted List of all values.",
 ];
 
 // --- HashSet ---
 
 pub const HASHSET_METHODS: &[MethodInfo] = methods![
-    "clone": "() -> HashSet<T>" => "Create a shallow copy.",
+    "clone": "() -> Set<T>" => "Create a shallow copy.",
     "contains": "(val: T) -> bool" => "Check if the set contains `val`.",
-    "difference": "(other: HashSet<T>) -> HashSet<T>" => "Return elements in self but not in other.",
+    "difference": "(other: Set<T>) -> Set<T>" => "Return elements in self but not in other.",
     "insert": "(val: T) -> bool" => "Insert a value. Returns true if new.",
-    "intersection": "(other: HashSet<T>) -> HashSet<T>" => "Return elements in both sets.",
+    "intersection": "(other: Set<T>) -> Set<T>" => "Return elements in both sets.",
     "is_empty": "() -> bool" => "Check if the set is empty.",
     "len": "() -> i64" => "Return the number of elements.",
     "remove": "(val: T) -> bool" => "Remove a value. Returns true if it existed.",
-    "to_vec": "() -> Vec<T>" => "Return a sorted Vec of all elements.",
-    "union": "(other: HashSet<T>) -> HashSet<T>" => "Return elements in either set.",
+    "to_vec": "() -> List<T>" => "Return a sorted List of all elements.",
+    "union": "(other: Set<T>) -> Set<T>" => "Return elements in either set.",
 ];
 
 // --- BTreeMap ---
@@ -294,10 +294,10 @@ pub const BTREEMAP_METHODS: &[MethodInfo] = methods![
     "get_or": "(key: K, default: V) -> V" => "Return the value for `key`, or `default`.",
     "insert": "(key: K, val: V) -> Option<V>" => "Insert a key-value pair.",
     "is_empty": "() -> bool" => "Check if the map is empty.",
-    "keys": "() -> Vec<K>" => "Return a Vec of all keys in sorted order.",
+    "keys": "() -> List<K>" => "Return a List of all keys in sorted order.",
     "len": "() -> i64" => "Return the number of entries.",
     "remove": "(key: K) -> Option<V>" => "Remove and return the value for `key`.",
-    "values": "() -> Vec<V>" => "Return a Vec of all values in key order.",
+    "values": "() -> List<V>" => "Return a List of all values in key order.",
 ];
 
 // --- BTreeSet ---
@@ -311,7 +311,7 @@ pub const BTREESET_METHODS: &[MethodInfo] = methods![
     "is_empty": "() -> bool" => "Check if the set is empty.",
     "len": "() -> i64" => "Return the number of elements.",
     "remove": "(val: T) -> bool" => "Remove a value. Returns true if it existed.",
-    "to_vec": "() -> Vec<T>" => "Return a Vec of all elements in sorted order.",
+    "to_vec": "() -> List<T>" => "Return a List of all elements in sorted order.",
     "union": "(other: BTreeSet<T>) -> BTreeSet<T>" => "Return elements in either set.",
 ];
 
@@ -324,7 +324,7 @@ pub const BINARYHEAP_METHODS: &[MethodInfo] = methods![
     "peek": "() -> Option<T>" => "Return the maximum element without removing it.",
     "pop": "() -> Option<T>" => "Remove and return the maximum element.",
     "push": "(val: T)" => "Insert an element into the heap.",
-    "to_vec": "() -> Vec<T>" => "Return a sorted Vec of all elements.",
+    "to_vec": "() -> List<T>" => "Return a sorted List of all elements.",
 ];
 
 // --- VecDeque ---
@@ -339,7 +339,7 @@ pub const VECDEQUE_METHODS: &[MethodInfo] = methods![
     "pop_front": "() -> Option<T>" => "Remove and return the first element.",
     "push_back": "(val: T)" => "Add an element to the back.",
     "push_front": "(val: T)" => "Add an element to the front.",
-    "to_vec": "() -> Vec<T>" => "Return a Vec of all elements.",
+    "to_vec": "() -> List<T>" => "Return a List of all elements.",
 ];
 
 // --- Iterator ---
@@ -348,20 +348,20 @@ pub const ITERATOR_METHODS: &[MethodInfo] = methods![
     "all": "(fn: (T) -> bool) -> bool" => "Check if all elements satisfy the predicate.",
     "any": "(fn: (T) -> bool) -> bool" => "Check if any element satisfies the predicate.",
     "chain": "(other: Iterator) -> Iterator" => "Chain two iterators together.",
-    "collect": "() -> Vec<T>" => "Collect the iterator into a Vec.",
+    "collect": "() -> List<T>" => "Collect the iterator into a List.",
     "count": "() -> i64" => "Count the number of elements.",
     "enumerate": "() -> Iterator" => "Return an iterator of (index, element) pairs.",
-    "filter": "(fn: (T) -> bool) -> Vec<T>" => "Keep elements matching the predicate.",
+    "filter": "(fn: (T) -> bool) -> List<T>" => "Keep elements matching the predicate.",
     "find": "(fn: (T) -> bool) -> Option<T>" => "Return the first matching element.",
-    "flat_map": "(fn: (T) -> Iterator) -> Vec<U>" => "Map then flatten.",
-    "flatten": "() -> Vec<T>" => "Flatten nested iterables.",
+    "flat_map": "(fn: (T) -> Iterator) -> List<U>" => "Map then flatten.",
+    "flatten": "() -> List<T>" => "Flatten nested iterables.",
     "fold": "(init: U, fn: (U, T) -> U) -> U" => "Reduce to a single value.",
     "for_each": "(fn: (T) -> ())" => "Call closure on each element.",
-    "map": "(fn: (T) -> U) -> Vec<U>" => "Transform each element.",
+    "map": "(fn: (T) -> U) -> List<U>" => "Transform each element.",
     "next": "() -> Option<T>" => "Return the next element.",
     "nth": "(n: i64) -> Option<T>" => "Return the nth element.",
     "position": "(fn: (T) -> bool) -> Option<i64>" => "Return the index of the first match.",
-    "rev": "() -> Vec<T>" => "Return elements in reverse order.",
+    "rev": "() -> List<T>" => "Return elements in reverse order.",
     "skip": "(n: i64) -> Iterator" => "Skip the first `n` elements.",
     "sum": "() -> T" => "Sum all elements.",
     "product": "() -> T" => "Multiply all elements together.",
@@ -462,10 +462,10 @@ pub const GENERIC_METHODS: &[MethodInfo] = methods![
 
 pub const ALL_TYPES: &[TypeDoc] = &[
     TypeDoc {
-        name: "Vec",
+        name: "List",
         detail: "Growable array type",
         hover_text:
-            "**Vec\\<T\\>** — Growable array\n\n```oxy\nlet v: Vec<i64> = vec![1, 2, 3];\n```",
+            "**List\\<T\\>** — Growable array\n\n```oxy\nlet v: List<i64> = vec![1, 2, 3];\n```",
         methods: VEC_METHODS,
     },
     TypeDoc {
@@ -475,15 +475,15 @@ pub const ALL_TYPES: &[TypeDoc] = &[
         methods: STRING_METHODS,
     },
     TypeDoc {
-        name: "HashMap",
+        name: "Map",
         detail: "Hash map collection",
-        hover_text: "**HashMap\\<K, V\\>** — Hash map collection",
+        hover_text: "**Map\\<K, V\\>** — Hash map collection",
         methods: HASHMAP_METHODS,
     },
     TypeDoc {
-        name: "HashSet",
+        name: "Set",
         detail: "Hash set collection",
-        hover_text: "**HashSet\\<T\\>** — Hash set collection",
+        hover_text: "**Set\\<T\\>** — Hash set collection",
         methods: HASHSET_METHODS,
     },
     TypeDoc {
@@ -530,8 +530,8 @@ pub const ALL_TYPES: &[TypeDoc] = &[
     },
     TypeDoc {
         name: "numeric",
-        detail: "Integer and float methods",
-        hover_text: "**i64 / f64** — Numeric methods common to all integer and float types",
+        detail: "Integer and Float methods",
+        hover_text: "**i64 / f64** — Numeric methods common to all integer and Float types",
         methods: NUMERIC_METHODS,
     },
     TypeDoc {

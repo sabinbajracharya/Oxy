@@ -760,14 +760,14 @@ mod tests {
 
     #[test]
     fn test_e2e_literal_int() {
-        let result = run_compiled_jit("fn main() -> int { 42 }");
+        let result = run_compiled_jit("fn main() -> Int { 42 }");
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
     }
 
     #[test]
     fn test_e2e_add() {
-        let result = run_compiled_jit("fn main() -> int { 1 + 2 }");
+        let result = run_compiled_jit("fn main() -> Int { 1 + 2 }");
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(3));
     }
@@ -795,21 +795,21 @@ mod tests {
 
     #[test]
     fn test_e2e_if_true() {
-        let result = run_compiled_jit("fn main() -> int { if true { 10 } else { 20 } }");
+        let result = run_compiled_jit("fn main() -> Int { if true { 10 } else { 20 } }");
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(10));
     }
 
     #[test]
     fn test_e2e_if_false() {
-        let result = run_compiled_jit("fn main() -> int { if false { 10 } else { 20 } }");
+        let result = run_compiled_jit("fn main() -> Int { if false { 10 } else { 20 } }");
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(20));
     }
 
     #[test]
     fn test_e2e_nested_if() {
-        let src = "fn main() -> int { if true { if false { 1 } else { 2 } } else { 3 } }";
+        let src = "fn main() -> Int { if true { if false { 1 } else { 2 } } else { 3 } }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(2));
@@ -817,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_e2e_if_cmp_cond() {
-        let src = "fn main() -> int { if 1 < 2 { 10 } else { 20 } }";
+        let src = "fn main() -> Int { if 1 < 2 { 10 } else { 20 } }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(10));
@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn test_e2e_while_false() {
         // Loop body never executes — should just return initial value.
-        let src = "fn main() -> int { let mut x = 42; while false { x = 1 } x }";
+        let src = "fn main() -> Int { let mut x = 42; while false { x = 1 } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -834,7 +834,7 @@ mod tests {
 
     #[test]
     fn test_e2e_let_mut_assign() {
-        let src = "fn main() -> int { let mut x = 0; x = 1; x }";
+        let src = "fn main() -> Int { let mut x = 0; x = 1; x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(1));
@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn test_e2e_while_true_return() {
         // while true should enter the body.
-        let src = "fn main() -> int { while true { return 42 } 0 }";
+        let src = "fn main() -> Int { while true { return 42 } 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -851,7 +851,7 @@ mod tests {
 
     #[test]
     fn test_e2e_if_mutate() {
-        let src = "fn main() -> int { let mut x = 0; if true { x = 5 } else { x = 10 } x }";
+        let src = "fn main() -> Int { let mut x = 0; if true { x = 5 } else { x = 10 } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -860,7 +860,7 @@ mod tests {
     #[test]
     fn test_e2e_while_mut_return() {
         // Mutate inside loop body then immediately return — tests StoreLocal in loop.
-        let src = "fn main() -> int { let mut x = 0; while x < 1 { x = 5; return x } 0 }";
+        let src = "fn main() -> Int { let mut x = 0; while x < 1 { x = 5; return x } 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -868,7 +868,7 @@ mod tests {
 
     #[test]
     fn test_e2e_while_once() {
-        let src = "fn main() -> int { let mut x = 0; while x < 1 { x = x + 1 } x }";
+        let src = "fn main() -> Int { let mut x = 0; while x < 1 { x = x + 1 } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(1));
@@ -876,7 +876,7 @@ mod tests {
 
     #[test]
     fn test_e2e_while_simple() {
-        let src = "fn main() -> int { let mut x = 0; while x < 3 { x = x + 1 } x }";
+        let src = "fn main() -> Int { let mut x = 0; while x < 3 { x = x + 1 } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(3));
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn test_e2e_match_literal() {
-        let src = "fn main() -> int { match 2 { 0 => 10, 1 => 20, 2 => 30, _ => 40 } }";
+        let src = "fn main() -> Int { match 2 { 0 => 10, 1 => 20, 2 => 30, _ => 40 } }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(30));
@@ -894,7 +894,7 @@ mod tests {
 
     #[test]
     fn test_e2e_match_wildcard() {
-        let src = "fn main() -> int { match 99 { 0 => 1, _ => 42 } }";
+        let src = "fn main() -> Int { match 99 { 0 => 1, _ => 42 } }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -902,7 +902,7 @@ mod tests {
 
     #[test]
     fn test_e2e_match_ident_bind() {
-        let src = "fn main() -> int { match 5 { x => x * 2 } }";
+        let src = "fn main() -> Int { match 5 { x => x * 2 } }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(10));
@@ -913,7 +913,7 @@ mod tests {
     #[test]
     fn test_e2e_struct_init_only() {
         // Struct init without field access — tests oxy_struct_init FFI.
-        let src = "struct Point { x: int, y: int } fn main() -> int { let _p = Point { x: 10, y: 20 }; 0 }";
+        let src = "struct PoInt { x: Int, y: Int } fn main() -> Int { let _p = PoInt { x: 10, y: 20 }; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
@@ -921,7 +921,7 @@ mod tests {
 
     #[test]
     fn test_e2e_struct_init_and_field() {
-        let src = "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 10, y: 20 }; p.x }";
+        let src = "struct PoInt { x: Int, y: Int } fn main() -> Int { let p = PoInt { x: 10, y: 20 }; p.x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(10));
@@ -931,7 +931,7 @@ mod tests {
     fn test_e2e_struct_field_not_tail() {
         // Field access stored to a local, then return constant — avoids the
         // spilled-CallBuiltin-as-tail-expr bug.
-        let src = "struct Point { x: int, y: int } fn main() -> int { let p = Point { x: 10, y: 20 }; let _px = p.x; 0 }";
+        let src = "struct PoInt { x: Int, y: Int } fn main() -> Int { let p = PoInt { x: 10, y: 20 }; let _px = p.x; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
@@ -941,7 +941,7 @@ mod tests {
 
     #[test]
     fn test_e2e_enum_unit_variant() {
-        let src = "enum Color { Red, Blue } fn main() -> int { let c = Color::Red; 0 }";
+        let src = "enum Color { Red, Blue } fn main() -> Int { let c = Color::Red; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
     }
@@ -950,7 +950,7 @@ mod tests {
 
     #[test]
     fn test_e2e_array_literal() {
-        let src = "fn main() -> int { let a = [1, 2, 3]; 0 }";
+        let src = "fn main() -> Int { let a = [1, 2, 3]; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
     }
@@ -958,14 +958,14 @@ mod tests {
     #[test]
     fn test_e2e_tuple_literal() {
         // Tuple field access (.0) returns Unit — bug in oxy_field_access for tuples.
-        let src = "fn main() -> int { let t = (1, 2); 0 }";
+        let src = "fn main() -> Int { let t = (1, 2); 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
     }
 
     #[test]
     fn test_e2e_string_len() {
-        let src = "fn main() -> int { let s = \"hello\"; s.len() }";
+        let src = "fn main() -> Int { let s = \"hello\"; s.len() }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -973,7 +973,7 @@ mod tests {
 
     #[test]
     fn test_e2e_string_len_via_local() {
-        let src = "fn main() -> int { let s = \"hello\"; let n = s.len(); n }";
+        let src = "fn main() -> Int { let s = \"hello\"; let n = s.len(); n }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -983,7 +983,7 @@ mod tests {
     #[test]
     fn test_e2e_ffi_binary_int_return() {
         // logical AND with int return (same FFI path as bool_and, but int type)
-        let src = "fn main() -> int { let x = true && false; 0 }";
+        let src = "fn main() -> Int { let x = true && false; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
@@ -994,7 +994,7 @@ mod tests {
     /// ConstInt in local, return via LoadLocal (no FFI call).
     #[test]
     fn test_e2e_constint_in_local() {
-        let src = "fn main() -> int { let x = 42; x }";
+        let src = "fn main() -> Int { let x = 42; x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -1003,7 +1003,7 @@ mod tests {
     /// String literal only, no method call, return constant.
     #[test]
     fn test_e2e_string_no_method() {
-        let src = "fn main() -> int { let s = \"hello\"; 0 }";
+        let src = "fn main() -> Int { let s = \"hello\"; 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
@@ -1012,7 +1012,7 @@ mod tests {
     /// String literal + method call, return constant.
     #[test]
     fn test_e2e_string_method_ret_const() {
-        let src = "fn main() -> int { let s = \"hello\"; let _n = s.len(); 0 }";
+        let src = "fn main() -> Int { let s = \"hello\"; let _n = s.len(); 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(0));
@@ -1021,7 +1021,7 @@ mod tests {
     /// Method call without any locals, return result directly.
     #[test]
     fn test_e2e_no_locals_method_call() {
-        let src = "fn main() -> int { \"hello\".len() }";
+        let src = "fn main() -> Int { \"hello\".len() }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -1030,7 +1030,7 @@ mod tests {
     /// Simple add via FFI without locals, return result.
     #[test]
     fn test_e2e_no_locals_arith() {
-        let src = "fn main() -> int { 2 + 3 }";
+        let src = "fn main() -> Int { 2 + 3 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -1039,7 +1039,7 @@ mod tests {
     /// Add via FFI with locals, return via local.
     #[test]
     fn test_e2e_arith_in_local() {
-        let src = "fn main() -> int { let x = 2 + 3; x }";
+        let src = "fn main() -> Int { let x = 2 + 3; x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(5));
@@ -1048,7 +1048,7 @@ mod tests {
     /// ConstInt stored and loaded through multiple locals.
     #[test]
     fn test_e2e_multi_local_chain() {
-        let src = "fn main() -> int { let a = 42; let b = a; b }";
+        let src = "fn main() -> Int { let a = 42; let b = a; b }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -1058,7 +1058,7 @@ mod tests {
 
     #[test]
     fn test_e2e_cast_to_int() {
-        let src = "fn main() -> int { 3.14 as int }";
+        let src = "fn main() -> Int { 3.14 as Int }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(3));
@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn test_e2e_return_from_if() {
-        let src = "fn main() -> int { if true { return 42 } 0 }";
+        let src = "fn main() -> Int { if true { return 42 } 0 }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(42));
@@ -1076,7 +1076,7 @@ mod tests {
 
     #[test]
     fn test_e2e_break_from_loop() {
-        let src = "fn main() -> int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }";
+        let src = "fn main() -> Int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }";
         let result = run_compiled_jit(src);
         assert!(result.is_ok(), "expected Ok, got {result:?}");
         assert_eq!(result.unwrap(), crate::types::Value::I64(6));

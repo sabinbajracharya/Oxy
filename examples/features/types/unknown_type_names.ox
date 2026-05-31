@@ -1,7 +1,7 @@
 // === Feature: unknown type names in annotations are rejected ===
 
 struct Foo {
-    x: int,
+    x: Int,
 }
 
 #[test]
@@ -11,10 +11,10 @@ fn test_known_type_ok() {
 
 #[test]
 fn test_vec_of_known_type_ok() {
-    let _v: Vec<Foo> = vec(Foo { x: 1 });
+    let _v: List<Foo> = list(Foo { x: 1 });
 }
 
-fn identity(x: int) -> int {
+fn identity(x: Int) -> Int {
     x
 }
 
@@ -30,8 +30,8 @@ fn test_unknown_bare_type_rejected() {
 
 #[compile_error]
 fn test_unknown_type_in_vec_generic_rejected() {
-    // The original ask: `Vec<can_type_anythin_here>` should error.
-    let _v: Vec<can_type_anythin_here> = vec(1, 2, 3);
+    // The original ask: `List<can_type_anythin_here>` should error.
+    let _v: List<can_type_anythin_here> = list(1, 2, 3);
 }
 
 #[compile_error]
@@ -41,7 +41,7 @@ fn test_unknown_type_in_option_generic_rejected() {
 
 #[compile_error]
 fn test_unknown_type_in_hashmap_generic_rejected() {
-    let _m: HashMap<String, NotARealType> = HashMap::new();
+    let _m: Map<String, NotARealType> = Map::new();
 }
 
 #[compile_error]

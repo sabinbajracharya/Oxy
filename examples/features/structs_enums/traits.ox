@@ -28,20 +28,20 @@ fn test_trait_basic() {
 // === Trait with Multiple Methods ===
 
 trait Shape2D {
-    fn area(self) -> float;
-    fn perimeter(self) -> float;
+    fn area(self) -> Float;
+    fn perimeter(self) -> Float;
 }
 
 struct Square {
-    side: float,
+    side: Float,
 }
 
 impl Shape2D for Square {
-    fn area(self) -> float {
+    fn area(self) -> Float {
         self.side * self.side
     }
 
-    fn perimeter(self) -> float {
+    fn perimeter(self) -> Float {
         4.0 * self.side
     }
 }
@@ -64,7 +64,7 @@ trait Describable {
 }
 
 struct Widget {
-    id: int,
+    id: Int,
 }
 
 impl Describable for Widget {
@@ -84,11 +84,11 @@ fn test_trait_default_method() {
 // === Multiple Impls for Same Type ===
 
 trait Identifiable {
-    fn id(self) -> int;
+    fn id(self) -> Int;
 }
 
 impl Identifiable for Widget {
-    fn id(self) -> int {
+    fn id(self) -> Int {
         self.id
     }
 }

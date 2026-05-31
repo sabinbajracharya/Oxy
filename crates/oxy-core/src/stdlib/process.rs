@@ -35,7 +35,7 @@ pub fn call(
                     .collect::<Vec<_>>(),
                 _ => {
                     return Err(runtime_error(
-                        "std::process::command_with_args(): second argument must be a Vec",
+                        "std::process::command_with_args(): second argument must be a List",
                         span,
                     ))
                 }
@@ -50,7 +50,7 @@ pub fn call(
                 Value::Vec(rc) => rc.borrow().iter().map(|a| format!("{a}")).collect(),
                 _ => {
                     return Err(runtime_error(
-                        "std::process::spawn(): second argument must be a Vec",
+                        "std::process::spawn(): second argument must be a List",
                         span,
                     ))
                 }
@@ -208,7 +208,7 @@ fn main() {
     fn test_process_command_with_args() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command_with_args("echo", vec("hello", "world"));
+    let result = std::process::command_with_args("echo", list("hello", "world"));
     if let Ok(output) = result {
         let trimmed = output.stdout.trim();
         println("{}", trimmed);
@@ -270,10 +270,10 @@ fn main() {
         // be invoked once per line, in order.
         let out = run(r#"
 fn main() {
-    let mut lines = vec();
+    let mut lines = list();
     let result = std::process::spawn(
         "printf",
-        vec("%s\n%s\n", "first", "second"),
+        list("%s\n%s\n", "first", "second"),
         |line, stream| {
             lines.push(stream);
             lines.push(line);
@@ -297,10 +297,10 @@ fn main() {
         // `sh -c` lets us deterministically write to both streams.
         let out = run(r#"
 fn main() {
-    let mut tagged = vec();
+    let mut tagged = list();
     let _ = std::process::spawn(
         "sh",
-        vec("-c", "echo out1; echo err1 1>&2; echo out2"),
+        list("-c", "echo out1; echo err1 1>&2; echo out2"),
         |line, stream| {
             tagged.push(stream + ":" + line);
         },
@@ -319,7 +319,7 @@ fn main() {
     fn test_process_spawn_status_on_failure() {
         let out = run(r#"
 fn main() {
-    let result = std::process::spawn("false", vec(), |_line, _stream| {});
+    let result = std::process::spawn("false", list(), |_line, _stream| {});
     if let Ok(output) = result {
         println("{} {}", output.success, output.status);
     } else {
@@ -336,7 +336,7 @@ fn main() {
 fn main() {
     let result = std::process::spawn(
         "nonexistent_program_xyz_98765",
-        vec(),
+        list(),
         |_line, _stream| {},
     );
     if let Ok(_) = result {

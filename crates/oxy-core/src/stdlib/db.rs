@@ -337,7 +337,7 @@ mod tests {
                 );
             }
         } else {
-            panic!("expected Vec");
+            panic!("expected List");
         }
     }
 
@@ -370,7 +370,7 @@ mod tests {
         if let Value::Vec(rc) = result {
             assert_eq!(rc.borrow().len(), 1);
         } else {
-            panic!("expected Vec");
+            panic!("expected List");
         }
     }
 

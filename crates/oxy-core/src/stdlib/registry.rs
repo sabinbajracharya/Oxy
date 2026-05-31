@@ -15,7 +15,7 @@
 //!   Any function name passes the compiler's whitelist; the module's `call`
 //!   function returns an error at runtime if it doesn't recognise the name.
 //!
-//! - **Item**: a full path like `["HashMap", "new"]` or
+//! - **Item**: a full path like `["Map", "new"]` or
 //!   `["std", "regex", "Regex", "new"]` dispatches to one specific handler.
 //!   Used for constructors and one-off built-ins that don't fit the module
 //!   shape.
@@ -90,7 +90,7 @@ pub fn lookup_item(path: &[&str]) -> Option<ItemHandler> {
         return Some(handler);
     }
     // Flatten each segment on `::` — a `use`-resolved segment can itself be a
-    // qualified name (e.g. `"std::collections::HashMap"`) — then retry against
+    // qualified name (e.g. `"std::collections::Map"`) — then retry against
     // the trailing `Type::method` pair.
     let flat: Vec<&str> = path.iter().flat_map(|s| s.split("::")).collect();
     if flat.len() > 2 {
@@ -190,11 +190,11 @@ static ITEMS: &[Item] = &[
         handler: string_from,
     },
     Item {
-        path: &["HashMap", "new"],
+        path: &["Map", "new"],
         handler: hashmap_new,
     },
     Item {
-        path: &["HashSet", "new"],
+        path: &["Set", "new"],
         handler: hashset_new,
     },
     Item {
@@ -222,11 +222,11 @@ static ITEMS: &[Item] = &[
         handler: treenode_new,
     },
     Item {
-        path: &["int", "parse"],
+        path: &["Int", "parse"],
         handler: int_parse,
     },
     Item {
-        path: &["float", "parse"],
+        path: &["Float", "parse"],
         handler: float_parse,
     },
     Item {
@@ -332,7 +332,7 @@ fn float_parse(args: &[Value]) -> Result<Value, String> {
     match s.trim().parse::<f64>() {
         Ok(n) => Ok(Value::ok(Value::F64(n))),
         Err(_) => Ok(Value::err(Value::String(format!(
-            "cannot parse \"{s}\" as float"
+            "cannot parse \"{s}\" as Float"
         )))),
     }
 }

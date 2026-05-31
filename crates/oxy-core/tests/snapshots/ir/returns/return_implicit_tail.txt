@@ -5,7 +5,7 @@ fn main() -> () {
     ret v0
 }
 
-fn sum(a: int, b: int) -> int {
+fn sum(a: Int, b: Int) -> Int {
   locals: 2
   bb0(entry):
     v0 = load.local $0

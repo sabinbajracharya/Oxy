@@ -53,15 +53,15 @@ fn test_trait_default_override() {
 
 // --- two impls of same trait on different types ---
 trait Area {
-    fn area(self) -> float;
+    fn area(self) -> Float;
 }
-struct Circ { r: float }
-struct Sq { s: float }
+struct Circ { r: Float }
+struct Sq { s: Float }
 impl Area for Circ {
-    fn area(self) -> float { 3.14 * self.r * self.r }
+    fn area(self) -> Float { 3.14 * self.r * self.r }
 }
 impl Area for Sq {
-    fn area(self) -> float { self.s * self.s }
+    fn area(self) -> Float { self.s * self.s }
 }
 
 #[test]
@@ -75,13 +75,13 @@ fn test_trait_dispatch_per_type() {
 // --- generic struct + concrete impl ---
 struct Pair<T> { a: T, b: T }
 
-impl Pair<int> {
-    fn new(a: int, b: int) -> Pair<int> { Pair { a, b } }
+impl Pair<Int> {
+    fn new(a: Int, b: Int) -> Pair<Int> { Pair { a, b } }
 }
 
 #[test]
 fn test_generic_struct_method() {
-    let p: Pair<int> = Pair::<int>::new(3, 4);
+    let p: Pair<Int> = Pair::<Int>::new(3, 4);
     assert_eq(p.a, 3);
     assert_eq(p.b, 4);
 }
@@ -135,7 +135,7 @@ fn test_generic_impl_two_params() {
 
 // --- derive(Debug) ---
 #[derive(Debug)]
-struct Pt { x: int, y: int }
+struct Pt { x: Int, y: Int }
 
 #[test]
 fn test_derive_debug() {
@@ -147,7 +147,7 @@ fn test_derive_debug() {
 
 // --- derive(Clone) ---
 #[derive(Clone, Debug, PartialEq)]
-struct Box1 { v: int }
+struct Box1 { v: Int }
 
 #[test]
 fn test_derive_clone() {
@@ -169,15 +169,15 @@ fn test_derive_partialeq_enum() {
 
 // --- multiple traits on one type ---
 trait Sound { fn noise(self) -> String; }
-trait Move { fn step(self) -> int; }
+trait Move { fn step(self) -> Int; }
 
-struct Walker { name: String, speed: int }
+struct Walker { name: String, speed: Int }
 
 impl Sound for Walker {
     fn noise(self) -> String { format("{} walks", self.name) }
 }
 impl Move for Walker {
-    fn step(self) -> int { self.speed }
+    fn step(self) -> Int { self.speed }
 }
 
 #[test]
@@ -190,16 +190,16 @@ fn test_multiple_traits_on_type() {
 
 // --- trait with multiple methods ---
 trait Stack {
-    fn pop_one(self) -> Option<int>;
-    fn peek(self) -> Option<int>;
+    fn pop_one(self) -> Option<Int>;
+    fn peek(self) -> Option<Int>;
     fn is_empty(self) -> bool;
 }
 
-struct VecStack { data: Vec<int> }
+struct VecStack { data: List<Int> }
 
 impl Stack for VecStack {
-    fn pop_one(self) -> Option<int> { self.data.pop() }
-    fn peek(self) -> Option<int> {
+    fn pop_one(self) -> Option<Int> { self.data.pop() }
+    fn peek(self) -> Option<Int> {
         if self.data.len() == 0 { None }
         else { Some(self.data[self.data.len() - 1]) }
     }
@@ -208,13 +208,13 @@ impl Stack for VecStack {
 
 #[test]
 fn test_trait_multiple_methods() {
-    let s = VecStack { data: vec(1, 2, 3) };
+    let s = VecStack { data: list(1, 2, 3) };
     assert_eq(s.is_empty(), false);
     assert_eq(s.peek(), Some(3));
 }
 
 // --- trait bound on generic fn ---
-fn area_double<T: Area>(t: T) -> float {
+fn area_double<T: Area>(t: T) -> Float {
     t.area() * 2.0
 }
 

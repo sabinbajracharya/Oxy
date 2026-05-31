@@ -260,7 +260,7 @@ impl IrGen {
                     "println" => Some(("oxy_println_val", vec![args.len()])),
                     "print" => Some(("oxy_print_val", vec![args.len()])),
                     "format" => Some(("oxy_format", vec![args.len()])),
-                    "vec" => Some(("oxy_make_array", vec![args.len()])),
+                    "list" => Some(("oxy_make_array", vec![args.len()])),
                     "dbg" => Some(("oxy_dbg", vec![args.len()])),
                     _ => None,
                 } {
@@ -699,7 +699,7 @@ impl IrGen {
                 }
                 if let Expr::Ident(name, ..) = target.as_ref() {
                     if let Some(slot) = self.lookup_local(name) {
-                        let coerced = if self.local_types.get(&slot).is_some_and(|t| t == "byte") {
+                        let coerced = if self.local_types.get(&slot).is_some_and(|t| t == "Byte") {
                             let cr = self.alloc_reg();
                             self.emit(IrOp::CallBuiltin {
                                 result: cr,
@@ -865,9 +865,9 @@ impl IrGen {
                 let val = self.gen_expr(expr);
                 let r = self.alloc_reg();
                 let func = match type_name.as_str() {
-                    "int" => "oxy_cast_int",
-                    "byte" => "oxy_cast_byte",
-                    "float" => "oxy_cast_float",
+                    "Int" => "oxy_cast_int",
+                    "Byte" => "oxy_cast_byte",
+                    "Float" => "oxy_cast_float",
                     "char" => "oxy_cast_to_char",
                     _ => "oxy_cast_int",
                 };

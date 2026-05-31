@@ -115,7 +115,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         symbols::string_m::PARSE_FLOAT => match s.trim().parse::<f64>() {
             Ok(n) => Ok(Value::ok(Value::F64(n))),
             Err(_) => Ok(Value::err(Value::String(format!(
-                "cannot parse \"{s}\" as float"
+                "cannot parse \"{s}\" as Float"
             )))),
         },
         symbols::string_m::FIND => {

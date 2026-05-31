@@ -1,10 +1,10 @@
 fn main() -> () {
   locals: 3
   bb0(entry):
-    v0 = const.int 0
+    v0 = const.Int 0
     store.local $0, v0
-    v1 = const.int 0
-    v2 = const.int 5
+    v1 = const.Int 0
+    v2 = const.Int 5
     v3 = call @oxy_make_range(v1, v2) imm[0]
     v4 = call @oxy_make_iter(v3)
     store.local $2, v4

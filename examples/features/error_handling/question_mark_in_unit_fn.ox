@@ -4,20 +4,20 @@
 // The fix-it points the user at the two ways out: handle with `match`, or
 // change the fn signature to return `Result<_, _>` / `Option<_>`.
 
-fn fails() -> Result<int, String> {
+fn fails() -> Result<Int, String> {
     Err("boom".to_string())
 }
 
-fn never_some() -> Option<int> {
+fn never_some() -> Option<Int> {
     None
 }
 
-fn outer_result() -> Result<int, String> {
+fn outer_result() -> Result<Int, String> {
     let v = fails()?;
     Ok(v + 1)
 }
 
-fn outer_option() -> Option<int> {
+fn outer_option() -> Option<Int> {
     let v = never_some()?;
     Some(v + 1)
 }
@@ -42,16 +42,16 @@ fn test_question_mark_in_unit_fn_rejected() {
 }
 
 #[compile_error]
-fn test_question_mark_in_int_fn_rejected() -> int {
+fn test_question_mark_in_int_fn_rejected() -> Int {
     let _v = fails()?;
     0
 }
 
 #[compile_error]
-fn test_question_mark_on_non_result_rejected() -> Result<int, String> {
-    // `?` requires a Result/Option operand. Calling it on a plain int
+fn test_question_mark_on_non_result_rejected() -> Result<Int, String> {
+    // `?` requires a Result/Option operand. Calling it on a plain Int
     // is meaningless.
-    let n: int = 5;
+    let n: Int = 5;
     let _v = n?;
     Ok(0)
 }

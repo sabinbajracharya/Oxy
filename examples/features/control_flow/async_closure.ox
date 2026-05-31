@@ -2,7 +2,7 @@
 
 fn main() {}
 
-fn take_int(x: int) -> int { x }
+fn take_int(x: Int) -> Int { x }
 
 // --- async closure: zero params ---
 
@@ -23,13 +23,13 @@ fn test_async_closure_single_expr_body() {
 
 #[test]
 fn test_async_closure_with_params() {
-    let f = async |x: int, y: int| { x + y };
+    let f = async |x: Int, y: Int| { x + y };
     assert_eq(f(10, 20).await, 30);
 }
 
 #[test]
 fn test_async_closure_single_param() {
-    let f = async |x: int| { x * 3 };
+    let f = async |x: Int| { x * 3 };
     assert_eq(f(7).await, 21);
 }
 
@@ -45,7 +45,7 @@ fn test_async_closure_capture() {
 #[test]
 fn test_async_closure_capture_with_param() {
     let base = 10;
-    let f = async |x: int| { x + base };
+    let f = async |x: Int| { x + base };
     assert_eq(f(32).await, 42);
 }
 
@@ -89,15 +89,15 @@ fn test_async_block_capture() {
 #[test]
 fn test_async_closure_type_flows() {
     let f = async || { 42 };
-    let fut = f();        // Future<int>
-    let v = fut.await;    // int
-    let _ = take_int(v);  // OK: int -> int
+    let fut = f();        // Future<Int>
+    let v = fut.await;    // Int
+    let _ = take_int(v);  // OK: Int -> Int
 }
 
 #[test]
 fn test_async_block_type_flows() {
-    let fut = async { 42 };  // Future<int>
-    let v = fut.await;       // int
+    let fut = async { 42 };  // Future<Int>
+    let v = fut.await;       // Int
     let _ = take_int(v);     // OK
 }
 
@@ -108,7 +108,7 @@ fn async_closure_wrong_type() {
     let f = async || { "hi".to_string() };
     let fut = f();           // Future<String>
     let v = fut.await;       // String
-    let _ = take_int(v);     // ERROR: String != int
+    let _ = take_int(v);     // ERROR: String != Int
 }
 
 #[compile_error]

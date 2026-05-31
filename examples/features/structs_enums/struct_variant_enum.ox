@@ -10,12 +10,12 @@
 //      caller's frame, corrupting downstream `println`/`?`/etc.
 
 enum Shape {
-    Circle(float),
-    Rectangle { w: float, h: float },
+    Circle(Float),
+    Rectangle { w: Float, h: Float },
     Nothing,
 }
 
-fn area(s: Shape) -> float {
+fn area(s: Shape) -> Float {
     match s {
         Shape::Circle(r) => 3.14159 * r * r,
         Shape::Rectangle { w, h } => w * h,
@@ -42,7 +42,7 @@ fn test_match_after_struct_variant_no_underflow() {
     assert(ac > 78.0 && ac < 79.0);
 
     let r = Shape::Rectangle { w: 4.0, h: 6.0 };
-    assert_eq(area(r) as int, 24);
+    assert_eq(area(r) as Int, 24);
 
     let n = Shape::Nothing;
     assert_eq(area(n), 0.0);

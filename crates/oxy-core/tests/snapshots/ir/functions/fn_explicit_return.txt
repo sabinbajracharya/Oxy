@@ -1,8 +1,8 @@
-fn abs(x: int) -> int {
+fn abs(x: Int) -> Int {
   locals: 2
   bb0(entry):
     v0 = load.local $0
-    v1 = const.int 0
+    v1 = const.Int 0
     v2 = lt v0, v1
     branch v2 -> bb4, bb1
 

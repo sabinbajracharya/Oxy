@@ -5,7 +5,7 @@
 // === Option-like Enum ===
 
 enum MyOption {
-    MySome(int),
+    MySome(Int),
     MyNone,
 }
 
@@ -84,8 +84,8 @@ fn test_if_let_none_else() {
 
 enum Event {
     KeyPress(char),
-    Click(int, int),
-    Resize { w: int, h: int },
+    Click(Int, Int),
+    Resize { w: Int, h: Int },
 }
 
 #[test]
@@ -105,9 +105,9 @@ fn test_enum_mixed_variants() {
 // that collided with binding positions.
 
 enum Color {
-    Rgb(int, int, int),
-    Rgba(int, int, int, int),
-    Hsl(int, int, int),
+    Rgb(Int, Int, Int),
+    Rgba(Int, Int, Int, Int),
+    Hsl(Int, Int, Int),
 }
 
 #[test]

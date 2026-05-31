@@ -1,4 +1,4 @@
-fn add(a: int, b: int) -> int {
+fn add(a: Int, b: Int) -> Int {
   locals: 2
   bb0(entry):
     v0 = load.local $0
