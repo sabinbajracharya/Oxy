@@ -160,9 +160,10 @@ Primary sources:
   `buffer.add(local_count + sp)` (`context.rs:146-163`).
 - Spill slots for register values grow **downward** from `capacity-1`
   (`codegen.rs:176-188`); `capacity = local_count + STACK_CAP`, `STACK_CAP = 2048`.
-- Other fields: async state (`resume_ip`, `entry_ip`, `yield_reason`,
-  `yield_data`), result/error state (`result: Value`, `error_msg: [u8; 1024]`,
+- Other fields: result/error state (`result: Value`, `error_msg: [u8; 1024]`,
   `error_len`), the closure-call function-pointer table, and a `tables` pointer.
+  (`async`/`spawn` run eagerly to completion — see `scheduler.rs` — so there is
+  no yield/resume state on the context.)
 
 ## 10. Type / value expectations
 
@@ -251,10 +252,7 @@ prime suspects when JIT tests fail and the first candidates for cleanup.
    is spilled, so the fast path is rarely taken and the two branches must stay
    behaviorally identical or bugs appear.
 
-8. **Bytecode-era naming in async state.** `resume_ip` / `entry_ip` are documented
-   as "bytecode IP" though there is no bytecode anymore — vestigial terminology.
-
-9. **Per-function vs engine `local_count`.** Each function carries its own
+8. **Per-function vs engine `local_count`.** Each function carries its own
    `local_count` (`fn_local_counts`, `codegen.rs:19`); a prior bug used `main`'s
    count for every frame, causing silent heap corruption only when a function had
    more locals than `main`. Keep frame sizing per-function.

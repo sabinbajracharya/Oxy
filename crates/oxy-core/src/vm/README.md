@@ -23,7 +23,7 @@ polymorphic call rather than a `#[cfg]` branch repeated at each entry point.
 |---|---|
 | `mod.rs` | `VmResult`, public re-exports, `builtin_method` dispatch, `dispatched_type_names()`, `run_tests` plumbing, FFI consistency tests. |
 | `api.rs` | Public entry points (`run_compiled`, `run_tests`, `disassemble_source`); the `ExecutionBackend` seam + `ActiveBackend` per-target selection. |
-| `scheduler.rs` | Async task scheduler (`spawn`/`await`/`sleep`/`select`). |
+| `scheduler.rs` | Task registry for `spawn`/`await`/`select`. Tasks run eagerly to completion (JIT code can't be paused), so this just holds each task's result + virtual `sleep` time. |
 | `interp.rs` | The IR interpreter backend (compiled on **all** targets, used on wasm). |
 | `builtins/` | Per-type method implementations (see its README). |
 | `jit/` | The native Cranelift backend, register IR, ir_gen, FFI (see its README). |

@@ -76,17 +76,6 @@ pub(crate) struct JitContext {
     /// Total capacity of the buffer (in Value units).
     pub capacity: usize,
 
-    /// Where to resume execution after a yield (bytecode IP).
-    /// 0 means start from the beginning.
-    pub resume_ip: usize,
-    /// The JIT function's entry bytecode IP (used to look up the native fn pointer).
-    pub entry_ip: usize,
-
-    /// Yield reason: 0=none, 1=sleep, 2=await_task, 3=select.
-    pub yield_reason: u32,
-    /// Associated task ID or wake time for the yield reason.
-    pub yield_data: u64,
-
     /// Completion value (set when a function returns Done).
     pub result: Value,
 
@@ -124,10 +113,6 @@ impl JitContext {
             local_count,
             sp: 0,
             capacity,
-            resume_ip: 0,
-            entry_ip: 0,
-            yield_reason: 0,
-            yield_data: 0,
             result: Value::Unit,
             error_msg: [0u8; 1024],
             error_len: 0,
@@ -192,13 +177,6 @@ impl JitContext {
             }
         }
         self.sp = 0;
-    }
-
-    /// Reset async yield state for a fresh execution.
-    pub fn reset_async_state(&mut self) {
-        self.resume_ip = 0;
-        self.yield_reason = 0;
-        self.yield_data = 0;
     }
 }
 

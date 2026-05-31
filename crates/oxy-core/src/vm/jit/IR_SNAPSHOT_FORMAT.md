@@ -281,7 +281,7 @@ no register. This discrepancy with `result_reg()` is a known IR inconsistency
 - **Stored `predecessors`** — recomputed from the CFG (§2.6).
 - **All codegen / runtime state** — CLIF values, `regs`, `reg_slot`, spill slots,
   `STACK_CAP`, operand-stack `sp`/`capacity`, `JitContext`, FFI function-pointer
-  table, `resume_ip`/`entry_ip`/yield state. The snapshot is pre-codegen IR.
+  table. The snapshot is pre-codegen IR.
 - **Source spans / line numbers** — not IR semantics; high churn. Excluded.
 - **Comments and debug annotations.**
 

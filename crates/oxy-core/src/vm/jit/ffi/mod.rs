@@ -1844,76 +1844,6 @@ thread_local! {
     static SLEEP_ACCUM: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// Build a JitTaskState from the current JitContext.
-pub(super) fn jit_state_from_ctx(
-    ctx: &mut JitContext,
-    resume_ip: usize,
-) -> crate::vm::scheduler::JitTaskState {
-    let entry_ip = ctx.entry_ip;
-    let local_count = ctx.local_count;
-    let sp = ctx.sp;
-    let mut locals = Vec::new();
-    for i in 0..local_count {
-        locals.push(unsafe { ctx.buffer.add(i).read() });
-    }
-    let mut operand_stack = Vec::new();
-    for i in 0..sp {
-        operand_stack.push(unsafe { ctx.buffer.add(local_count + i).read() });
-    }
-    // Prevent JitContext::drop from dropping these values — they're now owned
-    // by the JitTaskState. Without this, ptr::read above creates shallow copies
-    // and the Drop impl would free the same heap memory twice.
-    ctx.local_count = 0;
-    ctx.sp = 0;
-    crate::vm::scheduler::JitTaskState {
-        entry_ip,
-        resume_ip,
-        locals,
-        operand_stack,
-        local_count,
-        yield_reason: ctx.yield_reason,
-        yield_data: ctx.yield_data,
-    }
-}
-
-/// Restore JitContext from a JitTaskState (takes ownership to prevent double-free).
-pub(super) fn ctx_from_jit_state(ctx: &mut JitContext, state: crate::vm::scheduler::JitTaskState) {
-    // Ensure buffer is large enough
-    let needed = state.local_count + state.operand_stack.len();
-    while ctx.capacity < needed {
-        let new_cap = ctx.capacity * 2;
-        let new_layout = std::alloc::Layout::array::<Value>(new_cap).unwrap();
-        let new_buf = unsafe { std::alloc::alloc_zeroed(new_layout) as *mut Value };
-        unsafe {
-            std::ptr::copy_nonoverlapping(ctx.buffer, new_buf, ctx.capacity);
-            std::alloc::dealloc(
-                ctx.buffer as *mut u8,
-                std::alloc::Layout::array::<Value>(ctx.capacity).unwrap(),
-            );
-        }
-        ctx.buffer = new_buf;
-        ctx.capacity = new_cap;
-    }
-    ctx.local_count = state.local_count;
-    ctx.sp = state.operand_stack.len();
-    ctx.resume_ip = state.resume_ip;
-    ctx.entry_ip = state.entry_ip;
-    ctx.yield_reason = state.yield_reason;
-    ctx.yield_data = state.yield_data;
-    // Take ownership of values from the state (into_iter consumes the Vec,
-    // preventing JitTaskState::drop from freeing them).
-    for (i, v) in state.locals.into_iter().enumerate() {
-        unsafe {
-            ctx.buffer.add(i).write(v);
-        }
-    }
-    for (i, v) in state.operand_stack.into_iter().enumerate() {
-        unsafe {
-            ctx.buffer.add(state.local_count + i).write(v);
-        }
-    }
-}
-
 extern "C" fn oxy_await_ffi(ctx: *mut JitContext) {
     let ctx = unsafe { &mut *ctx };
     let val = unsafe { pop(ctx) };
@@ -2051,18 +1981,9 @@ extern "C" fn oxy_spawn_ffi(ctx: *mut JitContext) {
 
             let mut sched = scheduler_lock();
             let task_id = sched.create_task();
-            // Create the task entry first so complete() can find it.
-            sched.save_new_task(
-                task_id,
-                crate::vm::scheduler::TaskSnapshot {
-                    ip: target_ip,
-                    stack: vec![],
-                    jit_state: None,
-                },
-            );
-            // Mark the task as done with the eagerly-computed result.
+            // Record the virtual completion time and the eagerly-computed result.
             sched.set_virtual_time(task_id, task_sleep);
-            let _awoken = sched.complete(task_id, task_result);
+            sched.complete(task_id, task_result);
             drop(sched);
             unsafe {
                 push(ctx, Value::JoinHandle { task_id });
