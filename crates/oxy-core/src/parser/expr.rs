@@ -994,24 +994,9 @@ impl Parser {
     }
 
     pub(super) fn parse_arg_list(&mut self) -> Result<Vec<Expr>, PipelineError> {
-        let mut args = Vec::new();
-
-        if self.check(&TokenKind::RParen) || self.check(&TokenKind::RBracket) {
-            return Ok(args);
-        }
-
-        loop {
-            args.push(self.parse_expr(Precedence::None)?);
-            if !self.match_token(&TokenKind::Comma) {
-                break;
-            }
-            // Allow trailing comma: `foo(a, b,)` and `foo[a, b,]`.
-            if self.check(&TokenKind::RParen) || self.check(&TokenKind::RBracket) {
-                break;
-            }
-        }
-
-        Ok(args)
+        self.parse_comma_separated(&[TokenKind::RParen, TokenKind::RBracket], |s| {
+            s.parse_expr(Precedence::None)
+        })
     }
 
     /// Parse turbofish: `::<Type1, Type2, ...>`.  Assumes `::` has just been consumed.

@@ -64,18 +64,8 @@ impl Parser {
             TokenKind::LParen => {
                 let span = self.current_span();
                 self.advance();
-                let mut pats = Vec::new();
-                if !self.check(&TokenKind::RParen) {
-                    loop {
-                        pats.push(self.parse_pattern()?);
-                        if !self.match_token(&TokenKind::Comma) {
-                            break;
-                        }
-                        if self.check(&TokenKind::RParen) {
-                            break;
-                        }
-                    }
-                }
+                let pats =
+                    self.parse_comma_separated(&[TokenKind::RParen], |s| s.parse_pattern())?;
                 self.expect(TokenKind::RParen)?;
                 Ok(Pattern::Tuple(pats, span))
             }

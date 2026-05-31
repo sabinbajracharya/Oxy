@@ -264,6 +264,30 @@ impl Parser {
         Span::new(start.start, end.end, start.line, start.column)
     }
 
+    /// Parse zero or more elements separated by commas, with trailing comma
+    /// allowed before any token in `close`. Returns immediately if the next
+    /// token is one of the close delimiters.
+    fn parse_comma_separated<T>(
+        &mut self,
+        close: &[TokenKind],
+        mut parse_one: impl FnMut(&mut Self) -> Result<T, PipelineError>,
+    ) -> Result<Vec<T>, PipelineError> {
+        let mut items = Vec::new();
+        if close.iter().any(|c| self.check(c)) {
+            return Ok(items);
+        }
+        loop {
+            items.push(parse_one(self)?);
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+            if close.iter().any(|c| self.check(c)) {
+                break; // trailing comma
+            }
+        }
+        Ok(items)
+    }
+
     /// Parse the raw content of an f-string into `FStringPart`s.
     fn parse_fstring_parts(
         &self,

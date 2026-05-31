@@ -239,34 +239,7 @@ impl TypeChecker {
             // call paths (e.g. tests that invoke parse_stmt directly). Skip
             // it here — the hoisted copy is type-checked at the program level.
             Stmt::Item(_) => Ok(()),
-            Stmt::Use(use_def) => {
-                let base_path = use_def.path.join("::");
-                self.check_path_visible(&base_path, use_def.span)?;
-                match &use_def.tree {
-                    UseTree::Simple(alias) => {
-                        let local_name = alias
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
-                        self.use_aliases.insert(local_name, base_path.clone());
-                    }
-                    UseTree::Group(items) => {
-                        for (name, alias) in items {
-                            let local_name = alias.as_ref().unwrap_or(name);
-                            let qualified = format!("{}::{}", base_path, name);
-                            self.check_path_visible(&qualified, use_def.span)?;
-                            self.use_aliases.insert(local_name.clone(), qualified);
-                        }
-                    }
-                    UseTree::Glob => {
-                        // Record the module so bare calls resolving through the
-                        // glob get a visibility check (a glob must not import
-                        // private items).
-                        self.glob_imports.push(base_path.clone());
-                    }
-                }
-                Ok(())
-            }
+            Stmt::Use(use_def) => self.process_use_def(use_def),
         }
     }
 

@@ -1,6 +1,37 @@
 use super::*;
 
 impl TypeChecker {
+    /// Process a use definition (for both `Item::Use` and `Stmt::Use`).
+    /// Checks path visibility and registers aliases or glob imports.
+    pub(super) fn process_use_def(
+        &mut self,
+        use_def: &crate::ast::UseDef,
+    ) -> Result<(), PipelineError> {
+        let base_path = use_def.path.join("::");
+        self.check_path_visible(&base_path, use_def.span)?;
+        match &use_def.tree {
+            UseTree::Simple(alias) => {
+                let local_name = alias
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
+                self.use_aliases.insert(local_name, base_path);
+            }
+            UseTree::Group(items) => {
+                for (name, alias) in items {
+                    let local_name = alias.as_ref().unwrap_or(name);
+                    let qualified = format!("{}::{}", base_path, name);
+                    self.check_path_visible(&qualified, use_def.span)?;
+                    self.use_aliases.insert(local_name.clone(), qualified);
+                }
+            }
+            UseTree::Glob => {
+                self.glob_imports.push(base_path);
+            }
+        }
+        Ok(())
+    }
+
     /// Recursively collect struct defs, type aliases, and use aliases with module prefix.
     pub(super) fn collect_defs(&mut self, items: &[Item], prefix: &str) {
         for item in items {

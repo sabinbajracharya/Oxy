@@ -7,14 +7,6 @@
 use crate::symbols;
 use crate::types::Value;
 
-fn inner_of(receiver: &Value) -> Value {
-    if let Value::EnumVariant { data, .. } = receiver {
-        data.first().cloned().unwrap_or(Value::Unit)
-    } else {
-        Value::Unit
-    }
-}
-
 pub fn dispatch<F>(
     receiver: Value,
     method: &str,
@@ -34,21 +26,21 @@ where
 
         m::UNWRAP => {
             if is_ok {
-                Ok(inner_of(&receiver))
+                Ok(receiver.inner_of())
             } else {
                 Err("called `unwrap` on an `Err` value".into())
             }
         }
         m::UNWRAP_ERR => {
             if !is_ok {
-                Ok(inner_of(&receiver))
+                Ok(receiver.inner_of())
             } else {
                 Err("called `unwrap_err` on an `Ok` value".into())
             }
         }
         m::EXPECT => {
             if is_ok {
-                Ok(inner_of(&receiver))
+                Ok(receiver.inner_of())
             } else {
                 Err(args
                     .first()
@@ -58,31 +50,31 @@ where
         }
         m::UNWRAP_OR => {
             if is_ok {
-                Ok(inner_of(&receiver))
+                Ok(receiver.inner_of())
             } else {
                 Ok(first_arg())
             }
         }
         m::UNWRAP_OR_ELSE => {
             if is_ok {
-                Ok(inner_of(&receiver))
+                Ok(receiver.inner_of())
             } else {
                 // Closure receives the err value (Option's variant takes no args).
-                let err_val = inner_of(&receiver);
+                let err_val = receiver.inner_of();
                 call_closure(first_arg(), &[err_val])
             }
         }
 
         m::OK => {
             if is_ok {
-                Ok(Value::some(inner_of(&receiver)))
+                Ok(Value::some(receiver.inner_of()))
             } else {
                 Ok(Value::none())
             }
         }
         m::ERR => {
             if !is_ok {
-                Ok(Value::some(inner_of(&receiver)))
+                Ok(Value::some(receiver.inner_of()))
             } else {
                 Ok(Value::none())
             }
@@ -90,7 +82,7 @@ where
 
         m::MAP => {
             if is_ok {
-                let result = call_closure(first_arg(), &[inner_of(&receiver)])?;
+                let result = call_closure(first_arg(), &[receiver.inner_of()])?;
                 Ok(Value::ok(result))
             } else {
                 Ok(receiver)
@@ -98,7 +90,7 @@ where
         }
         m::MAP_ERR => {
             if !is_ok {
-                let result = call_closure(first_arg(), &[inner_of(&receiver)])?;
+                let result = call_closure(first_arg(), &[receiver.inner_of()])?;
                 Ok(Value::err(result))
             } else {
                 Ok(receiver)
@@ -106,14 +98,14 @@ where
         }
         m::AND_THEN => {
             if is_ok {
-                call_closure(first_arg(), &[inner_of(&receiver)])
+                call_closure(first_arg(), &[receiver.inner_of()])
             } else {
                 Ok(receiver)
             }
         }
         m::OR_ELSE => {
             if !is_ok {
-                let err_val = inner_of(&receiver);
+                let err_val = receiver.inner_of();
                 call_closure(first_arg(), &[err_val])
             } else {
                 Ok(receiver)

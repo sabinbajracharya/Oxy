@@ -39,33 +39,7 @@ impl TypeChecker {
                 self.module_stack.pop();
                 Ok(())
             }
-            Item::Use(use_def) => {
-                let base_path = use_def.path.join("::");
-                // Reject imports of private items from outside the defining module.
-                self.check_path_visible(&base_path, use_def.span)?;
-                match &use_def.tree {
-                    UseTree::Simple(alias) => {
-                        let local_name = alias
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| use_def.path.last().cloned().unwrap_or_default());
-                        self.use_aliases.insert(local_name, base_path.clone());
-                    }
-                    UseTree::Group(items) => {
-                        for (name, alias) in items {
-                            let local_name = alias.as_ref().unwrap_or(name);
-                            let qualified = format!("{}::{}", base_path, name);
-                            self.check_path_visible(&qualified, use_def.span)?;
-                            self.use_aliases.insert(local_name.clone(), qualified);
-                        }
-                    }
-                    UseTree::Glob => {
-                        // Glob: we can't enumerate all exports at type-check time,
-                        // so we skip. Visibility is enforced by the compiler.
-                    }
-                }
-                Ok(())
-            }
+            Item::Use(use_def) => self.process_use_def(use_def),
             Item::Impl(i) => {
                 let qualified_type = if self.module_stack.is_empty() {
                     i.type_name.clone()

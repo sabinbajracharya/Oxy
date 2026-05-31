@@ -124,6 +124,16 @@ impl Value {
         }
     }
 
+    /// Return the first data element from an enum variant (Some/Ok),
+    /// or `Unit` if the receiver isn't an enum variant or has no payload.
+    pub fn inner_of(&self) -> Value {
+        if let Value::EnumVariant { data, .. } = self {
+            data.first().cloned().unwrap_or(Value::Unit)
+        } else {
+            Value::Unit
+        }
+    }
+
     /// Extract i64 from any integer variant (widening, wrapping for unsigned).
     pub fn as_i64(&self) -> i64 {
         match self {
