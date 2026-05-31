@@ -93,7 +93,7 @@
 - [x] Parse `fn name(params) -> T = expr` — desugar to block with tail expr
 - [x] Handle return type omission: `fn add(x, y) = x + y`
 - [x] Add test file
-- [ ] **Commit:** `feat: add single-line function syntax`
+- [x] **Commit:** `feat: add single-line function syntax` (`a1902b2`)
 
 ### 3.3 Pipeline-friendly stdlib
 - [ ] Add free functions: `map(data, f)`, `filter(data, f)`, `fold(data, init, f)`
