@@ -1,11 +1,13 @@
 # Rust Concepts: Enums as Tagged Unions, Pattern Matching
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. We already introduced Rust enums in Part 1.
-Now we go deeper: enums as the representation of "this OR that" — the TypeInfo enum
-is the best example in the codebase. Frame it as: you already know what a Rust enum is.
-Now let's see how powerful they become when you combine them with pattern matching.
--->
+You already know what a Rust enum is — we met them back in Part 1, where `TokenKind` was a label
+with an occasional payload. Now we go deeper, because the type checker shows enums doing the thing
+they're really for: representing "this *or* that *or* that," a closed set of mutually exclusive
+possibilities, each carrying exactly the data its case needs. `TypeInfo` — the enum that answers
+"what type is this?" — is the best example in the whole codebase, because an Oxy type genuinely *is*
+one-of-many (it's an int, *or* a Vec of something, *or* a user struct named X) and several of those
+cases nest recursively. Pair that with pattern matching and you get code that takes a type apart as
+naturally as you'd describe it in English. You know the syntax; this chapter is about the power.
 
 ## `TypeInfo` as a tagged union
 

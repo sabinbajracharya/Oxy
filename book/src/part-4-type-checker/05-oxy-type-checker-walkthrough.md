@@ -1,9 +1,12 @@
 # Oxy's Type Checker: A Full Walkthrough
 
-<!-- OPUS_FILL
-1-paragraph intro. "Let's open the type checker and trace a program through it."
-Reference the files we'll read. Keep it short — this chapter is code-heavy.
--->
+Enough theory — let's open the type checker and push a real program through it. Like the parser,
+the type checker is split by responsibility across several files: `mod.rs` holds `TypeInfo` and the
+`TypeChecker` struct, `collect.rs` is the two collection passes, `check_item.rs` and `check_stmt.rs`
+and `check_expr.rs` are the second-pass walkers for items, statements, and expressions, and
+`resolve.rs` handles module and visibility resolution. This chapter is code-heavy and trace-driven:
+open `mod.rs` and follow along as we walk a few representative expressions from source down to the
+`TypeInfo` each produces.
 
 **Files:**
 - `crates/oxy-core/src/type_checker/mod.rs` — `TypeInfo`, `TypeChecker` struct, `check_program`

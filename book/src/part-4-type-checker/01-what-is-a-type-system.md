@@ -1,22 +1,36 @@
 # What Is a Type System?
 
-<!-- OPUS_FILL
-Write a 3-4 paragraph hook.
+Here's a precise way to think about what a type checker does, and it's worth getting precise
+because the word "types" gets used loosely. A type system is a static analysis — it runs before
+your program does — that *proves* certain classes of error cannot happen at runtime. Note the
+careful wording. It does not prove your program is correct; that's far too much to ask, and no
+type checker promises it. It proves that *specific things are impossible*. Your logic can still be
+wrong, your algorithm can still be backwards — but you will not, at runtime, find yourself trying
+to add a number to a function or read a field off something that has no fields. Those particular
+disasters are ruled out in advance.
 
-Key insight: a type system is a static analysis that proves, at compile time, that certain
-classes of errors cannot happen at runtime. It does not prove your program is correct —
-it proves specific things are impossible.
+Make it concrete. Suppose `add` expects two integers, and somewhere you call `add("hello", 42)`.
+In a language with no type checking, that call sails through to runtime, where the machine
+attempts to add a string to an integer and either crashes, panics, or — worse — silently computes
+garbage that propagates for another thousand lines before anything looks wrong. A type checker
+catches it before a single instruction executes: *expected int, found String, line 4*. The error
+moves from "mysterious runtime failure, time and place unknown" to "named mistake, exact location,
+before you even ran the thing." That relocation is the entire value proposition.
 
-Use a concrete example: passing a String to a function that expects an int. Without types,
-this crashes at runtime (or silently computes nonsense). With types, the compiler catches it
-before the program runs.
+And here's the satisfying part, the thing that makes a type checker far less intimidating than its
+reputation: it's just another tree walk. You already watched the tree-walker visit every AST node
+and ask *what value does this produce?* The type checker visits the very same nodes and asks a
+parallel question — *what type does this produce, and does that type make sense where it's being
+used?* Same tree, same recursion, same shape of code. The only thing that changes is that instead
+of computing a `Value`, each node computes a `TypeInfo`. If you understood Part 3, you already
+understand the skeleton of Part 4.
 
-The "aha!" moment: a type checker is just another tree-walk. It visits every AST node and
-asks "what type does this expression have?" and "does this type make sense in this context?"
-
-End with the honest caveat: Oxy's type system is not Rust-complete. It catches common errors
-but does not verify every possible type invariant. It is a pragmatic, useful subset.
--->
+One honest caveat before we dive in: Oxy's type system is not Rust's. It is not complete, and it
+is not trying to be. It catches the common, costly mistakes — wrong argument types, missing
+fields, misused `?`, visibility violations — but it deliberately doesn't attempt to verify every
+invariant a fancier system could. It's a pragmatic, useful subset, chosen to be implementable and
+to give good error messages, not to be a theorem prover. Knowing where its edges are is part of
+understanding it.
 
 ## Types as a static proof
 

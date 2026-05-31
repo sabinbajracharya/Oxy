@@ -1,12 +1,21 @@
 # The Two-Pass Design: Collect Then Check
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The problem this solves: in a single pass, you cannot check a call to `foo()` before
-you've seen `foo`'s definition. Languages that require functions to be declared before use
-solve this with forward declarations. Oxy solves it with two passes.
-Frame it as: the first pass is like reading a book's table of contents before reading the chapters.
--->
+There's a problem you hit the moment you let people call functions that are defined later in the
+file. If the type checker reads top to bottom and reaches a call to `foo()` before it has ever seen
+`foo`'s definition, it has no idea what `foo` returns or what arguments it expects — and so it can't
+check the call. Older languages dodged this by *forbidding* it: C makes you write a forward
+declaration, declaring the function's signature up top before you're allowed to use it. That works,
+but it's a chore, and Oxy chose not to inflict it. In Oxy you can call `greet` from `main` even if
+`greet` is defined fifty lines below.
+
+The way to have that without forward declarations is to read the program *twice*. The first pass
+doesn't check anything — it just skims the whole program and writes down every name and its
+signature: every struct, every function's parameters and return type. Think of it as reading the
+table of contents before you read the chapters. Once that index exists, the second pass can walk
+the actual bodies and check every call against it, and it no longer matters what order things were
+written in, because by then it already knows about all of them. That's the two-pass design, and the
+rest of this chapter is how Oxy implements it — including one invariant that, if you get it wrong,
+makes the whole type checker silently stop catching errors.
 
 ## The problem: forward references
 

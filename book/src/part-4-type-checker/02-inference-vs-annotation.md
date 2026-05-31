@@ -1,13 +1,19 @@
 # Inference vs Annotation
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The tension: annotations are explicit (easy to check, verbose) vs inference
-(concise, requires a smarter algorithm). Oxy does both — annotations where declared,
-inference for expressions.
-Make it concrete: `let x: int = 42` (annotation), `let x = 42` (inference from literal).
-Both are valid Oxy. The type checker handles both.
--->
+There's a genuine tension at the heart of every type checker, and it's about who does the work of
+saying what type a thing is. You can make the *programmer* say it — write `let x: int = 42` and now
+the checker's job is trivial, it just confirms the right-hand side really is an int. That's an
+annotation: explicit, dead simple to verify, and a little tedious when the answer was obvious. Or
+you can make the *checker* figure it out — write `let x = 42` and let it notice that `42` is an
+integer literal and conclude `x` is an int without being told. That's inference: concise and
+pleasant to write, but it demands a smarter algorithm, and the smarter the inference, the worse the
+error messages tend to get when it can't decide.
+
+Oxy does both, and the line it draws between them is deliberate. Where you've written an annotation,
+it checks against it. Where you haven't, it infers from the expression. `let x: int = 42` and
+`let x = 42` are both perfectly valid Oxy and the type checker handles each with the appropriate
+machinery. The interesting questions — where inference stops, why function parameters *must* be
+annotated, and what the mysterious `Unknown` type is for — are what this chapter is about.
 
 ## Type annotation: explicit declaration
 

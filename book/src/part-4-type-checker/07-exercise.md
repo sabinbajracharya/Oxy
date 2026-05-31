@@ -1,11 +1,12 @@
 # Exercise: Add a Type Error
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercises involve making the type checker stricter —
-adding a check that currently does not exist. This is the kind of work that makes a
-language safer over time. Frame it as: "You are about to make Oxy catch a real bug
-that it currently silently ignores."
--->
+These exercises are about making the type checker *stricter* — teaching it to reject something it
+currently waves through. That's a different flavor of work from the earlier parts, and a deeply
+satisfying one: you're not adding a feature, you're closing a hole. Every check you add is a class
+of bug that can never reach a user again, caught at compile time instead of discovered at 2am in
+production. You're about to make Oxy catch a real mistake it currently ignores in silence. Write the
+`#[compile_error]` test first, watch it *not* fail (because the hole is still open), then close the
+hole and watch the test go green. That's the whole loop.
 
 ## Part A: Reject `i32` and other retired type names
 

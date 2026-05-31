@@ -1,10 +1,12 @@
 # Field Visibility and Module Boundaries
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. Visibility checking is one of the more subtle features of the
-type checker — it enforces encapsulation at compile time. Frame it as: this is the feature
-that lets you write a struct where the internal representation is hidden from callers.
--->
+Visibility checking is one of the quieter, subtler jobs the type checker does, and it's the one
+that makes encapsulation real. When you write a struct and mark a field private, you're making a
+promise to yourself: callers outside this module cannot touch this field, so I'm free to change how
+it's represented without breaking them. That promise is worth exactly nothing unless something
+enforces it — and the type checker is what enforces it, at compile time, before any code runs. This
+chapter is about how it knows where "inside" and "outside" a module are, and how it turns a private
+field into a hard compile error the moment someone reaches for it from the wrong place.
 
 ## The visibility model
 
