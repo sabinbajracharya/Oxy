@@ -1,11 +1,12 @@
 # The REPL and CLI
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. The CLI is the face of Oxy — the command the user runs.
-Its job is to route commands and wrap oxy-core. It is intentionally thin.
-The REPL is the interactive mode — for experiments and quick tests.
-Frame it as: "The CLI is glue. The REPL is play. Both are in crates/oxy-cli/src/main.rs."
--->
+The CLI is the face of Oxy — `oxy run`, `oxy test`, `oxy repl` — the command a person actually
+types. And like the VS Code extension, it does much less than its prominence suggests: its whole
+job is to route a subcommand to the right entry point in `oxy-core` and surface whatever comes back,
+errors in red. It is glue, intentionally thin. The REPL is the other half of this file and a
+different mood entirely — it's where you play, trying a line of Oxy and seeing the result
+immediately, accumulating multi-line input until it parses. The CLI is glue; the REPL is play; both
+live in `crates/oxy-cli/src/main.rs`, and we'll read each in turn.
 
 **File:** `crates/oxy-cli/src/main.rs`
 

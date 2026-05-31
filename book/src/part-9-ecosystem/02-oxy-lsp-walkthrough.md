@@ -1,10 +1,12 @@
 # Oxy's LSP: A Walkthrough
 
-<!-- OPUS_FILL
-1-paragraph intro. "Open crates/oxy-lsp/src/main.rs. It's about 1200 lines.
-The key thing to understand is how tower-lsp makes the protocol mechanics disappear —
-you implement trait methods, the library handles the JSON-RPC plumbing."
--->
+Open `crates/oxy-lsp/src/main.rs` — about 1,200 lines, and far less of it is protocol plumbing
+than you'd expect. That's the point of this chapter. Oxy's LSP is built on `tower-lsp`, a Rust
+library that makes the entire JSON-RPC machinery disappear: you don't parse messages or manage
+request IDs, you just implement methods on a trait — `did_open`, `completion`, `hover` — and the
+library calls them when the matching message arrives and serializes whatever you return. So the
+code you'll read is almost entirely *language* logic (re-run the pipeline, look up a method in
+`symbols.rs`, convert a span to a range) sitting on top of a thin framework. Let's walk it.
 
 **File:** `crates/oxy-lsp/src/main.rs`
 

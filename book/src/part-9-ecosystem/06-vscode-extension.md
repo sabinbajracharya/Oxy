@@ -1,11 +1,12 @@
 # The VS Code Extension
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. The VS Code extension is the final layer — the thing users
-actually interact with. It is thin glue: syntax highlighting and LSP client.
-The language intelligence comes from the LSP; the extension just wires it up.
-Frame it as: "The extension is small on purpose. The real work is in the LSP."
--->
+The VS Code extension is the last layer between Oxy and a person, and the surprising thing about it
+is how little it does. It is thin glue: a TextMate grammar for static syntax highlighting and a few
+lines of client code that find the `oxy-lsp` binary and connect VS Code to it. That's it. All the
+actual language intelligence — the completions, the hovers, the error underlines — lives in the LSP
+you read in the last two chapters; the extension just wires it up and gets out of the way. This is
+by design, and it's the whole reason LSP exists: the extension is small *on purpose*, so the real
+work lives in one server that every editor can share rather than being re-implemented per editor.
 
 **Directory:** `editors/vscode/`
 

@@ -1,13 +1,20 @@
 # Package Managers: The Boring Essential
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook. Package managers are the unsexy part of a language ecosystem.
-Nobody writes blog posts about them. But they are the thing that makes a language ecosystem
-function — without a package manager, every Oxy program would be one file with no dependencies.
+Nobody writes a breathless blog post about a package manager. There are no conference talks titled
+"The Beauty of Lockfiles." It is the unglamorous plumbing of a language ecosystem — and it is also,
+quietly, the thing that decides whether an ecosystem exists at all. Without a package manager,
+every Oxy program is an island: one file, no dependencies, no way to use anyone else's code or
+share your own. The moment you want to build on top of someone else's HTTP library, you need a
+manifest that declares it, a resolver that finds a compatible version, a place to download it from,
+and a lockfile so your teammate gets the exact same thing you did. That machinery is boring, and it
+is load-bearing.
 
-Reference Cargo (Rust's package manager) as the gold standard. Then frame tug as a simpler
-version: a manifest file, a lock file, install packages, run programs. The 80% that matters.
--->
+Rust's Cargo is the gold standard here — version resolution, workspaces, features, the works — and
+it's the obvious thing to point at. Oxy's package manager, `tug`, is deliberately a smaller animal.
+No workspaces, no feature flags, no elaborate version solver. What it has is the 80% that actually
+matters day to day: a `tug.toml` manifest to declare dependencies, a `tug.lock` to pin them, a way
+to install them, and a way to run and test your project. This chapter is about that core loop —
+what each piece is for and, especially, why the lockfile is the part you can't skip.
 
 ## What a package manager does
 

@@ -1,9 +1,13 @@
 # Tug: Oxy's Package Manager
 
-<!-- OPUS_FILL
-1-paragraph intro. "Open crates/oxy-tug/src/. The package manager is a standalone crate
-that uses oxy-core as a library. It is simpler than Cargo but covers the essentials."
--->
+Open `crates/oxy-tug/src/`. The thing to notice first is the architecture: `tug` is its own crate,
+separate from `oxy-core`, and it does *not* reimplement any of the language. It parses manifests,
+resolves dependencies, and then delegates the actual running to the `oxy` binary through a flag.
+That separation is deliberate and worth watching for as we read — it's why `oxy-core` knows nothing
+about package registries and `tug` knows nothing about how the language executes. The crate is
+small and split cleanly by job (manifest, lockfile, install, runner, scaffold), so this walkthrough
+follows those files in turn, ending with the `--extern` mechanism that is the actual seam between
+the two halves.
 
 **Crate:** `crates/oxy-tug/`
 

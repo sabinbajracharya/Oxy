@@ -1,20 +1,26 @@
 # Language Server Protocol: How IDEs Understand Your Code
 
-<!-- OPUS_FILL
-Write a 3-paragraph hook.
-LSP is one of the most impactful inventions in developer tooling in the last decade.
-Before LSP (2016), every IDE had to implement language support from scratch — a Python
-plugin for VS Code, a different one for JetBrains, another for Emacs. Each one understood
-Python differently. N languages × M IDEs = N×M implementations.
+The Language Server Protocol is one of the quietly transformative ideas in developer tooling, and
+to appreciate it you have to remember the world before it. Until LSP arrived around 2016, editor
+language support was a combinatorial disaster. If you wanted Python to feel good in VS Code,
+somebody wrote a VS Code Python plugin. Want it in JetBrains? A completely separate plugin, written
+again from scratch. Emacs? Vim? Sublime? Each one its own implementation, each understanding Python
+slightly differently, each with its own bugs. With N languages and M editors, the world needed
+N×M implementations — and most of those boxes were simply never filled, which is why your favorite
+obscure language felt great in one editor and like a text file in every other.
 
-LSP inverted this: one language server per language, one LSP client per IDE. N + M implementations.
+LSP inverted the whole thing with one move: standardize the conversation between editor and
+language. Now a language author writes *one* server that understands their language, every editor
+ships *one* generic client that speaks the protocol, and the two snap together. N+M instead of N×M.
+That's the difference between "language support is a heroic per-editor effort" and "write the
+server once, get every editor for free" — and it's the reason a small language like Oxy can offer
+real autocompletion, hover docs, and live error underlining at all.
 
-For Oxy: building the LSP was not optional if the language wanted to be usable.
-VS Code autocompletion, hover documentation, error underlining, go-to-definition —
-all of these come from the LSP server.
-
-End with: the LSP is just a process that speaks JSON-RPC over stdio. It is less scary than it sounds.
--->
+For Oxy that made the LSP non-optional. A language you can't get diagnostics or completions for, in
+the editor you already use, doesn't feel like a real language. So `oxy-lsp` exists, and everything
+the editor knows about Oxy flows through it. And here's the reassuring part, before the acronyms
+pile up: a language server is just a process that reads JSON messages on stdin and writes JSON
+messages on stdout. That's the whole protocol. It is far less scary than it sounds.
 
 ## What LSP is
 
