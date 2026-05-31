@@ -387,8 +387,8 @@ fn test_struct_field_mutation_via_self_push() {
                     Stack { items: [] }
                 }
 
-                fn push(self, val: Int) {
-                    self.items.push(val);
+                fn push(self, v: Int) {
+                    self.items.push(v);
                 }
             }
 
@@ -410,7 +410,7 @@ fn test_listnode_new() {
         r#"
             fn main() {
                 val n = ListNode::new(5);
-                println("{}", n.val);
+                println("{}", n.value);
                 println("{}", n.next.is_none());
             }
             "#,
@@ -424,7 +424,7 @@ fn test_treenode_new() {
         r#"
             fn main() {
                 val t = TreeNode::new(10);
-                println("{}", t.val);
+                println("{}", t.value);
                 println("{}", t.left.is_none());
                 println("{}", t.right.is_none());
             }
@@ -441,8 +441,8 @@ fn test_listnode_linking() {
                 var head = ListNode::new(1);
                 val second = ListNode::new(2);
                 head.next = Some(second);
-                println("{}", head.val);
-                println("{}", head.next.unwrap().val);
+                println("{}", head.value);
+                println("{}", head.next.unwrap().value);
             }
             "#,
     );
@@ -459,9 +459,9 @@ fn test_treenode_linking() {
                 val right = TreeNode::new(7);
                 root.left = Some(left);
                 root.right = Some(right);
-                println("{}", root.val);
-                println("{}", root.left.unwrap().val);
-                println("{}", root.right.unwrap().val);
+                println("{}", root.value);
+                println("{}", root.left.unwrap().value);
+                println("{}", root.right.unwrap().value);
             }
             "#,
     );

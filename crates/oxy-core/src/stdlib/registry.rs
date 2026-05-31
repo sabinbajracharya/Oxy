@@ -289,9 +289,9 @@ fn vecdeque_new(_args: &[Value]) -> Result<Value, String> {
 }
 
 fn listnode_new(args: &[Value]) -> Result<Value, String> {
-    let val = args.first().cloned().unwrap_or(Value::Unit);
+    let value = args.first().cloned().unwrap_or(Value::Unit);
     let mut fields = HashMap::new();
-    fields.insert("val".to_string(), val);
+    fields.insert("value".to_string(), value);
     fields.insert("next".to_string(), Value::none());
     Ok(Value::Struct {
         name: "ListNode".to_string(),
@@ -300,9 +300,9 @@ fn listnode_new(args: &[Value]) -> Result<Value, String> {
 }
 
 fn treenode_new(args: &[Value]) -> Result<Value, String> {
-    let val = args.first().cloned().unwrap_or(Value::Unit);
+    let value = args.first().cloned().unwrap_or(Value::Unit);
     let mut fields = HashMap::new();
-    fields.insert("val".to_string(), val);
+    fields.insert("value".to_string(), value);
     fields.insert("left".to_string(), Value::none());
     fields.insert("right".to_string(), Value::none());
     Ok(Value::Struct {
