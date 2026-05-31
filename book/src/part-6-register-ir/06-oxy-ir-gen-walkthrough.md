@@ -1,10 +1,12 @@
 # Oxy's IR Gen: AST → IrFunction
 
-<!-- OPUS_FILL
-1-paragraph intro. "The IR gen is where the AST becomes executable. Let's trace through it."
-Mention the split across files (the large ir_gen/mod.rs was split into per-domain files
-in a recent refactor). Reference the files to read.
--->
+IR gen is where the tree finally becomes a program — where the AST stops being a static description
+and turns into the flat, executable register IR both backends consume. It's the most consequential
+translation in the compiler, and like the parser and type checker before it, it grew big enough that
+a May 2026 refactor split the once-monolithic `ir_gen/mod.rs` into per-domain files: the `IrGen`
+struct and entry points stay in `mod.rs`, and the generation methods for expressions, statements,
+items, and the rest live in sibling files beside it. Open `ir_gen/mod.rs` and let's trace a program
+through it, from `gen_program` down to the individual ops.
 
 **Files** (after the May 2026 split refactor):
 - `crates/oxy-core/src/vm/jit/ir_gen/mod.rs` — `IrGen` struct, entry points

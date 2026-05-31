@@ -1,17 +1,21 @@
 # Basic Blocks and Control Flow Graphs
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-The key insight: a basic block is a sequence of instructions with no branches in the middle
-— control enters at the top, executes straight through, exits at the bottom.
-An if/else creates three blocks: the condition block, the then block, and the else block.
-A while loop creates three blocks: the condition block, the body block, and the continuation.
+Registers give you a clean way to talk about *values*. Now we need a clean way to talk about
+*control* — what runs after what, where the branches go, how loops loop. The unit that makes this
+manageable is the basic block, and its definition is refreshingly strict: a basic block is a run of
+instructions with no branching in the middle. Control enters at the top, falls straight through
+every instruction in order with no jumps in or out along the way, and leaves only at the very
+bottom through a single exit. Nothing surprising can happen inside a block. If you're at the first
+instruction, you are guaranteed to reach the last.
 
-The CFG is the graph connecting these blocks. It's the structure that lets compilers
-analyze control flow, detect dead code, and optimize loops.
-
-Make it concrete with a simple if/else diagram.
--->
+That strictness is what makes the whole program tractable. Every control structure decomposes into
+a small fixed number of blocks: an `if`/`else` becomes a condition block that branches to a then-
+block and an else-block, which both rejoin at a continuation block; a `while` loop becomes a
+condition block, a body block, and a block for whatever comes after, with the body looping back to
+the condition. Wire the blocks together by their exits and you get a directed graph — the **control
+flow graph**, or CFG — and that graph is the structure compilers use to find dead code, recognize
+loops, and reason about execution paths. The diagram below shows the simplest case, an `if`/`else`,
+laid out as four blocks.
 
 ## What is a basic block?
 

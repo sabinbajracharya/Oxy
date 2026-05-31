@@ -1,10 +1,11 @@
 # Exercise: Trace a Program Through the IR
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercise bridges theory and practice — you run real
-programs and read their IR. The goal is: after this exercise, IR dumps are not scary.
-They are just a slightly unusual but fully readable form of "what your program does."
--->
+This exercise has one quiet goal: to make IR dumps stop looking like noise. You'll run real
+programs, read their traces, draw a control flow graph by hand, add a snapshot test, and even wire
+in a brand-new IR op end to end through both backends. By the time you've done that, an IR dump
+will read like what it actually is — a slightly unusual but completely legible description of what
+your program does, step by step. The fear of the trace is the only thing standing between you and
+debugging IR gen confidently, and this is where you lose it.
 
 ## Part A: Read the IR for a recursive function
 

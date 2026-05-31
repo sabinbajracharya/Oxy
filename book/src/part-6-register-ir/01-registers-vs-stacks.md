@@ -1,18 +1,22 @@
 # Why Register Machines Beat Stacks
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-The core insight: real CPUs are register machines, not stack machines. x86-64 has
-RAX, RBX, RCX, RDX, RSI, RDI, and more. ARM64 has X0-X30. When you want to emit
-machine code, you need register-style thinking. Stack bytecode is a detour.
+The last part ended with a decision: skip the stack, emit register IR. This chapter is the
+justification. And the deepest reason is physical — real CPUs are register machines, not stack
+machines. An x86-64 chip has named registers: RAX, RBX, RCX, RDX, and a couple dozen more. ARM64
+has X0 through X30. When the processor adds two numbers, it loads them into named registers and
+writes the result to a named register. There is no hardware stack of operands; the stack is a
+fiction layered on top. So if your end goal is machine code, register-style thinking isn't one
+option among several — it's the native tongue of the target. Stack bytecode was always going to
+require translating *back* into registers eventually. It was a detour.
 
-Also: register IR is easier to analyze and optimize. In a stack machine, values are
-implicit (they're "on the stack"). In a register machine, every value has a name.
-Named values are easier to reason about.
-
-End with: this is why LLVM, Cranelift, and every modern compiler backend use register IR.
-And why Oxy moved to register IR as soon as native compilation became the goal.
--->
+There's a second reason, just as important and more about your own sanity than the hardware's. In a
+stack machine, values are anonymous — a thing is "second from the top" right now and something else
+in three instructions. To know what you're operating on, you have to mentally replay every push and
+pop. In a register machine, every value has a *name* that never moves: `v0` is `v0` forever, and
+you can trace exactly where it came from and where it's used by following that name. Named values
+are vastly easier to analyze, fold, eliminate, and reason about — which is exactly why LLVM,
+Cranelift, and essentially every serious compiler backend speaks register IR, and why Oxy switched
+to it the moment native code became the goal.
 
 ## Real CPUs use registers
 

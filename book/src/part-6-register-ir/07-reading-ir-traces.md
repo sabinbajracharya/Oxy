@@ -1,9 +1,11 @@
 # Reading Oxy IR with OXY_VM_TRACE=1
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. Something like: "The IR is not a secret. You can see it.
-Set OXY_VM_TRACE=1 and every function's IR dumps to stderr. Let's read one."
--->
+The IR is not a secret buried inside the compiler — you can just look at it. Set the environment
+variable `OXY_VM_TRACE=1` and Oxy dumps the register IR for every function it compiles straight to
+stderr, exactly the form we've been drawing by hand for the last few chapters. This is the single
+most useful debugging tool in the whole project: when a program does the wrong thing, the IR trace
+shows you precisely what was generated, layer by layer, so you can pin the bug to the stage that
+produced it. Let's turn it on and learn to read what comes out.
 
 ## Enabling IR dumps
 

@@ -1,12 +1,15 @@
 # Rust Concepts: Ownership, Vec, and Indices
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. The IR code uses index-based references
-(BlockId = usize, Reg = usize) rather than pointers, because Rust's ownership rules
-make self-referential data structures with pointers painful. Index-based references
-are the Rust-idiomatic solution. Frame it as: "Rust's ownership system pushed us toward
-a design that is actually cleaner."
--->
+Here's a place where Rust's famous strictness quietly does you a favor. A control flow graph is a
+graph: blocks point at other blocks, join points are pointed at from two directions, loops point
+backward at themselves. In C you'd model that with pointers and accept the bookkeeping. In Rust,
+pointer-based graphs fight the ownership rules hard — who *owns* a block that two branches both
+point to? — and the answer involves `Rc` and reference cells and a lot of ceremony. So the Oxy IR
+doesn't use pointers at all. It stores every block in one `Vec` and refers to blocks by their index
+(`BlockId = usize`), and every value by its register number (`Reg = usize`). The `Vec` owns
+everything; the references are just integers. The interesting part is that this isn't a grudging
+workaround — index-based graphs are genuinely *cleaner* than pointer soup, more debuggable, and
+immune to a class of invalidation bugs. Rust's ownership system pushed us toward the better design.
 
 ## Why indices instead of pointers
 

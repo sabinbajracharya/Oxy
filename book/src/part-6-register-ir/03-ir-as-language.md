@@ -1,18 +1,22 @@
 # The IR as a Language Between Languages
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook. The IR is a private language understood only by the compiler
-and the two backends. It is designed by the compiler author for the compiler author —
-not for humans to write, not for the machine to execute directly.
+An intermediate representation is a language nobody speaks. No human writes it by hand, no CPU
+executes it directly — it exists purely as the meeting point between the compiler's front end and
+its back ends, a format designed by the compiler author for the compiler author. The job of an IR
+is to be good at exactly three things: easy to *generate* from the AST, easy to *analyze* (and
+optimize), and easy to *lower* into whatever actually runs. Every serious system has one. LLVM IR
+sits between Clang and the machine. JVM bytecode sits between `javac` and the interpreter.
+WebAssembly is one too. They differ in the details, but they're all the same idea: a deliberately
+neutral middle language.
 
-Reference: LLVM IR, JVM bytecode, WebAssembly — all IRs. They are all designed to be:
-easy to generate (from the front-end), easy to analyze (for optimization), easy to lower
-(to machine code or interpretation).
-
-The Oxy IR has a specific design constraint: it must be interpretable by the wasm interpreter
-as well as compilable by Cranelift. This rules out low-level choices (raw memory addresses,
-unboxed values) that the interpreter couldn't handle.
--->
+Oxy's IR has one design constraint that shapes everything about it, and it's unusual: it has to
+serve *two* back ends at once. Cranelift will compile it to native machine code, and — for the
+browser — a hand-written interpreter will walk it directly. That dual audience rules out a whole
+class of low-level shortcuts. The IR can't traffic in raw memory addresses or unboxed machine
+values, because the interpreter has no way to honor those; it has to stay high-level enough that
+walking it in Rust is straightforward, while still lowering cleanly to CLIF. Holding both of those
+at once is what gives the Oxy IR its particular shape, and especially its reliance on the
+`CallBuiltin` op that this chapter is built around.
 
 ## Two consumers, one IR
 

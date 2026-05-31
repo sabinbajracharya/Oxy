@@ -1,9 +1,10 @@
 # IrOp and Terminator: Every Instruction Explained
 
-<!-- OPUS_FILL
-1-paragraph intro. "Let's read the instruction set."
-Reference the file. Keep it very short — this chapter is reference material.
--->
+We've talked about what registers and basic blocks are; now let's read the actual instruction set
+that fills them. Every `IrOp` Oxy can emit is defined in one file, `vm/jit/ir.rs`, and this chapter
+is the annotated catalog: what each op means, what its registers are, and which ones the JIT inlines
+versus routes through the FFI. It's reference material — open `ir.rs` and use what follows as the
+key to it.
 
 **File:** `crates/oxy-core/src/vm/jit/ir.rs`
 
