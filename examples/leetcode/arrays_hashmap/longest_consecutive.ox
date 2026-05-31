@@ -23,7 +23,7 @@
 // - The while loop runs at most n times total across all iterations
 
 fn main() {
-    let nums = list(100, 4, 200, 1, 3, 2);
+    let nums = [100, 4, 200, 1, 3, 2];
     println("{}", longest_consecutive(nums));
 }
 
@@ -51,22 +51,22 @@ fn longest_consecutive(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    let nums = list(100, 4, 200, 1, 3, 2);
+    let nums = [100, 4, 200, 1, 3, 2];
     assert_eq(longest_consecutive(nums), 4);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(longest_consecutive(list()), 0);
+    assert_eq(longest_consecutive([]), 0);
 }
 
 #[test]
 fn test_single() {
-    assert_eq(longest_consecutive(list(5)), 1);
+    assert_eq(longest_consecutive([5]), 1);
 }
 
 #[test]
 fn test_duplicates() {
-    let nums = list(1, 2, 0, 1, 3);
+    let nums = [1, 2, 0, 1, 3];
     assert_eq(longest_consecutive(nums), 4);
 }

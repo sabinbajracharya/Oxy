@@ -420,8 +420,7 @@ fn test_loop_expression() {
 
 #[test]
 fn test_for_in() {
-    let ir =
-        gen("fn main() -> Int { let mut sum = 0; for x in list(1, 2, 3) { sum = sum + x; } sum }");
+    let ir = gen("fn main() -> Int { let mut sum = 0; for x in [1, 2, 3] { sum = sum + x; } sum }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 2,
@@ -605,7 +604,7 @@ fn test_match_on_enum() {
 
 #[test]
 fn test_vec_literal() {
-    let ir = gen("fn main() -> Int { let v = list(1, 2, 3); 0 }");
+    let ir = gen("fn main() -> Int { let v = [1, 2, 3]; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -626,7 +625,7 @@ fn test_tuple_literal() {
 
 #[test]
 fn test_index_expr() {
-    let ir = gen("fn main() -> Int { let v = list(1, 2, 3); v[0] }");
+    let ir = gen("fn main() -> Int { let v = [1, 2, 3]; v[0] }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -894,7 +893,7 @@ fn test_while_let() {
 
 #[test]
 fn test_for_destructure() {
-    let ir = gen("fn main() -> Int { for (a, b) in list((1, 2), (3, 4)) { let _x = a + b; } 0 }");
+    let ir = gen("fn main() -> Int { for (a, b) in [(1, 2), (3, 4)] { let _x = a + b; } 0 }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 3,

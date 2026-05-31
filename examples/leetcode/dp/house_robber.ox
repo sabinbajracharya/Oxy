@@ -22,7 +22,7 @@
 // - Base: empty → 0, single → nums[0]
 
 fn main() {
-    let nums = list(1, 2, 3, 1);
+    let nums = [1, 2, 3, 1];
     println("{}", rob(nums));
 }
 
@@ -46,15 +46,15 @@ fn rob(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(rob(list(1, 2, 3, 1)), 4);
+    assert_eq(rob([1, 2, 3, 1]), 4);
 }
 
 #[test]
 fn test_two_houses() {
-    assert_eq(rob(list(2, 1)), 2);
+    assert_eq(rob([2, 1]), 2);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(rob(list()), 0);
+    assert_eq(rob([]), 0);
 }

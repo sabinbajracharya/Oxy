@@ -260,7 +260,6 @@ impl IrGen {
                     "println" => Some(("oxy_println_val", vec![args.len()])),
                     "print" => Some(("oxy_print_val", vec![args.len()])),
                     "format" => Some(("oxy_format", vec![args.len()])),
-                    "list" => Some(("oxy_make_array", vec![args.len()])),
                     "dbg" => Some(("oxy_dbg", vec![args.len()])),
                     _ => None,
                 } {

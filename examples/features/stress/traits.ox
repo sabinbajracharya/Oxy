@@ -208,7 +208,7 @@ impl Stack for VecStack {
 
 #[test]
 fn test_trait_multiple_methods() {
-    let s = VecStack { data: list(1, 2, 3) };
+    let s = VecStack { data: [1, 2, 3] };
     assert_eq(s.is_empty(), false);
     assert_eq(s.peek(), Some(3));
 }

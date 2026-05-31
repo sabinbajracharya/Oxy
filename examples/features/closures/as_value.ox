@@ -67,7 +67,7 @@ fn test_closure_factory() {
 fn test_closure_in_list() {
     let add_one = |x: Int| x + 1;
     let double = |x: Int| x * 2;
-    let ops = list(add_one, double);
+    let ops = [add_one, double];
     let result = ops[0](10);
     assert_eq(result, 11);
 }

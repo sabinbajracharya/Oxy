@@ -59,7 +59,7 @@ fn test_closure_block_body() {
 // --- closure (explicit) ---
 #[test]
 fn test_closure() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let f = || v.len();
     assert_eq(f(), 3);
 }
@@ -100,33 +100,33 @@ fn test_closure_in_if_branch() {
 // --- closure in vec.map ---
 #[test]
 fn test_closure_in_vec_map() {
-    let r: List<Int> = list(1, 2, 3).iter().map(|x| x * x).collect();
-    assert_eq(r, list(1, 4, 9));
+    let r: List<Int> = [1, 2, 3].iter().map(|x| x * x).collect();
+    assert_eq(r, [1, 4, 9]);
 }
 
 // --- closure in vec.filter ---
 #[test]
 fn test_closure_in_vec_filter() {
-    let r: List<Int> = list(1, 2, 3, 4, 5).iter().filter(|x| x % 2 == 0).collect();
-    assert_eq(r, list(2, 4));
+    let r: List<Int> = [1, 2, 3, 4, 5].iter().filter(|x| x % 2 == 0).collect();
+    assert_eq(r, [2, 4]);
 }
 
 // --- closure in vec.fold ---
 #[test]
 fn test_closure_in_vec_fold() {
-    let r = list(1, 2, 3, 4).iter().fold(0, |acc, x| acc + x);
+    let r = [1, 2, 3, 4].iter().fold(0, |acc, x| acc + x);
     assert_eq(r, 10);
 }
 
 // --- chained map+filter+collect ---
 #[test]
 fn test_closure_chained_iter() {
-    let r: List<Int> = list(1, 2, 3, 4, 5, 6)
+    let r: List<Int> = [1, 2, 3, 4, 5, 6]
         .iter()
         .map(|x| x * 2)
         .filter(|x| x > 4)
         .collect();
-    assert_eq(r, list(6, 8, 10, 12));
+    assert_eq(r, [6, 8, 10, 12]);
 }
 
 // --- closure capturing mutable ---

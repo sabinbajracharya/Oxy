@@ -208,7 +208,7 @@ fn main() {
     fn test_process_command_with_args() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command_with_args("echo", list("hello", "world"));
+    let result = std::process::command_with_args("echo", ["hello", "world"]);
     if let Ok(output) = result {
         let trimmed = output.stdout.trim();
         println("{}", trimmed);
@@ -270,10 +270,10 @@ fn main() {
         // be invoked once per line, in order.
         let out = run(r#"
 fn main() {
-    let mut lines = list();
+    let mut lines = [];
     let result = std::process::spawn(
         "printf",
-        list("%s\n%s\n", "first", "second"),
+        ["%s\n%s\n", "first", "second"],
         |line, stream| {
             lines.push(stream);
             lines.push(line);
@@ -297,10 +297,10 @@ fn main() {
         // `sh -c` lets us deterministically write to both streams.
         let out = run(r#"
 fn main() {
-    let mut tagged = list();
+    let mut tagged = [];
     let _ = std::process::spawn(
         "sh",
-        list("-c", "echo out1; echo err1 1>&2; echo out2"),
+        ["-c", "echo out1; echo err1 1>&2; echo out2"],
         |line, stream| {
             tagged.push(stream + ":" + line);
         },
@@ -319,7 +319,7 @@ fn main() {
     fn test_process_spawn_status_on_failure() {
         let out = run(r#"
 fn main() {
-    let result = std::process::spawn("false", list(), |_line, _stream| {});
+    let result = std::process::spawn("false", [], |_line, _stream| {});
     if let Ok(output) = result {
         println("{} {}", output.success, output.status);
     } else {
@@ -336,7 +336,7 @@ fn main() {
 fn main() {
     let result = std::process::spawn(
         "nonexistent_program_xyz_98765",
-        list(),
+        [],
         |_line, _stream| {},
     );
     if let Ok(_) = result {

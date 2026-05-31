@@ -77,7 +77,7 @@ fn find_first_even(nums: List<Int>) -> Int {
 
 #[test]
 fn test_return_from_loop() {
-    let nums = list(1, 3, 5, 8, 9);
+    let nums = [1, 3, 5, 8, 9];
     assert_eq(find_first_even(nums), 8);
 }
 

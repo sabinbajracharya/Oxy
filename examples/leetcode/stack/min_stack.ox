@@ -29,7 +29,7 @@ struct MinStack {
 
 impl MinStack {
     fn new() -> Self {
-        MinStack { data: list(), mins: list() }
+        MinStack { data: [], mins: [] }
     }
 
     fn push(self, val: Int) {

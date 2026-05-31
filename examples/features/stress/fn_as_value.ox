@@ -48,7 +48,7 @@ fn test_fn_returns_closure() {
 // --- fn stored in a List ---
 #[test]
 fn test_fns_in_list() {
-    let ops: List<fn(Int) -> Int> = list(square, neg);
+    let ops: List<fn(Int) -> Int> = [square, neg];
     let r0 = ops[0](6);
     let r1 = ops[1](6);
     assert_eq(r0, 36);

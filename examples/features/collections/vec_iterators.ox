@@ -8,7 +8,7 @@
 
 #[test]
 fn test_map() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let doubled = v.map(|x| x * 2);
     assert_eq(doubled.len(), 3);
 }
@@ -17,7 +17,7 @@ fn test_map() {
 
 #[test]
 fn test_filter() {
-    let v = list(1, 2, 3, 4, 5, 6);
+    let v = [1, 2, 3, 4, 5, 6];
     let evens = v.filter(|x| x % 2 == 0);
     assert_eq(evens.len(), 3);
 }
@@ -26,14 +26,14 @@ fn test_filter() {
 
 #[test]
 fn test_fold_sum() {
-    let v = list(1, 2, 3, 4);
+    let v = [1, 2, 3, 4];
     let result = v.fold(0, |acc, x| acc + x);
     assert_eq(result, 10);
 }
 
 #[test]
 fn test_fold_multiply() {
-    let v = list(1, 2, 3, 4);
+    let v = [1, 2, 3, 4];
     let result = v.fold(1, |acc, x| acc * x);
     assert_eq(result, 24);
 }
@@ -42,25 +42,25 @@ fn test_fold_multiply() {
 
 #[test]
 fn test_any_true() {
-    let v = list(1, 3, 5, 8);
+    let v = [1, 3, 5, 8];
     assert(v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_any_false() {
-    let v = list(1, 3, 5, 7);
+    let v = [1, 3, 5, 7];
     assert(!v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_true() {
-    let v = list(2, 4, 6, 8);
+    let v = [2, 4, 6, 8];
     assert(v.all(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_false() {
-    let v = list(2, 3, 4);
+    let v = [2, 3, 4];
     assert(!v.all(|x| x % 2 == 0));
 }
 
@@ -68,14 +68,14 @@ fn test_all_false() {
 
 #[test]
 fn test_find_some() {
-    let v = list(1, 3, 5, 8, 9);
+    let v = [1, 3, 5, 8, 9];
     let r = v.find(|x| x % 2 == 0);
     assert(r.is_some());
 }
 
 #[test]
 fn test_find_none() {
-    let v = list(1, 3, 5, 7);
+    let v = [1, 3, 5, 7];
     let r = v.find(|x| x % 2 == 0);
     assert(r.is_none());
 }
@@ -84,14 +84,14 @@ fn test_find_none() {
 
 #[test]
 fn test_position_found() {
-    let v = list("a", "b", "c", "d");
+    let v = ["a", "b", "c", "d"];
     let r = v.position(|x| x == "c");
     assert(r.is_some());
 }
 
 #[test]
 fn test_position_not_found() {
-    let v = list("a", "b", "c");
+    let v = ["a", "b", "c"];
     let r = v.position(|x| x == "z");
     assert(r.is_none());
 }
@@ -100,13 +100,13 @@ fn test_position_not_found() {
 
 #[test]
 fn test_sum() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     assert_eq(v.sum(), 15);
 }
 
 #[test]
 fn test_count() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     assert_eq(v.count(), 5);
 }
 
@@ -114,7 +114,7 @@ fn test_count() {
 
 #[test]
 fn test_for_each() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let mut count = 0;
     v.for_each(|x| count = count + 1);
     assert_eq(count, 5);
@@ -124,7 +124,7 @@ fn test_for_each() {
 
 #[test]
 fn test_enumerate() {
-    let v = list("a", "b", "c");
+    let v = ["a", "b", "c"];
     let pairs = v.enumerate();
     let mut count = 0;
     for pair in pairs {
@@ -137,8 +137,8 @@ fn test_enumerate() {
 
 #[test]
 fn test_zip() {
-    let a = list(1, 2, 3);
-    let b = list("a", "b", "c");
+    let a = [1, 2, 3];
+    let b = ["a", "b", "c"];
     let zipped = a.zip(b);
     let mut count = 0;
     for pair in zipped {
@@ -151,7 +151,7 @@ fn test_zip() {
 
 #[test]
 fn test_take() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let first_two = v.take(2);
     let mut count = 0;
     for x in first_two {
@@ -164,7 +164,7 @@ fn test_take() {
 
 #[test]
 fn test_skip() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let rest = v.skip(3);
     let mut count = 0;
     for x in rest {
@@ -177,8 +177,8 @@ fn test_skip() {
 
 #[test]
 fn test_chain() {
-    let a = list(1, 2);
-    let b = list(3, 4);
+    let a = [1, 2];
+    let b = [3, 4];
     let combined = a.chain(b);
     let mut count = 0;
     for x in combined {
@@ -191,7 +191,7 @@ fn test_chain() {
 
 #[test]
 fn test_rev_iter() {
-    let mut v = list(1, 2, 3);
+    let mut v = [1, 2, 3];
     v.reverse();
     // Now iterate over the reversed vec
     let mut count = 0;

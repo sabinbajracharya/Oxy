@@ -22,7 +22,7 @@
 // - List::join("") to reconstruct the key string
 
 fn main() {
-    let strs = list("eat", "tea", "tan", "ate", "nat", "bat");
+    let strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
     let groups = group_anagrams(strs);
     for g in groups {
         println("{:?}", g);
@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn sort_string(s: String) -> String {
-    let mut chars = list();
+    let mut chars = [];
     for ch in s {
         chars.push(ch);
     }
@@ -47,7 +47,7 @@ fn group_anagrams(strs: List) -> List {
     let mut map = Map::new();
     for s in strs {
         let key = sort_string(s);
-        let mut group = map.get(key.clone()).unwrap_or(list());
+        let mut group = map.get(key.clone()).unwrap_or([]);
         group.push(s);
         map.insert(key, group);
     }
@@ -56,14 +56,14 @@ fn group_anagrams(strs: List) -> List {
 
 #[test]
 fn test_basic() {
-    let strs = list("eat", "tea", "tan", "ate", "nat", "bat");
+    let strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
     let result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }
 
 #[test]
 fn test_single_word() {
-    let strs = list("abc");
+    let strs = ["abc"];
     let result = group_anagrams(strs);
     assert_eq(result.len(), 1);
     assert_eq(result[0].len(), 1);
@@ -71,7 +71,7 @@ fn test_single_word() {
 
 #[test]
 fn test_no_anagrams() {
-    let strs = list("abc", "def", "ghi");
+    let strs = ["abc", "def", "ghi"];
     let result = group_anagrams(strs);
     assert_eq(result.len(), 3);
 }

@@ -192,7 +192,7 @@ fn test_match_on_result() {
 // --- Option in List ---
 #[test]
 fn test_vec_of_options() {
-    let v: List<Option<Int>> = list(Some(1), None, Some(3));
+    let v: List<Option<Int>> = [Some(1), None, Some(3)];
     assert_eq(v.len(), 3);
 }
 

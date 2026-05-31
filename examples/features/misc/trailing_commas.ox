@@ -33,7 +33,7 @@ fn test_trailing_comma_in_struct_init() {
 
 #[test]
 fn test_trailing_comma_in_vec_macro() {
-    let v = list(1, 2, 3,);
+    let v = [1, 2, 3,];
     assert_eq(v.len(), 3);
 }
 

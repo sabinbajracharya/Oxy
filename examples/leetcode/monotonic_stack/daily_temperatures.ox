@@ -26,18 +26,18 @@
 // - Default answer is 0 (List initialized with zeros)
 
 fn main() {
-    let temps = list(73, 74, 75, 71, 69, 72, 76, 73);
+    let temps = [73, 74, 75, 71, 69, 72, 76, 73];
     let result = daily_temperatures(temps);
     println("{:?}", result);
 }
 
 fn daily_temperatures(temps: List) -> List {
     let n = temps.len();
-    let mut answer = list();
+    let mut answer = [];
     for i in 0..n {
         answer.push(0);
     }
-    let mut stack = list();
+    let mut stack = [];
     for i in 0..n {
         while !stack.is_empty() {
             let prev_idx = stack.last().unwrap();
@@ -55,21 +55,21 @@ fn daily_temperatures(temps: List) -> List {
 
 #[test]
 fn test_example() {
-    let temps = list(73, 74, 75, 71, 69, 72, 76, 73);
+    let temps = [73, 74, 75, 71, 69, 72, 76, 73];
     assert_eq(
         daily_temperatures(temps),
-        list(1, 1, 4, 2, 1, 1, 0, 0)
+        [1, 1, 4, 2, 1, 1, 0, 0]
     );
 }
 
 #[test]
 fn test_all_decreasing() {
-    let temps = list(5, 4, 3, 2, 1);
-    assert_eq(daily_temperatures(temps), list(0, 0, 0, 0, 0));
+    let temps = [5, 4, 3, 2, 1];
+    assert_eq(daily_temperatures(temps), [0, 0, 0, 0, 0]);
 }
 
 #[test]
 fn test_all_increasing() {
-    let temps = list(1, 2, 3, 4);
-    assert_eq(daily_temperatures(temps), list(1, 1, 1, 0));
+    let temps = [1, 2, 3, 4];
+    assert_eq(daily_temperatures(temps), [1, 1, 1, 0]);
 }

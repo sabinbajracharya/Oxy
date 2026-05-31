@@ -2,7 +2,7 @@
 
 #[test]
 fn test_vec_index_with_int_ok() {
-    let v = list(10, 20, 30);
+    let v = [10, 20, 30];
     assert_eq(v[1], 20);
 }
 
@@ -23,13 +23,13 @@ fn test_range_with_ints_ok() {
 
 #[compile_error]
 fn test_vec_index_with_string_rejected() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let _ = v["zero"];
 }
 
 #[compile_error]
 fn test_vec_index_with_bool_rejected() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let _ = v[true];
 }
 

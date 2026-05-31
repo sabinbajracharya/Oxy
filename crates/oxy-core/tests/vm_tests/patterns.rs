@@ -9,7 +9,7 @@ fn test_for_destructure_vec_of_tuples() {
     let output = run_and_capture(
         r#"
 fn main() {
-    let pairs = list((1, "a"), (2, "b"));
+    let pairs = [(1, "a"), (2, "b")];
     for (num, letter) in pairs {
         println("{} {}", num, letter);
     }
@@ -35,7 +35,7 @@ fn test_let_tuple_destructure() {
 fn test_let_slice_destructure() {
     let output = run_and_capture(
         r#"fn main() {
-            let v = list(10, 20);
+            let v = [10, 20];
             let [x, y] = v;
             println("{} {}", x, y);
             }"#,
@@ -48,7 +48,7 @@ fn test_vec_empty_macro() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let mut v = list();
+                let mut v = [];
                 println("{}", v.len());
                 v.push(42);
                 println("{}", v.len());
@@ -77,7 +77,7 @@ fn test_range_slicing_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = list(10, 20, 30, 40, 50);
+                let v = [10, 20, 30, 40, 50];
                 let a = v[1..4];
                 println("{} {} {}", a[0], a[1], a[2]);
                 let b = v[..2];
@@ -110,7 +110,7 @@ fn test_clone_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = list(1, 2, 3);
+                let a = [1, 2, 3];
                 let mut b = a.clone();
                 b.push(4);
                 // .clone() is a deep copy — mutations don't propagate
@@ -126,7 +126,7 @@ fn test_vec_shared_mutation() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let a = list(1, 2, 3);
+                let a = [1, 2, 3];
                 let mut b = a;        // shared via Rc — no deep copy
                 b.push(4);            // mutation visible through both
                 println("{} {}", a.len(), b.len());
@@ -204,7 +204,7 @@ fn test_match_guard_with_binding() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let values = list(1, -2, 3, -4, 5);
+                let values = [1, -2, 3, -4, 5];
                 let mut pos = 0;
                 let mut neg = 0;
                 for v in values {

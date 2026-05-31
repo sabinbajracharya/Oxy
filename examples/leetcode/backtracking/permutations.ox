@@ -16,7 +16,7 @@
 // - Shared mutable collections let us use classic push/pop/recurse/undo
 
 fn main() {
-    let nums = list(1, 2, 3);
+    let nums = [1, 2, 3];
     let result = permute(nums);
     for p in result {
         println("{:?}", p);
@@ -43,27 +43,27 @@ fn backtrack(nums: List, current: List, used: List, result: List) {
 
 fn permute(nums: List) -> List {
     let n = nums.len();
-    let mut used = list();
+    let mut used = [];
     let mut i = 0;
     while i < n {
         used.push(false);
         i = i + 1;
     }
-    let result = list();
-    let current = list();
+    let result = [];
+    let current = [];
     backtrack(nums, current, used, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = permute(list(1, 2, 3));
+    let result = permute([1, 2, 3]);
     assert_eq(result.len(), 6);
 }
 
 #[test]
 fn test_single() {
-    let result = permute(list(1));
+    let result = permute([1]);
     assert_eq(result.len(), 1);
-    assert_eq(result[0], list(1));
+    assert_eq(result[0], [1]);
 }

@@ -29,7 +29,7 @@ fn main() {
     }
 
     // Tuple destructuring in for loops
-    let pairs = list((1, "one"), (2, "two"), (3, "three"));
+    let pairs = [(1, "one"), (2, "two"), (3, "three")];
     for (num, word) in pairs {
         println("{} = {}", num, word);
     }

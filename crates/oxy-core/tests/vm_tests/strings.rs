@@ -187,9 +187,8 @@ fn test_fstring_escaped_braces() {
 
 #[test]
 fn test_fstring_method_call() {
-    let out = run_and_capture(
-        r#"fn main() { let v = list(1, 2, 3); println("{}", f"len = {v.len()}"); }"#,
-    );
+    let out =
+        run_and_capture(r#"fn main() { let v = [1, 2, 3]; println("{}", f"len = {v.len()}"); }"#);
     assert_eq!(out, vec!["len = 3\n"]);
 }
 

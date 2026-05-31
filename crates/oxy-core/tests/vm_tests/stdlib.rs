@@ -78,7 +78,7 @@ fn test_json_serialize_string_escapes() {
 fn test_json_serialize_list() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
@@ -172,7 +172,7 @@ fn test_json_serialize_option_result() {
 fn test_json_serialize_nested() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = list(list(1, 2), list(3, 4));
+    let v = [[1, 2], [3, 4]];
     let j = json::serialize(v).unwrap();
     println("{}", j);
 }"#,
@@ -184,7 +184,7 @@ fn test_json_serialize_nested() {
 fn test_json_serialize_pretty() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let j = json::to_string_pretty(v).unwrap();
     println("{}", j);
 }"#,
@@ -254,7 +254,7 @@ fn test_json_deserialize_nested() {
 fn test_json_roundtrip() {
     let output = run_and_capture(
         r#"fn main() {
-    let original = list(1, 2, 3);
+    let original = [1, 2, 3];
     let json_str = json::serialize(original).unwrap();
     let parsed = json::deserialize(json_str).unwrap();
     println("{:?}", parsed);
@@ -267,7 +267,7 @@ fn test_json_roundtrip() {
 fn test_json_to_json_method() {
     let output = run_and_capture(
         r#"fn main() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let j = v.to_json().unwrap();
     println("{}", j);
     let n = 42;

@@ -384,7 +384,7 @@ fn test_struct_field_mutation_via_self_push() {
 
             impl Stack {
                 fn new() -> Self {
-                    Stack { items: list() }
+                    Stack { items: [] }
                 }
 
                 fn push(self, val: Int) {

@@ -56,7 +56,7 @@ fn test_regex_reuse() {
     // A single Regex value reused across many calls works.
     let re = std::regex::Regex::new("\\d");
     let mut count = 0;
-    for s in list("abc", "1", "a2", "33") {
+    for s in ["abc", "1", "a2", "33"] {
         if re.is_match(s) { count = count + 1; }
     }
     assert_eq(count, 3);

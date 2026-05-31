@@ -43,7 +43,7 @@ fn main() {
     // List iterator methods
     println("\n=== Iterator Methods ===");
 
-    let numbers = list(1, 2, 3, 4, 5);
+    let numbers = [1, 2, 3, 4, 5];
 
     // map
     let doubled = numbers.map(|x| x * 2);
@@ -70,7 +70,7 @@ fn main() {
     println("find(>3): {:?}", found);
 
     // enumerate
-    let words = list("foo", "bar", "baz");
+    let words = ["foo", "bar", "baz"];
     let indexed = words.enumerate();
     println("enumerate: {:?}", indexed);
 
@@ -80,8 +80,8 @@ fn main() {
     println("");
 
     // flat_map
-    let nested = list(1, 2, 3);
-    let flat = nested.flat_map(|x| list(x, x * 10));
+    let nested = [1, 2, 3];
+    let flat = nested.flat_map(|x| [x, x * 10]);
     println("flat_map: {:?}", flat);
 
     // position

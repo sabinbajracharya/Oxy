@@ -23,7 +23,7 @@
 // - O(n) time, O(n) space
 
 fn main() {
-    let nums = list(1, 1, 1);
+    let nums = [1, 1, 1];
     println("{}", subarray_sum(nums, 2));
 }
 
@@ -44,16 +44,16 @@ fn subarray_sum(nums: List, k: Int) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(subarray_sum(list(1, 1, 1), 2), 2);
+    assert_eq(subarray_sum([1, 1, 1], 2), 2);
 }
 
 #[test]
 fn test_negative() {
-    assert_eq(subarray_sum(list(1, -1, 0), 0), 3);
+    assert_eq(subarray_sum([1, -1, 0], 0), 3);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(subarray_sum(list(5), 5), 1);
-    assert_eq(subarray_sum(list(5), 3), 0);
+    assert_eq(subarray_sum([5], 5), 1);
+    assert_eq(subarray_sum([5], 3), 0);
 }

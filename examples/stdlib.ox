@@ -71,7 +71,7 @@ fn main() {
     // === Process ===
     println("\n=== Process ===");
     
-    let result = std::process::command_with_args("echo", list("Hello", "World"));
+    let result = std::process::command_with_args("echo", ["Hello", "World"]);
     match result {
         Ok(output) => {
             println("stdout: {}", output.stdout);

@@ -75,7 +75,7 @@ fn test_closure() {
 
 #[test]
 fn test_closure_inline() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let doubled = v.map(|x| x * 2);
     assert_eq(doubled.len(), 3);
 }

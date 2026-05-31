@@ -45,7 +45,7 @@ fn main() {
 
     // Option usage
     println("\n=== Option ===");
-    let items = list("apple", "banana", "cherry");
+    let items = ["apple", "banana", "cherry"];
     let found = find_item(items, "banana");
 
     if let Some(idx) = found {
@@ -63,7 +63,7 @@ fn main() {
 
     // while let with List::pop()
     println("\n=== while let ===");
-    let mut stack = list(1, 2, 3);
+    let mut stack = [1, 2, 3];
     while let Some(top) = stack.pop() {
         println("popped: {}", top);
     }

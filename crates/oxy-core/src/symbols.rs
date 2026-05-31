@@ -181,11 +181,6 @@ pub const ALL_MACROS: &[MacroInfo] = &[
         detail: "Mark unimplemented code",
         hover_text: "**unimplemented()** — Mark unimplemented code (panics at runtime)",
     },
-    MacroInfo {
-        name: "list",
-        detail: "Create a List",
-        hover_text: "**list(items...)** — Create a List from elements",
-    },
 ];
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@
 // - Empty input returns empty output
 
 fn main() {
-    let intervals = list(list(1, 3), list(2, 6), list(8, 10), list(15, 18));
+    let intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
     let merged = merge(intervals);
     for m in merged {
         println("{:?}", m);
@@ -36,7 +36,7 @@ fn merge(intervals: List) -> List {
     }
     // Sort by start time
     intervals.sort_by_key(|iv| iv[0]);
-    let mut result = list();
+    let mut result = [];
     let mut current = intervals[0];
     let mut i = 1;
     while i < n {
@@ -58,19 +58,19 @@ fn merge(intervals: List) -> List {
 
 #[test]
 fn test_example() {
-    let intervals = list(list(1, 3), list(2, 6), list(8, 10), list(15, 18));
+    let intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
     let result = merge(intervals);
-    assert_eq(result, list(list(1, 6), list(8, 10), list(15, 18)));
+    assert_eq(result, [[1, 6], [8, 10], [15, 18]]);
 }
 
 #[test]
 fn test_no_overlap() {
-    let intervals = list(list(1, 2), list(3, 4));
-    assert_eq(merge(intervals), list(list(1, 2), list(3, 4)));
+    let intervals = [[1, 2], [3, 4]];
+    assert_eq(merge(intervals), [[1, 2], [3, 4]]);
 }
 
 #[test]
 fn test_contained() {
-    let intervals = list(list(1, 4), list(2, 3));
-    assert_eq(merge(intervals), list(list(1, 4)));
+    let intervals = [[1, 4], [2, 3]];
+    assert_eq(merge(intervals), [[1, 4]]);
 }

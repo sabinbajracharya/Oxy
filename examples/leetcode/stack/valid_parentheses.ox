@@ -28,7 +28,7 @@ fn main() {
 }
 
 fn is_valid(s: String) -> bool {
-    let mut stack = list();
+    let mut stack = [];
     for ch in s {
         if ch == '(' || ch == '[' || ch == '{' {
             stack.push(ch);

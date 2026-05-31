@@ -1016,7 +1016,7 @@ mod tests {
     #[test]
     fn interp_higher_order_builtin() {
         assert_parity(
-            "fn main() { let v = list(1, 2, 3, 4); \
+            "fn main() { let v = [1, 2, 3, 4]; \
              let s: Int = v.iter().map(|x| x * 2).filter(|x| x > 4).sum(); \
              println(\"{}\", s); }",
         );
@@ -1055,7 +1055,7 @@ mod tests {
 
     #[test]
     fn interp_vec_and_index() {
-        assert_parity("fn main() { let v = list(10, 20, 30); println(\"{} {}\", v[0], v[2]); }");
+        assert_parity("fn main() { let v = [10, 20, 30]; println(\"{} {}\", v[0], v[2]); }");
     }
 
     #[test]

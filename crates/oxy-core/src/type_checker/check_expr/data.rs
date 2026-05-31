@@ -280,7 +280,8 @@ impl TypeChecker {
             });
         }
         let _ = span;
-        Ok(TypeInfo::Array(Box::new(leader), elements.len()))
+        // `[...]` always produces a growable `List<T>`, matching Gleam semantics.
+        Ok(TypeInfo::Vec(Box::new(leader)))
     }
 
     pub(super) fn infer_repeat(
@@ -290,11 +291,10 @@ impl TypeChecker {
     ) -> Result<TypeInfo, PipelineError> {
         let val_ty = self.infer_expr(value)?;
         let _ = self.infer_expr(count)?;
-        // The repeat count is the array's length, which must be known at
-        // compile time. Only an integer literal qualifies; a variable or
-        // other runtime expression is rejected (matching `[T; N]`).
-        let n = match count {
-            Expr::IntLiteral(n, _, _) => *n as usize,
+        // The repeat count must be a compile-time integer literal.
+        // `[val; N]` creates a growable `List<T>`, matching `[...]` semantics.
+        match count {
+            Expr::IntLiteral(..) => {}
             _ => {
                 let span = count.span();
                 return Err(PipelineError::TypeError {
@@ -305,7 +305,7 @@ impl TypeChecker {
                 });
             }
         };
-        Ok(TypeInfo::Array(Box::new(val_ty), n))
+        Ok(TypeInfo::Vec(Box::new(val_ty)))
     }
 
     pub(super) fn infer_range(

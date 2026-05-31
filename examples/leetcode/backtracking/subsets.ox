@@ -16,7 +16,7 @@
 // - Shared mutable state for classic push/pop/recurse/undo
 
 fn main() {
-    let nums = list(1, 2, 3);
+    let nums = [1, 2, 3];
     let result = subsets(nums);
     for s in result {
         println("{:?}", s);
@@ -35,21 +35,21 @@ fn backtrack(nums: List, start: Int, current: List, result: List) {
 }
 
 fn subsets(nums: List) -> List {
-    let result = list();
-    let current = list();
+    let result = [];
+    let current = [];
     backtrack(nums, 0, current, result);
     result
 }
 
 #[test]
 fn test_example() {
-    let result = subsets(list(1, 2, 3));
+    let result = subsets([1, 2, 3]);
     assert_eq(result.len(), 8);
 }
 
 #[test]
 fn test_empty() {
-    let result = subsets(list());
+    let result = subsets([]);
     assert_eq(result.len(), 1);
-    assert_eq(result[0], list());
+    assert_eq(result[0], []);
 }

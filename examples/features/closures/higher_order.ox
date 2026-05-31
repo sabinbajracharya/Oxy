@@ -5,7 +5,7 @@
 // === Custom map function ===
 
 fn my_map(v: List<Int>, f: fn(Int) -> Int) -> List<Int> {
-    let mut result = list();
+    let mut result = [];
     let mut i = 0;
     while i < v.len() {
         result.push(f(v[i]));
@@ -16,7 +16,7 @@ fn my_map(v: List<Int>, f: fn(Int) -> Int) -> List<Int> {
 
 #[test]
 fn test_custom_map() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let doubled = my_map(v, |x| x * 2);
     assert_eq(doubled.len(), 3);
 }
@@ -24,7 +24,7 @@ fn test_custom_map() {
 // === Custom filter ===
 
 fn my_filter(v: List<Int>, pred: fn(Int) -> bool) -> List<Int> {
-    let mut result = list();
+    let mut result = [];
     let mut i = 0;
     while i < v.len() {
         if pred(v[i]) {
@@ -37,7 +37,7 @@ fn my_filter(v: List<Int>, pred: fn(Int) -> bool) -> List<Int> {
 
 #[test]
 fn test_custom_filter() {
-    let v = list(1, 2, 3, 4, 5, 6);
+    let v = [1, 2, 3, 4, 5, 6];
     let evens = my_filter(v, |x| x % 2 == 0);
     assert_eq(evens.len(), 3);
 }
@@ -56,7 +56,7 @@ fn my_fold(v: List<Int>, init: Int, f: fn(Int, Int) -> Int) -> Int {
 
 #[test]
 fn test_custom_fold() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let sum = my_fold(v, 0, |acc, x| acc + x);
     assert_eq(sum, 15);
 }

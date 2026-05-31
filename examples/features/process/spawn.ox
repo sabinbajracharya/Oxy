@@ -7,10 +7,10 @@
 
 #[test]
 fn test_spawn_streams_stdout_lines_in_order() {
-    let mut lines = list();
+    let mut lines = [];
     let result = std::process::spawn(
         "printf",
-        list("%s\n%s\n", "alpha", "beta"),
+        ["%s\n%s\n", "alpha", "beta"],
         |line, stream| {
             lines.push(stream + ":" + line);
         },
@@ -30,10 +30,10 @@ fn test_spawn_streams_stdout_lines_in_order() {
 fn test_spawn_tags_stderr_separately_from_stdout() {
     // `sh -c` lets us deterministically write to both streams. Interleaving
     // between streams is racy, so we sort before asserting.
-    let mut tagged = list();
+    let mut tagged = [];
     let result = std::process::spawn(
         "sh",
-        list("-c", "echo out1; echo err1 1>&2; echo out2"),
+        ["-c", "echo out1; echo err1 1>&2; echo out2"],
         |line, stream| {
             tagged.push(stream + ":" + line);
         },
@@ -49,7 +49,7 @@ fn test_spawn_tags_stderr_separately_from_stdout() {
 #[test]
 fn test_spawn_reports_nonzero_exit_status() {
     let mut count = 0;
-    let result = std::process::spawn("false", list(), |_line, _stream| {
+    let result = std::process::spawn("false", [], |_line, _stream| {
         count = count + 1;
     });
     if let Ok(output) = result {
@@ -65,7 +65,7 @@ fn test_spawn_reports_nonzero_exit_status() {
 fn test_spawn_returns_err_for_nonexistent_program() {
     let result = std::process::spawn(
         "definitely_not_a_real_program_xyz_98765",
-        list(),
+        [],
         |_line, _stream| {},
     );
     assert(result.is_err());
@@ -77,7 +77,7 @@ fn test_spawn_handles_many_lines() {
     // is larger than a single pipe buffer might hold.
     let mut received = 0;
     let mut last = String::from("");
-    let result = std::process::spawn("seq", list("1", "50"), |line, _stream| {
+    let result = std::process::spawn("seq", ["1", "50"], |line, _stream| {
         received = received + 1;
         last = line;
     });

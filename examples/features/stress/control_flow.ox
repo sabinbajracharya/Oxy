@@ -93,7 +93,7 @@ fn test_for_in_inclusive_range() {
 }
 #[test]
 fn test_for_in_list() {
-    let v = list(10, 20, 30, 40);
+    let v = [10, 20, 30, 40];
     let mut sum = 0;
     for x in v {
         sum = sum + x;
@@ -231,7 +231,7 @@ fn test_if_let_else() {
 // --- while-let with List.pop ---
 #[test]
 fn test_while_let_pops_list() {
-    let mut v = list(1, 2, 3, 4);
+    let mut v = [1, 2, 3, 4];
     let mut sum = 0;
     while let Some(x) = v.pop() {
         sum = sum + x;

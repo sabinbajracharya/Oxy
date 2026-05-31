@@ -7,21 +7,21 @@ use std::collections::Set;
 
 #[test]
 fn test_vec_empty() {
-    let v: List<Int> = list();
+    let v: List<Int> = [];
     assert_eq(v.len(), 0);
     assert_eq(v.is_empty(), true);
 }
 
 #[test]
 fn test_vec_singleton() {
-    let v = list(42);
+    let v = [42];
     assert_eq(v.len(), 1);
     assert_eq(v[0], 42);
 }
 
 #[test]
 fn test_vec_push_pop() {
-    let mut v: List<Int> = list();
+    let mut v: List<Int> = [];
     v.push(1); v.push(2); v.push(3);
     assert_eq(v.len(), 3);
     assert_eq(v.pop(), Some(3));
@@ -32,63 +32,63 @@ fn test_vec_push_pop() {
 
 #[test]
 fn test_vec_indexing() {
-    let v = list(10, 20, 30);
+    let v = [10, 20, 30];
     assert_eq(v[0], 10);
     assert_eq(v[2], 30);
 }
 
 #[test]
 fn test_vec_iter_sum() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let s: Int = v.iter().sum();
     assert_eq(s, 15);
 }
 
 #[test]
 fn test_vec_iter_map() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let r: List<Int> = v.iter().map(|x| x * 10).collect();
-    assert_eq(r, list(10, 20, 30));
+    assert_eq(r, [10, 20, 30]);
 }
 
 #[test]
 fn test_vec_iter_filter() {
-    let v = list(1, 2, 3, 4, 5);
+    let v = [1, 2, 3, 4, 5];
     let r: List<Int> = v.iter().filter(|x| x % 2 == 0).collect();
-    assert_eq(r, list(2, 4));
+    assert_eq(r, [2, 4]);
 }
 
 #[test]
 fn test_vec_contains() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     assert_eq(v.contains(2), true);
     assert_eq(v.contains(99), false);
 }
 
 #[test]
 fn test_vec_reverse_in_place() {
-    let mut v = list(1, 2, 3);
+    let mut v = [1, 2, 3];
     v.reverse();
-    assert_eq(v, list(3, 2, 1));
+    assert_eq(v, [3, 2, 1]);
 }
 
 #[test]
 fn test_vec_sort_ints() {
-    let mut v = list(3, 1, 4, 1, 5, 9, 2, 6, 5);
+    let mut v = [3, 1, 4, 1, 5, 9, 2, 6, 5];
     v.sort();
-    assert_eq(v, list(1, 1, 2, 3, 4, 5, 5, 6, 9));
+    assert_eq(v, [1, 1, 2, 3, 4, 5, 5, 6, 9]);
 }
 
 #[test]
 fn test_vec_nested() {
-    let v: List<List<Int>> = list(list(1, 2), list(3, 4), list(5, 6));
+    let v: List<List<Int>> = [[1, 2], [3, 4], [5, 6]];
     assert_eq(v[1][0], 3);
     assert_eq(v.len(), 3);
 }
 
 #[test]
 fn test_vec_large() {
-    let mut v: List<Int> = list();
+    let mut v: List<Int> = [];
     let mut i = 0;
     while i < 1000 {
         v.push(i);
@@ -100,21 +100,21 @@ fn test_vec_large() {
 
 #[test]
 fn test_vec_first_last() {
-    let v = list(10, 20, 30);
+    let v = [10, 20, 30];
     assert_eq(v.first(), Some(10));
     assert_eq(v.last(), Some(30));
 }
 
 #[test]
 fn test_vec_first_last_empty() {
-    let v: List<Int> = list();
+    let v: List<Int> = [];
     assert_eq(v.first(), None);
     assert_eq(v.last(), None);
 }
 
 #[test]
 fn test_vec_iteration_order() {
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     let mut acc = "".to_string();
     for x in v {
         acc = format("{}{}", acc, x);

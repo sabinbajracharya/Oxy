@@ -2,7 +2,7 @@
 
 #[test]
 fn test_vec_known_method_ok() {
-    let v: List<Int> = list(1, 2, 3);
+    let v: List<Int> = [1, 2, 3];
     assert_eq(v.len(), 3);
 }
 
@@ -14,7 +14,7 @@ fn test_string_known_method_ok() {
 
 #[compile_error]
 fn test_vec_unknown_field_rejected() {
-    let v: List<Int> = list(1, 2, 3);
+    let v: List<Int> = [1, 2, 3];
     let _ = v.bogus_field;
 }
 

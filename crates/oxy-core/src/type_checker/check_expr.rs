@@ -308,15 +308,14 @@ impl TypeChecker {
             Expr::Repeat { value, count, .. } => self.infer_repeat(value, count),
 
             Expr::Array { elements, span } => {
-                // Empty array with expected Vec/Array type: use expected
-                // element type so `let v: Vec<String> = []` works.
+                // Empty array: use expected element type.
+                // `[...]` always creates a `List<T>` (growable), not a
+                // fixed-size array — matching Gleam semantics.
                 if elements.is_empty() {
                     if let Some(expected) = expected {
                         match expected {
                             TypeInfo::Vec(elem) => return Ok(TypeInfo::Vec(elem.clone())),
-                            TypeInfo::Array(elem, _) => {
-                                return Ok(TypeInfo::Array(elem.clone(), 0))
-                            }
+                            TypeInfo::Array(elem, _) => return Ok(TypeInfo::Vec(elem.clone())),
                             _ => {}
                         }
                     }

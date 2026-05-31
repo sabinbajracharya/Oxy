@@ -175,7 +175,7 @@ fn test_match_returning_tuple_neg() {
 fn test_match_in_for_body() {
     let mut hits = 0;
     let mut misses = 0;
-    for n in list(1, 2, 3, 4, 5) {
+    for n in [1, 2, 3, 4, 5] {
         match n % 2 {
             0 => hits = hits + 1,
             _ => misses = misses + 1,

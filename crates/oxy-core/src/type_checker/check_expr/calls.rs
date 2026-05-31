@@ -286,31 +286,6 @@ impl TypeChecker {
                     "format" => {
                         return Ok(TypeInfo::String);
                     }
-                    "list" => {
-                        let mut leader = TypeInfo::Unknown;
-                        for (i, t) in arg_types.iter().enumerate() {
-                            if *t == TypeInfo::Unknown {
-                                continue;
-                            }
-                            if leader == TypeInfo::Unknown {
-                                leader = t.clone();
-                                continue;
-                            }
-                            if leader.accepts(t) {
-                                continue;
-                            }
-                            if t.accepts(&leader) {
-                                leader = t.clone();
-                                continue;
-                            }
-                            let espan = args[i].span();
-                            return Err(PipelineError::TypeError {
-                                message: format!("`list` has mixed element types: element {} is `{}`, expected `{}`", i + 1, t.name(), leader.name()),
-                                line: espan.line, column: espan.column,
-                            });
-                        }
-                        return Ok(TypeInfo::Vec(Box::new(leader)));
-                    }
                     "dbg" => {
                         return Ok(arg_types.first().cloned().unwrap_or(TypeInfo::Unknown));
                     }

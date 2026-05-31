@@ -23,8 +23,8 @@
 // - Empty input → just return [new_interval]
 
 fn main() {
-    let intervals = list(list(1, 3), list(6, 9));
-    let new_interval = list(2, 5);
+    let intervals = [[1, 3], [6, 9]];
+    let new_interval = [2, 5];
     let result = insert(intervals, new_interval);
     for r in result {
         println("{:?}", r);
@@ -32,7 +32,7 @@ fn main() {
 }
 
 fn insert(intervals: List, new_interval: List) -> List {
-    let mut result = list();
+    let mut result = [];
     let n = intervals.len();
     let mut i = 0;
     // Phase 1: add all before overlap
@@ -62,21 +62,21 @@ fn insert(intervals: List, new_interval: List) -> List {
 
 #[test]
 fn test_example() {
-    let intervals = list(list(1, 3), list(6, 9));
-    let result = insert(intervals, list(2, 5));
-    assert_eq(result, list(list(1, 5), list(6, 9)));
+    let intervals = [[1, 3], [6, 9]];
+    let result = insert(intervals, [2, 5]);
+    assert_eq(result, [[1, 5], [6, 9]]);
 }
 
 #[test]
 fn test_no_overlap() {
-    let intervals = list(list(1, 2), list(5, 6));
-    let result = insert(intervals, list(3, 4));
-    assert_eq(result, list(list(1, 2), list(3, 4), list(5, 6)));
+    let intervals = [[1, 2], [5, 6]];
+    let result = insert(intervals, [3, 4]);
+    assert_eq(result, [[1, 2], [3, 4], [5, 6]]);
 }
 
 #[test]
 fn test_merge_all() {
-    let intervals = list(list(1, 3), list(4, 6));
-    let result = insert(intervals, list(2, 5));
-    assert_eq(result, list(list(1, 6)));
+    let intervals = [[1, 3], [4, 6]];
+    let result = insert(intervals, [2, 5]);
+    assert_eq(result, [[1, 6]]);
 }

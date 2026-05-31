@@ -24,17 +24,17 @@
 // - BFS: push all 0 in-degree nodes, process, decrement neighbors
 
 fn main() {
-    let prereqs = list(list(1, 0), list(2, 1), list(3, 2));
+    let prereqs = [[1, 0], [2, 1], [3, 2]];
     println("{}", can_finish(4, prereqs));
 }
 
 fn can_finish(num_courses: Int, prerequisites: List) -> bool {
     // Build adjacency list and in-degree array
     let n = num_courses;
-    let mut graph = list();
-    let mut indegree = list();
+    let mut graph = [];
+    let mut indegree = [];
     for _i in 0..n {
-        graph.push(list());
+        graph.push([]);
         indegree.push(0);
     }
     for pr in prerequisites {
@@ -65,17 +65,17 @@ fn can_finish(num_courses: Int, prerequisites: List) -> bool {
 
 #[test]
 fn test_possible() {
-    let prereqs = list(list(1, 0), list(2, 1), list(3, 2));
+    let prereqs = [[1, 0], [2, 1], [3, 2]];
     assert(can_finish(4, prereqs));
 }
 
 #[test]
 fn test_cycle() {
-    let prereqs = list(list(0, 1), list(1, 0));
+    let prereqs = [[0, 1], [1, 0]];
     assert(!can_finish(2, prereqs));
 }
 
 #[test]
 fn test_no_prereqs() {
-    assert(can_finish(3, list()));
+    assert(can_finish(3, []));
 }

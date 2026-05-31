@@ -114,7 +114,7 @@ fn test_self_in_impl() {
 struct Bag { items: List<Int> }
 
 impl Bag {
-    fn new() -> Bag { Bag { items: list() } }
+    fn new() -> Bag { Bag { items: [] } }
     fn add(self, x: Int) -> Bag {
         self.items.push(x);
         self
@@ -164,7 +164,7 @@ fn test_builder_pattern() {
 // --- ordering — comparisons on i64 ---
 #[test]
 fn test_int_ordering_in_data() {
-    let mut v = list(3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5);
+    let mut v = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5];
     v.sort();
     assert_eq(v[0], 1);
     assert_eq(v[v.len() - 1], 9);
@@ -173,7 +173,7 @@ fn test_int_ordering_in_data() {
 // --- ordering on String ---
 #[test]
 fn test_string_ordering() {
-    let mut v = list("banana".to_string(), "apple".to_string(), "cherry".to_string());
+    let mut v = ["banana".to_string(), "apple".to_string(), "cherry".to_string()];
     v.sort();
     assert_eq(v[0], "apple");
     assert_eq(v[1], "banana");

@@ -42,7 +42,7 @@ fn main() {
 }
 
 fn level_order(root: Option) -> List {
-    let mut result = list();
+    let mut result = [];
     if root.is_none() {
         return result;
     }
@@ -50,7 +50,7 @@ fn level_order(root: Option) -> List {
     queue.push_back(root.unwrap());
     while !queue.is_empty() {
         let level_size = queue.len();
-        let mut level = list();
+        let mut level = [];
         for _i in 0..level_size {
             let mut node = queue.pop_front().unwrap();
             level.push(node.val);
@@ -76,9 +76,9 @@ fn test_example() {
     root.right = Some(r);
     let result = level_order(Some(root));
     assert_eq(result.len(), 3);
-    assert_eq(result[0], list(3));
-    assert_eq(result[1], list(9, 20));
-    assert_eq(result[2], list(15, 7));
+    assert_eq(result[0], [3]);
+    assert_eq(result[1], [9, 20]);
+    assert_eq(result[2], [15, 7]);
 }
 
 #[test]

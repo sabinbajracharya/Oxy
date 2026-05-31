@@ -21,7 +21,7 @@ fn main() {
 
     // --- Serialize a List ---
     println("\n=== List ===");
-    let numbers = list(1, 2, 3, 4, 5);
+    let numbers = [1, 2, 3, 4, 5];
     println("{}", json::serialize(numbers).unwrap());
 
     // --- Serialize a Map ---
@@ -42,7 +42,7 @@ fn main() {
 
     // --- Pretty printing ---
     println("\n=== Pretty Print ===");
-    let data = list(1, 2, 3);
+    let data = [1, 2, 3];
     println("{}", json::to_string_pretty(data).unwrap());
 
     // --- Deserialize JSON ---
@@ -57,7 +57,7 @@ fn main() {
 
     // --- Round-trip ---
     println("\n=== Round-trip ===");
-    let original = list(100, 200, 300);
+    let original = [100, 200, 300];
     let json_str = json::serialize(original).unwrap();
     println("JSON:   {}", json_str);
     let restored = json::deserialize(json_str).unwrap();
@@ -65,7 +65,7 @@ fn main() {
 
     // --- .to_json() method ---
     println("\n=== .to_json() method ===");
-    let v = list(1, 2, 3);
+    let v = [1, 2, 3];
     println("{}", v.to_json().unwrap());
 
     // --- Typed deserialization ---

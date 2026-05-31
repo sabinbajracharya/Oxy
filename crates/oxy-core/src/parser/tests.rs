@@ -664,22 +664,6 @@ fn test_empty_tuple() {
 }
 
 #[test]
-fn test_vec_as_regular_call() {
-    let stmts = parse_fn_body("fn main() { list(1, 2, 3); }");
-    let Stmt::Expr { expr, .. } = &stmts[0] else {
-        panic!();
-    };
-    let Expr::Call { callee, args, .. } = expr else {
-        panic!("expected Call, got {:?}", expr);
-    };
-    let Expr::Ident(name, _) = callee.as_ref() else {
-        panic!("expected Ident callee");
-    };
-    assert_eq!(name, "list");
-    assert_eq!(args.len(), 3);
-}
-
-#[test]
 fn test_chained_method_calls() {
     let stmts = parse_fn_body(r#"fn main() { s.trim().to_uppercase(); }"#);
     let Stmt::Expr { expr, .. } = &stmts[0] else {

@@ -917,7 +917,7 @@ mod tests {
     fn test_compiled_iter_any() {
         let source = r#"
         fn main() {
-            let v = list(1, 2, 3);
+            let v = [1, 2, 3];
             let r = v.iter().any(|x| x == 2);
             println("{}", r);
         }

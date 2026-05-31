@@ -202,7 +202,7 @@ mod tests {
                 if v.len() == 0 { None } else { Some(v[0]) }
             }
             fn main() {
-                let x = first_elem(list(1, 2, 3));
+                let x = first_elem([1, 2, 3]);
                 // x should be Option<Int>
                 let _ = x.unwrap() + 1;
             }
@@ -236,7 +236,7 @@ mod tests {
             r#"
             fn map_list(v: List<Int>, f: fn(Int) -> Int) -> List<Int> { v.map(f) }
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 // Closure |x| x + 1: x inferred as Int from fn(Int) -> Int
                 let result = map_list(v, |x| x + 1);
                 let _ = result;
@@ -363,7 +363,7 @@ mod tests {
             fn first<T>(v: List<T>) -> Option<T> =
                 if v.len() == 0 { None } else { Some(v[0]) }
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = first(v);
             }
             "#,
@@ -410,7 +410,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = map(v, |x| x * 2);
             }
             "#,
@@ -423,7 +423,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3, 4);
+                let v = [1, 2, 3, 4];
                 let _ = filter(v, |x| x > 2);
             }
             "#,
@@ -436,7 +436,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = fold(v, 0, |acc, x| acc + x);
             }
             "#,
@@ -449,7 +449,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = any(v, |x| x > 2);
                 let _ = all(v, |x| x > 0);
             }
@@ -463,7 +463,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = find(v, |x| x > 1);
             }
             "#,
@@ -476,7 +476,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let _ = collect(v);
             }
             "#,
@@ -489,7 +489,7 @@ mod tests {
         let result = run_compiled(
             r#"
             fn main() {
-                let v = list(3, 1, 2);
+                let v = [3, 1, 2];
                 let _ = sort(v);
             }
             "#,
@@ -504,7 +504,7 @@ mod tests {
             fn double(x: Int) -> Int = x * 2
             fn is_positive(x: Int) -> bool = x > 0
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 // Pipeline chain using free functions
                 let _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
             }
@@ -517,7 +517,7 @@ mod tests {
     fn test_free_fn_wrong_arg_count_fails() {
         let result = run_compiled(
             r#"
-            fn main() { let _ = map(list(1)); }
+            fn main() { let _ = map([1]); }
             "#,
         );
         assert!(result.is_err(), "expected error (wrong arg count), got Ok");

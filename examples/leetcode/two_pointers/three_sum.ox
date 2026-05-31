@@ -24,7 +24,7 @@
 // - Skip duplicate left/right values after finding a match
 
 fn main() {
-    let nums = list(-1, 0, 1, 2, -1, -4);
+    let nums = [-1, 0, 1, 2, -1, -4];
     let triplets = three_sum(nums);
     for t in triplets {
         println("{:?}", t);
@@ -36,7 +36,7 @@ fn three_sum(nums: List) -> List {
     sorted.sort_by(|a, b| {
         if a < b { -1 } else if a > b { 1 } else { 0 }
     });
-    let mut result = list();
+    let mut result = [];
     let n = sorted.len();
     let mut i = 0;
     while i < n - 2 {
@@ -58,7 +58,7 @@ fn three_sum(nums: List) -> List {
             } else if sum > 0 {
                 right = right - 1;
             } else {
-                result.push(list(a, sorted[left], sorted[right]));
+                result.push([a, sorted[left], sorted[right]]);
                 // Skip duplicates
                 while left < right && sorted[left] == sorted[left + 1] {
                     left = left + 1;
@@ -77,21 +77,21 @@ fn three_sum(nums: List) -> List {
 
 #[test]
 fn test_example() {
-    let nums = list(-1, 0, 1, 2, -1, -4);
+    let nums = [-1, 0, 1, 2, -1, -4];
     let result = three_sum(nums);
     assert_eq(result.len(), 2);
 }
 
 #[test]
 fn test_no_solution() {
-    let nums = list(1, 2, 3);
+    let nums = [1, 2, 3];
     let result = three_sum(nums);
     assert_eq(result.len(), 0);
 }
 
 #[test]
 fn test_all_zeros() {
-    let nums = list(0, 0, 0, 0);
+    let nums = [0, 0, 0, 0];
     let result = three_sum(nums);
     assert_eq(result.len(), 1);
 }

@@ -63,23 +63,23 @@ fn first_elem<T>(v: List<T>) -> Option<T> {
 
 #[test]
 fn test_generic_over_vec_int() {
-    assert_eq(first_elem(list(1, 2, 3)), Some(1));
+    assert_eq(first_elem([1, 2, 3]), Some(1));
 }
 #[test]
 fn test_generic_over_vec_empty() {
-    let v: List<Int> = list();
+    let v: List<Int> = [];
     assert_eq(first_elem(v), None);
 }
 
 // --- nested generic types ---
 #[test]
 fn test_vec_of_option_int() {
-    let v: List<Option<Int>> = list(Some(1), None, Some(3));
+    let v: List<Option<Int>> = [Some(1), None, Some(3)];
     assert_eq(v.len(), 3);
 }
 #[test]
 fn test_option_of_vec_int() {
-    let o: Option<List<Int>> = Some(list(1, 2, 3));
+    let o: Option<List<Int>> = Some([1, 2, 3]);
     assert_eq(o.is_some(), true);
 }
 
@@ -109,7 +109,7 @@ fn test_generic_struct_concrete_method() {
 // --- turbofish on PathCall ---
 struct Stash<T> { items: List<T> }
 impl Stash<Int> {
-    fn new() -> Stash<Int> { Stash { items: list() } }
+    fn new() -> Stash<Int> { Stash { items: [] } }
 }
 #[test]
 fn test_turbofish_on_path_call() {

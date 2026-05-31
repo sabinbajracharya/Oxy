@@ -18,13 +18,13 @@ fn test_empty_array() {
 
 #[test]
 fn test_vec_macro() {
-    let output = run_and_capture("fn main() { let v = list(10, 20, 30); println(\"{:?}\", v); }");
+    let output = run_and_capture("fn main() { let v = [10, 20, 30]; println(\"{:?}\", v); }");
     assert_eq!(output, vec!["[10, 20, 30]\n"]);
 }
 
 #[test]
 fn test_vec_index() {
-    let output = run_and_capture("fn main() { let v = list(10, 20, 30); println(\"{}\", v[1]); }");
+    let output = run_and_capture("fn main() { let v = [10, 20, 30]; println(\"{}\", v[1]); }");
     assert_eq!(output, vec!["20\n"]);
 }
 
@@ -32,7 +32,7 @@ fn test_vec_index() {
 fn test_vec_push() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = list(1, 2);
+let mut v = [1, 2];
 v.push(3);
 println("{:?}", v);
 }"#,
@@ -44,7 +44,7 @@ println("{:?}", v);
 fn test_vec_pop() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = list(1, 2, 3);
+let mut v = [1, 2, 3];
 let x = v.pop();
 println("{:?} {:?}", x, v);
 }"#,
@@ -54,7 +54,7 @@ println("{:?} {:?}", x, v);
 
 #[test]
 fn test_vec_len() {
-    let output = run_and_capture("fn main() { let v = list(1, 2, 3); println(\"{}\", v.len()); }");
+    let output = run_and_capture("fn main() { let v = [1, 2, 3]; println(\"{}\", v.len()); }");
     assert_eq!(output, vec!["3\n"]);
 }
 
@@ -63,7 +63,7 @@ fn test_vec_is_empty() {
     let output = run_and_capture(
         r#"fn main() {
 let a = [];
-let b = list(1);
+let b = [1];
 println("{} {}", a.is_empty(), b.is_empty());
 }"#,
     );
@@ -74,7 +74,7 @@ println("{} {}", a.is_empty(), b.is_empty());
 fn test_vec_contains() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list(1, 2, 3);
+let v = [1, 2, 3];
 println("{} {}", v.contains(2), v.contains(5));
 }"#,
     );
@@ -85,7 +85,7 @@ println("{} {}", v.contains(2), v.contains(5));
 fn test_vec_index_assign() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = list(1, 2, 3);
+let mut v = [1, 2, 3];
 v[1] = 99;
 println("{:?}", v);
 }"#,
@@ -97,7 +97,7 @@ println("{:?}", v);
 fn test_vec_iteration() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list(10, 20, 30);
+let v = [10, 20, 30];
 let mut sum = 0;
 for x in v {
     sum += x;
@@ -112,7 +112,7 @@ println("{}", sum);
 fn test_vec_join() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list("a", "b", "c");
+let v = ["a", "b", "c"];
 println("{}", v.join(", "));
 }"#,
     );
@@ -265,7 +265,7 @@ for c in "abc" {
 fn test_vec_first_last() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list(10, 20, 30);
+let v = [10, 20, 30];
 println("{:?} {:?}", v.first(), v.last());
 }"#,
     );
@@ -276,7 +276,7 @@ println("{:?} {:?}", v.first(), v.last());
 fn test_vec_reverse() {
     let output = run_and_capture(
         r#"fn main() {
-let mut v = list(1, 2, 3);
+let mut v = [1, 2, 3];
 v.reverse();
 println("{:?}", v);
 }"#,
@@ -288,7 +288,7 @@ println("{:?}", v);
 fn test_nested_list() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list(list(1, 2), list(3, 4));
+let v = [[1, 2], [3, 4]];
 println("{}", v[0][1]);
 println("{:?}", v);
 }"#,
@@ -300,7 +300,7 @@ println("{:?}", v);
 fn test_debug_format_collections() {
     let output = run_and_capture(
         r#"fn main() {
-let v = list("hello", "world");
+let v = ["hello", "world"];
 println("{:?}", v);
 let t = (1, "two", true);
 println("{:?}", t);
@@ -314,7 +314,7 @@ println("{:?}", t);
 
 #[test]
 fn test_index_out_of_bounds() {
-    let result = run_compiled("fn main() { let v = list(1, 2); let x = v[5]; }");
+    let result = run_compiled("fn main() { let v = [1, 2]; let x = v[5]; }");
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("out of bounds"), "actual error: {err}");
@@ -835,7 +835,7 @@ fn test_turbofish_collect_list() {
     let output = run_and_capture(
         r#"
             fn main() {
-                let v = list(1, 2, 3);
+                let v = [1, 2, 3];
                 let doubled = v.iter().map(|x| x * 2).collect::<List>();
                 println("{:?}", doubled);
             }

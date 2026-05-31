@@ -166,7 +166,7 @@ fn test_while_let() {
     let out = run_and_capture(
         r#"
 fn main() {
-    let mut v = list(1, 2, 3);
+    let mut v = [1, 2, 3];
     while let Some(val) = v.pop() {
         println("{}", val);
     }
@@ -369,7 +369,7 @@ fn find_item(items: List, target: Int) -> Option {
 }
 
 fn main() {
-    let items = list(10, 20, 30, 40);
+    let items = [10, 20, 30, 40];
     let result = find_item(items, 30);
     match result {
         Some(idx) => println("found at {}", idx),
@@ -394,7 +394,7 @@ fn get_first(v: List) -> Option {
 }
 
 fn process() -> Option {
-    let v = list(10, 20, 30);
+    let v = [10, 20, 30];
     let first = get_first(v)?;
     Some(first * 2)
 }

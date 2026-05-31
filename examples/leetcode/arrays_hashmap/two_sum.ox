@@ -25,7 +25,7 @@
 // - The map stores value → index so we can retrieve positions directly
 
 fn main() {
-    let nums = list(2, 7, 11, 15);
+    let nums = [2, 7, 11, 15];
     let target = 9;
     match two_sum(nums, target) {
         Some((i, j)) => println("Found: indices {} and {}", i, j),
@@ -49,28 +49,28 @@ fn two_sum(nums: List, target: Int) -> Option {
 
 #[test]
 fn test_basic_case() {
-    let nums = list(2, 7, 11, 15);
+    let nums = [2, 7, 11, 15];
     let result = two_sum(nums, 9);
     assert_eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_reversed_order() {
-    let nums = list(3, 3, 4, 1);
+    let nums = [3, 3, 4, 1];
     let result = two_sum(nums, 6);
     assert_eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_no_solution() {
-    let nums = list(1, 2, 3);
+    let nums = [1, 2, 3];
     let result = two_sum(nums, 10);
     assert(result.is_none());
 }
 
 #[test]
 fn test_negative_numbers() {
-    let nums = list(-3, 4, 3, 90);
+    let nums = [-3, 4, 3, 90];
     let result = two_sum(nums, 0);
     assert_eq(result, Some((0, 2)));
 }
