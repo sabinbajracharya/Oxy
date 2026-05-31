@@ -1,0 +1,23 @@
+[book]
+title = "From Text to Machine Code: Building the Oxy Programming Language"
+authors = ["Sabin Bajracharya"]
+description = "A hands-on journey through building a real compiled programming language — from a tree-walking interpreter to a Cranelift JIT — based on 500+ commits of the Oxy language project."
+language = "en"
+multilingual = false
+src = "src"
+
+[rust]
+edition = "2021"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+no-section-label = false
+git-repository-url = "https://github.com/your-repo/oxy"
+edit-url-template = "https://github.com/your-repo/oxy/edit/main/book/src/{path}"
+
+[output.html.fold]
+enable = true
+level = 1

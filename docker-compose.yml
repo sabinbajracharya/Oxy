@@ -69,6 +69,37 @@ services:
       context: .
       target: runtime
 
+  book:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /app
+    command: >
+      bash -c "
+        cargo install mdbook --version '^0.4' --quiet 2>/dev/null || true &&
+        mdbook build book/ &&
+        echo '✅ Book built: book/book/'
+      "
+
+  book-serve:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    command: >
+      bash -c "
+        cargo install mdbook --version '^0.4' --quiet 2>/dev/null || true &&
+        mdbook serve book/ --hostname 0.0.0.0 --port 3000
+      "
+
 volumes:
   cargo-cache:
   target-cache:
