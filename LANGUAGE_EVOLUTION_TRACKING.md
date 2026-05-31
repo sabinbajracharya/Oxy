@@ -102,11 +102,36 @@
 - [ ] These share implementation with existing Iterator methods
 - [ ] **Commit:** `feat(stdlib): add pipeline-friendly free functions`
 
-### 3.4 F-string ergonomics
-- [ ] Add `print()` and `println()` as built-in functions (not macros)
-- [ ] Accept f-string-style arguments
-- [ ] Keep `println!()` macro for backward compat during transition, then remove
-- [ ] **Commit:** `feat: add print/println built-in functions`
+### 3.4 Remove all `!` macros — make them built-in functions
+- [ ] Remove `!` token from macro call syntax in parser
+- [ ] `println!(...)` → `println(...)`, `print!(...)` → `print(...)`, `eprintln!()` → `eprintln()`
+- [ ] `format!(...)` → `format(...)`, `dbg!(...)` → `dbg(...)`
+- [ ] `panic!(...)` → `panic(...)`, `todo!(...)` → `todo(...)`
+- [ ] `vec![...]` → `List(...)` (rename to match new type name — see 3.5)
+- [ ] Update ir_gen: route `Expr::Call` for these built-in names (no `MacroCall` needed)
+- [ ] Keep `MacroCall` AST node? No — remove it. All macro-like things become regular calls.
+- [ ] Update all `.ox` test files
+- [ ] **Commit:** `refactor: remove ! macro syntax — all built-ins are functions`
+
+### 3.5 Type naming — consistency + `Vec` → `List`
+- [ ] Research: Gleam/Elm use uppercase types (`Int`, `String`, `Bool`, `List`), Lua untyped
+- [ ] Current inconsistency: `int`/`byte`/`float` lowercase vs `String`/`Vec`/`HashMap` uppercase
+- [ ] Decision: unify to **UppercaseCamel types** (Gleam/Elm convention):
+  - `int` → `Int`, `byte` → `Byte`, `float` → `Float`
+  - `String` → unchanged, `Bool` → unchanged
+  - `Vec<T>` → `List<T>` ("list" is universal; "vec" is Rust/C++ jargon)
+  - `HashMap<K,V>` → `Map<K,V>`, `HashSet<T>` → `Set<T>`
+  - `Option<T>`, `Result<T,E>` — unchanged
+  - `BTreeMap`, `BTreeSet`, `BinaryHeap`, `VecDeque` — rename TBD or keep
+- [ ] **Rationale:** Uppercase avoids `map`-type-vs-`map`-function conflict. Matches
+  Gleam and Elm conventions the user referenced. Visually distinguishes types from values.
+- [ ] Update `symbols.rs` (ALL_TYPES, type name constants, MethodInfo lists)
+- [ ] Update `type_checker/mod.rs` (from_name, display_name)
+- [ ] Update all `.ox` test files (mechanical: `int`→`Int`, `byte`→`Byte`, `float`→`Float`, `Vec`→`List`, `HashMap`→`Map`, `HashSet`→`Set`)
+- [ ] Update VM test files
+- [ ] Update LSP (completions, hover docs)
+- [ ] Update VS Code extension (syntax highlighting)
+- [ ] **Commit:** `refactor: rename types for consistency — Vec→List, int→Int, etc.`
 
 ---
 
@@ -125,21 +150,17 @@
 - [ ] Update all `.ox` test files
 - [ ] **Commit:** `refactor: remove return keyword — use tail expressions and break value`
 
-### 4.3 Remove `println!` / `print!` macros
-- [ ] Remove 9 built-in macros entirely? Or keep `vec!`, `format!`, `panic!`, `todo!`?
-- [ ] Decision: keep `vec!`, `format!`, `panic!`, `todo!`, `dbg!` — remove `println!`, `print!`, `eprintln!`
-- [ ] Built-in `print()`, `println()`, `eprintln()` functions take their place
-- [ ] **Commit:** `refactor: replace println!/print!/eprintln! macros with functions`
-
-### 4.4 Update CLAUDE.md identity
+### 4.3 Update CLAUDE.md identity
 - [ ] Replace "Dynamic Rust" section with positive "Typed Scripting" identity
 - [ ] Update language identity description
-- [ ] Update syntax mapping table
+- [ ] Update syntax mapping table (remove Rust→Oxy conversion, add positive feature list)
+- [ ] Document new naming convention: UppercaseCamel types, lowercase functions
+- [ ] Document: no macros, no `!` syntax — everything is a function
 - [ ] **Commit:** `docs: update CLAUDE.md language identity`
 
-### 4.5 Update README and docs
-- [ ] New tagline: "Oxy: typed scripting for data, CLIs, and servers"
-- [ ] New hello world example
+### 4.4 Update README and docs
+- [ ] New tagline: "Oxy: a fast, approachable language that runs everywhere"
+- [ ] New hello world example using `println()`
 - [ ] Update all folder README.md files
 - [ ] **Commit:** `docs: update README and folder docs for new identity`
 
@@ -150,13 +171,16 @@
 ### 5.1 VS Code extension
 - [ ] Remove highlighting for retired keywords
 - [ ] Add `|>` token highlighting
+- [ ] Rename `vec` → `list` in syntax highlighting
+- [ ] Update type names: `int`→`Int`, `byte`→`Byte`, `float`→`Float`, etc.
 - [ ] Update language configuration
 - [ ] **Commit:** `feat(vscode): update syntax highlighting for language evolution`
 
 ### 5.2 LSP updates
 - [ ] Verify LSP works with all parser changes
 - [ ] Update keyword completions
-- [ ] Update hover docs
+- [ ] Update hover docs for renamed types
+- [ ] Update type completions
 - [ ] **Commit:** `feat(lsp): update completions and hover for evolved syntax`
 
 ### 5.3 Tug (package manager) updates
