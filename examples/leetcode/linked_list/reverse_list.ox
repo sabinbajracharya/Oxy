@@ -22,7 +22,7 @@
 // - Single node list → return itself
 
 struct ListNode {
-    val: Int,
+    value: Int,
     next: Option,
 }
 
@@ -40,7 +40,7 @@ fn main() {
 fn print_list(head: Option) {
     var curr = head;
     while val Some(node) = curr {
-        print("{} ", node.val);
+        print("{} ", node.value);
         curr = node.next;
     }
     println("");
@@ -68,7 +68,7 @@ fn test_reverse_empty() {
 fn test_reverse_single() {
     val n = ListNode::new(42);
     val result = reverse_list(Some(n));
-    assert_eq(result.unwrap().val, 42);
+    assert_eq(result.unwrap().value, 42);
     assert(result.unwrap().next.is_none());
 }
 
@@ -80,7 +80,7 @@ fn test_reverse_multiple() {
     n2.next = Some(n3);
     n1.next = Some(n2);
     val result = reverse_list(Some(n1));
-    assert_eq(result.unwrap().val, 3);
+    assert_eq(result.unwrap().value, 3);
     val r2 = result.unwrap().next.unwrap();
-    assert_eq(r2.val, 2);
+    assert_eq(r2.value, 2);
 }

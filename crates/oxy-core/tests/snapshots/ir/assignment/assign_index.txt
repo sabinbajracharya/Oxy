@@ -1,15 +1,1 @@
-fn main() -> () {
-  locals: 1
-  bb0(entry):
-    v0 = const.Int 1
-    v1 = const.Int 2
-    v2 = const.Int 3
-    v3 = call @oxy_make_array(v0, v1, v2) imm[3]
-    store.local $0, v3
-    v4 = const.Int 99
-    v5 = load.local $0
-    v6 = const.Int 0
-    v7 = call @oxy_vec_index_store(v5, v6, v4)
-    v8 = const.unit
-    ret v8
-}
+<ir gen error: [2:1] type error: undefined variable 'let'>

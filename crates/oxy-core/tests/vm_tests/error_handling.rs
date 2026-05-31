@@ -133,8 +133,8 @@ fn test_if_let_some() {
         r#"
 fn main() {
     val x = Some(42);
-    if val Some(val) = x {
-        println("got {}", val);
+    if val Some(v) = x {
+        println("got {}", v);
     } else {
         println("nothing");
     }
@@ -150,8 +150,8 @@ fn test_if_let_none() {
         r#"
 fn main() {
     val x = None;
-    if val Some(val) = x {
-        println("got {}", val);
+    if val Some(v) = x {
+        println("got {}", v);
     } else {
         println("nothing");
     }
@@ -167,8 +167,8 @@ fn test_while_let() {
         r#"
 fn main() {
     var v = [1, 2, 3];
-    while val Some(val) = v.pop() {
-        println("{}", val);
+    while val Some(v) = v.pop() {
+        println("{}", v);
     }
 }
 "#,
@@ -183,7 +183,7 @@ fn test_match_option() {
 fn main() {
     val x = Some(42);
     match x {
-        Some(val) => println("value: {}", val),
+        Some(v) => println("value: {}", v),
         None => println("nothing"),
     }
 }
@@ -199,7 +199,7 @@ fn test_match_result() {
 fn main() {
     val x = Err("problem");
     match x {
-        Ok(val) => println("ok: {}", val),
+        Ok(v) => println("ok: {}", v),
         Err(e) => println("err: {}", e),
     }
 }
@@ -344,8 +344,8 @@ fn test_if_let_result() {
         r#"
 fn main() {
     val x = Ok(42);
-    if val Ok(val) = x {
-        println("ok: {}", val);
+    if val Ok(v) = x {
+        println("ok: {}", v);
     } else {
         println("err");
     }

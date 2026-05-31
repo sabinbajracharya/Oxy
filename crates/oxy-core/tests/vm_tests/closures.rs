@@ -266,8 +266,8 @@ fn main() {
 fn test_option_map_with_closure() {
     let output = run_and_capture(
         r#"fn main() {
-val val = Some(5);
-val doubled = val.map(|x| x * 2);
+val value = Some(5);
+val doubled = value.map(|x| x * 2);
 println("{:?}", doubled);
 val none_val: Option<Int> = None;
 val mapped = none_val.map(|x| x * 2);
@@ -281,8 +281,8 @@ println("{:?}", mapped);
 fn test_result_map_with_closure() {
     let output = run_and_capture(
         r#"fn main() {
-val val: Result<Int, String> = Ok(5);
-val doubled = val.map(|x| x * 2);
+val value: Result<Int, String> = Ok(5);
+val doubled = value.map(|x| x * 2);
 println("{:?}", doubled);
 }"#,
     );

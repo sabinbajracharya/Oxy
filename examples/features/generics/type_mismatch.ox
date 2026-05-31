@@ -208,8 +208,8 @@ struct Cell<T> {
 }
 
 impl Cell {
-    fn new(val: T) -> Cell<T> {
-        Cell { value: val }
+    fn new(value: T) -> Cell<T> {
+        Cell { value: value }
     }
 
     fn replace(self, new_val: T) -> Cell<T> {

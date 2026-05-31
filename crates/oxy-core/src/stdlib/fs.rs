@@ -205,13 +205,13 @@ mod tests {
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_roundtrip_9a1b.txt";
-    let w = std::fs::write(path, "hello oxy");
-    let result = std::fs::read_to_string(path);
-    if let Ok(content) = result {{
+    val path = "{t}/oxy_test_roundtrip_9a1b.txt";
+    val w = std::fs::write(path, "hello oxy");
+    val result = std::fs::read_to_string(path);
+    if val Ok(content) = result {{
         println("{{}}", content);
     }}
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
 }}
 "#
         ));
@@ -224,10 +224,10 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_exists_7c2d.txt";
-    let w = std::fs::write(path, "data");
+    val path = "{t}/oxy_test_exists_7c2d.txt";
+    val w = std::fs::write(path, "data");
     println("{{}}", std::fs::exists(path));
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
 }}
 "#
         ));
@@ -253,12 +253,12 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_isfile_3e4f.txt";
-    let w = std::fs::write(path, "test");
+    val path = "{t}/oxy_test_isfile_3e4f.txt";
+    val w = std::fs::write(path, "test");
     println("{{}}", std::fs::is_file(path));
     println("{{}}", std::fs::is_dir(path));
     println("{{}}", std::fs::is_dir("{t}"));
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
 }}
 "#
         ));
@@ -271,10 +271,10 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let dir = "{t}/oxy_test_dir_a8b9";
-    let c = std::fs::create_dir(dir);
+    val dir = "{t}/oxy_test_dir_a8b9";
+    val c = std::fs::create_dir(dir);
     println("{{}}", std::fs::is_dir(dir));
-    let d = std::fs::remove_dir(dir);
+    val d = std::fs::remove_dir(dir);
     println("{{}}", std::fs::exists(dir));
 }}
 "#
@@ -288,10 +288,10 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let dir = "{t}/oxy_test_nested_c1d2/sub1/sub2";
-    let c = std::fs::create_dir_all(dir);
+    val dir = "{t}/oxy_test_nested_c1d2/sub1/sub2";
+    val c = std::fs::create_dir_all(dir);
     println("{{}}", std::fs::is_dir(dir));
-    let d = std::fs::remove_dir_all("{t}/oxy_test_nested_c1d2");
+    val d = std::fs::remove_dir_all("{t}/oxy_test_nested_c1d2");
     println("{{}}", std::fs::exists("{t}/oxy_test_nested_c1d2"));
 }}
 "#
@@ -305,16 +305,16 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let src = "{t}/oxy_test_rename_src_5e6f.txt";
-    let dst = "{t}/oxy_test_rename_dst_5e6f.txt";
-    let w = std::fs::write(src, "rename me");
-    let r = std::fs::rename(src, dst);
+    val src = "{t}/oxy_test_rename_src_5e6f.txt";
+    val dst = "{t}/oxy_test_rename_dst_5e6f.txt";
+    val w = std::fs::write(src, "rename me");
+    val r = std::fs::rename(src, dst);
     println("{{}}", std::fs::exists(src));
-    let result = std::fs::read_to_string(dst);
-    if let Ok(content) = result {{
+    val result = std::fs::read_to_string(dst);
+    if val Ok(content) = result {{
         println("{{}}", content);
     }}
-    let d = std::fs::remove_file(dst);
+    val d = std::fs::remove_file(dst);
 }}
 "#
         ));
@@ -327,19 +327,19 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let src = "{t}/oxy_test_copy_src_7g8h.txt";
-    let dst = "{t}/oxy_test_copy_dst_7g8h.txt";
-    let w = std::fs::write(src, "copy me");
-    let result = std::fs::copy(src, dst);
-    if let Ok(bytes) = result {{
+    val src = "{t}/oxy_test_copy_src_7g8h.txt";
+    val dst = "{t}/oxy_test_copy_dst_7g8h.txt";
+    val w = std::fs::write(src, "copy me");
+    val result = std::fs::copy(src, dst);
+    if val Ok(bytes) = result {{
         println("{{}}", bytes > 0);
     }}
-    let read_result = std::fs::read_to_string(dst);
-    if let Ok(content) = read_result {{
+    val read_result = std::fs::read_to_string(dst);
+    if val Ok(content) = read_result {{
         println("{{}}", content);
     }}
-    let d1 = std::fs::remove_file(src);
-    let d2 = std::fs::remove_file(dst);
+    val d1 = std::fs::remove_file(src);
+    val d2 = std::fs::remove_file(dst);
 }}
 "#
         ));
@@ -352,15 +352,15 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_meta_9i0j.txt";
-    let w = std::fs::write(path, "12345");
-    let result = std::fs::metadata(path);
-    if let Ok(meta) = result {{
+    val path = "{t}/oxy_test_meta_9i0j.txt";
+    val w = std::fs::write(path, "12345");
+    val result = std::fs::metadata(path);
+    if val Ok(meta) = result {{
         println("{{}}", meta.size);
         println("{{}}", meta.is_file);
         println("{{}}", meta.is_dir);
     }}
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
 }}
 "#
         ));
@@ -373,15 +373,15 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let dir = "{t}/oxy_test_readdir_k1l2";
-    let c = std::fs::create_dir(dir);
-    let w1 = std::fs::write("{t}/oxy_test_readdir_k1l2/a.txt", "a");
-    let w2 = std::fs::write("{t}/oxy_test_readdir_k1l2/b.txt", "b");
-    let result = std::fs::read_dir(dir);
-    if let Ok(entries) = result {{
+    val dir = "{t}/oxy_test_readdir_k1l2";
+    val c = std::fs::create_dir(dir);
+    val w1 = std::fs::write("{t}/oxy_test_readdir_k1l2/a.txt", "a");
+    val w2 = std::fs::write("{t}/oxy_test_readdir_k1l2/b.txt", "b");
+    val result = std::fs::read_dir(dir);
+    if val Ok(entries) = result {{
         println("{{}}", entries.len());
     }}
-    let d = std::fs::remove_dir_all(dir);
+    val d = std::fs::remove_dir_all(dir);
 }}
 "#
         ));
@@ -394,14 +394,14 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_append_m3n4.txt";
-    let w = std::fs::write(path, "hello");
-    let a = std::fs::append(path, " world");
-    let result = std::fs::read_to_string(path);
-    if let Ok(content) = result {{
+    val path = "{t}/oxy_test_append_m3n4.txt";
+    val w = std::fs::write(path, "hello");
+    val a = std::fs::append(path, " world");
+    val result = std::fs::read_to_string(path);
+    if val Ok(content) = result {{
         println("{{}}", content);
     }}
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
 }}
 "#
         ));
@@ -414,9 +414,9 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let result = std::fs::canonicalize("{t}");
-    if let Ok(path) = result {{
-        let len = path.len();
+    val result = std::fs::canonicalize("{t}");
+    if val Ok(path) = result {{
+        val len = path.len();
         println("{{}}", len > 0);
     }} else {{
         println("err");
@@ -433,10 +433,10 @@ fn main() {{
         let out = run(&format!(
             r#"
 fn main() {{
-    let path = "{t}/oxy_test_remove_o5p6.txt";
-    let w = std::fs::write(path, "delete me");
+    val path = "{t}/oxy_test_remove_o5p6.txt";
+    val w = std::fs::write(path, "delete me");
     println("{{}}", std::fs::exists(path));
-    let d = std::fs::remove_file(path);
+    val d = std::fs::remove_file(path);
     println("{{}}", std::fs::exists(path));
 }}
 "#

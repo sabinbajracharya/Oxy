@@ -193,8 +193,8 @@ mod tests {
     fn test_process_command_echo() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command("echo");
-    if let Ok(output) = result {
+    val result = std::process::command("echo");
+    if val Ok(output) = result {
         println("{}", output.success);
     } else {
         println("err");
@@ -208,9 +208,9 @@ fn main() {
     fn test_process_command_with_args() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command_with_args("echo", ["hello", "world"]);
-    if let Ok(output) = result {
-        let trimmed = output.stdout.trim();
+    val result = std::process::command_with_args("echo", ["hello", "world"]);
+    if val Ok(output) = result {
+        val trimmed = output.stdout.trim();
         println("{}", trimmed);
     }
 }
@@ -222,8 +222,8 @@ fn main() {
     fn test_process_command_nonexistent() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command("nonexistent_program_xyz_12345");
-    if let Ok(output) = result {
+    val result = std::process::command("nonexistent_program_xyz_12345");
+    if val Ok(output) = result {
         println("ok");
     } else {
         println("err");
@@ -237,8 +237,8 @@ fn main() {
     fn test_process_command_status_code() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command("true");
-    if let Ok(output) = result {
+    val result = std::process::command("true");
+    if val Ok(output) = result {
         println("{}", output.status);
     }
 }
@@ -250,8 +250,8 @@ fn main() {
     fn test_process_command_failure_status() {
         let out = run(r#"
 fn main() {
-    let result = std::process::command("false");
-    if let Ok(output) = result {
+    val result = std::process::command("false");
+    if val Ok(output) = result {
         println("{}", output.success);
     }
 }
@@ -270,8 +270,8 @@ fn main() {
         // be invoked once per line, in order.
         let out = run(r#"
 fn main() {
-    let mut lines = [];
-    let result = std::process::spawn(
+    var lines = [];
+    val result = std::process::spawn(
         "printf",
         ["%s\n%s\n", "first", "second"],
         |line, stream| {
@@ -279,7 +279,7 @@ fn main() {
             lines.push(line);
         },
     );
-    if let Ok(output) = result {
+    if val Ok(output) = result {
         println("{}", output.success);
         for l in lines {
             println("{}", l);
@@ -297,8 +297,8 @@ fn main() {
         // `sh -c` lets us deterministically write to both streams.
         let out = run(r#"
 fn main() {
-    let mut tagged = [];
-    let _ = std::process::spawn(
+    var tagged = [];
+    val _ = std::process::spawn(
         "sh",
         ["-c", "echo out1; echo err1 1>&2; echo out2"],
         |line, stream| {
@@ -319,8 +319,8 @@ fn main() {
     fn test_process_spawn_status_on_failure() {
         let out = run(r#"
 fn main() {
-    let result = std::process::spawn("false", [], |_line, _stream| {});
-    if let Ok(output) = result {
+    val result = std::process::spawn("false", [], |_line, _stream| {});
+    if val Ok(output) = result {
         println("{} {}", output.success, output.status);
     } else {
         println("err");
@@ -334,12 +334,12 @@ fn main() {
     fn test_process_spawn_nonexistent_program() {
         let out = run(r#"
 fn main() {
-    let result = std::process::spawn(
+    val result = std::process::spawn(
         "nonexistent_program_xyz_98765",
         [],
         |_line, _stream| {},
     );
-    if let Ok(_) = result {
+    if val Ok(_) = result {
         println("ok");
     } else {
         println("err");

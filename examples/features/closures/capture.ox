@@ -68,8 +68,8 @@ fn test_capture_in_loop() {
     var captured = 0;
     var i = 0;
     while i < 5 {
-        val val = i;
-        val closure = || val;
+        val v = i;
+        val closure = || v;
         captured = captured + closure();
         i = i + 1;
     }

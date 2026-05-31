@@ -310,7 +310,7 @@ fn test_shr() {
 
 #[test]
 fn test_let_binding() {
-    let ir = gen("fn main() -> Int { let x = 5; x }");
+    let ir = gen("fn main() -> Int { val x = 5; x }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -327,7 +327,7 @@ fn test_let_binding() {
 
 #[test]
 fn test_let_mut_binding() {
-    let ir = gen("fn main() -> Int { let mut x = 5; x = 10; x }");
+    let ir = gen("fn main() -> Int { var x = 5; x = 10; x }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -338,7 +338,7 @@ fn test_let_mut_binding() {
 
 #[test]
 fn test_multiple_lets() {
-    let ir = gen("fn main() -> Int { let a = 1; let b = 2; a + b }");
+    let ir = gen("fn main() -> Int { val a = 1; val b = 2; a + b }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -389,7 +389,7 @@ fn test_if_else_if() {
 
 #[test]
 fn test_if_let() {
-    let ir = gen("fn main() -> Int { let x = Option::Some(42); if let Option::Some(v) = x { v } else { 0 } }");
+    let ir = gen("fn main() -> Int { val x = Option::Some(42); if val Option::Some(v) = x { v } else { 0 } }");
     let f = find_fn(&ir, "main");
     assert!(f.blocks.len() >= 3, "if-let should have multiple blocks");
 }
@@ -398,7 +398,7 @@ fn test_if_let() {
 
 #[test]
 fn test_while_loop() {
-    let ir = gen("fn main() -> Int { let mut x = 0; while x < 5 { x = x + 1; } x }");
+    let ir = gen("fn main() -> Int { var x = 0; while x < 5 { x = x + 1; } x }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 2,
@@ -409,7 +409,7 @@ fn test_while_loop() {
 
 #[test]
 fn test_loop_expression() {
-    let ir = gen("fn main() -> Int { let mut x = 0; loop { x = x + 1; if x > 5 { break; } } x }");
+    let ir = gen("fn main() -> Int { var x = 0; loop { x = x + 1; if x > 5 { break; } } x }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 2,
@@ -420,7 +420,7 @@ fn test_loop_expression() {
 
 #[test]
 fn test_for_in() {
-    let ir = gen("fn main() -> Int { let mut sum = 0; for x in [1, 2, 3] { sum = sum + x; } sum }");
+    let ir = gen("fn main() -> Int { var sum = 0; for x in [1, 2, 3] { sum = sum + x; } sum }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 2,
@@ -431,7 +431,7 @@ fn test_for_in() {
 
 #[test]
 fn test_break_value() {
-    let ir = gen("fn main() -> Int { let result = loop { break 42 }; result }");
+    let ir = gen("fn main() -> Int { val result = loop { break 42 }; result }");
     let f = find_fn(&ir, "main");
     assert!(f.blocks.len() >= 2);
 }
@@ -439,7 +439,7 @@ fn test_break_value() {
 #[test]
 fn test_continue_in_loop() {
     let ir = gen(
-        "fn main() -> Int { let mut x = 0; while x < 10 { x = x + 1; if x == 2 { continue; } } x }",
+        "fn main() -> Int { var x = 0; while x < 10 { x = x + 1; if x == 2 { continue; } } x }",
     );
     let f = find_fn(&ir, "main");
     assert!(
@@ -471,7 +471,7 @@ fn test_fn_call_with_args() {
 
 #[test]
 fn test_method_call() {
-    let ir = gen("fn main() -> Int { let s = \"hello\"; s.len() }");
+    let ir = gen("fn main() -> Int { val s = \"hello\"; s.len() }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -482,7 +482,7 @@ fn test_method_call() {
 
 #[test]
 fn test_path_call() {
-    let ir = gen("fn main() -> Int { let m = Map::new(); 0 }");
+    let ir = gen("fn main() -> Int { val m = Map::new(); 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -516,7 +516,7 @@ fn test_return_expr_tail() {
 
 #[test]
 fn test_nested_block() {
-    let ir = gen("fn main() -> Int { let x = { let y = 1; y }; x }");
+    let ir = gen("fn main() -> Int { val x = { val y = 1; y }; x }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -526,7 +526,7 @@ fn test_nested_block() {
 #[test]
 fn test_struct_init() {
     let ir = gen(
-        "struct PoInt { x: Int, y: Int } fn main() -> Int { let p = PoInt { x: 1, y: 2 }; p.x }",
+        "struct PoInt { x: Int, y: Int } fn main() -> Int { val p = PoInt { x: 1, y: 2 }; p.x }",
     );
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
@@ -538,7 +538,7 @@ fn test_struct_init() {
 
 #[test]
 fn test_struct_update() {
-    let ir = gen("struct PoInt { x: Int, y: Int } fn main() -> Int { let p = PoInt { x: 1, y: 2 }; let p2 = PoInt { x: 3, ..p }; p2.x }");
+    let ir = gen("struct PoInt { x: Int, y: Int } fn main() -> Int { val p = PoInt { x: 1, y: 2 }; val p2 = PoInt { x: 3, ..p }; p2.x }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -546,7 +546,7 @@ fn test_struct_update() {
 #[test]
 fn test_field_access() {
     let ir = gen(
-        "struct PoInt { x: Int, y: Int } fn main() -> Int { let p = PoInt { x: 1, y: 2 }; p.x }",
+        "struct PoInt { x: Int, y: Int } fn main() -> Int { val p = PoInt { x: 1, y: 2 }; p.x }",
     );
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
@@ -560,7 +560,7 @@ fn test_field_access() {
 
 #[test]
 fn test_enum_variant_unit() {
-    let ir = gen("enum Color { Red, Blue } fn main() -> Int { let c = Color::Red; 0 }");
+    let ir = gen("enum Color { Red, Blue } fn main() -> Int { val c = Color::Red; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -568,7 +568,7 @@ fn test_enum_variant_unit() {
 #[test]
 fn test_enum_variant_with_data() {
     let ir =
-        gen("enum MyOption { Some(Int), None } fn main() -> Int { let x = MyOption::Some(42); 0 }");
+        gen("enum MyOption { Some(Int), None } fn main() -> Int { val x = MyOption::Some(42); 0 }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -592,7 +592,7 @@ fn test_match_expression() {
 
 #[test]
 fn test_match_on_enum() {
-    let ir = gen("enum MyOption { Some(Int), None } fn main() -> Int { let x = MyOption::Some(42); match x { MyOption::Some(v) => v, MyOption::None => 0 } }");
+    let ir = gen("enum MyOption { Some(Int), None } fn main() -> Int { val x = MyOption::Some(42); match x { MyOption::Some(v) => v, MyOption::None => 0 } }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 3,
@@ -604,28 +604,28 @@ fn test_match_on_enum() {
 
 #[test]
 fn test_vec_literal() {
-    let ir = gen("fn main() -> Int { let v = [1, 2, 3]; 0 }");
+    let ir = gen("fn main() -> Int { val v = [1, 2, 3]; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
 
 #[test]
 fn test_array_literal() {
-    let ir = gen("fn main() -> Int { let a = [1, 2, 3]; 0 }");
+    let ir = gen("fn main() -> Int { val a = [1, 2, 3]; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
 
 #[test]
 fn test_tuple_literal() {
-    let ir = gen("fn main() -> Int { let t = (1, \"hello\", true); 0 }");
+    let ir = gen("fn main() -> Int { val t = (1, \"hello\", true); 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
 
 #[test]
 fn test_index_expr() {
-    let ir = gen("fn main() -> Int { let v = [1, 2, 3]; v[0] }");
+    let ir = gen("fn main() -> Int { val v = [1, 2, 3]; v[0] }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -638,7 +638,7 @@ fn test_index_expr() {
 
 #[test]
 fn test_fstring() {
-    let ir = gen("fn main() -> String { let name = \"world\"; f\"Hello {name}!\" }");
+    let ir = gen("fn main() -> String { val name = \"world\"; f\"Hello {name}!\" }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -647,7 +647,7 @@ fn test_fstring() {
 
 #[test]
 fn test_try_operator() {
-    let ir = gen("fn main() -> Option { let x = Option::Some(42); let y = x?; Option::Some(y) }");
+    let ir = gen("fn main() -> Option { val x = Option::Some(42); val y = x?; Option::Some(y) }");
     let f = find_fn(&ir, "main");
     // Entry block still uses oxy_try_pop for classification.
     let entry_ops = &f.blocks[f.entry].ops;
@@ -693,7 +693,7 @@ fn test_panic_macro_lowering() {
 
 #[test]
 fn test_closure_simple() {
-    let ir = gen("fn main() -> Int { let add = |a: Int, b: Int| -> Int { a + b }; add(1, 2) }");
+    let ir = gen("fn main() -> Int { val add = |a: Int, b: Int| -> Int { a + b }; add(1, 2) }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
     // Should have a separate function for the closure
@@ -703,7 +703,7 @@ fn test_closure_simple() {
 
 #[test]
 fn test_closure_capture() {
-    let ir = gen("fn main() -> Int { let x = 10; let f = || -> Int { x }; f() }");
+    let ir = gen("fn main() -> Int { val x = 10; val f = || -> Int { x }; f() }");
     let _f = find_fn(&ir, "main");
     let closure = ir.functions.iter().find(|f| f.name.contains("closure"));
     assert!(closure.is_some(), "should have a closure function");
@@ -716,7 +716,7 @@ fn test_closure_capture() {
 
 #[test]
 fn test_async_block() {
-    let ir = gen("fn main() -> Int { let fut = async { 42 }; 0 }");
+    let ir = gen("fn main() -> Int { val fut = async { 42 }; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -744,7 +744,7 @@ fn test_multiple_functions() {
 
 #[test]
 fn test_assign() {
-    let ir = gen("fn main() -> Int { let mut x = 5; x = 10; x }");
+    let ir = gen("fn main() -> Int { var x = 5; x = 10; x }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     let store_count = ops
@@ -760,7 +760,7 @@ fn test_assign() {
 
 #[test]
 fn test_compound_assign() {
-    let ir = gen("fn main() -> Int { let mut x = 5; x += 3; x }");
+    let ir = gen("fn main() -> Int { var x = 5; x += 3; x }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -791,14 +791,14 @@ fn test_empty_function() {
 #[test]
 fn test_deeply_nested() {
     let ir =
-        gen("fn main() -> Int { let x = if true { if false { 1 } else { 2 } } else { 3 }; x }");
+        gen("fn main() -> Int { val x = if true { if false { 1 } else { 2 } } else { 3 }; x }");
     let f = find_fn(&ir, "main");
     assert!(f.blocks.len() >= 4, "nested if should have multiple blocks");
 }
 
 #[test]
 fn test_complex_expression() {
-    let ir = gen("fn main() -> Int { let a = 1; let b = 2; let c = 3; (a + b) * c }");
+    let ir = gen("fn main() -> Int { val a = 1; val b = 2; val c = 3; (a + b) * c }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
@@ -808,7 +808,7 @@ fn test_complex_expression() {
 #[test]
 fn test_unreachable_code_is_rejected() {
     // Code after return is now a type error, not an ir_gen crash.
-    let source = "fn main() -> Int { return 42; let x = 1; x }";
+    let source = "fn main() -> Int { return 42; val x = 1; x }";
     let program = crate::parser::parse(source).expect("parse failed");
     let result = crate::type_checker::TypeChecker::new().check_program(&program);
     assert!(
@@ -849,7 +849,7 @@ fn test_macro_call_println() {
 
 #[test]
 fn test_repeat_expression() {
-    let ir = gen("fn main() -> Int { let a = [0; 5]; 0 }");
+    let ir = gen("fn main() -> Int { val a = [0; 5]; 0 }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -860,14 +860,14 @@ fn test_repeat_expression() {
 
 #[test]
 fn test_async_block_expr() {
-    let ir = gen("fn main() -> Int { let fut = async { 42 }; 0 }");
+    let ir = gen("fn main() -> Int { val fut = async { 42 }; 0 }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }
 
 #[test]
 fn test_await_expr() {
-    let ir = gen("fn main() -> Int { let fut = async { 42 }; fut.await }");
+    let ir = gen("fn main() -> Int { val fut = async { 42 }; fut.await }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -881,7 +881,7 @@ fn test_await_expr() {
 #[test]
 fn test_while_let() {
     let ir = gen(
-        "fn main() -> Int { let x = Option::Some(1); while let Option::Some(v) = x { break; } 0 }",
+        "fn main() -> Int { val x = Option::Some(1); while val Option::Some(v) = x { break; } 0 }",
     );
     let f = find_fn(&ir, "main");
     assert!(
@@ -893,7 +893,7 @@ fn test_while_let() {
 
 #[test]
 fn test_for_destructure() {
-    let ir = gen("fn main() -> Int { for (a, b) in [(1, 2), (3, 4)] { let _x = a + b; } 0 }");
+    let ir = gen("fn main() -> Int { for (a, b) in [(1, 2), (3, 4)] { val _x = a + b; } 0 }");
     let f = find_fn(&ir, "main");
     assert!(
         f.blocks.len() >= 3,
@@ -904,7 +904,7 @@ fn test_for_destructure() {
 
 #[test]
 fn test_let_pattern() {
-    let ir = gen("fn main() -> Int { let (x, y) = (1, 2); x + y }");
+    let ir = gen("fn main() -> Int { val (x, y) = (1, 2); x + y }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(
@@ -920,7 +920,7 @@ fn test_let_pattern() {
 
 #[test]
 fn test_closure_inside_match() {
-    let ir = gen("fn main() -> Int { let x = 10; let f = match 1 { 1 => || -> Int { x }, _ => || -> Int { 0 } }; f() }");
+    let ir = gen("fn main() -> Int { val x = 10; val f = match 1 { 1 => || -> Int { x }, _ => || -> Int { 0 } }; f() }");
     let _f = find_fn(&ir, "main");
     let closures: Vec<_> = ir
         .functions
@@ -932,7 +932,7 @@ fn test_closure_inside_match() {
 
 #[test]
 fn test_cast_to_float() {
-    let ir = gen("fn main() -> Float { let x: Float = 3; x }");
+    let ir = gen("fn main() -> Float { val x: Float = 3; x }");
     let f = find_fn(&ir, "main");
     assert!(!f.blocks.is_empty());
 }

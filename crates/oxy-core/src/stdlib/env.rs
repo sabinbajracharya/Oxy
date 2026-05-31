@@ -44,9 +44,9 @@ pub fn call(
             let items: Vec<Value> = argv.into_iter().map(Value::String).collect();
             Ok(Value::Vec(Rc::new(RefCell::new(items))))
         }
-        "var" => {
-            check_arg_count("std::env::var", 1, args, span)?;
-            let name = expect_string(&args[0], "std::env::var", span)?;
+        "get" => {
+            check_arg_count("std::env::get", 1, args, span)?;
+            let name = expect_string(&args[0], "std::env::get", span)?;
             match std::env::var(name) {
                 Ok(val) => Ok(Value::some(Value::String(val))),
                 Err(_) => Ok(Value::none()),
@@ -104,8 +104,8 @@ mod tests {
     fn test_env_var_existing() {
         let out = run(r#"
 fn main() {
-    let val = std::env::var("PATH");
-    if let Some(v) = val {
+    var maybe_path = std::env::get("PATH");
+    if val Some(v) = maybe_path {
         println("found");
     } else {
         println("missing");
@@ -119,8 +119,8 @@ fn main() {
     fn test_env_var_nonexistent() {
         let out = run(r#"
 fn main() {
-    let val = std::env::var("FERRITE_NONEXISTENT_VAR_XYZ_12345");
-    if let Some(v) = val {
+    var maybe_path = std::env::get("FERRITE_NONEXISTENT_VAR_XYZ_12345");
+    if val Some(v) = maybe_path {
         println("found");
     } else {
         println("none");
@@ -134,8 +134,8 @@ fn main() {
     fn test_env_vars_returns_hashmap() {
         let out = run(r#"
 fn main() {
-    let vars = std::env::vars();
-    let len = vars.len();
+    val vars = std::env::vars();
+    val len = vars.len();
     println("{}", len > 0);
 }
 "#);
@@ -146,9 +146,9 @@ fn main() {
     fn test_env_current_dir() {
         let out = run(r#"
 fn main() {
-    let result = std::env::current_dir();
-    if let Ok(dir) = result {
-        let len = dir.len();
+    val result = std::env::current_dir();
+    if val Ok(dir) = result {
+        val len = dir.len();
         println("{}", len > 0);
     } else {
         println("err");
@@ -162,9 +162,9 @@ fn main() {
     fn test_env_home_dir() {
         let out = run(r#"
 fn main() {
-    let result = std::env::home_dir();
-    if let Some(dir) = result {
-        let len = dir.len();
+    val result = std::env::home_dir();
+    if val Some(dir) = result {
+        val len = dir.len();
         println("{}", len > 0);
     } else {
         println("none");

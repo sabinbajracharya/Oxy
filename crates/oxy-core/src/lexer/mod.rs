@@ -1317,8 +1317,8 @@ mod tests {
 
     #[test]
     fn test_span_tracking() {
-        let tokens = tokenize("let x = 42;").unwrap();
-        // 'let' starts at line 1, col 1
+        let tokens = tokenize("val x = 42;").unwrap();
+        // 'val' starts at line 1, col 1
         assert_eq!(tokens[0].span.line, 1);
         assert_eq!(tokens[0].span.column, 1);
         // 'x' starts at line 1, col 5
@@ -1328,10 +1328,10 @@ mod tests {
 
     #[test]
     fn test_multiline_span() {
-        let tokens = tokenize("let x\nlet y").unwrap();
-        assert_eq!(tokens[0].span.line, 1); // let
+        let tokens = tokenize("val x\nval y").unwrap();
+        assert_eq!(tokens[0].span.line, 1); // val
         assert_eq!(tokens[1].span.line, 1); // x
-        assert_eq!(tokens[2].span.line, 2); // let
+        assert_eq!(tokens[2].span.line, 2); // val
         assert_eq!(tokens[3].span.line, 2); // y
     }
 

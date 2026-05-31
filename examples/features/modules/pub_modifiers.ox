@@ -49,7 +49,7 @@ mod parent_lib {
     }
 
     pub struct SuperInfo {
-        pub val: Int,
+        pub value: Int,
     }
 
     pub fn public_data() -> Int {
@@ -66,8 +66,8 @@ fn test_pub_super_accessible_from_parent() {
 
 #[test]
 fn test_pub_super_struct_from_parent() {
-    val s = parent_lib::SuperInfo { val: 77 };
-    assert_eq(s.val, 77);
+    val s = parent_lib::SuperInfo { value: 77 };
+    assert_eq(s.value, 77);
 }
 
 #[test]

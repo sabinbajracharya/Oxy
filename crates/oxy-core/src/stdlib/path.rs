@@ -192,7 +192,7 @@ mod tests {
     fn test_path_join_two() {
         let out = run(r#"
 fn main() {
-    let p = std::path::join(["a".to_string(), "b".to_string()]);
+    val p = std::path::join(["a".to_string(), "b".to_string()]);
     println("{}", p);
 }
 "#);
@@ -204,7 +204,7 @@ fn main() {
     fn test_path_basename() {
         let out = run(r#"
 fn main() {
-    let n = std::path::basename("/a/b/c.txt");
+    val n = std::path::basename("/a/b/c.txt");
     println("{}", n);
 }
 "#);
@@ -215,8 +215,8 @@ fn main() {
     fn test_path_extension() {
         let out = run(r#"
 fn main() {
-    let e = std::path::extension("foo/bar.tar.gz");
-    if let Some(s) = e { println("{}", s); } else { println("none"); }
+    val e = std::path::extension("foo/bar.tar.gz");
+    if val Some(s) = e { println("{}", s); } else { println("none"); }
 }
 "#);
         assert_eq!(out, "gz\n");
@@ -226,7 +226,7 @@ fn main() {
     fn test_path_normalize_dots() {
         let out = run(r#"
 fn main() {
-    let n = std::path::normalize("a/b/./../c");
+    val n = std::path::normalize("a/b/./../c");
     println("{}", n);
 }
 "#);

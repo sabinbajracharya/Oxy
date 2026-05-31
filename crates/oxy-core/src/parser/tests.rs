@@ -22,7 +22,7 @@ fn parse_fn(src: &str) -> FnDef {
 // === Let statements ===
 
 #[test]
-fn test_val_simple() {
+fn test_let_simple() {
     let stmts = parse_fn_body("fn main() { val x = 42; }");
     assert_eq!(stmts.len(), 1);
     let Stmt::Let {
@@ -32,7 +32,7 @@ fn test_val_simple() {
         ..
     } = &stmts[0]
     else {
-        panic!("expected val statement");
+        panic!("expected let statement");
     };
     assert_eq!(name, "x");
     assert!(!mutable);
@@ -40,17 +40,17 @@ fn test_val_simple() {
 }
 
 #[test]
-fn test_var() {
+fn test_let_mut() {
     let stmts = parse_fn_body("fn main() { var x = 10; }");
     let Stmt::Let { name, mutable, .. } = &stmts[0] else {
-        panic!("expected var statement");
+        panic!("expected let statement");
     };
     assert_eq!(name, "x");
     assert!(mutable);
 }
 
 #[test]
-fn test_val_with_type() {
+fn test_let_with_type() {
     let stmts = parse_fn_body("fn main() { val x: i64 = 42; }");
     let Stmt::Let { type_ann, .. } = &stmts[0] else {
         panic!("expected let statement");
@@ -342,7 +342,7 @@ fn test_pretty_print() {
 // === Error cases ===
 
 #[test]
-fn test_missing_semicolon_in_val() {
+fn test_missing_semicolon_in_let() {
     let result = parse("fn main() { val x = 42 }");
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("expected ';'"));
@@ -386,9 +386,9 @@ fn add(a: i64, b: i64) -> i64 {
 }
 
 fn main() {
-    let x: i64 = 10;
-    let y: i64 = 20;
-    let result = add(x, y);
+    val x: i64 = 10;
+    val y: i64 = 20;
+    val result = add(x, y);
     println("Result: {}", result);
 }
 "#;

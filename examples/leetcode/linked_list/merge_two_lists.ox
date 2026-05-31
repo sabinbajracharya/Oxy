@@ -7,7 +7,7 @@
 // and append to the result. Works exactly like the merge step of merge sort.
 //
 // === Intuition ===
-// Compare l1.val and l2.val. The smaller node becomes part of the result.
+// Compare l1.value and l2.value. The smaller node becomes part of the result.
 // Recursively merge the rest. This avoids the dummy-head copy issue.
 //
 // === Pattern Recognition ===
@@ -21,7 +21,7 @@
 // - Simple and avoids state management issues
 
 struct ListNode {
-    val: Int,
+    value: Int,
     next: Option,
 }
 
@@ -45,7 +45,7 @@ fn main() {
 fn print_list(head: Option) {
     var curr = head;
     while val Some(node) = curr {
-        print("{} ", node.val);
+        print("{} ", node.value);
         curr = node.next;
     }
     println("");
@@ -60,7 +60,7 @@ fn merge_two_lists(l1: Option, l2: Option) -> Option {
     }
     var node_a = l1.unwrap();
     var node_b = l2.unwrap();
-    if node_a.val <= node_b.val {
+    if node_a.value <= node_b.value {
         val rest_a = node_a.next;
         node_a.next = merge_two_lists(rest_a, Some(node_b));
         Some(node_a)
@@ -82,12 +82,12 @@ fn test_merge_basic() {
     l2.next = Some(n4);
 
     val result = merge_two_lists(Some(l1), Some(l2));
-    assert_eq(result.unwrap().val, 1);
+    assert_eq(result.unwrap().value, 1);
 }
 
 #[test]
 fn test_merge_one_empty() {
     val l1 = ListNode::new(5);
     val result = merge_two_lists(Some(l1), None);
-    assert_eq(result.unwrap().val, 5);
+    assert_eq(result.unwrap().value, 5);
 }

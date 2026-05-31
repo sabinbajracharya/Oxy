@@ -254,12 +254,12 @@ fn test_self_in_use_path() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn val() -> Int { 42 }
-    pub use self::val;
+    pub fn value() -> Int { 42 }
+    pub use self::value;
 }
-use m::val;
+use m::value;
 fn main() {
-    println("{}", val());
+    println("{}", value());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -271,10 +271,10 @@ fn test_super_in_use_path() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn val() -> Int { 99 }
+    pub fn value() -> Int { 99 }
     pub mod b {
-        use super::val;
-        pub fn call() -> Int { val() }
+        use super::value;
+        pub fn call() -> Int { value() }
     }
 }
 use a::b::call;
@@ -473,11 +473,11 @@ fn test_pub_visibility() {
     let output = run_and_capture(
         r#"
 mod m {
-    pub fn val() -> Int { 42 }
+    pub fn value() -> Int { 42 }
 }
-use m::val;
+use m::value;
 fn main() {
-    println("{}", val());
+    println("{}", value());
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -489,10 +489,10 @@ fn test_pub_parent_visibility() {
     let output = run_and_capture(
         r#"
 mod a {
-    pub fn val() -> Int { 99 }
+    pub fn value() -> Int { 99 }
     pub mod b {
-        use super::val;
-        pub fn call() -> Int { val() }
+        use super::value;
+        pub fn call() -> Int { value() }
     }
 }
 use a::b::call;

@@ -105,7 +105,7 @@ fn test_path_call_return_type() {
 
 mod outer_mod {
     pub struct Inner {
-        pub val: Int,
+        pub value: Int,
     }
 
     pub struct Outer {
@@ -113,7 +113,7 @@ mod outer_mod {
     }
 
     pub fn make() -> Outer {
-        Outer { inner: Inner { val: 99 } }
+        Outer { inner: Inner { value: 99 } }
     }
 }
 
@@ -122,6 +122,6 @@ use outer_mod::Outer;
 #[test]
 fn test_nested_field_access() {
     val o = outer_mod::make();
-    val v: Int = o.inner.val;
+    val v: Int = o.inner.value;
     assert_eq(v, 99);
 }

@@ -53,13 +53,13 @@ fn main() {
     // === Environment ===
     println("\n=== Environment ===");
     
-    val path = std::env::var("PATH");
+    val path = std::env::get("PATH");
     match path {
         Some(p) => println("PATH starts with: {}...", p),
         None => println("PATH not set"),
     }
     
-    val missing = std::env::var("THIS_DOES_NOT_EXIST_12345");
+    val missing = std::env::get("THIS_DOES_NOT_EXIST_12345");
     println("Missing var: {:?}", missing);
     
     val cwd = std::env::current_dir();

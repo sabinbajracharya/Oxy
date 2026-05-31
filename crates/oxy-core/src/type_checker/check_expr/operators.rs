@@ -245,7 +245,7 @@ impl TypeChecker {
                 if existing_mut == Some(false) {
                     return Err(PipelineError::TypeError {
                                 message: format!(
-                                    "cannot assign to immutable variable `{name}`; declare it with `let mut {name}`"
+                                    "cannot assign to immutable variable `{name}`; declare it with `var {name}`"
                                 ),
                                 line: target.span().line,
                                 column: target.span().column,
@@ -343,7 +343,7 @@ impl TypeChecker {
                     if let Some(false) = self.env.borrow().get_mutable(name) {
                         return Err(PipelineError::TypeError {
                             message: format!(
-                                "cannot assign to a field of immutable variable `{name}`; declare it with `let mut {name}`"
+                                "cannot assign to a field of immutable variable `{name}`; declare it with `var {name}`"
                             ),
                             line: span.line,
                             column: span.column,

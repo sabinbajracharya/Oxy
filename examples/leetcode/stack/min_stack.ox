@@ -32,10 +32,10 @@ impl MinStack {
         MinStack { data: [], mins: [] }
     }
 
-    fn push(self, val: Int) {
-        self.data.push(val);
-        val min_val = if self.mins.is_empty() || val < self.mins.last().unwrap() {
-            val
+    fn push(self, v: Int) {
+        self.data.push(v);
+        val min_val = if self.mins.is_empty() || v < self.mins.last().unwrap() {
+            v
         } else {
             self.mins.last().unwrap()
         };

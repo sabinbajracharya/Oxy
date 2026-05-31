@@ -31,10 +31,10 @@ fn backtrack(candidates: List, start: Int, target: Int, current: List, result: L
     }
     var i = start;
     while i < candidates.len() {
-        val val = candidates[i];
-        if val <= target {
-            current.push(val);
-            backtrack(candidates, i, target - val, current, result);
+        val v = candidates[i];
+        if v <= target {
+            current.push(v);
+            backtrack(candidates, i, target - v, current, result);
             current.pop();
         }
         i = i + 1;

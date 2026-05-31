@@ -23,7 +23,7 @@
 // - Track level_size before processing each level
 
 struct TreeNode {
-    val: Int,
+    value: Int,
     left: Option,
     right: Option,
 }
@@ -53,7 +53,7 @@ fn level_order(root: Option) -> List {
         var level = [];
         for _i in 0..level_size {
             var node = queue.pop_front().unwrap();
-            level.push(node.val);
+            level.push(node.value);
             if val Some(left) = node.left {
                 queue.push_back(left);
             }

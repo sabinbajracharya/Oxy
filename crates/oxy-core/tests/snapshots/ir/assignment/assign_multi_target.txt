@@ -1,16 +1,1 @@
-fn main() -> () {
-  locals: 3
-  bb0(entry):
-    v0 = const.Int 0
-    store.local $0, v0
-    v1 = const.Int 0
-    store.local $1, v1
-    v2 = const.Int 5
-    store.local $2, v2
-    v3 = load.local $2
-    store.local $0, v3
-    v4 = load.local $2
-    store.local $1, v4
-    v5 = const.unit
-    ret v5
-}
+<ir gen error: [2:1] type error: undefined variable 'let'>

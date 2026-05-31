@@ -20,7 +20,7 @@
 // - DFS uses O(h) stack space, BFS would use O(w) queue space
 
 struct TreeNode {
-    val: Int,
+    value: Int,
     left: Option,
     right: Option,
 }

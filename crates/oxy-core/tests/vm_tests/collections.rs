@@ -350,8 +350,8 @@ fn test_hashmap_get() {
 fn main() {
     var m = Map::new();
     m.insert("key", 42);
-    val val = m.get("key");
-    println("{}", val.unwrap());
+    val value = m.get("key");
+    println("{}", value.unwrap());
 }
 "#,
     );
@@ -364,8 +364,8 @@ fn test_hashmap_get_missing() {
         r#"
 fn main() {
     val m = Map::new();
-    val val = m.get("nope");
-    println("{}", val.is_none());
+    val value = m.get("nope");
+    println("{}", value.is_none());
 }
 "#,
     );

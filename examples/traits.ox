@@ -42,8 +42,8 @@ fn identity<T>(x: T) -> T {
 }
 
 // Generic with bounds (bounds parsed but not enforced in this phase)
-fn print_value<T: Display>(val: T) {
-    println("{}", val);
+fn print_value<T: Display>(value: T) {
+    println("{}", value);
 }
 
 // Operator overloading via traits

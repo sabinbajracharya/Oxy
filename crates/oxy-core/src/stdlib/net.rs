@@ -162,8 +162,8 @@ mod tests {
     fn test_net_tcp_connect_invalid() {
         let out = run(r#"
 fn main() {
-    let result = std::net::tcp_connect("127.0.0.1:1");
-    if let Ok(conn) = result {
+    val result = std::net::tcp_connect("127.0.0.1:1");
+    if val Ok(conn) = result {
         println("ok");
     } else {
         println("err");
@@ -177,7 +177,7 @@ fn main() {
     fn test_net_socket_addr_parse() {
         let out = run(r#"
 fn main() {
-    let addr = std::net::socket_addr_parse("127.0.0.1", 8080);
+    val addr = std::net::socket_addr_parse("127.0.0.1", 8080);
     println("{}", addr);
 }
 "#);
@@ -189,8 +189,8 @@ fn main() {
         // DNS may fail in some environments, so just verify it returns a Result
         let out = run(r#"
 fn main() {
-    let result = std::net::lookup_host("localhost");
-    if let Ok(addrs) = result {
+    val result = std::net::lookup_host("localhost");
+    if val Ok(addrs) = result {
         println("{}", addrs.len() > 0);
     } else {
         // DNS lookup may fail in some envs — still valid

@@ -132,7 +132,7 @@ fn main() {
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
-        msg.contains("immutable variable `p`") && msg.contains("let mut"),
+        msg.contains("immutable variable `p`") && msg.contains("var p"),
         "expected fix-it error, got: {}",
         msg
     );

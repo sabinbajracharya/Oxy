@@ -9,7 +9,7 @@ mod tests {
     fn test_compiled_array_literal() {
         let source = r#"
         fn main() {
-            let arr = [1, 2, 3];
+            val arr = [1, 2, 3];
             println(arr);
         }
         "#;
@@ -21,7 +21,7 @@ mod tests {
     fn test_compiled_array_empty() {
         let source = r#"
         fn main() {
-            let arr = [];
+            val arr = [];
             println(arr);
         }
         "#;
@@ -33,7 +33,7 @@ mod tests {
     fn test_compiled_array_nested() {
         let source = r#"
         fn main() {
-            let arr = [[1, 2], [3, 4]];
+            val arr = [[1, 2], [3, 4]];
             println(arr);
         }
         "#;
@@ -47,7 +47,7 @@ mod tests {
     fn test_compiled_index_list() {
         let source = r#"
         fn main() {
-            let arr = [10, 20, 30];
+            val arr = [10, 20, 30];
             println(arr[0]);
             println(arr[2]);
         }
@@ -62,7 +62,7 @@ mod tests {
     fn test_compiled_index_string() {
         let source = r#"
         fn main() {
-            let s = "ab";
+            val s = "ab";
             println(s[0]);
             println(s[1]);
         }
@@ -77,7 +77,7 @@ mod tests {
     fn test_compiled_index_tuple() {
         let source = r#"
         fn main() {
-            let t = (10, 20);
+            val t = (10, 20);
             println(t.0);
             println(t.1);
         }
@@ -111,7 +111,7 @@ mod tests {
     fn test_compiled_for_range_compiles() {
         let source = r#"
         fn main() {
-            let mut sum = 0;
+            var sum = 0;
             for i in 0..3 {
                 sum = sum + i;
             }
@@ -141,7 +141,7 @@ mod tests {
     fn test_compiled_for_range_sum() {
         let source = r#"
         fn main() {
-            let mut sum = 0;
+            var sum = 0;
             for i in 0..5 {
                 sum = sum + i;
             }
@@ -175,7 +175,7 @@ mod tests {
         // Verify while loop works correctly after refactoring (no break)
         let source = r#"
         fn main() {
-            let mut i = 0;
+            var i = 0;
             while i < 3 {
                 println(i);
                 i = i + 1;
@@ -192,7 +192,7 @@ mod tests {
     fn test_compiled_while_break() {
         let source = r#"
         fn main() {
-            let mut i = 0;
+            var i = 0;
             while i < 10 {
                 if i == 3 { break; }
                 println(i);
@@ -210,7 +210,7 @@ mod tests {
     fn test_compiled_loop_break() {
         let source = r#"
         fn main() {
-            let mut i = 0;
+            var i = 0;
             loop {
                 if i >= 3 { break; }
                 println(i);
@@ -244,7 +244,7 @@ mod tests {
     fn test_compiled_while_continue() {
         let source = r#"
         fn main() {
-            let mut i = 0;
+            var i = 0;
             while i < 5 {
                 i = i + 1;
                 if i == 3 { continue; }
@@ -262,7 +262,7 @@ mod tests {
     fn test_compiled_loop_continue() {
         let source = r#"
         fn main() {
-            let mut i = 0;
+            var i = 0;
             loop {
                 i = i + 1;
                 if i == 2 { continue; }
@@ -337,10 +337,10 @@ mod tests {
     fn test_compiled_arithmetic() {
         let source = r#"
         fn main() {
-            let x = 40 + 2;
-            let y = x * 2;
-            let z = y - 4;
-            let w = z / 2;
+            val x = 40 + 2;
+            val y = x * 2;
+            val z = y - 4;
+            val w = z / 2;
             println("{}", w);
         }
         "#;
@@ -353,7 +353,7 @@ mod tests {
         let source = r#"
         fn add(x: Int, y: Int) -> Int { x + y }
         fn main() {
-            let r = add(3, 4);
+            val r = add(3, 4);
             println("{}", r);
         }
         "#;
@@ -382,7 +382,7 @@ mod tests {
         // Simplest while loop to debug
         let source = r#"
         fn main() {
-            let mut x = 0;
+            var x = 0;
             while x < 3 {
                 println("{}", x);
                 x = x + 1;
@@ -412,7 +412,7 @@ mod tests {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
-            let r = fib(10);
+            val r = fib(10);
             println("{}", r);
         }
         "#;
@@ -424,8 +424,8 @@ mod tests {
     fn test_compiled_while_loop() {
         let source = r#"
         fn main() {
-            let mut i = 0;
-            let mut sum = 0;
+            var i = 0;
+            var sum = 0;
             while i < 10 {
                 sum = sum + i;
                 i = i + 1;
@@ -459,7 +459,7 @@ mod tests {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
         fn main() {
-            let r = fib(10);
+            val r = fib(10);
             println("{}", r);
         }
         "#;
@@ -476,7 +476,7 @@ mod tests {
     fn test_compiled_compound_assign_add() {
         let source = r#"
         fn main() {
-            let mut x = 10;
+            var x = 10;
             x += 5;
             println("{}", x);
         }
@@ -491,7 +491,7 @@ mod tests {
     fn test_compiled_compound_assign_sub() {
         let source = r#"
         fn main() {
-            let mut x = 10;
+            var x = 10;
             x -= 3;
             println("{}", x);
         }
@@ -506,7 +506,7 @@ mod tests {
     fn test_compiled_compound_assign_mul() {
         let source = r#"
         fn main() {
-            let mut x = 7;
+            var x = 7;
             x *= 3;
             println("{}", x);
         }
@@ -521,7 +521,7 @@ mod tests {
     fn test_compiled_compound_assign_div() {
         let source = r#"
         fn main() {
-            let mut x = 20;
+            var x = 20;
             x /= 4;
             println("{}", x);
         }
@@ -538,7 +538,7 @@ mod tests {
     fn test_compiled_fstring_literal_only() {
         let source = r#"
         fn main() {
-            let msg = f"hello world";
+            val msg = f"hello world";
             println("{}", msg);
         }
         "#;
@@ -552,8 +552,8 @@ mod tests {
     fn test_compiled_fstring_interpolated() {
         let source = r#"
         fn main() {
-            let name = "Oxy";
-            let msg = f"Hello, {name}!";
+            val name = "Oxy";
+            val msg = f"Hello, {name}!";
             println("{}", msg);
         }
         "#;
@@ -571,9 +571,9 @@ mod tests {
     fn test_compiled_fstring_multiple_exprs() {
         let source = r#"
         fn main() {
-            let x = 10;
-            let y = 20;
-            let msg = f"{x} + {y} = {x + y}";
+            val x = 10;
+            val y = 20;
+            val msg = f"{x} + {y} = {x + y}";
             println("{}", msg);
         }
         "#;
@@ -618,8 +618,8 @@ mod tests {
             }
         }
         fn main() {
-            let c = Counter { n: 0 };
-            let c2 = c.inc();
+            val c = Counter { n: 0 };
+            val c2 = c.inc();
             println("{}", c2.n);
         }
         "#;
@@ -639,7 +639,7 @@ mod tests {
             }
         }
         fn main() {
-            let v = Value { x: 42 };
+            val v = Value { x: 42 };
             println("{}", v.get());
         }
         "#;
@@ -655,8 +655,8 @@ mod tests {
     fn test_compiled_match_literal() {
         let source = r#"
         fn main() {
-            let x = 1;
-            let r = match x {
+            val x = 1;
+            val r = match x {
                 1 => "one",
                 _ => "other",
             };
@@ -673,8 +673,8 @@ mod tests {
     fn test_compiled_match_wildcard() {
         let source = r#"
         fn main() {
-            let x = 99;
-            let r = match x {
+            val x = 99;
+            val r = match x {
                 1 => "one",
                 _ => "other",
             };
@@ -691,8 +691,8 @@ mod tests {
     fn test_compiled_match_ident_binding() {
         let source = r#"
         fn main() {
-            let x = 42;
-            let r = match x {
+            val x = 42;
+            val r = match x {
                 v => v + 1,
             };
             println("{}", r);
@@ -713,8 +713,8 @@ mod tests {
         let source = r#"
         enum Opt { Some(Int), None }
         fn main() {
-            let x = Opt::Some(10);
-            let r = match x {
+            val x = Opt::Some(10);
+            val r = match x {
                 Opt::Some(v) => v,
                 Opt::None => 0,
             };
@@ -738,8 +738,8 @@ mod tests {
         let source = r#"
         enum Opt { Some(Int), None }
         fn main() {
-            let x = Opt::Some(42);
-            if let Opt::Some(v) = x {
+            val x = Opt::Some(42);
+            if val Opt::Some(v) = x {
                 println("{}", v);
             }
         }
@@ -755,8 +755,8 @@ mod tests {
         let source = r#"
         enum Opt { Some(Int), None }
         fn main() {
-            let x = Opt::None;
-            if let Opt::Some(v) = x {
+            val x = Opt::None;
+            if val Opt::Some(v) = x {
                 println("{}", v);
             } else {
                 println("nothing");
@@ -805,7 +805,7 @@ mod tests {
     fn test_compiled_pathcall_string_from() {
         let source = r#"
         fn main() {
-            let s = String::from("hello");
+            val s = String::from("hello");
             println("{}", s);
         }
         "#;
@@ -823,7 +823,7 @@ mod tests {
     fn test_compiled_pathcall_hashmap_new() {
         let source = r#"
         fn main() {
-            let m = Map::new();
+            val m = Map::new();
             println("{}", m.len());
         }
         "#;
@@ -864,11 +864,11 @@ mod tests {
         let source = r#"
         mod outer {
             pub mod inner {
-                pub fn val() -> Int { 99 }
+                pub fn value() -> Int { 99 }
             }
         }
         fn main() {
-            println("{}", outer::inner::val());
+            println("{}", outer::inner::value());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -917,8 +917,8 @@ mod tests {
     fn test_compiled_iter_any() {
         let source = r#"
         fn main() {
-            let v = [1, 2, 3];
-            let r = v.iter().any(|x| x == 2);
+            val v = [1, 2, 3];
+            val r = v.iter().any(|x| x == 2);
             println("{}", r);
         }
         "#;
@@ -934,7 +934,7 @@ mod tests {
     fn test_event_loop_spawn_basic() {
         let source = r#"
         fn main() {
-            let h = spawn(|| 42);
+            val h = spawn(|| 42);
             println("{}", h.await);
         }
         "#;
@@ -948,8 +948,8 @@ mod tests {
     fn test_event_loop_spawn_multiple() {
         let source = r#"
         fn main() {
-            let a = spawn(|| 100);
-            let b = spawn(|| 200);
+            val a = spawn(|| 100);
+            val b = spawn(|| 200);
             println("{}", a.await);
             println("{}", b.await);
         }
@@ -964,7 +964,7 @@ mod tests {
     fn test_event_loop_sleep_in_spawn() {
         let source = r#"
         fn main() {
-            let h = spawn(|| {
+            val h = spawn(|| {
                 sleep(0);
                 99
             });
@@ -981,9 +981,9 @@ mod tests {
     fn test_event_loop_select_basic() {
         let source = r#"
         fn main() {
-            let a = spawn(|| 42);
-            let b = spawn(|| 99);
-            let result = select(a, b);
+            val a = spawn(|| 42);
+            val b = spawn(|| 99);
+            val result = select(a, b);
             println("{}", result);
         }
         "#;

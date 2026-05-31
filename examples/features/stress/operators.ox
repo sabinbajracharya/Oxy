@@ -95,11 +95,11 @@ fn test_chained_add() {
 }
 
 // --- Self in impl ---
-struct Counter1 { val: Int }
+struct Counter1 { value: Int }
 
 impl Counter1 {
-    fn new() -> Self { Counter1 { val: 0 } }
-    fn bumped(self) -> Self { Counter1 { val: self.val + 1 } }
+    fn new() -> Self { Counter1 { value: 0 } }
+    fn bumped(self) -> Self { Counter1 { value: self.value + 1 } }
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_self_in_impl() {
     val c = Counter1::new();
     val c2 = c.bumped();
     val c3 = c2.bumped();
-    assert_eq(c3.val, 2);
+    assert_eq(c3.value, 2);
 }
 
 // --- self vs mut self ---

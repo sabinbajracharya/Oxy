@@ -1,10 +1,1 @@
-fn main() -> () {
-  locals: 1
-  bb0(entry):
-    v0 = const.Int 1
-    v1 = const.Int 1
-    v2 = eq v0, v1
-    store.local $0, v2
-    v3 = const.unit
-    ret v3
-}
+<ir gen error: [2:1] type error: undefined variable 'let'>

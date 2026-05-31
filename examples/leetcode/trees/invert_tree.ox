@@ -22,7 +22,7 @@
 // - Return the node itself (now inverted)
 
 struct TreeNode {
-    val: Int,
+    value: Int,
     left: Option,
     right: Option,
 }
@@ -43,7 +43,7 @@ fn main() {
 
 fn print_tree(root: Option) {
     if val Some(node) = root {
-        print("{} ", node.val);
+        print("{} ", node.value);
         print_tree(node.left);
         print_tree(node.right);
     }
@@ -75,9 +75,9 @@ fn test_invert() {
     root.right = Some(r);
     val result = invert_tree(Some(root));
     val node = result.unwrap();
-    assert_eq(node.val, 4);
-    assert_eq(node.left.unwrap().val, 7);
-    assert_eq(node.right.unwrap().val, 2);
+    assert_eq(node.value, 4);
+    assert_eq(node.left.unwrap().value, 7);
+    assert_eq(node.right.unwrap().value, 2);
 }
 
 #[test]

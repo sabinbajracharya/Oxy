@@ -142,7 +142,7 @@ fn test_iteration() {
     s.insert(20);
     s.insert(30);
     var count = 0;
-    for val in s {
+    for v in s {
         count = count + 1;
     }
     assert_eq(count, 3);

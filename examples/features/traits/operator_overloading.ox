@@ -123,21 +123,21 @@ fn test_div_operator() {
 // === Operator on Enum ===
 
 struct BoxedInt {
-    val: Int,
+    value: Int,
 }
 
 impl Add for BoxedInt {
     fn add(self, other: BoxedInt) -> BoxedInt {
-        BoxedInt { val: self.val + other.val }
+        BoxedInt { value: self.value + other.value }
     }
 }
 
 #[test]
 fn test_operator_on_enum() {
-    val a = BoxedInt { val: 10 };
-    val b = BoxedInt { val: 20 };
+    val a = BoxedInt { value: 10 };
+    val b = BoxedInt { value: 20 };
     val c = a + b;
-    assert_eq(c.val, 30);
+    assert_eq(c.value, 30);
 }
 
 // === Method Overrides Operator ===

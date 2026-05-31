@@ -278,7 +278,8 @@ fn test_all_modules_resolve_in_registry() {
 #[test]
 fn test_keywords_not_empty() {
     assert!(!symbols::KEYWORDS.is_empty());
-    assert!(symbols::KEYWORDS.contains(&"let"));
+    assert!(symbols::KEYWORDS.contains(&"val"));
+    assert!(symbols::KEYWORDS.contains(&"var"));
     assert!(symbols::KEYWORDS.contains(&"fn"));
     assert!(symbols::KEYWORDS.contains(&"struct"));
     assert!(symbols::KEYWORDS.contains(&"match"));
