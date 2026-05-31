@@ -770,7 +770,7 @@ fn test_compound_assign() {
 
 #[test]
 fn test_method_with_self() {
-    let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
+    let ir = gen("struct Counter { value: int } impl Counter { fn inc(self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
     // Should generate IR for the inc method
     let method = ir.functions.iter().find(|f| f.name.contains("inc"));
     assert!(
@@ -940,7 +940,7 @@ fn test_cast_to_float() {
 
 #[test]
 fn test_method_with_self_param() {
-    let ir = gen("struct Counter { value: int } impl Counter { fn inc(mut self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
+    let ir = gen("struct Counter { value: int } impl Counter { fn inc(self) { self.value = self.value + 1 } } fn main() -> int { 0 }");
     let method = ir.functions.iter().find(|f| f.name.contains("inc"));
     assert!(method.is_some(), "should have inc method");
 }

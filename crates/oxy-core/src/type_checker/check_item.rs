@@ -125,7 +125,7 @@ impl TypeChecker {
         for (param, p_ty) in f.params.iter().zip(param_tys.iter()) {
             fn_env
                 .borrow_mut()
-                .define_mut(&param.name, p_ty.clone(), param.is_mut);
+                .define_mut(&param.name, p_ty.clone(), true);
         }
 
         let saved_env = self.env.clone();

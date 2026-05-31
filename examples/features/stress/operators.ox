@@ -115,7 +115,7 @@ struct Bag { items: Vec<int> }
 
 impl Bag {
     fn new() -> Bag { Bag { items: vec![] } }
-    fn add(mut self, x: int) -> Bag {
+    fn add(self, x: int) -> Bag {
         self.items.push(x);
         self
     }
@@ -150,8 +150,8 @@ struct Config { name: String, retries: int }
 
 impl Config {
     fn new() -> Config { Config { name: "".to_string(), retries: 0 } }
-    fn name(mut self, n: String) -> Config { self.name = n; self }
-    fn retries(mut self, r: int) -> Config { self.retries = r; self }
+    fn name(self, n: String) -> Config { self.name = n; self }
+    fn retries(self, r: int) -> Config { self.retries = r; self }
 }
 
 #[test]

@@ -207,7 +207,6 @@ pub(super) extern "C" fn oxy_push_closure(
                     generic_args: vec![],
                     span: placeholder_span,
                 },
-                is_mut: false,
                 span: placeholder_span,
             })
             .collect(),

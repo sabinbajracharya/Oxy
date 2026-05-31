@@ -358,7 +358,7 @@ fn test_struct_field_mutation_via_method() {
                     Counter { count: 0 }
                 }
 
-                fn inc(mut self) {
+                fn inc(self) {
                     self.count = self.count + 1;
                 }
             }
@@ -387,7 +387,7 @@ fn test_struct_field_mutation_via_self_push() {
                     Stack { items: vec![] }
                 }
 
-                fn push(mut self, val: int) {
+                fn push(self, val: int) {
                     self.items.push(val);
                 }
             }

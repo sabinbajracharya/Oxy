@@ -304,21 +304,13 @@ impl Parser {
             // so `&self` / `&mut self` / `&T` are noise that mislead readers.
             if self.check(&TokenKind::Amp) {
                 return Err(self.error(
-                    "references are not supported in Oxy. Use `self` for read-only \
-                     methods, `mut self` for mutating methods, and drop `&` from \
-                     parameter types (e.g., `name: String` instead of `name: &str`). \
+                    "references are not supported in Oxy. Use `self` for methods \
+                     and drop `&` from parameter types (e.g., `name: String` \
+                     instead of `name: &str`). \
                      Oxy has no borrow checker — see CLAUDE.md."
                         .to_string(),
                 ));
             }
-
-            // Optional `mut` prefix (applies to both `mut self` and `mut x: T`).
-            let is_mut = if self.check(&TokenKind::Mut) {
-                self.advance();
-                true
-            } else {
-                false
-            };
 
             // `self` parameter (for methods).
             if self.check(&TokenKind::SelfLower) {
@@ -330,7 +322,6 @@ impl Parser {
                         generic_args: Vec::new(),
                         span: start_span,
                     },
-                    is_mut,
                     span: start_span,
                 });
                 if !self.match_token(&TokenKind::Comma) {
@@ -348,7 +339,6 @@ impl Parser {
                 span: self.merge_spans(start_span, type_ann.span()),
                 name,
                 type_ann,
-                is_mut,
             });
 
             if !self.match_token(&TokenKind::Comma) {

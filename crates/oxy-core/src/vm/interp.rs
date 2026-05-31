@@ -1094,7 +1094,7 @@ mod tests {
     #[test]
     fn interp_struct_method() {
         assert_parity(
-            "struct Counter { n: int }\nimpl Counter { fn get(self) -> int { self.n } fn bump(mut self) { self.n = self.n + 1; } }\nfn main() { let mut c = Counter { n: 5 }; c.bump(); println!(\"{}\", c.get()); }",
+            "struct Counter { n: int }\nimpl Counter { fn get(self) -> int { self.n } fn bump(self) { self.n = self.n + 1; } }\nfn main() { let mut c = Counter { n: 5 }; c.bump(); println!(\"{}\", c.get()); }",
         );
     }
 

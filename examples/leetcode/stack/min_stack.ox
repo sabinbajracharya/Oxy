@@ -32,7 +32,7 @@ impl MinStack {
         MinStack { data: vec![], mins: vec![] }
     }
 
-    fn push(mut self, val: int) {
+    fn push(self, val: int) {
         self.data.push(val);
         let min_val = if self.mins.is_empty() || val < self.mins.last().unwrap() {
             val
@@ -42,7 +42,7 @@ impl MinStack {
         self.mins.push(min_val);
     }
 
-    fn pop(mut self) {
+    fn pop(self) {
         self.data.pop();
         self.mins.pop();
     }

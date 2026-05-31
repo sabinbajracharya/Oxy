@@ -65,12 +65,12 @@ fn test_reject_amp_prefix_expression() {
 }
 
 #[test]
-fn test_mut_self_method_works() {
+fn test_self_method_works() {
     let output = run_and_capture(
         r#"
 struct Counter { n: int }
 impl Counter {
-    fn bump(mut self) -> int {
+    fn bump(self) -> int {
         self.n = self.n + 1;
         self.n
     }
@@ -84,10 +84,10 @@ fn main() {
 }
 
 #[test]
-fn test_mut_param_works() {
+fn test_param_reassign_works() {
     let output = run_and_capture(
         r#"
-fn double_in_place(mut x: int) -> int {
+fn double_in_place(x: int) -> int {
     x = x * 2;
     x
 }
@@ -99,10 +99,9 @@ fn main() {
 }
 
 #[test]
-fn test_immutable_self_field_assign_rejected() {
-    // Method declared `fn ...(self) { self.field = X }` must error —
-    // mutating a field of `self` requires `mut self`.
-    let result = run_compiled(
+fn test_self_field_assign_works() {
+    // self is always mutable — field assignment works without `mut self`.
+    let output = run_and_capture(
         r#"
 struct Counter { n: int }
 impl Counter {
@@ -116,13 +115,7 @@ fn main() {
     println!("{}", c.try_bump());
 }"#,
     );
-    assert!(result.is_err());
-    let msg = result.unwrap_err().to_string();
-    assert!(
-        msg.contains("immutable `self`") && msg.contains("mut self"),
-        "expected fix-it error, got: {}",
-        msg
-    );
+    assert_eq!(output, vec!["6\n"]);
 }
 
 #[test]

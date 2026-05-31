@@ -77,7 +77,7 @@ mod hidden_fields {
         count: int,
     }
     pub fn new() -> Counter { Counter { visible: 0, count: 0 } }
-    pub fn bump(mut c: Counter) -> Counter {
+    pub fn bump(c: Counter) -> Counter {
         c.count = c.count + 1;
         c.visible = c.visible + 1;
         c

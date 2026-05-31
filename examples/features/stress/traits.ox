@@ -190,7 +190,7 @@ fn test_multiple_traits_on_type() {
 
 // --- trait with multiple methods ---
 trait Stack {
-    fn pop_one(mut self) -> Option<int>;
+    fn pop_one(self) -> Option<int>;
     fn peek(self) -> Option<int>;
     fn is_empty(self) -> bool;
 }
@@ -198,7 +198,7 @@ trait Stack {
 struct VecStack { data: Vec<int> }
 
 impl Stack for VecStack {
-    fn pop_one(mut self) -> Option<int> { self.data.pop() }
+    fn pop_one(self) -> Option<int> { self.data.pop() }
     fn peek(self) -> Option<int> {
         if self.data.len() == 0 { None }
         else { Some(self.data[self.data.len() - 1]) }

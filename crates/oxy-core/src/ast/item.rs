@@ -77,8 +77,6 @@ pub struct FnDef {
 pub struct Param {
     pub name: String,
     pub type_ann: TypeAnnotation,
-    /// `true` if declared as `mut param: T` (or `mut self`). Mirrors `let mut x`.
-    pub is_mut: bool,
     pub span: Span,
 }
 

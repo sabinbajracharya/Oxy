@@ -352,15 +352,7 @@ impl TypeChecker {
                     return Ok(());
                 }
                 Expr::SelfRef { .. } => {
-                    if let Some(false) = self.env.borrow().get_mutable("self") {
-                        return Err(PipelineError::TypeError {
-                            message:
-                                "cannot assign to a field through immutable `self`; declare the method with `mut self`"
-                                    .to_string(),
-                            line: span.line,
-                            column: span.column,
-                        });
-                    }
+                    // self is always mutable — field assignment is always allowed.
                     return Ok(());
                 }
                 _ => return Ok(()),
