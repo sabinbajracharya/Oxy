@@ -1,15 +1,24 @@
 # Grammar Decisions: Why Oxy Looks Like Rust
 
-<!-- OPUS_FILL
-Write a 2-3 paragraph section.
-The core tension: Oxy is "dynamic Rust" — it has Rust's syntax but not Rust's ownership model.
-Every syntax decision was: keep whatever makes programs readable and self-documenting,
-drop whatever exists solely to serve the borrow checker.
+Oxy looks like Rust because that resemblance is the entire pitch: it's "dynamic Rust," Rust's
+syntax with Rust's ownership model surgically removed. But that goal creates a constant tension at
+the grammar level, because a lot of Rust's syntax exists *specifically* to serve the borrow
+checker. So every syntactic decision in Oxy came down to one question: does this notation help a
+human read the program, or does it exist only to feed the ownership machinery? Keep the former,
+banish the latter.
 
-Give this some personality. The borrow checker references syntax was banished on principle.
-The no-width-zoo decision (int + byte + float only) was deliberate. These were choices, not accidents.
-End with: syntax is a statement about values. Oxy's syntax says: safety through types, not through ownership.
--->
+And we do mean banished — on principle, not by accident. Reference syntax (`&T`, `&mut self`,
+`&str`) isn't quietly accepted-and-ignored; the parser rejects it outright with a fix-it, because
+a `&` with no borrow checker behind it is a lie about what the program does. The integer width zoo
+(`i8` through `usize`) got the same treatment: Oxy has exactly three numeric types — `int`, `byte`,
+`float` — and the type checker steers you back to them. These weren't oversights or
+not-yet-implemented gaps. They were calls, made deliberately, and the rest of this chapter walks
+through them.
+
+Because in the end, syntax is never just decoration — it's a statement about what a language thinks
+matters. Rust's surface says *safety comes from tracking ownership*. Oxy keeps the same surface but
+changes the sentence underneath it to: *safety comes from types, and ownership is the runtime's
+problem, not yours.*
 
 ## What Oxy kept from Rust
 

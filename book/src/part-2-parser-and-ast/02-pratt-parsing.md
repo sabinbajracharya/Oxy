@@ -1,21 +1,26 @@
 # Pratt Parsing: The Elegant Algorithm
 
-<!-- OPUS_FILL
-Write a 2-3 paragraph intro.
-The key observation: most parser algorithms for expressions are either too complex
-(full parser generator tables) or too verbose (one function per precedence level, which
-is the "recursive descent" approach that gives you 14 nested functions).
+There are two well-trodden ways to parse expressions, and both of them are a little
+unsatisfying. On one end you have parser generators — you write down a grammar, a tool spits out
+a parse table the size of a phone book, and when something goes wrong you're debugging a state
+machine you didn't write. On the other end you have hand-written recursive descent, where you
+write one function per precedence level: `parse_or` calls `parse_and` calls `parse_equality`
+calls `parse_comparison`... all the way down through a dozen nearly-identical functions whose only
+real job is to call the next one. It works, but adding an operator means surgery on a call chain,
+and the whole thing reads like a Russian doll.
 
-Pratt parsing is the elegant middle ground: one loop, a precedence number, and two
-dispatch tables (prefix handlers, infix handlers). Bob Nystrom's "Crafting Interpreters"
-popularized it. It's what Oxy uses.
+Pratt parsing is the elegant thing in the middle. It's one loop, one precedence number, and two
+small dispatch tables — one for things that start an expression, one for operators that join two
+expressions. No generated tables, no dozen-deep call chain. It's the algorithm Bob Nystrom
+popularized in *Crafting Interpreters*, and it's what Oxy uses.
 
-The "aha!" to build toward: precedence is just a number you pass to a recursive call.
-"Parse everything to my right that binds tighter than I do" — that's it.
-
-Optionally: reference that Vaughan Pratt published this in 1973 and it was mostly ignored
-for decades. It deserved better.
--->
+Here's the single idea the whole thing rests on, and once it clicks the rest is bookkeeping:
+**precedence is just a number you pass into a recursive call.** Every operator has a binding
+strength. When you parse an expression, you carry a "minimum strength" with you, and the rule is
+simply *keep grabbing operators to my right as long as they bind tighter than my minimum*. That's
+it. That one rule, applied recursively, reproduces every precedence and associativity behavior you
+could want. Vaughan Pratt published this in 1973 and the world mostly ignored it for thirty years.
+It deserved better.
 
 ## The problem with naive recursive descent
 

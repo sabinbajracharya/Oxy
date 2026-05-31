@@ -1,10 +1,13 @@
 # Exercise: Parse Simple Function Definitions
 
-<!-- OPUS_FILL
-Write a 1-paragraph framing. The exercise involves adding a new expression form to the
-parser and AST. Frame it as: "You are about to add a feature to a real compiler. The
-steps are exactly what you would do on a real PR to the Oxy project."
--->
+You're about to add a new expression form to a real compiler — a new AST node, a new keyword, a
+new parser arm — and the steps below are not a simplified teaching exercise. They are, almost
+exactly, what you'd do on an actual pull request to Oxy: touch the AST, touch the lexer, touch the
+parser, write a test, and then chase the compiler's complaints until everything is green again.
+That last part is the real lesson. The moment you add a variant to `Expr`, the build will break in
+every `match` that didn't handle it, and the Rust compiler will hand you a to-do list of exactly
+which files to visit next. Follow it. That's not the exercise going wrong — that's the exercise
+working.
 
 ## Part A: Add a `typeof` expression
 

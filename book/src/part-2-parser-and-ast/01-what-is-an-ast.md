@@ -1,18 +1,38 @@
 # What Is an AST?
 
-<!-- OPUS_FILL
-Write a 3-4 paragraph hook.
+The lexer handed us a flat list of tokens, and a flat list has a problem it cannot solve on its
+own. Take `2 + 3 * 4`. That's five tokens in a row — `2`, `+`, `3`, `*`, `4` — and if you stare
+at them as a sequence, there's no way to tell which operation happens first. Do we add `2 + 3` and
+then multiply by `4`? Or multiply `3 * 4` and then add `2`? You know the answer is the second one,
+because you learned operator precedence in school. But the token list doesn't know that. Tokens
+have no precedence. They're just beads on a string.
 
-The key insight: a flat list of tokens has no structure. `2 + 3 * 4` is five tokens, but
-which two get multiplied first? The tokens don't say. The AST *does* — the multiplication
-is a subtree under the addition, expressing the precedence visually and structurally.
+The answer is to stop thinking of the program as a line and start thinking of it as a tree. Here
+is `2 + 3 * 4` as a flat token list:
 
-Use a concrete example: `2 + 3 * 4`. Show what it looks like as tokens (flat) vs as an
-AST (tree). Make the reader feel the difference between "a list of things" and
-"a structure of things."
+```
+IntLiteral(2)  Plus  IntLiteral(3)  Star  IntLiteral(4)
+```
 
-End by setting up: the parser's job is to build that tree. The next chapters show how.
--->
+And here is the same expression as a tree:
+
+```
+    BinaryOp(+)
+   /           \
+IntLit(2)   BinaryOp(*)
+            /          \
+        IntLit(3)   IntLit(4)
+```
+
+Look at what the tree did. The multiplication isn't sitting *next to* the addition anymore — it's
+*underneath* it, a subtree nested inside the right branch. And because it's deeper in the tree,
+it gets evaluated first: you can't compute the `+` node until you've computed both of its children,
+and one of its children is the `*`. Precedence stopped being a rule you have to remember and became
+the literal shape of the data. There is no ambiguity left to resolve, because the structure already
+resolved it.
+
+That tree is called an Abstract Syntax Tree, and building it is the parser's entire job. The next
+few chapters are about how it pulls that off.
 
 ## From flat to structured
 

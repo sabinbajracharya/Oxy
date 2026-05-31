@@ -1,9 +1,12 @@
 # Oxy's Parser: A Full Walkthrough
 
-<!-- OPUS_FILL
-1-paragraph intro. "The lexer gives us tokens. Now we build the tree. Let's open the parser."
-Mention that the parser is split across 5 files — each handles a domain.
--->
+The lexer handed us a flat list of tokens; the parser turns it into the tree we just spent two
+chapters describing. Where the lexer was a single file, the parser is split across five, each
+owning one domain: `mod.rs` holds the `Parser` struct and the precedence machinery, `expr.rs`
+does the Pratt expression parsing, `stmt.rs` handles statements, `item.rs` handles top-level
+declarations, and `ty.rs` and `pattern.rs` handle type annotations and patterns. The split is by
+*what is being parsed*, not by phase — there's still only one left-to-right pass. Open the files
+and let's walk through how they fit together.
 
 **Files:**
 - `crates/oxy-core/src/parser/mod.rs` — `Parser` struct, `Precedence`, helper methods

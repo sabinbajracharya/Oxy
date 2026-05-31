@@ -1,12 +1,20 @@
 # Rust Concepts: Box, Recursive Enums, and the Heap
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The Rust compiler insists on knowing the size of every type at compile time. This is normally
-fine — but recursive data structures (like trees) break that requirement. Box<T> is the escape hatch.
-Frame it as: the compiler is being pedantic for good reason (stack frames need fixed size),
-and Box<T> is the solution that doesn't compromise safety.
--->
+We just built a tree, and trees are recursive: a node contains other nodes, which contain other
+nodes, all the way down. In most languages you'd reach for this without a second thought. In Rust,
+the moment you write it, the compiler stops you — because Rust insists on knowing the exact size in
+bytes of every type at compile time, and a node that directly contains a node of the same type has,
+in a literal sense, infinite size. This is the compiler being pedantic, but it's pedantic for a
+good reason: values that live on the stack need a fixed, known size so the machine can lay out
+function frames before anything runs. A type whose size depends on itself can't be laid out at all.
+
+The escape hatch is `Box<T>`, and it's the thing that makes Oxy's entire AST possible — you'll see
+it on nearly every recursive node. A `Box` is a pointer to a value on the heap, and a pointer is
+always the same size no matter how big the thing it points to is. So by putting child nodes behind
+a `Box`, the recursive size dependency is broken: the parent has a fixed size (it just holds
+pointers), and the children live out on the heap where there's no size constraint to worry about.
+Crucially, this costs you nothing in safety — `Box` still owns its value and still cleans it up
+automatically. It's a fixed-size handle on a variable-size thing, which is exactly what a tree needs.
 
 ## Why Rust requires known sizes
 

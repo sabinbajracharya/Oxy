@@ -1,11 +1,11 @@
 # Oxy's AST: Every Node Explained
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro. Something like: "The AST is the shared language between the
-parser and everything downstream. Every chapter from here on operates on these types.
-Let's learn them."
-Keep it short — this chapter is reference material, not narrative.
--->
+The AST is the contract. From here to the end of the book, every stage — type checker, IR gen,
+codegen, the interpreter — takes these types as input. The parser is the only thing that
+*produces* them; everyone else *consumes* them. That makes `ast/mod.rs` the most-referenced file
+in the whole codebase, and it's worth knowing well. This chapter is a guided tour of every major
+node: not narrative, but reference. Open the file alongside it and treat what follows as the
+annotated map.
 
 **File:** `crates/oxy-core/src/ast/mod.rs`
 
