@@ -9,14 +9,20 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
         Value::I64(n) => *n as f64,
         Value::U8(n) => *n as f64,
         Value::F64(x) => *x,
-        _ => 0.0,
+        other => unreachable!(
+            "numeric::dispatch called with non-numeric type {:?}",
+            other.type_name()
+        ),
     };
     match method {
         symbols::numeric_m::ABS => match &receiver {
             Value::I64(n) => Ok(Value::I64(n.abs())),
             Value::U8(n) => Ok(Value::I64(*n as i64)),
             Value::F64(x) => Ok(float_to_value(x.abs())),
-            _ => Ok(Value::I64(0)),
+            other => unreachable!(
+                "numeric::abs called with non-numeric type {:?}",
+                other.type_name()
+            ),
         },
         symbols::numeric_m::SQRT => Ok(float_to_value(to_f64(&receiver).sqrt())),
         symbols::numeric_m::FLOOR => Ok(float_to_value(to_f64(&receiver).floor())),
@@ -43,7 +49,10 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             Value::I64(n) => Ok(Value::I64(n.signum())),
             Value::U8(n) => Ok(Value::I64(if *n == 0 { 0 } else { 1 })),
             Value::F64(x) => Ok(float_to_value(x.signum())),
-            _ => Ok(Value::I64(0)),
+            other => unreachable!(
+                "numeric::signum called with non-numeric type {:?}",
+                other.type_name()
+            ),
         },
         symbols::numeric_m::SIN => Ok(float_to_value(to_f64(&receiver).sin())),
         symbols::numeric_m::COS => Ok(float_to_value(to_f64(&receiver).cos())),

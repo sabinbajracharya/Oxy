@@ -816,6 +816,16 @@ impl IrGen {
             }
             Expr::Repeat { value, count, .. } => {
                 let val_reg = self.gen_expr(value);
+                // Count is guaranteed to be a constant integer literal by the type
+                // checker. Guard here for defense-in-depth (e.g. ir_gen used without
+                // prior type checking).
+                match count.as_ref() {
+                    Expr::IntLiteral(..) => {}
+                    other => unreachable!(
+                        "ir_gen: array repeat count must be IntLiteral, got {:?}",
+                        other
+                    ),
+                };
                 let count_reg = self.gen_expr(count);
                 let r = self.alloc_reg();
                 self.emit(IrOp::CallBuiltin {

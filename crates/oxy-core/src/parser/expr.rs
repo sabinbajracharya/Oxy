@@ -13,15 +13,10 @@ impl Parser {
                 break;
             }
             // Accept both identifiers (named fields) and integers (tuple struct fields)
-            let is_int_field = matches!(self.peek_kind(), TokenKind::IntLiteral(..));
-            let field_name = if is_int_field {
-                if let TokenKind::IntLiteral(n, _) = self.peek_kind() {
-                    let name = n.to_string();
-                    self.advance();
-                    name
-                } else {
-                    unreachable!()
-                }
+            let field_name = if let TokenKind::IntLiteral(n, _) = self.peek_kind() {
+                let name = n.to_string();
+                self.advance();
+                name
             } else {
                 self.expect_ident()?
             };

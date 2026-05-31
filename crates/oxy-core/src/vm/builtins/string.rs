@@ -64,8 +64,7 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
             Ok(Value::String(s.repeat(n)))
         }
         symbols::string_m::PUSH_STR => {
-            eprintln!("String::push_str is unsupported (strings are immutable in Oxy)");
-            Ok(Value::Unit)
+            Err("String::push_str is unsupported (strings are immutable in Oxy)".to_string())
         }
         symbols::string_m::CHAR_AT => {
             let i = args
@@ -137,27 +136,27 @@ pub fn dispatch(receiver: Value, method: &str, args: &[Value]) -> Result<Value, 
 
 pub fn method_names() -> &'static [&'static str] {
     &[
-        "len",
-        "is_empty",
-        "to_uppercase",
-        "to_lowercase",
-        "trim",
-        "contains",
-        "starts_with",
-        "ends_with",
-        "replace",
-        "lines",
-        "split",
-        "split_whitespace",
-        "chars",
-        "repeat",
-        "push_str",
-        "char_at",
-        "substring",
-        "parse_int",
-        "parse_float",
-        "find",
-        "clone",
-        "to_string",
+        symbols::string_m::LEN,
+        symbols::string_m::IS_EMPTY,
+        symbols::string_m::TO_UPPERCASE,
+        symbols::string_m::TO_LOWERCASE,
+        symbols::string_m::TRIM,
+        symbols::string_m::CONTAINS,
+        symbols::string_m::STARTS_WITH,
+        symbols::string_m::ENDS_WITH,
+        symbols::string_m::REPLACE,
+        symbols::string_m::LINES,
+        symbols::string_m::SPLIT,
+        symbols::string_m::SPLIT_WHITESPACE,
+        symbols::string_m::CHARS,
+        symbols::string_m::REPEAT,
+        symbols::string_m::PUSH_STR,
+        symbols::string_m::CHAR_AT,
+        symbols::string_m::SUBSTRING,
+        symbols::string_m::PARSE_INT,
+        symbols::string_m::PARSE_FLOAT,
+        symbols::string_m::FIND,
+        symbols::string_m::CLONE,
+        symbols::string_m::TO_STRING,
     ]
 }
