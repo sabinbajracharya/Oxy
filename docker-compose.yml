@@ -79,7 +79,7 @@ services:
     working_dir: /app
     command: >
       bash -c "
-        cargo install mdbook --version '^0.4' --quiet 2>/dev/null || true &&
+        which mdbook || cargo install mdbook --version '^0.4' &&
         mdbook build book/ &&
         echo '✅ Book built: book/book/'
       "
@@ -96,8 +96,8 @@ services:
       - "3000:3000"
     command: >
       bash -c "
-        cargo install mdbook --version '^0.4' --quiet 2>/dev/null || true &&
-        mdbook serve book/ --hostname 0.0.0.0 --port 3000
+        which mdbook || cargo install mdbook --version '^0.4' &&
+        exec mdbook serve book/ --hostname 0.0.0.0 --port 3000
       "
 
 volumes:

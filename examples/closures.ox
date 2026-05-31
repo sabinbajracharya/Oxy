@@ -35,9 +35,9 @@ fn main() {
     let add5 = make_adder(5);
     println!("add5(10) = {}", add5(10));
 
-    // move closure
+    // closure
     let name = "world";
-    let greet2 = move || format!("hello {}", name);
+    let greet2 = || format!("hello {}", name);
     println!("{}", greet2());
 
     // Vec iterator methods

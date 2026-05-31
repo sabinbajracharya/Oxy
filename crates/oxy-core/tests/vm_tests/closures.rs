@@ -92,11 +92,11 @@ fn main() {
 }
 
 #[test]
-fn test_move_closure() {
+fn test_closure() {
     let output = run_and_capture(
         r#"fn main() {
 let name = "world";
-let greet = move || format!("hello {}", name);
+let greet = || format!("hello {}", name);
 println!("{}", greet());
 }"#,
     );

@@ -65,9 +65,9 @@ fn test_immediately_called() {
 // === Move Closure ===
 
 #[test]
-fn test_move_closure() {
+fn test_closure() {
     let name = "world";
-    let greet = move || "hello " + name;
+    let greet = || "hello " + name;
     assert_eq!(greet(), "hello world");
 }
 

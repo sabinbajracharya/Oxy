@@ -84,11 +84,9 @@ pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
         "mod" => Some("Define or reference a module."),
         "use" => Some("Import items from a module."),
         "const" => Some("Declare a compile-time constant."),
-        "static" => Some("Declare a static variable."),
         "type" => Some("Create a type alias."),
         "async" => Some("Mark a function as asynchronous."),
         "await" => Some("Await an async expression."),
-        "move" => Some("Move captured variables into a closure."),
         _ => None,
     }
 }

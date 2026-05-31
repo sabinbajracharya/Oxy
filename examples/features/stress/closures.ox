@@ -56,11 +56,11 @@ fn test_closure_block_body() {
     assert_eq!(f(7), 15);
 }
 
-// --- move closure (explicit) ---
+// --- closure (explicit) ---
 #[test]
-fn test_move_closure() {
+fn test_closure() {
     let v = vec![1, 2, 3];
-    let f = move || v.len();
+    let f = || v.len();
     assert_eq!(f(), 3);
 }
 

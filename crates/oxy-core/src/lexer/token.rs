@@ -131,24 +131,14 @@ pub enum TokenKind {
     Label(String),
     /// `as` — type casting
     As,
-    /// `ref` — reference binding in patterns
-    Ref,
     /// `const` — compile-time constant
     Const,
-    /// `static` — static lifetime binding
-    Static,
     /// `type` — type alias
     Type,
-    /// `where` — generic constraint clause
-    Where,
-    /// `move` — move capture in closures
-    Move,
     /// `async` — asynchronous function modifier
     Async,
     /// `await` — await an asynchronous value
     Await,
-    /// `dyn` — dynamic dispatch trait object
-    Dyn,
     /// `super` — parent module reference
     Super,
     /// `crate` — crate root reference
@@ -278,15 +268,10 @@ impl TokenKind {
             "self" => Some(Self::SelfLower),
             "Self" => Some(Self::SelfUpper),
             "as" => Some(Self::As),
-            "ref" => Some(Self::Ref),
             "const" => Some(Self::Const),
-            "static" => Some(Self::Static),
             "type" => Some(Self::Type),
-            "where" => Some(Self::Where),
-            "move" => Some(Self::Move),
             "async" => Some(Self::Async),
             "await" => Some(Self::Await),
-            "dyn" => Some(Self::Dyn),
             "true" => Some(Self::True),
             "false" => Some(Self::False),
             "super" => Some(Self::Super),
@@ -330,15 +315,10 @@ impl TokenKind {
             Self::SelfUpper => "'Self'",
             Self::Label(_) => "label",
             Self::As => "'as'",
-            Self::Ref => "'ref'",
             Self::Const => "'const'",
-            Self::Static => "'static'",
             Self::Type => "'type'",
-            Self::Where => "'where'",
-            Self::Move => "'move'",
             Self::Async => "'async'",
             Self::Await => "'await'",
-            Self::Dyn => "'dyn'",
             Self::Super => "'super'",
             Self::Crate => "'crate'",
             Self::Plus => "'+'",
@@ -394,9 +374,8 @@ impl TokenKind {
 /// `TokenKind::from_keyword`. Re-exported via `crate::symbols::KEYWORDS`.
 pub const KEYWORDS: &[&str] = &[
     "let", "mut", "fn", "return", "if", "else", "while", "loop", "for", "in", "break", "continue",
-    "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self", "Self", "as", "ref",
-    "const", "static", "type", "where", "move", "async", "await", "dyn", "true", "false", "super",
-    "crate",
+    "struct", "enum", "impl", "trait", "match", "pub", "use", "mod", "self", "Self", "as", "const",
+    "type", "async", "await", "true", "false", "super", "crate",
 ];
 
 impl std::fmt::Display for TokenKind {

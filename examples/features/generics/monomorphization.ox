@@ -74,10 +74,7 @@ struct Pair<A, B> {
     second: B,
 }
 
-fn make_pair<A, B>() -> Pair<A, B>
-where
-    A: DefaultValue,
-    B: DefaultValue,
+fn make_pair<A: DefaultValue, B: DefaultValue>() -> Pair<A, B>
 {
     Pair {
         first: A::default_val(),

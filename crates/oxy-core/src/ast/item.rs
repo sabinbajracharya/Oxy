@@ -31,12 +31,11 @@ pub enum Item {
         target: TypeAnnotation,
         span: Span,
     },
-    /// `const NAME: Type = expr;` or `static NAME: Type = expr;`
+    /// `const NAME: Type = expr;`
     Const {
         name: String,
         type_ann: Option<TypeAnnotation>,
         value: Expr,
-        is_static: bool,
         span: Span,
     },
 }
@@ -416,18 +415,12 @@ impl Item {
                 let pad = "  ".repeat(indent);
                 out.push_str(&format!("{pad}type {name} = {};\n", target.name()));
             }
-            Item::Const {
-                name,
-                type_ann,
-                is_static,
-                ..
-            } => {
+            Item::Const { name, type_ann, .. } => {
                 let pad = "  ".repeat(indent);
-                let kw = if *is_static { "static" } else { "const" };
                 if let Some(ta) = type_ann {
-                    out.push_str(&format!("{pad}{kw} {name}: {} = ...;\n", ta.name()));
+                    out.push_str(&format!("{pad}const {name}: {} = ...;\n", ta.name()));
                 } else {
-                    out.push_str(&format!("{pad}{kw} {name} = ...;\n"));
+                    out.push_str(&format!("{pad}const {name} = ...;\n"));
                 }
             }
         }

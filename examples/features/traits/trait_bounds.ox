@@ -48,9 +48,7 @@ fn test_multiple_bounds() {
 
 // === Where Clause ===
 
-fn add_str<T>(x: T) -> String
-where
-    T: AsText,
+fn add_str<T: AsText>(x: T) -> String
 {
     x.as_text()
 }
@@ -63,9 +61,7 @@ fn test_where_clause() {
 
 // === Where Clause with Multiple Bounds ===
 
-fn transform<T>(x: T) -> String
-where
-    T: AsText + Doublable,
+fn transform<T: AsText + Doublable>(x: T) -> String
 {
     x.double().as_text()
 }

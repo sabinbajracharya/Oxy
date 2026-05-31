@@ -454,16 +454,6 @@ impl Parser {
                 })
             }
 
-            // `move` closure: `move |params| expr` or `move || expr`
-            TokenKind::Move => {
-                self.advance(); // consume `move`
-                if self.check(&TokenKind::PipePipe) {
-                    self.parse_empty_closure(false)
-                } else {
-                    self.parse_closure(false)
-                }
-            }
-
             // `async` closure: `async || expr`, `async |params| expr`, `async { ... }`
             TokenKind::Async => {
                 let start_span = self.current_span();

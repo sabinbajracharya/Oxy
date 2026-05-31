@@ -4,7 +4,7 @@ type Distance = float;
 type Name = String;
 
 const MAX_ITEMS: int = 10;
-static VERSION: int = 1;
+const VERSION: int = 1;
 
 fn main() {
     // Constants

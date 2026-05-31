@@ -36,7 +36,7 @@ fn test_two_arg_fn_pointer() {
 
 // --- fn returning fn (closure as return value) ---
 fn make_adder(n: int) -> fn(int) -> int {
-    move |x| x + n
+    |x| x + n
 }
 
 #[test]

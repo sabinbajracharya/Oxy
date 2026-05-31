@@ -39,8 +39,7 @@ impl Parser {
             TokenKind::Mod => self.parse_module_def(visibility).map(Item::Module),
             TokenKind::Use => self.parse_use_def(visibility).map(Item::Use),
             TokenKind::Type => self.parse_type_alias(),
-            TokenKind::Const => self.parse_const_def(false),
-            TokenKind::Static => self.parse_const_def(true),
+            TokenKind::Const => self.parse_const_def(),
             other => Err(self.error(format!(
                 "expected item (e.g., 'fn', 'struct', 'enum', 'impl', 'trait', 'mod', 'use', 'const', 'type'), found {}",
                 other.description()
@@ -235,13 +234,9 @@ impl Parser {
         })
     }
 
-    fn parse_const_def(&mut self, is_static: bool) -> Result<Item, PipelineError> {
+    fn parse_const_def(&mut self) -> Result<Item, PipelineError> {
         let start_span = self.current_span();
-        if is_static {
-            self.expect(TokenKind::Static)?;
-        } else {
-            self.expect(TokenKind::Const)?;
-        }
+        self.expect(TokenKind::Const)?;
         let name = self.expect_ident()?;
         let type_ann = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type_annotation()?)
@@ -256,7 +251,6 @@ impl Parser {
             name,
             type_ann,
             value,
-            is_static,
             span: self.merge_spans(start_span, end_span),
         })
     }
@@ -273,7 +267,7 @@ impl Parser {
         let name = self.expect_ident()?;
 
         // Optional generic parameters: `<T, U: Bound>`
-        let mut generic_params = if self.check(&TokenKind::Lt) {
+        let generic_params = if self.check(&TokenKind::Lt) {
             self.parse_generic_params()?
         } else {
             Vec::new()
@@ -290,33 +284,6 @@ impl Parser {
         } else {
             None
         };
-
-        // Parse optional `where` clause and merge bounds into generic_params
-        if self.check(&TokenKind::Where) {
-            self.advance();
-            while !self.check(&TokenKind::LBrace) && !self.is_at_end() {
-                let param_name = self.expect_ident()?;
-                self.expect(TokenKind::Colon)?;
-                let mut bounds = Vec::new();
-                bounds.push(self.expect_ident()?);
-                while self.check(&TokenKind::Plus) {
-                    self.advance();
-                    bounds.push(self.expect_ident()?);
-                }
-                // Merge bounds into matching generic param
-                if let Some(gp) = generic_params.iter_mut().find(|g| g.name == param_name) {
-                    for b in bounds {
-                        if !gp.bounds.contains(&b) {
-                            gp.bounds.push(b);
-                        }
-                    }
-                }
-                // Skip optional comma
-                if self.check(&TokenKind::Comma) {
-                    self.advance();
-                }
-            }
-        }
 
         self.ctx.fn_name_stack.push(name.clone());
         let body = self.parse_block()?;

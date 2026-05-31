@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::lexer::IntegerSuffix;
 
@@ -1141,8 +1140,8 @@ fn test_empty_closure() {
 }
 
 #[test]
-fn test_move_closure() {
-    let program = parse(r#"fn main() { let f = move |x| x; }"#).unwrap();
+fn test_closure() {
+    let program = parse(r#"fn main() { let f = |x| x; }"#).unwrap();
     let Item::Function(f) = &program.items[0] else {
         panic!("expected function");
     };
@@ -1237,31 +1236,11 @@ fn test_type_alias() {
 #[test]
 fn test_const_def() {
     let program = parse("const MAX: i64 = 100; fn main() {}").unwrap();
-    let Item::Const {
-        name,
-        type_ann,
-        is_static,
-        ..
-    } = &program.items[0]
-    else {
+    let Item::Const { name, type_ann, .. } = &program.items[0] else {
         panic!("expected const");
     };
     assert_eq!(name, "MAX");
-    assert!(!is_static);
     assert_eq!(type_ann.as_ref().unwrap().name(), "i64");
-}
-
-#[test]
-fn test_static_def() {
-    let program = parse("static COUNT: i64 = 0; fn main() {}").unwrap();
-    let Item::Const {
-        name, is_static, ..
-    } = &program.items[0]
-    else {
-        panic!("expected static");
-    };
-    assert_eq!(name, "COUNT");
-    assert!(is_static);
 }
 
 #[test]

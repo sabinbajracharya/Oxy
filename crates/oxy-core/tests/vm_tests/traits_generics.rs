@@ -362,10 +362,10 @@ fn main() {
 }
 
 #[test]
-fn test_static() {
+fn test_const_float() {
     let output = run_and_capture(
         r#"
-static PI: float = 3.14;
+const PI: float = 3.14;
 fn main() {
     println!("{}", PI);
 }
@@ -617,13 +617,13 @@ fn test_type_alias_associated_fn() {
 }
 
 #[test]
-fn test_where_clause_parses() {
+fn test_trait_bound_inline() {
     let output = run_and_capture(
         r#"
             trait Greet { fn greet(self) -> String; }
             struct Dog { name: String }
             impl Greet for Dog { fn greet(self) -> String { format!("Woof! I'm {}", self.name) } }
-            fn say_hi<T>(item: T) where T: Greet {
+            fn say_hi<T: Greet>(item: T) {
                 println!("{}", item.greet());
             }
             fn main() {
