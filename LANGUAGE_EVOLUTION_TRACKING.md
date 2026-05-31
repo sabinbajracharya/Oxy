@@ -23,13 +23,13 @@
 - [x] **Committed:** `f5b6518` — refactor: retire vestigial keywords (ref, dyn, move, where, static)
 
 ### 1.2 Simplify visibility system
-- [ ] Remove `Visibility::PubCrate` from AST
-- [ ] Remove `Visibility::PubSuper` from AST
-- [ ] Simplify visibility parsing (just `pub` or none)
-- [ ] Simplify visibility checking in type checker
-- [ ] Simplify path resolution (no crate/super paths)
-- [ ] Remove `super` and `crate` keywords? — evaluate: needed for module navigation?
-- [ ] **Commit:** `refactor: simplify visibility to pub/private only`
+- [x] Remove `Visibility::PubCrate` and `Visibility::PubSuper` from AST
+- [x] Simplify visibility parsing: `pub` token → `Visibility::Pub`, else `Private`
+- [x] Simplify `is_visible_from()` — remove PubCrate/PubSuper arms
+- [x] Remove dead `parent_module` helper
+- [x] Update `.ox` tests: `pub(crate)`/`pub(super)` → `pub`
+- [x] `super`/`crate` keywords stay for module path navigation (`super::`, `crate::`)
+- [x] **Committed:** `ac68659` — refactor: simplify visibility to pub/private only
 
 ### 1.3 Remove `mut` from parameter position
 - [ ] Remove `mut` parsing from function parameter lists
