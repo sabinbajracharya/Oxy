@@ -1,18 +1,22 @@
 # What Is a Token?
 
-<!-- OPUS_FILL
-Write a 2-3 paragraph hook. The reader is about to learn what a token is.
+Here is the most important thing to understand about a lexer before you understand anything else
+about it: it has no idea what your code means. None. It does not know that `fn` introduces a
+function or that `+` adds numbers. It cannot tell a variable name from a typo. If you handed it a
+program that was complete gibberish in every semantic sense but used only legal characters, it
+would happily chop it up and hand back a tidy list of pieces without the slightest complaint.
 
-Set up the key insight: a lexer has absolutely no idea what the code MEANS.
-It just chops it into labeled pieces. A surgeon with scissors and sticky labels,
-not a doctor who understands anatomy.
+That sounds like a weakness. It is actually the whole trick. The lexer is a surgeon with scissors
+and a roll of sticky labels, not a doctor who understands anatomy. Its entire job is to look at a
+flat stream of characters and cut it into chunks, slapping a label on each one — *this chunk is a
+keyword, this one is a name, this one is a number, this one is an open paren* — and then to hand
+that labeled pile to the next stage. Meaning is somebody else's problem. The parser will worry
+about structure; the type checker will worry about correctness. The lexer worries about exactly
+one thing, does it fast, and stops.
 
-The "aha!" moment to build toward: the lexer's job is not to understand — it's
-to label. Understanding comes later (parser, type checker). This separation of
-concerns is a feature, not a limitation.
-
-End by transitioning to: "So what is a token, exactly?"
--->
+This is the first instance of a pattern you'll see at every layer of the compiler: each stage does
+one small job and refuses to do anyone else's. The separation isn't a limitation we're apologizing
+for — it's the reason the whole thing stays comprehensible. So what is a token, exactly?
 
 ## The definition
 

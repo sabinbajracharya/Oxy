@@ -1,11 +1,16 @@
 # Exercise: Build a Mini-Lexer
 
-<!-- OPUS_FILL
-Write a 1-2 paragraph framing for this exercise.
-Key message: the exercise is not about building a complete lexer. It's about the moment
-where something clicks — where you feel the mechanics in your hands, not just understand
-them in your head. Something slightly playful about how getting it wrong is part of the deal.
--->
+The point of this exercise is not to build a lexer from scratch — Oxy already has a perfectly good
+one, and you've just read it. The point is to put your hands on the real machine and turn a crank.
+You're going to add a single operator, and somewhere between editing the enum and watching the
+test go green, the whole left-to-right-scan-and-label mechanism is going to stop being a thing you
+*read about* and become a thing you *did*. That shift is the entire goal.
+
+Expect to get it wrong at least once, and treat that as part of the deal rather than a setback.
+Forget to add the new variant to a `match` somewhere and the Rust compiler will plant a flag on
+the exact line — that's not the tool scolding you, that's the exhaustive-match guarantee from the
+last chapter doing its job in real time. Getting stuck and then unstuck is where the intuition
+actually lives. So break things cheerfully.
 
 ## Part A: Add a new operator to Oxy's lexer
 

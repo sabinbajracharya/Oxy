@@ -1,10 +1,11 @@
 # Oxy's Lexer: A Full Walkthrough
 
-<!-- OPUS_FILL
-Write a 1-paragraph intro framing this chapter.
-"We know what tokens are and how lexers work in theory. Now let's open the actual file."
-Tone: direct, no fluff. Just set up that we're going to walk through the real code.
--->
+You now know what a token is and, in the abstract, how a lexer turns characters into a stream of
+them. Time to stop talking about it in the abstract. This chapter walks through Oxy's actual
+lexer — the real file, the real functions, line numbers and all — from the single public entry
+point down through each scanning routine. Open the two files listed below in your editor and read
+them alongside this text; the goal by the end is that `lexer/mod.rs` reads like something you
+could have written, because every piece of it is.
 
 **Files we're reading:**
 - `crates/oxy-core/src/lexer/token.rs` — token and span types

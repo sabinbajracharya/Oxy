@@ -1,12 +1,20 @@
 # Rust Concepts: Enums and Match
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro. The reader is about to learn Rust enums.
-Key framing: Rust enums are not like Java enums (just named constants). They are algebraic
-data types — each variant can carry different data. This is the foundation of everything in
-the compiler: AST nodes, token kinds, type info, IR ops — all enums.
-Make the reader feel: "oh, enums can do THAT?"
--->
+If the word "enum" makes you think of a list of named constants — `RED`, `GREEN`, `BLUE`, each
+secretly just an integer — then Rust is about to expand your definition. A Rust enum is that, but
+it is also enormously more: each variant can carry its own payload, and different variants can
+carry completely different payloads. One variant holds nothing. Another holds a string. Another
+holds two numbers and a nested struct. They're all the same type, and at any moment a value of
+that type is exactly one of them. This is the algebraic data type, and the first time it clicks,
+the reaction is usually some version of *oh — enums can do that?*
+
+Hold onto that reaction, because this single feature is the structural backbone of the entire
+compiler. Tokens are an enum. AST nodes are an enum. The type checker's notion of "what type is
+this" is an enum. The IR's instructions are an enum. Runtime values are an enum. Over and over,
+the same move: define one variant per case, let each variant carry exactly the data that case
+needs, and then use `match` to take them apart again with the compiler enforcing that you handled
+every one. Learn this pattern here, in the lexer, where it's simplest — you'll be using it on
+every page from now on.
 
 ## What a Rust enum is
 

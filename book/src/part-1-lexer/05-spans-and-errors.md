@@ -1,12 +1,19 @@
 # Spans: How Error Messages Know Where You Went Wrong
 
-<!-- OPUS_FILL
-Write a 2-paragraph hook.
-The core observation: the difference between a good error message ("line 7, column 3: unexpected '§'")
-and a useless one ("error: unexpected character") is just whether the compiler tracked its position.
-Spans cost almost nothing — a few extra integers per token. The payoff is enormous.
-Frame it as: spans are the difference between a compiler that helps you and one that abandons you.
--->
+There are two kinds of compiler error message. One says `error: unexpected character '§'` and
+leaves you to scroll through 500 lines hunting for the offending symbol like it's a word search.
+The other says `error at line 7, column 3: unexpected character '§'` and you're fixing the
+problem before you've finished reading the sentence. The entire difference between those two
+experiences — between a compiler that helps you and one that shrugs and abandons you — comes down
+to a single question: did the compiler bother to remember *where it was* when things went wrong?
+
+That memory is what a span is, and the remarkable thing is how little it costs. A span is just a
+handful of integers stapled to each token: where it starts, where it ends, what line and column
+it sits on. A few bytes per token, updated as the lexer walks forward. That's the entire price.
+In return, every error message in every later stage of the pipeline — parser, type checker, all
+of it — can point a finger at the exact spot in your source. Spans are one of the highest
+leverage-to-cost ratios in the whole compiler, and the only trick is remembering to track them
+from the very start, because retrofitting them later is miserable.
 
 ## The `Span` type
 

@@ -1,16 +1,17 @@
 # How Lexers Work
 
-<!-- OPUS_FILL
-Write a 2-paragraph intro.
-The key intuition: a lexer is a single pass left-to-right through the source.
-It never goes back. It looks at the current character (and sometimes the next one),
-decides what token to start, scans until the token ends, emits it, moves on.
+The mechanism behind a lexer is almost embarrassingly simple once you see it: it walks through
+the source text one character at a time, left to right, and it never goes back. There's no
+rewinding, no second pass, no "let me reconsider that paragraph." It looks at the character under
+the cursor — and, when it has to, the one right after it — decides what kind of token is starting,
+scans forward until that token ends, emits it, and picks up where it left off. Then it does that
+again, and again, until it runs out of input.
 
-Compare it to reading aloud: you process one character at a time, your brain groups
-them into words, and you never re-read a letter once you've passed it.
-
-End with: "That's it. Now let's see how Oxy does it."
--->
+If that feels familiar, it's because it's exactly what you do when you read this sentence aloud.
+Your eyes move forward across the letters; your brain quietly groups them into words and
+punctuation; and you do not re-read the letter `t` once you've already passed it on your way to
+the next word. A lexer reads the way you read — forward only, grouping as it goes. That's it. Now
+let's see how Oxy does it.
 
 ## One character at a time
 
