@@ -528,6 +528,32 @@ fn compile_op(
     reg_slot: &mut HashMap<Reg, usize>,
     next_spill_slot: &mut usize,
 ) {
+    macro_rules! binary_ffi_body {
+        ($r:expr, $a:expr, $b:expr, $ffi:literal) => {{
+            call_ffi_binary(builder, ctx, ffi_refs, $ffi, *$a, *$b, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *$r, reg_slot, next_spill_slot);
+        }};
+    }
+
+    macro_rules! cmp_ffi_body {
+        ($r:expr, $a:expr, $b:expr, $cc:ident, $ffi:literal) => {{
+            if regs.contains_key($a) && regs.contains_key($b) {
+                let c = builder.ins().icmp(IntCC::$cc, regs[$a], regs[$b]);
+                spill_bool(builder, ctx, ffi_refs, c, *$r, reg_slot, next_spill_slot);
+            } else {
+                call_ffi_binary(builder, ctx, ffi_refs, $ffi, *$a, *$b, regs, reg_slot);
+                spill_result(builder, ctx, ffi_refs, *$r, reg_slot, next_spill_slot);
+            }
+        }};
+    }
+
+    macro_rules! unary_ffi_body {
+        ($r:expr, $a:expr, $ffi:literal) => {{
+            call_ffi_unary(builder, ctx, ffi_refs, $ffi, *$a, regs, reg_slot);
+            spill_result(builder, ctx, ffi_refs, *$r, reg_slot, next_spill_slot);
+        }};
+    }
+
     match op {
         IrOp::ConstInt(r, n) => {
             regs.insert(*r, builder.ins().iconst(types::I64, *n));
@@ -545,86 +571,17 @@ fn compile_op(
             }
             spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
         }
-        IrOp::Add(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_add", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Sub(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_sub", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Mul(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_mul", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Div(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_div", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Rem(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_mod", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Eq(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder.ins().icmp(IntCC::Equal, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_eq", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
-        IrOp::Neq(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder.ins().icmp(IntCC::NotEqual, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_neq", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
-        IrOp::Lt(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder.ins().icmp(IntCC::SignedLessThan, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_lt", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
-        IrOp::Gt(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThan, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_gt", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
-        IrOp::Le(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder
-                    .ins()
-                    .icmp(IntCC::SignedLessThanOrEqual, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_le", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
-        IrOp::Ge(r, a, b) => {
-            if regs.contains_key(a) && regs.contains_key(b) {
-                let c = builder
-                    .ins()
-                    .icmp(IntCC::SignedGreaterThanOrEqual, regs[a], regs[b]);
-                spill_bool(builder, ctx, ffi_refs, c, *r, reg_slot, next_spill_slot);
-            } else {
-                call_ffi_binary(builder, ctx, ffi_refs, "oxy_ge", *a, *b, regs, reg_slot);
-                spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-            }
-        }
+        IrOp::Add(r, a, b) => binary_ffi_body!(r, a, b, "oxy_add"),
+        IrOp::Sub(r, a, b) => binary_ffi_body!(r, a, b, "oxy_sub"),
+        IrOp::Mul(r, a, b) => binary_ffi_body!(r, a, b, "oxy_mul"),
+        IrOp::Div(r, a, b) => binary_ffi_body!(r, a, b, "oxy_div"),
+        IrOp::Rem(r, a, b) => binary_ffi_body!(r, a, b, "oxy_mod"),
+        IrOp::Eq(r, a, b) => cmp_ffi_body!(r, a, b, Equal, "oxy_eq"),
+        IrOp::Neq(r, a, b) => cmp_ffi_body!(r, a, b, NotEqual, "oxy_neq"),
+        IrOp::Lt(r, a, b) => cmp_ffi_body!(r, a, b, SignedLessThan, "oxy_lt"),
+        IrOp::Gt(r, a, b) => cmp_ffi_body!(r, a, b, SignedGreaterThan, "oxy_gt"),
+        IrOp::Le(r, a, b) => cmp_ffi_body!(r, a, b, SignedLessThanOrEqual, "oxy_le"),
+        IrOp::Ge(r, a, b) => cmp_ffi_body!(r, a, b, SignedGreaterThanOrEqual, "oxy_ge"),
         IrOp::Copy(r, a) => {
             // The source may be a raw-i64 register (ConstInt) or a spilled,
             // tagged value (ConstBool/ConstUnit/comparison result now live in a
@@ -639,47 +596,17 @@ fn compile_op(
             regs.insert(*r, regs[a]);
         }
 
-        IrOp::And(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_and", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Or(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_or", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::BitAnd(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_bitand", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::BitOr(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_bitor", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::BitXor(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_bitxor", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Shl(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_shl", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Shr(r, a, b) => {
-            call_ffi_binary(builder, ctx, ffi_refs, "oxy_shr", *a, *b, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
+        IrOp::And(r, a, b) => binary_ffi_body!(r, a, b, "oxy_and"),
+        IrOp::Or(r, a, b) => binary_ffi_body!(r, a, b, "oxy_or"),
+        IrOp::BitAnd(r, a, b) => binary_ffi_body!(r, a, b, "oxy_bitand"),
+        IrOp::BitOr(r, a, b) => binary_ffi_body!(r, a, b, "oxy_bitor"),
+        IrOp::BitXor(r, a, b) => binary_ffi_body!(r, a, b, "oxy_bitxor"),
+        IrOp::Shl(r, a, b) => binary_ffi_body!(r, a, b, "oxy_shl"),
+        IrOp::Shr(r, a, b) => binary_ffi_body!(r, a, b, "oxy_shr"),
 
-        IrOp::Neg(r, a) => {
-            call_ffi_unary(builder, ctx, ffi_refs, "oxy_neg", *a, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::Not(r, a) => {
-            call_ffi_unary(builder, ctx, ffi_refs, "oxy_not", *a, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
-        IrOp::BitNot(r, a) => {
-            call_ffi_unary(builder, ctx, ffi_refs, "oxy_bitnot", *a, regs, reg_slot);
-            spill_result(builder, ctx, ffi_refs, *r, reg_slot, next_spill_slot);
-        }
+        IrOp::Neg(r, a) => unary_ffi_body!(r, a, "oxy_neg"),
+        IrOp::Not(r, a) => unary_ffi_body!(r, a, "oxy_not"),
+        IrOp::BitNot(r, a) => unary_ffi_body!(r, a, "oxy_bitnot"),
 
         IrOp::ConstFloat(r, n) => {
             if let Some(push) = ffi_refs.get("oxy_push_float") {
