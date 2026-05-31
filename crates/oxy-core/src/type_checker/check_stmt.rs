@@ -303,6 +303,30 @@ impl TypeChecker {
         }
     }
 
+    /// Check a sequence of statements, rejecting any statement that follows an
+    /// unconditional exit (return/break/continue/panic).
+    pub(super) fn check_stmt_seq(
+        &mut self,
+        stmts: &[Stmt],
+        fn_ret: &TypeInfo,
+    ) -> Result<(), PipelineError> {
+        let mut iter = stmts.iter().peekable();
+        while let Some(stmt) = iter.next() {
+            self.check_stmt(stmt, fn_ret)?;
+            if stmt_always_terminates(stmt) {
+                if let Some(next) = iter.peek() {
+                    let span = next.span();
+                    return Err(PipelineError::TypeError {
+                        message: "unreachable code".to_string(),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn check_block(
         &mut self,
         block: &Block,
@@ -311,10 +335,22 @@ impl TypeChecker {
         let block_env = TypeEnv::child(&self.env);
         let saved = self.env.clone();
         self.env = block_env;
-        for stmt in &block.stmts {
-            self.check_stmt(stmt, fn_ret)?;
-        }
+        let result = self.check_stmt_seq(&block.stmts, fn_ret);
         self.env = saved;
-        Ok(())
+        result
     }
+}
+
+/// Returns true if a statement unconditionally transfers control out of the
+/// current block (return, break, continue, or a direct panic!() call).
+fn stmt_always_terminates(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Return { .. } | Stmt::Break { .. } | Stmt::Continue { .. } => true,
+        Stmt::Expr { expr, .. } => expr_always_terminates(expr),
+        _ => false,
+    }
+}
+
+fn expr_always_terminates(expr: &Expr) -> bool {
+    matches!(expr, Expr::MacroCall { name, .. } if name == "panic")
 }

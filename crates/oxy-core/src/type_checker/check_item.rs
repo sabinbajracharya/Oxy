@@ -158,12 +158,7 @@ impl TypeChecker {
         self.env = fn_env;
         let saved_fn_return = std::mem::replace(&mut self.current_fn_return, ret_ty.clone());
 
-        let body_result = (|| -> Result<(), PipelineError> {
-            for stmt in &f.body.stmts {
-                self.check_stmt(stmt, &ret_ty)?;
-            }
-            Ok(())
-        })();
+        let body_result = self.check_stmt_seq(&f.body.stmts, &ret_ty);
 
         self.env = saved_env;
         self.current_generics = saved_generics;

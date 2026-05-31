@@ -9,6 +9,15 @@ impl IrGen {
         let mut last: Option<Reg> = None;
         for stmt in &block.stmts {
             last = self.gen_stmt(stmt);
+            // Stop if the current block was terminated (Return/Panic/Jump/Branch).
+            // Remaining statements are unreachable — the type checker already
+            // rejected them; this guard keeps the IR well-formed.
+            if !self.current.blocks[self.current_block]
+                .terminator
+                .is_default()
+            {
+                break;
+            }
         }
         last
     }

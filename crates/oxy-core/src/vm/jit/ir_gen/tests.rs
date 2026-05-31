@@ -671,7 +671,7 @@ fn test_try_operator() {
 
 #[test]
 fn test_panic_macro_lowering() {
-    let ir = gen("fn main() -> int { panic!(\"boom\"); 0 }");
+    let ir = gen("fn main() { panic!(\"boom\"); }");
     let f = find_fn(&ir, "main");
     // Must have SetError op in some block.
     assert!(
@@ -807,11 +807,20 @@ fn test_complex_expression() {
 // ── Compile error tests ────────────────────────────────────────────
 
 #[test]
-fn test_unreachable_code_does_not_crash() {
-    // Code after return should be handled gracefully
-    let ir = gen("fn main() -> int { return 42; let x = 1; x }");
-    let f = find_fn(&ir, "main");
-    assert!(!f.blocks.is_empty());
+fn test_unreachable_code_is_rejected() {
+    // Code after return is now a type error, not an ir_gen crash.
+    let source = "fn main() -> int { return 42; let x = 1; x }";
+    let program = crate::parser::parse(source).expect("parse failed");
+    let result = crate::type_checker::TypeChecker::new().check_program(&program);
+    assert!(
+        result.is_err(),
+        "unreachable code after return should be a type error"
+    );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("unreachable code"),
+        "error should mention 'unreachable code', got: {msg}"
+    );
 }
 
 // ── Gaps from audit: MacroCall, Grouped, Repeat, AsyncBlock, Await ──

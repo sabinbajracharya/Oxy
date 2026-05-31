@@ -123,8 +123,7 @@ pub(crate) enum IrOp {
     /// Write register to ctx.result for function return.
     #[allow(dead_code)]
     WriteResult(Reg),
-    /// Set error message in ctx.
-    #[allow(dead_code)]
+    /// Set error message in ctx. Emitted for explicit `panic!()` calls.
     SetError(Reg),
     /// Check if ctx has an error set (returns bool-like in result register).
     CheckError(Reg),
