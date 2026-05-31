@@ -194,11 +194,11 @@ pub(crate) enum Terminator {
     },
     /// Halt execution (end of program).
     Halt,
-    /// Panic: set error from register, return the error discriminant.
-    ///
-    /// Implemented in both backends (see IR_DESIGN.md) but not yet emitted by
-    /// ir_gen, which currently lowers panics through the FFI.
-    #[allow(dead_code)]
+    /// Early-exit with error discriminant 2. The register names the value that
+    /// triggered the exit (informational — used in IR display and snapshots).
+    /// The error state must already be set by a preceding op (e.g. oxy_try_pop
+    /// for `?`, or SetError for explicit panics). This terminator does NOT call
+    /// oxy_panic itself — it just exits.
     Panic(Reg),
 }
 

@@ -347,11 +347,9 @@ impl<'a> Codegen<'a> {
                     };
                     builder.ins().return_(&[disc]);
                 }
-                Terminator::Panic(msg_reg) => {
-                    push_reg(&mut builder, ctx, &ffi_refs, *msg_reg, &regs, &reg_slot);
-                    if let Some(panic) = ffi_refs.get("oxy_panic") {
-                        builder.ins().call(*panic, &[ctx]);
-                    }
+                Terminator::Panic(_msg_reg) => {
+                    // Error is already set by the preceding SetError op or oxy_try_pop.
+                    // Just exit with the error discriminant; the register is informational.
                     let disc = builder.ins().iconst(types::I64, 2);
                     builder.ins().return_(&[disc]);
                 }

@@ -251,9 +251,9 @@ impl<'e> Interpreter<'e> {
                     block_id = if truthy { *then_block } else { *else_block };
                 }
                 Terminator::Halt => return discriminant(ctx),
-                Terminator::Panic(msg_reg) => {
-                    let v = Self::reg_val(&regs, *msg_reg);
-                    self.call_named(ctx, "oxy_panic", &[v], &[], &[]);
+                Terminator::Panic(_msg_reg) => {
+                    // Error is already set by the preceding SetError op or oxy_try_pop.
+                    // Just exit with the error discriminant; the register is informational.
                     return 2;
                 }
             }

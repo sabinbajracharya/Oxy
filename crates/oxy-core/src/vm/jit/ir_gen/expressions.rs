@@ -584,7 +584,8 @@ impl IrGen {
                     immediates: vec![],
                     strings: vec![],
                 });
-                // oxy_try_pop calls set_error on Err/None, so CheckError detects it.
+                // oxy_try_pop sets the error flag and stores the Err/None in
+                // ctx.result when the value is an error; CheckError reads the flag.
                 let err = self.alloc_reg();
                 self.emit(IrOp::CheckError(err));
                 let continue_id = self.alloc_block();
@@ -594,11 +595,13 @@ impl IrGen {
                     then_block: return_id,
                     else_block: continue_id,
                 });
-                // Return block: Halt. oxy_error_discriminant returns 2 (set_error
-                // was called), disc=2 with empty error_msg signals ? propagation.
+                // Error block: early return. oxy_try_pop already set the error
+                // flag (empty sentinel) and ctx.result (the Err/None value).
+                // Panic(val) makes this CFG exit explicit — val names the value
+                // that triggered the early return, visible in IR snapshots.
                 self.start_block(return_id);
-                self.terminate(Terminator::Halt);
-                // Continue block: r holds the unwrapped value.
+                self.terminate(Terminator::Panic(val));
+                // Continue block: r holds the unwrapped Ok/Some value.
                 self.start_block(continue_id);
                 r
             }
@@ -773,6 +776,22 @@ impl IrGen {
                 for a in args {
                     arg_regs.push(self.gen_expr(a));
                 }
+
+                // panic!() is lowered to SetError + Terminator::Panic so the
+                // error exit is a real CFG edge, not an opaque FFI call.
+                if name == "panic" {
+                    let msg_reg = if let Some(&m) = arg_regs.first() {
+                        m
+                    } else {
+                        let r = self.alloc_reg();
+                        self.emit(IrOp::ConstString(r, String::new()));
+                        r
+                    };
+                    self.emit(IrOp::SetError(msg_reg));
+                    self.terminate(Terminator::Panic(msg_reg));
+                    return msg_reg; // dead; satisfies expression return type
+                }
+
                 let r = self.alloc_reg();
                 let (func, strings, extra_immediates) = match name.as_str() {
                     "println" => ("oxy_println_val", vec![], vec![args.len()]),
@@ -780,7 +799,6 @@ impl IrGen {
                     "format" => ("oxy_format", vec![], vec![args.len()]),
                     "vec" => ("oxy_make_array", vec![], vec![args.len()]),
                     "dbg" => ("oxy_dbg", vec![], vec![args.len()]),
-                    "panic" => ("oxy_panic", vec![], vec![]),
                     _ => (
                         "oxy_path_call_builtin",
                         vec![name.clone()],

@@ -650,10 +650,43 @@ fn test_fstring() {
 fn test_try_operator() {
     let ir = gen("fn main() -> Option { let x = Option::Some(42); let y = x?; Option::Some(y) }");
     let f = find_fn(&ir, "main");
-    let ops = &f.blocks[f.entry].ops;
+    // Entry block still uses oxy_try_pop for classification.
+    let entry_ops = &f.blocks[f.entry].ops;
     assert!(
-        ops.iter().any(|op| matches!(op, IrOp::CallBuiltin { .. })),
+        entry_ops
+            .iter()
+            .any(|op| matches!(op, IrOp::CallBuiltin { func, .. } if *func == "oxy_try_pop")),
         "try should use CallBuiltin for oxy_try_pop"
+    );
+    // The error path must have an explicit Panic terminator (not Halt).
+    assert!(
+        f.blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Panic(_))),
+        "? error path should use Terminator::Panic, not Halt"
+    );
+}
+
+// ── panic!() ───────────────────────────────────────────────────────
+
+#[test]
+fn test_panic_macro_lowering() {
+    let ir = gen("fn main() -> int { panic!(\"boom\"); 0 }");
+    let f = find_fn(&ir, "main");
+    // Must have SetError op in some block.
+    assert!(
+        f.blocks
+            .iter()
+            .flat_map(|b| b.ops.iter())
+            .any(|op| matches!(op, IrOp::SetError(_))),
+        "panic! should emit SetError"
+    );
+    // Must have Panic terminator (explicit CFG exit edge).
+    assert!(
+        f.blocks
+            .iter()
+            .any(|b| matches!(b.terminator, Terminator::Panic(_))),
+        "panic! should use Terminator::Panic, not an opaque FFI call"
     );
 }
 
