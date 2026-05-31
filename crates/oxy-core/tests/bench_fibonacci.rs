@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use oxy_core::vm::{run, run_compiled};
+use oxy_core::vm::run_compiled;
 
 const FIB_SOURCE: &str = r#"
 fn fib(n: int) -> int {
@@ -16,13 +16,13 @@ fn main() {
 #[ignore = "performance benchmark — run manually with: cargo test -- --ignored"]
 fn bench_fibonacci_30() {
     // Warmup
-    run(FIB_SOURCE).unwrap();
+    run_compiled(FIB_SOURCE).unwrap();
     run_compiled(FIB_SOURCE).unwrap();
 
     // Interpreted
     let start = Instant::now();
     for _ in 0..5 {
-        run(FIB_SOURCE).unwrap();
+        run_compiled(FIB_SOURCE).unwrap();
     }
     let interpreted = start.elapsed() / 5;
 

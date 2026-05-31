@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-use oxy_core::vm::run_capturing;
+use oxy_core::vm::run_compiled_capturing;
 
 /// Find a TCP port the OS reports as currently free. There's an inherent
 /// race between this and the server binding it, but in practice it's
@@ -71,7 +71,7 @@ fn main() {{
 
     // The VM's listen() blocks; run it in a thread that we deliberately leak.
     std::thread::spawn(move || {
-        let _ = run_capturing(&src);
+        let _ = run_compiled_capturing(&src);
     });
     wait_ready(port);
 
@@ -132,7 +132,7 @@ fn main() {{
 "#,
     );
     std::thread::spawn(move || {
-        let _ = run_capturing(&src);
+        let _ = run_compiled_capturing(&src);
     });
     wait_ready(port);
 

@@ -36,8 +36,8 @@ with `use super::*`.
 
 - `run_and_capture(src) -> Vec<String>` — compile + run `main`, return stdout lines.
 - `run_and_get_value(src) -> Value` — compile + run `main`, return the final value.
-- `run` / `run_capturing` — re-exported from `oxy_core::vm` for tests that assert on
-  raw `Result`s (compile errors, panics).
+- `run_compiled` / `run_compiled_capturing` — re-exported from `oxy_core::vm` for tests
+  that assert on raw `Result`s (compile errors, panics).
 
 ## Invariants & gotchas
 

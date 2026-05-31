@@ -181,10 +181,10 @@ fn expect_vec_of_strings(v: &Value, func: &str, span: &Span) -> Result<Vec<Strin
 
 #[cfg(test)]
 mod tests {
-    use crate::vm::run_capturing;
+    use crate::vm::run_compiled_capturing;
 
     fn run(src: &str) -> String {
-        let (_, output) = run_capturing(src).expect("runtime error");
+        let (_, output) = run_compiled_capturing(src).expect("runtime error");
         output.join("")
     }
 

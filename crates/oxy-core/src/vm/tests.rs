@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use crate::vm::{run, run_compiled, run_compiled_capturing};
+    use crate::vm::{run_compiled, run_compiled_capturing};
 
     // --- Array tests ---
 
@@ -465,7 +465,7 @@ mod tests {
         "#;
         // Both should produce the same result
         let compiled = run_compiled(source);
-        let interpreted = run(source);
+        let interpreted = run_compiled(source);
         assert!(compiled.is_ok());
         assert!(interpreted.is_ok());
     }

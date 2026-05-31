@@ -22,7 +22,7 @@ fn main() {
 
 #[test]
 fn test_reject_amp_in_type_position() {
-    let result = run(r#"fn greet(name: &str) { println!("{}", name); } fn main() {}"#);
+    let result = run_compiled(r#"fn greet(name: &str) { println!("{}", name); } fn main() {}"#);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -34,13 +34,15 @@ fn test_reject_amp_in_type_position() {
 
 #[test]
 fn test_reject_amp_self_in_method_receiver() {
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 struct Foo { n: int }
 impl Foo {
     fn get(&self) -> int { self.n }
 }
 fn main() {}
-"#);
+"#,
+    );
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -52,7 +54,7 @@ fn main() {}
 
 #[test]
 fn test_reject_amp_prefix_expression() {
-    let result = run(r#"fn main() { let x = 5; let r = &x; println!("{}", r); }"#);
+    let result = run_compiled(r#"fn main() { let x = 5; let r = &x; println!("{}", r); }"#);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -100,7 +102,8 @@ fn main() {
 fn test_immutable_self_field_assign_rejected() {
     // Method declared `fn ...(self) { self.field = X }` must error —
     // mutating a field of `self` requires `mut self`.
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 struct Counter { n: int }
 impl Counter {
     fn try_bump(self) -> int {
@@ -111,7 +114,8 @@ impl Counter {
 fn main() {
     let c = Counter { n: 5 };
     println!("{}", c.try_bump());
-}"#);
+}"#,
+    );
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -124,12 +128,14 @@ fn main() {
 #[test]
 fn test_immutable_let_field_assign_rejected() {
     // `let x = Struct { ... }; x.field = Y;` must error — same logic.
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 struct Point { x: int }
 fn main() {
     let p = Point { x: 1 };
     p.x = 42;
-}"#);
+}"#,
+    );
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(

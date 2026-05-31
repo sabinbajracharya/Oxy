@@ -44,7 +44,7 @@ fn test_let_mut_and_assign() {
 
 #[test]
 fn test_immutable_assign_error() {
-    let result = run(r#"fn main() { let x = 1; x = 2; }"#);
+    let result = run_compiled(r#"fn main() { let x = 1; x = 2; }"#);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -54,7 +54,7 @@ fn test_immutable_assign_error() {
 
 #[test]
 fn test_undefined_variable_error() {
-    let result = run(r#"fn main() { println!("{}", x); }"#);
+    let result = run_compiled(r#"fn main() { println!("{}", x); }"#);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -82,7 +82,7 @@ fn test_float_arithmetic() {
 
 #[test]
 fn test_division_by_zero() {
-    let result = run(r#"fn main() { let x = 1 / 0; }"#);
+    let result = run_compiled(r#"fn main() { let x = 1 / 0; }"#);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("division by zero"));
 }
@@ -136,7 +136,7 @@ fn test_compound_assignment() {
 
 #[test]
 fn test_no_main_error() {
-    let result = run("fn foo() {}");
+    let result = run_compiled("fn foo() {}");
     assert!(result.is_err());
     assert!(result
         .unwrap_err()

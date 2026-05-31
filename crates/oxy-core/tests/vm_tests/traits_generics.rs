@@ -590,7 +590,7 @@ fn test_type_alias_struct() {
 
 #[test]
 fn test_type_alias_enum() {
-    run_capturing(
+    run_compiled_capturing(
         r#"
             enum Dir { Up, Down }
             type Direction = Dir;

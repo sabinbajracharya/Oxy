@@ -133,10 +133,10 @@ fn match_to_value(m: regex::Match<'_>) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::vm::run_capturing;
+    use crate::vm::run_compiled_capturing;
 
     fn run(src: &str) -> String {
-        let (_, output) = run_capturing(src).expect("runtime error");
+        let (_, output) = run_compiled_capturing(src).expect("runtime error");
         output.join("")
     }
 
@@ -255,7 +255,7 @@ fn main() {
 
     #[test]
     fn test_regex_invalid_pattern() {
-        let result = run_capturing(
+        let result = run_compiled_capturing(
             r#"
 fn main() {
     let x = std::regex::is_match("[invalid", "text");

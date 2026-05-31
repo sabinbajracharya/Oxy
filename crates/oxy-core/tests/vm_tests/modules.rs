@@ -517,12 +517,13 @@ fn main() {
 
 #[test]
 fn test_pub_fn() {
-    run_capturing("pub fn greet() { println!(\"hello\"); } fn main() { greet(); }").unwrap();
+    run_compiled_capturing("pub fn greet() { println!(\"hello\"); } fn main() { greet(); }")
+        .unwrap();
 }
 
 #[test]
 fn test_pub_struct() {
-    run_capturing(
+    run_compiled_capturing(
         "pub struct Point { pub x: int, pub y: int } fn main() { let p = Point { x: 1, y: 2 }; }",
     )
     .unwrap();
@@ -530,7 +531,8 @@ fn test_pub_struct() {
 
 #[test]
 fn test_pub_enum() {
-    run_capturing("pub enum Color { Red, Blue } fn main() { let c = Color::Red; }").unwrap();
+    run_compiled_capturing("pub enum Color { Red, Blue } fn main() { let c = Color::Red; }")
+        .unwrap();
 }
 
 #[test]

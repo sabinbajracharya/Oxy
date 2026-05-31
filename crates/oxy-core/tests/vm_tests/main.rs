@@ -6,7 +6,7 @@
 //! here and reach the submodules via their `use super::*`.
 
 use oxy_core::types::*;
-use oxy_core::vm::{run, run_capturing, run_compiled_capturing};
+use oxy_core::vm::{run_compiled, run_compiled_capturing};
 
 fn run_and_capture(src: &str) -> Vec<String> {
     let (_, output) = run_compiled_capturing(src).unwrap();

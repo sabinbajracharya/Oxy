@@ -59,10 +59,12 @@ fn main() {
 
 #[test]
 fn test_wrong_arg_count() {
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 fn foo(a: int) -> int { a }
 fn main() { foo(1, 2); }
-"#);
+"#,
+    );
     assert!(result.is_err());
     assert!(result
         .unwrap_err()

@@ -21,12 +21,14 @@ fn main() {
 
 #[test]
 fn test_did_you_mean_suggestion() {
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 fn main() {
     let name = "Alice";
     println!("{}", nme);
 }
-"#);
+"#,
+    );
     let err = result.unwrap_err().to_string();
     assert!(err.contains("undefined variable 'nme'"));
     assert!(err.contains("did you mean 'name'"));
@@ -34,12 +36,14 @@ fn main() {
 
 #[test]
 fn test_no_suggestion_for_distant_name() {
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 fn main() {
     let x = 1;
     println!("{}", completely_different);
 }
-"#);
+"#,
+    );
     let err = result.unwrap_err().to_string();
     assert!(err.contains("undefined variable"));
     assert!(!err.contains("did you mean"));
@@ -58,7 +62,7 @@ fn main() {
     outer();
 }
 "#;
-    let result = run(source);
+    let result = run_compiled(source);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("division by zero") || err.contains("divide by zero"));
@@ -92,42 +96,43 @@ fn test_suggest_name() {
 
 #[test]
 fn test_assert_pass() {
-    run_capturing("fn main() { assert!(true); }").unwrap();
-    run_capturing("fn main() { assert!(1 == 1); }").unwrap();
+    run_compiled_capturing("fn main() { assert!(true); }").unwrap();
+    run_compiled_capturing("fn main() { assert!(1 == 1); }").unwrap();
 }
 
 #[test]
 fn test_assert_fail() {
-    let err = run_capturing("fn main() { assert!(false); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert!(false); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 
 #[test]
 fn test_assert_with_message() {
-    let err = run_capturing(r#"fn main() { assert!(false, "custom message"); }"#).unwrap_err();
+    let err =
+        run_compiled_capturing(r#"fn main() { assert!(false, "custom message"); }"#).unwrap_err();
     assert!(format!("{err}").contains("custom message"));
 }
 
 #[test]
 fn test_assert_eq_pass() {
-    run_capturing("fn main() { assert_eq!(1, 1); }").unwrap();
-    run_capturing(r#"fn main() { assert_eq!("hello", "hello"); }"#).unwrap();
+    run_compiled_capturing("fn main() { assert_eq!(1, 1); }").unwrap();
+    run_compiled_capturing(r#"fn main() { assert_eq!("hello", "hello"); }"#).unwrap();
 }
 
 #[test]
 fn test_assert_eq_fail() {
-    let err = run_capturing("fn main() { assert_eq!(1, 2); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert_eq!(1, 2); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 
 #[test]
 fn test_assert_ne_pass() {
-    run_capturing("fn main() { assert_ne!(1, 2); }").unwrap();
+    run_compiled_capturing("fn main() { assert_ne!(1, 2); }").unwrap();
 }
 
 #[test]
 fn test_assert_ne_fail() {
-    let err = run_capturing("fn main() { assert_ne!(1, 1); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert_ne!(1, 1); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 

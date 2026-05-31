@@ -267,7 +267,7 @@ fn main() {
     panic!("something went wrong");
 }
 "#;
-    let result = run(src);
+    let result = run_compiled(src);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -416,7 +416,7 @@ fn main() {
     x.unwrap();
 }
 "#;
-    let result = run(src);
+    let result = run_compiled(src);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -432,7 +432,7 @@ fn main() {
     x.unwrap();
 }
 "#;
-    let result = run(src);
+    let result = run_compiled(src);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()

@@ -425,7 +425,7 @@ fn main() {
 
 #[test]
 fn test_http_unknown_function() {
-    let result = run_capturing(
+    let result = run_compiled_capturing(
         r#"
 fn main() {
     let r = http::unknown_func("test");

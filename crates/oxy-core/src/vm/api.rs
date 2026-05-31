@@ -389,16 +389,6 @@ pub fn run_compiled_capturing(source: &str) -> Result<(Value, Vec<String>), Pipe
     ActiveBackend::run_capturing(source)
 }
 
-/// Run a program and capture its output (compatibility alias).
-pub fn run_capturing(source: &str) -> Result<(Value, Vec<String>), PipelineError> {
-    run_compiled_capturing(source)
-}
-
-/// Run a program, return its value (compatibility alias).
-pub fn run(source: &str) -> Result<Value, PipelineError> {
-    run_compiled(source)
-}
-
 /// Parse, type-check, lower to register IR, and render the IR disassembly.
 ///
 /// Also verifies the program compiles all the way to native code, so callers

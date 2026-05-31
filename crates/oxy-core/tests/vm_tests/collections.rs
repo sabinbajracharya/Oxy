@@ -314,7 +314,7 @@ println!("{:?}", t);
 
 #[test]
 fn test_index_out_of_bounds() {
-    let result = run("fn main() { let v = vec![1, 2]; let x = v[5]; }");
+    let result = run_compiled("fn main() { let v = vec![1, 2]; let x = v[5]; }");
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("out of bounds"), "actual error: {err}");
@@ -322,7 +322,7 @@ fn test_index_out_of_bounds() {
 
 #[test]
 fn test_tuple_index_out_of_bounds() {
-    let result = run("fn main() { let t = (1, 2); let x = t.5; }");
+    let result = run_compiled("fn main() { let t = (1, 2); let x = t.5; }");
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("out of bounds"), "actual error: {err}");

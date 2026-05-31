@@ -275,7 +275,7 @@ A `#[compile_error]` test passes if EITHER the type checker OR ir_gen/codegen re
 ### Rust-side test helpers
 
 - `run_and_capture(src) → Vec<String>` — compile + run main, return stdout lines
-- `run(src) → Result<Value>` — compile + run main, return final value or error
+- `run_compiled(src) → Result<Value>` — compile + run main, return final value or error
 - Source must wrap in `fn main() { ... }`
 - `run_tests(path, source) → Result<Vec<TestResult>>` — run #[test] + #[compile_error] functions
 

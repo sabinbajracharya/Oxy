@@ -302,7 +302,8 @@ fn main() {
 
 #[test]
 fn test_match_non_exhaustive_error() {
-    let result = run(r#"
+    let result = run_compiled(
+        r#"
 fn main() {
     let x = 5;
     match x {
@@ -310,7 +311,8 @@ fn main() {
         2 => "two",
     };
 }
-"#);
+"#,
+    );
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("non-exhaustive"));
 }
