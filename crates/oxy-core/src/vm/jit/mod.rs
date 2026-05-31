@@ -39,6 +39,11 @@ type FfiDecl = (&'static str, &'static [types::Type], Option<types::Type>);
 fn ffi_decls() -> Vec<FfiDecl> {
     vec![
         ("oxy_set_result_i64", &[types::I64, types::I64], None),
+        ("oxy_set_result_bool", &[types::I64, types::I8], None),
+        ("oxy_set_result_char", &[types::I64, types::I32], None),
+        ("oxy_set_result_float", &[types::I64, types::F64], None),
+        ("oxy_set_result_unit", &[types::I64], None),
+        ("oxy_set_result_local", &[types::I64, types::I64], None),
         ("oxy_push_unit", &[types::I64], None),
         ("oxy_push_bool", &[types::I64, types::I8], None),
         ("oxy_push_int", &[types::I64, types::I64], None),

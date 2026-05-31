@@ -7,11 +7,45 @@
 //! [locals: local_count × Value] [operand stack: sp × Value]
 //! ```
 
-/// Set ctx.result directly (bypasses operand stack for simple returns).
+/// Set ctx.result directly — bypasses operand-stack round-trip for plain returns.
 #[no_mangle]
 extern "C" fn oxy_set_result_i64(ctx: *mut super::JitContext, val: i64) {
     let ctx = unsafe { &mut *ctx };
     ctx.result = crate::types::Value::I64(val);
+}
+
+extern "C" fn oxy_set_result_bool(ctx: *mut super::JitContext, val: u8) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.result = crate::types::Value::Bool(val != 0);
+}
+
+extern "C" fn oxy_set_result_char(ctx: *mut super::JitContext, val: u32) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.result = crate::types::Value::Char(char::from_u32(val).unwrap_or('\0'));
+}
+
+extern "C" fn oxy_set_result_float(ctx: *mut super::JitContext, val: f64) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.result = crate::types::Value::F64(val);
+}
+
+extern "C" fn oxy_set_result_unit(ctx: *mut super::JitContext) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.result = crate::types::Value::Unit;
+}
+
+/// Set ctx.result from a local buffer slot — bypasses operand-stack round-trip
+/// for spill-slot returns (equivalent to oxy_load_local followed by oxy_return).
+extern "C" fn oxy_set_result_local(ctx: *mut super::JitContext, slot: usize) {
+    let ctx = unsafe { &mut *ctx };
+    let val = unsafe { ctx.buffer.add(slot).read() };
+    let result = match &val {
+        crate::types::Value::Cell(rc) => rc.borrow().clone(),
+        other => other.clone(),
+    };
+    // val is a shallow bitwise copy — forget it to prevent a double-free.
+    std::mem::forget(val);
+    ctx.result = result;
 }
 
 use super::context::{JitContext, JitTables};
@@ -2054,6 +2088,11 @@ pub(crate) fn ffi_symbols() -> Vec<(&'static str, *const u8, FfiRet)> {
     use FfiRet::*;
     vec![
         ("oxy_set_result_i64", oxy_set_result_i64 as _, Void),
+        ("oxy_set_result_bool", oxy_set_result_bool as _, Void),
+        ("oxy_set_result_char", oxy_set_result_char as _, Void),
+        ("oxy_set_result_float", oxy_set_result_float as _, Void),
+        ("oxy_set_result_unit", oxy_set_result_unit as _, Void),
+        ("oxy_set_result_local", oxy_set_result_local as _, Void),
         ("oxy_push_unit", oxy_push_unit as _, Void),
         ("oxy_push_bool", oxy_push_bool as _, Void),
         ("oxy_push_int", oxy_push_int as _, Void),

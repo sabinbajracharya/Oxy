@@ -258,40 +258,16 @@ impl<'a> Codegen<'a> {
 
             match &block.terminator {
                 Terminator::Return(r) => {
-                    let ret_is_int = matches!(
-                        &ir_fn.return_type,
-                        crate::type_checker::TypeInfo::I64 | crate::type_checker::TypeInfo::U8
-                    );
                     if let Some(clif_val) = regs.get(r).copied() {
-                        if ret_is_int {
-                            if let Some(set_result) = ffi_refs.get("oxy_set_result_i64") {
-                                builder.ins().call(*set_result, &[ctx, clif_val]);
-                            }
-                        } else {
-                            push_return_value(
-                                &mut builder,
-                                ctx,
-                                &ffi_refs,
-                                clif_val,
-                                &ir_fn.return_type,
-                            );
-                            if let Some(ret) = ffi_refs.get("oxy_return") {
-                                builder.ins().call(*ret, &[ctx]);
-                            }
-                        }
+                        set_result_reg(&mut builder, ctx, &ffi_refs, clif_val, &ir_fn.return_type);
                     } else if let Some(slot) = reg_slot.get(r).copied() {
-                        if let Some(load_local) = ffi_refs.get("oxy_load_local") {
+                        if let Some(f) = ffi_refs.get("oxy_set_result_local") {
                             let slot_val = builder.ins().iconst(types::I64, slot as i64);
-                            builder.ins().call(*load_local, &[ctx, slot_val]);
+                            builder.ins().call(*f, &[ctx, slot_val]);
                         }
-                        if let Some(ret) = ffi_refs.get("oxy_return") {
-                            builder.ins().call(*ret, &[ctx]);
-                        }
-                    } else if let Some(ret) = ffi_refs.get("oxy_return") {
-                        builder.ins().call(*ret, &[ctx]);
+                    } else if let Some(f) = ffi_refs.get("oxy_set_result_unit") {
+                        builder.ins().call(*f, &[ctx]);
                     }
-                    // Check the error state from FFI calls (set_error)
-                    // rather than always returning success.
                     let disc = if let Some(f) = ffi_refs.get("oxy_error_discriminant") {
                         let inst = builder.ins().call(*f, &[ctx]);
                         builder.func.dfg.inst_results(inst)[0]
@@ -496,7 +472,8 @@ fn call_ffi_unary(
     }
 }
 
-fn push_return_value(
+/// Set ctx.result directly from a CLIF register value, bypassing the operand stack.
+fn set_result_reg(
     builder: &mut FunctionBuilder,
     ctx: cranelift_codegen::ir::Value,
     ffi_refs: &HashMap<String, cranelift_codegen::ir::FuncRef>,
@@ -505,34 +482,35 @@ fn push_return_value(
 ) {
     match return_type {
         crate::type_checker::TypeInfo::Bool => {
-            if let Some(push) = ffi_refs.get("oxy_push_bool") {
+            if let Some(f) = ffi_refs.get("oxy_set_result_bool") {
                 let v = builder.ins().ireduce(types::I8, val);
-                builder.ins().call(*push, &[ctx, v]);
+                builder.ins().call(*f, &[ctx, v]);
             }
         }
         crate::type_checker::TypeInfo::Char => {
-            if let Some(push) = ffi_refs.get("oxy_push_char") {
+            if let Some(f) = ffi_refs.get("oxy_set_result_char") {
                 let v = builder.ins().ireduce(types::I32, val);
-                builder.ins().call(*push, &[ctx, v]);
+                builder.ins().call(*f, &[ctx, v]);
             }
         }
         crate::type_checker::TypeInfo::F64 => {
-            if let Some(push) = ffi_refs.get("oxy_push_float") {
+            if let Some(f) = ffi_refs.get("oxy_set_result_float") {
                 let v =
                     builder
                         .ins()
                         .bitcast(types::F64, cranelift_codegen::ir::MemFlags::new(), val);
-                builder.ins().call(*push, &[ctx, v]);
+                builder.ins().call(*f, &[ctx, v]);
             }
         }
         crate::type_checker::TypeInfo::Unit => {
-            if let Some(push) = ffi_refs.get("oxy_push_unit") {
-                builder.ins().call(*push, &[ctx]);
+            if let Some(f) = ffi_refs.get("oxy_set_result_unit") {
+                builder.ins().call(*f, &[ctx]);
             }
         }
         _ => {
-            if let Some(push) = ffi_refs.get("oxy_push_int") {
-                builder.ins().call(*push, &[ctx, val]);
+            // I64, U8, and any other integer-like type stored as a raw i64 in CLIF.
+            if let Some(f) = ffi_refs.get("oxy_set_result_i64") {
+                builder.ins().call(*f, &[ctx, val]);
             }
         }
     }
