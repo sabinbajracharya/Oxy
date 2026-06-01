@@ -6,21 +6,24 @@ Oxy is a compiled programming language written in Rust. Rust-like syntax without
 
 **Pipeline:** `parse → type_check → ir_gen (AST → Register IR + CFG) → codegen (IR → Cranelift CLIF) → native`
 
-## Language Identity: Dynamic Rust
+## Language Identity
 
-Oxy is **dynamic Rust** — Rust-like syntax WITHOUT ownership, lifetimes, or borrow checking. This is a deliberate, load-bearing choice. Do not weaken it.
+Oxy is a **general-purpose compiled language** — statically typed, mutation-aware, with Rust-like syntax and no borrow checker. It targets native (Cranelift JIT) and WASM (register IR interpreter) from one codebase.
 
 ### What Oxy DOES NOT have
-- **Reference syntax**: `&T`, `&mut T`, `&self`, `&mut self`, `&str`, `&[T]`, `&expr`. The parser **rejects these** with a fix-it error message. They are not "accepted but ignored" — they error.
+- **Reference syntax**: `&T`, `&mut T`, `&self`, `&mut self`, `&str`, `&[T]`, `&expr`. The parser **rejects these**.
 - **Lifetimes**: `'a`, `<'a>`. Not parsed, not supported.
 - **Borrow checker**, move semantics, ownership-tracking rules. None of it.
-- **Slice types**: `[T]` as a parameter type. Use `Vec<T>` instead.
-- **Rust-style integer width zoo**: `i8 / i16 / i32 / i64 / u16 / u32 / u64 / isize / usize` are **not Oxy types**. The type checker rejects them with a fix-it suggesting `int`. `u8` is rejected too (use `byte`). `f32` is rejected (use `float`). The full width zoo was retired in favour of three numeric types: `int`, `byte`, `float`.
+- **Rust-style integer width zoo**: `i8/i16/i32/i64/u16/u32/u64/isize/usize` are **not Oxy types**. The type checker rejects them. `u8` is rejected (use `byte`). `f32` is rejected (use `float`). Exactly three numeric types: `Int`, `Byte`, `Float`.
 
 ### What Oxy DOES have
-- **Variable-level mutability**: `let mut x`, `mut self` for methods, `mut param: T` for fn parameters. Controls whether the binding can be reassigned. This is independent of borrow checking — it's the same as `const`/`let` in JS or `final` in Java.
-- `Vec<T>` for dynamic-length lists. `String` for text. `[T; N]` for fixed-size arrays (coerce to `Vec` at fn boundaries). `Option<T>` and `Result<T, E>` for absence/error.
-- **Exactly three numeric types**: `int` (signed, 64-bit wrapping), `byte` (unsigned, 8-bit wrapping), `float` (64-bit IEEE-754). Width semantics are enforced at function-call boundaries (entry and return) and at typed `let` bindings; intermediate arithmetic widens to `int` to keep mixed-type expressions ergonomic.
+- **val/var bindings**: `val x = 5` (immutable), `var x = 5` (mutable). Controls binding reassignment and, for collections, content mutability (Swift model). No `mut` keyword — `var` is the single token for mutable bindings.
+- **`~>` cascade operator** (Dart-style): `v ~> push(4) ~> push(5)` chains mutations on the same receiver. Each `..` call returns the receiver, discarding the method's return. Desugars at parse level.
+- **Module system**: `::` for paths (`std::env::get("PATH")`), `.` for field access (`point.x`) and method calls (`v.push(4)`). `mod` blocks, `use` imports, `pub` visibility.
+- **Closures**: `|x| x * 2` syntax. `Fn(Int) -> Int` type annotation. Named functions can be passed as values (`val f = my_function`).
+- **Structs + impl blocks**: `struct Point { x: Float, y: Float }` with `impl Point { fn method(self) { ... } }`.
+- `List<T>` for dynamic arrays, `String` for text, `Option<T>` and `Result<T, E>` for absence/error, `Map<K,V>` and `BTreeMap<K,V>`.
+- **IO in std::io**: `io::println`, `io::print`, `io::dbg`. **Formatting in std::string**: `string::format`.
 
 ### If a user asks to add reference / borrow / lifetime features
 **Push back before implementing.** Quote this section. Ask:

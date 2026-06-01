@@ -207,6 +207,10 @@
                 {
                     "name": "keyword.operator.question.oxy",
                     "match": "\\?"
+                },
+                {
+                    "name": "keyword.operator.cascade.oxy",
+                    "match": "~>"
                 }
             ]
         },
