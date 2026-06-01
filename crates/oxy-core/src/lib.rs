@@ -19,6 +19,8 @@
 pub mod ast;
 /// Environment and lexical scope management.
 pub mod env;
+/// Structured diagnostics model shared by CLI/LSP and pipeline stages.
+pub mod diagnostics;
 /// Error types used throughout the interpreter.
 pub mod errors;
 /// HTTP client support for Oxy scripts.

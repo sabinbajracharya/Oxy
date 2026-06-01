@@ -13,7 +13,8 @@ standard library, and the shared symbol/type definitions. Consumed by `oxy-cli`,
 |---|---|
 | `lib.rs` | Public API surface and module declarations / re-exports. |
 | `symbols.rs` | **Single source of truth** for all language symbols — keywords, primitive/built-in types, macros, stdlib modules, and per-type method lists. Both the compiler and the LSP import from here; never hardcode a symbol elsewhere. |
-| `errors.rs` | The crate's error enum (`Lexer` / `Parser` / `TypeError` / `Runtime`). *(Planned rename to a language-name-independent identifier — see `docs/REFACTOR_PLAN.md`.)* |
+| `diagnostics/` | Structured diagnostics model (codes, labels, notes/help, fix-its) consumed by CLI/LSP adapters. |
+| `errors.rs` | Pipeline error/control-flow enum with backward-compatible conversion to structured diagnostics. |
 
 ## Submodules (each has its own README)
 
@@ -28,6 +29,7 @@ standard library, and the shared symbol/type definitions. Consumed by `oxy-cli`,
 | `vm/builtins/` | per-type built-in method implementations |
 | `types/` | `Value` enum + type system |
 | `env/` | lexical scope chain |
+| `diagnostics/` | first-class diagnostic data model |
 | `stdlib/` | standard library (`std::*`, `math`, `json`, `rand`, `time`) |
 | `json/` | hand-written JSON ser/de |
 | `http/` | HTTP client wrapper |

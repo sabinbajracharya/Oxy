@@ -12,7 +12,7 @@ Purpose: track the architecture-first diagnostics refactor so work can be resume
 ## Step Plan
 
 - [x] Step 1: Create this tracker and define phased architecture plan.
-- [ ] Step 2: Add `oxy-core` diagnostics module (`Diagnostic`, labels, notes/help, fix-its, codes).
+- [x] Step 2: Add `oxy-core` diagnostics module (`Diagnostic`, labels, notes/help, fix-its, codes).
 - [ ] Step 3: Wire `PipelineError` ↔ structured diagnostics conversion.
 - [ ] Step 4: Switch CLI rendering to structured diagnostics (primary + secondary labels, notes/help, fix-its).
 - [ ] Step 5: Switch LSP diagnostic mapping to structured diagnostics.
@@ -22,3 +22,5 @@ Purpose: track the architecture-first diagnostics refactor so work can be resume
 ## Progress Log
 
 - ✅ Initialized tracking file and agreed phased implementation.
+- ✅ Added `crates/oxy-core/src/diagnostics/` with core model, code constants, and tests.
+- ✅ Exported diagnostics from `oxy-core` and updated `src/README.md` module map.
