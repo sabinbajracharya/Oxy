@@ -211,4 +211,24 @@ impl IrGen {
             _ => {}
         }
     }
+
+    /// Lower a cascade expression to a block:
+    /// `receiver ..{ .field = val; .method(); }` becomes
+    /// `{ var __cascade_t = receiver; __cascade_t.field = val; __cascade_t.method(); __cascade_t }`
+    pub(super) fn gen_cascade(&mut self, receiver: &Expr, body: &[Stmt], _span: crate::lexer::Span) -> Reg {
+        // Register the receiver value
+        let receiver_reg = self.gen_expr(receiver);
+        let slot = self.alloc_local("__cascade_t");
+        self.emit(IrOp::StoreLocal(slot, receiver_reg));
+
+        // Execute each body statement
+        for stmt in body {
+            self.gen_stmt(stmt);
+        }
+
+        // Return the receiver
+        let r = self.alloc_reg();
+        self.emit(IrOp::LoadLocal(r, slot));
+        r
+    }
 }

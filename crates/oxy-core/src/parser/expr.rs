@@ -45,11 +45,6 @@ impl Parser {
 
     pub(super) fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
         let left = self.parse_expr_inner(min_prec)?;
-
-        if !self.is_at_end() && self.check(&TokenKind::TildeArrow) {
-            return self.parse_cascade_chain(left);
-        }
-
         Ok(left)
     }
 
@@ -506,6 +501,13 @@ impl Parser {
                     span,
                 })
             };
+        }
+
+        // Cascade: `receiver ..{ .method(); .field = val; }`
+        if op_kind == TokenKind::DotDot && self.pos + 1 < self.tokens.len() && matches!(&self.tokens[self.pos + 1].kind, TokenKind::LBrace) {
+            self.advance(); // skip DotDot
+            self.advance(); // skip LBrace
+            return self.parse_cascade_body(left);
         }
 
         // Range operators: `..` and `..=`
@@ -1053,88 +1055,119 @@ impl Parser {
         }
     }
 
-    /// Parse a cascade chain: `receiver ~> op1 ~> op2 ~> ...`
-    /// Flattens all operations into a single Block to prevent double-evaluation
-    /// from nested cascade desugaring.
-    fn parse_cascade_chain(&mut self, receiver: Expr) -> Result<Expr, PipelineError> {
+    /// Parse a cascade body: statements inside `receiver ..{ ... }`.
+    /// Leading `.` accesses the receiver; no dot = outer scope.
+    fn parse_cascade_body(&mut self, receiver: Expr) -> Result<Expr, PipelineError> {
         let start_span = receiver.span();
         let mut stmts: Vec<Stmt> = Vec::new();
 
-        while self.check(&TokenKind::TildeArrow) {
-            self.advance();
-            let right = self.parse_expr_inner(Precedence::None)?;
-            let stmt = Self::cascade_stmt(&receiver, right)?;
-            stmts.push(stmt);
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            // Leading dot = receiver access: `.field = val` or `.method()`
+            if self.check(&TokenKind::Dot) {
+                self.advance(); // skip dot
+                let stmt = self.parse_cascade_dot_stmt(&receiver)?;
+                stmts.push(stmt);
+            } else {
+                // No dot = outer scope statement
+                let stmt = self.parse_stmt()?;
+                stmts.push(stmt);
+            }
         }
 
-        let end_span = receiver.span();
-        stmts.push(Stmt::Expr {
-            expr: receiver,
-            has_semicolon: false,
-        });
+        let end_span = self.current_span();
+        self.expect(TokenKind::RBrace)?;
 
-        Ok(Expr::Block(Block {
-            stmts,
+        Ok(Expr::Cascade {
+            receiver: Box::new(receiver),
+            body: stmts,
             span: self.merge_spans(start_span, end_span),
-        }))
+        })
     }
 
-    /// Build a single cascade statement from the right-hand side.
-    fn cascade_stmt(receiver: &Expr, right: Expr) -> Result<Stmt, PipelineError> {
-        let right_span = right.span();
-        match right {
-            Expr::MethodCall { .. } => {
-                Ok(Stmt::Expr { expr: right, has_semicolon: true })
-            }
-            Expr::Call { callee, turbofish, args, span: call_span } => {
-                match *callee {
-                    Expr::Ident(method, _) => {
-                        let method_call = Expr::MethodCall {
+    /// Parse a dot-prefixed statement inside a cascade body:
+    /// `.field = value;` or `.method(args);`
+    fn parse_cascade_dot_stmt(&mut self, receiver: &Expr) -> Result<Stmt, PipelineError> {
+        match self.peek_kind() {
+            TokenKind::Ident(_) => {
+                let name = self.expect_ident()?;
+                // `.name = value;` — field assignment
+                if self.check(&TokenKind::Eq) && !matches!(self.peek_kind(), TokenKind::EqEq) {
+                    self.advance(); // skip =
+                    let value = self.parse_expr(Precedence::None)?;
+                    let span = self.current_span();
+                    self.expect(TokenKind::Semicolon)?;
+                    let assign = Expr::Assign {
+                        target: Box::new(Expr::FieldAccess {
                             object: Box::new(receiver.clone()),
-                            method,
-                            turbofish,
-                            args,
-                            span: call_span,
-                        };
-                        Ok(Stmt::Expr { expr: method_call, has_semicolon: true })
-                    }
-                    other => {
-                        let call = Expr::Call {
-                            callee: Box::new(other),
-                            turbofish,
-                            args,
-                            span: call_span,
-                        };
-                        Ok(Stmt::Expr { expr: call, has_semicolon: true })
-                    }
+                            field: name,
+                            span: span.clone(),
+                        }),
+                        value: Box::new(value),
+                        span: span,
+                    };
+                    Ok(Stmt::Expr { expr: assign, has_semicolon: true })
+                } else {
+                    // `.method(args);` or `.method(args)?;`
+                    let (args, turbofish) = self.parse_call_suffix()?;
+                    let try_op = self.check(&TokenKind::Question);
+                    if try_op { self.advance(); }
+                    let span = self.current_span();
+                    self.expect(TokenKind::Semicolon)?;
+                    let mut method_call = Expr::MethodCall {
+                        object: Box::new(receiver.clone()),
+                        method: name,
+                        turbofish,
+                        args,
+                        span: span.clone(),
+                    };
+                    let expr = if try_op {
+                        Expr::Try { expr: Box::new(method_call), span: span.clone() }
+                    } else {
+                        method_call
+                    };
+                    Ok(Stmt::Expr { expr, has_semicolon: true })
                 }
             }
-            Expr::PathCall { .. } => {
-                Ok(Stmt::Expr { expr: right, has_semicolon: true })
-            }
-            Expr::Assign { target, value, span: assign_span } => {
-                let rewritten = match *target {
-                    Expr::Ident(name, s) => Expr::FieldAccess {
-                        object: Box::new(receiver.clone()),
-                        field: name,
-                        span: s,
+            // `.await?;`
+            TokenKind::Await => {
+                self.advance();
+                self.expect(TokenKind::Semicolon)?;
+                Ok(Stmt::Expr {
+                    expr: Expr::Await {
+                        expr: Box::new(receiver.clone()),
+                        span: self.current_span(),
                     },
-                    other => other,
-                };
-                let assign = Expr::Assign {
-                    target: Box::new(rewritten),
-                    value,
-                    span: assign_span,
-                };
-                Ok(Stmt::Expr { expr: assign, has_semicolon: true })
+                    has_semicolon: true,
+                })
             }
-            _ => Err(PipelineError::Parser {
-                message: "right side of `~>` must be a method call or field assignment"
-                    .to_string(),
-                line: right_span.line,
-                column: right_span.column,
-            }),
+            other => Err(self.error(format!(
+                "expected identifier or `await` after `.` in cascade, found {}",
+                other.description()
+            ))),
         }
+    }
+
+    /// Parse the call suffix: optional turbofish `::<T>` and `(args)`.
+    fn parse_call_suffix(&mut self) -> Result<(Vec<Expr>, Option<Vec<TypeAnnotation>>), PipelineError> {
+        let turbofish = if self.check(&TokenKind::ColonColon) {
+            self.advance();
+            if self.check(&TokenKind::Lt) {
+                Some(self.parse_turbofish()?)
+            } else {
+                return Err(self.error("expected `<` after `::` in turbofish".to_string()));
+            }
+        } else {
+            None
+        };
+        let args = if self.check(&TokenKind::LParen) {
+            self.advance();
+            let args = self.parse_arg_list()?;
+            self.expect(TokenKind::RParen)?;
+            args
+        } else {
+            vec![]
+        };
+        Ok((args, turbofish))
     }
 
 }

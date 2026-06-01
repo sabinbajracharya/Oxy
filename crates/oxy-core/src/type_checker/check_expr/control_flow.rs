@@ -214,3 +214,31 @@ impl TypeChecker {
         }
     }
 }
+
+impl TypeChecker {
+    /// Type-check a cascade expression: `receiver ..{ .field = val; .method(); }`.
+    pub(super) fn infer_cascade(
+        &mut self,
+        receiver: &Expr,
+        body: &[Stmt],
+        _span: &Span,
+    ) -> Result<TypeInfo, PipelineError> {
+        let receiver_ty = self.infer_expr(receiver)?;
+        // Type-check each body statement. The receiver type is used to resolve
+        // dot-prefixed access (field assignments and method calls).
+        for stmt in body {
+            self.check_cascade_stmt(stmt, &receiver_ty)?;
+        }
+        Ok(receiver_ty)
+    }
+
+    fn check_cascade_stmt(&mut self, stmt: &Stmt, _receiver_ty: &TypeInfo) -> Result<(), PipelineError> {
+        match stmt {
+            Stmt::Expr { expr, .. } => {
+                self.infer_expr(expr)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}

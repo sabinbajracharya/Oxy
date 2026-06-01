@@ -165,14 +165,8 @@ impl<'src> Lexer<'src> {
                 }
             }
 
-            // Tilde or TildeArrow (cascade)
-            '~' => {
-                if self.match_char('>') {
-                    TokenKind::TildeArrow
-                } else {
-                    TokenKind::Tilde
-                }
-            }
+            // Tilde (bitwise NOT)
+            '~' => TokenKind::Tilde,
 
             // Lt, LtEq, Shl
             '<' => {
@@ -1006,11 +1000,10 @@ mod tests {
     #[test]
     fn test_arrows() {
         assert_eq!(
-            kinds("-> => ~>"),
+            kinds("-> =>"),
             vec![
                 TokenKind::Arrow,
                 TokenKind::FatArrow,
-                TokenKind::TildeArrow,
                 TokenKind::Eof,
             ]
         );
