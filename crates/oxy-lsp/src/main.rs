@@ -160,7 +160,10 @@ mod tests {
     #[test]
     fn test_builtin_hover() {
         assert!(builtin_hover("Int").is_some());
+        assert!(builtin_hover("io::println").is_some());
         assert!(builtin_hover("println").is_some());
+        assert!(builtin_hover("string::format").is_some());
+        assert!(builtin_hover("format").is_some());
         assert!(builtin_hover("unknown").is_none());
     }
 
