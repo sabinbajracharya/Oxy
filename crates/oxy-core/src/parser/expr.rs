@@ -55,6 +55,29 @@ impl Parser {
             left = self.parse_infix(left, prec)?;
         }
 
+        // Cascade operator `~>` — postfix chain of method calls and field
+        // assignments. All operations apply to the same receiver, flattened
+        // into a single Block to avoid double-evaluation.
+        if !self.is_at_end() && self.check(&TokenKind::TildeArrow) {
+            return self.parse_cascade_chain(left);
+        }
+
+        Ok(left)
+    }
+
+    /// Parse an expression without cascade — used for the right-hand side
+    /// of `~>` to prevent `a ~> (b ~> c)` right-associative nesting.
+    fn parse_expr_no_cascade(&mut self) -> Result<Expr, PipelineError> {
+        let mut left = self.parse_prefix()?;
+
+        loop {
+            let prec = Precedence::of_binary(self.peek_kind());
+            if prec <= Precedence::None {
+                break;
+            }
+            left = self.parse_infix(left, prec)?;
+        }
+
         Ok(left)
     }
 
@@ -524,14 +547,6 @@ impl Parser {
                 inclusive,
                 span,
             });
-        }
-
-        // Cascade operator: `x ~> method(args)` calls method on x, returns x
-        if op_kind == TokenKind::TildeArrow {
-            self.advance();
-            let right = self.parse_expr(prec)?;
-            let span = self.merge_spans(left.span(), right.span());
-            return Self::desugar_cascade(left, right, span);
         }
 
         // Binary operators
@@ -1051,26 +1066,69 @@ impl Parser {
         }
     }
 
-    /// Desugar `left ~> right` — call method / assign field on left, return left.
-    ///
-    /// | Right side form        | Result                       |
-    /// |------------------------|------------------------------|
-    /// | `method(args...)`      | left.method(args...); left   |
-    /// | `field = value`        | left.field = value; left     |
-    fn desugar_cascade(left: Expr, right: Expr, span: Span) -> Result<Expr, PipelineError> {
+    /// Parse a cascade chain: `receiver ~> op1 ~> op2 ~> ...`
+    /// Flattens all operations into a single Block to prevent double-evaluation
+    /// from nested cascade desugaring.
+    fn parse_cascade_chain(&mut self, receiver: Expr) -> Result<Expr, PipelineError> {
+        let start_span = receiver.span();
+        let mut stmts: Vec<Stmt> = Vec::new();
+
+        while self.check(&TokenKind::TildeArrow) {
+            self.advance();
+            let right = self.parse_expr_no_cascade()?;
+            let stmt = Self::cascade_stmt(&receiver, right)?;
+            stmts.push(stmt);
+        }
+
+        let end_span = receiver.span();
+        stmts.push(Stmt::Expr {
+            expr: receiver,
+            has_semicolon: false,
+        });
+
+        Ok(Expr::Block(Block {
+            stmts,
+            span: self.merge_spans(start_span, end_span),
+        }))
+    }
+
+    /// Build a single cascade statement from the right-hand side.
+    fn cascade_stmt(receiver: &Expr, right: Expr) -> Result<Stmt, PipelineError> {
         let right_span = right.span();
-        let cascade_stmt = match right {
-            Expr::MethodCall { .. } | Expr::Call { .. } | Expr::PathCall { .. } => {
-                Stmt::Expr {
-                    expr: right,
-                    has_semicolon: true,
+        match right {
+            Expr::MethodCall { .. } => {
+                Ok(Stmt::Expr { expr: right, has_semicolon: true })
+            }
+            Expr::Call { callee, turbofish, args, span: call_span } => {
+                match *callee {
+                    Expr::Ident(method, _) => {
+                        let method_call = Expr::MethodCall {
+                            object: Box::new(receiver.clone()),
+                            method,
+                            turbofish,
+                            args,
+                            span: call_span,
+                        };
+                        Ok(Stmt::Expr { expr: method_call, has_semicolon: true })
+                    }
+                    other => {
+                        let call = Expr::Call {
+                            callee: Box::new(other),
+                            turbofish,
+                            args,
+                            span: call_span,
+                        };
+                        Ok(Stmt::Expr { expr: call, has_semicolon: true })
+                    }
                 }
             }
+            Expr::PathCall { .. } => {
+                Ok(Stmt::Expr { expr: right, has_semicolon: true })
+            }
             Expr::Assign { target, value, span: assign_span } => {
-                // Rewrite bare field name `field = val` to `left.field = val`
                 let rewritten = match *target {
                     Expr::Ident(name, s) => Expr::FieldAccess {
-                        object: Box::new(left.clone()),
+                        object: Box::new(receiver.clone()),
                         field: name,
                         span: s,
                     },
@@ -1081,30 +1139,15 @@ impl Parser {
                     value,
                     span: assign_span,
                 };
-                Stmt::Expr {
-                    expr: assign,
-                    has_semicolon: true,
-                }
+                Ok(Stmt::Expr { expr: assign, has_semicolon: true })
             }
-            _ => {
-                return Err(PipelineError::Parser {
-                    message: "right side of `~>` must be a method call or field assignment"
-                        .to_string(),
-                    line: right_span.line,
-                    column: right_span.column,
-                });
-            }
-        };
-
-        Ok(Expr::Block(Block {
-            stmts: vec![
-                cascade_stmt,
-                Stmt::Expr {
-                    expr: left,
-                    has_semicolon: false,
-                },
-            ],
-            span,
-        }))
+            _ => Err(PipelineError::Parser {
+                message: "right side of `~>` must be a method call or field assignment"
+                    .to_string(),
+                line: right_span.line,
+                column: right_span.column,
+            }),
+        }
     }
+
 }
