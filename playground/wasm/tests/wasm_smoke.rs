@@ -31,14 +31,14 @@ fn check(src: &str, expected: &str) {
 // oxy_print/println_val (usize count), oxy_add — the most basic FFI path.
 #[wasm_bindgen_test]
 fn wasm_println_arithmetic() {
-    check("fn main() { println!(\"{}\", 1 + 2 * 3); }", "7\n");
+    check("fn main() { io::println(\"{}\", 1 + 2 * 3); }", "7\n");
 }
 
 // oxy_load_local / oxy_store_local / oxy_make_cell (usize slot indices).
 #[wasm_bindgen_test]
 fn wasm_locals_and_while() {
     check(
-        "fn main() { let mut s = 0; let mut i = 0; while i < 5 { s = s + i; i = i + 1; } println!(\"{}\", s); }",
+        "fn main() { var s = 0; var i = 0; while i < 5 { s = s + i; i = i + 1; } io::println(\"{}\", s); }",
         "10\n",
     );
 }
@@ -47,7 +47,7 @@ fn wasm_locals_and_while() {
 #[wasm_bindgen_test]
 fn wasm_vec_index() {
     check(
-        "fn main() { let v = vec![10, 20, 30]; println!(\"{}\", v[1]); }",
+        "fn main() { val v = [10, 20, 30]; io::println(\"{}\", v[1]); }",
         "20\n",
     );
 }
@@ -56,7 +56,7 @@ fn wasm_vec_index() {
 #[wasm_bindgen_test]
 fn wasm_range_for_loop() {
     check(
-        "fn main() { let mut s = 0; for i in 0..5 { s = s + i; } println!(\"{}\", s); }",
+        "fn main() { var s = 0; for i in 0..5 { s = s + i; } io::println(\"{}\", s); }",
         "10\n",
     );
 }
@@ -67,7 +67,7 @@ fn wasm_range_for_loop() {
 #[wasm_bindgen_test]
 fn wasm_higher_order_closure() {
     check(
-        "fn main() { let v = vec![1, 2, 3]; let t: int = v.iter().map(|x| x * 2).sum(); println!(\"{}\", t); }",
+        "fn main() { val v = [1, 2, 3]; val t: Int = v.map(|x| x * 2).sum(); io::println(\"{}\", t); }",
         "12\n",
     );
 }
@@ -76,7 +76,7 @@ fn wasm_higher_order_closure() {
 #[wasm_bindgen_test]
 fn wasm_struct_method() {
     check(
-        "struct P { x: int, y: int }\nimpl P { fn sum(self) -> int { self.x + self.y } }\nfn main() { let p = P { x: 3, y: 4 }; println!(\"{}\", p.sum()); }",
+        "struct P { x: Int, y: Int }\nimpl P { fn sum(self) -> Int { self.x + self.y } }\nfn main() { val p = P { x: 3, y: 4 }; io::println(\"{}\", p.sum()); }",
         "7\n",
     );
 }
@@ -85,7 +85,7 @@ fn wasm_struct_method() {
 #[wasm_bindgen_test]
 fn wasm_enum_and_match() {
     check(
-        "fn half(n: int) -> Result<int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => println!(\"ok {}\", v), Err(e) => println!(\"err {}\", e) } }",
+        "fn half(n: Int) -> Result<Int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => io::println(\"ok {}\", v), Err(e) => io::println(\"err {}\", e) } }",
         "ok 5\n",
     );
 }
@@ -94,7 +94,7 @@ fn wasm_enum_and_match() {
 #[wasm_bindgen_test]
 fn wasm_recursion() {
     check(
-        "fn fib(n: int) -> int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { println!(\"{}\", fib(10)); }",
+        "fn fib(n: Int) -> Int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { io::println(\"{}\", fib(10)); }",
         "55\n",
     );
 }
@@ -104,7 +104,7 @@ fn wasm_recursion() {
 #[wasm_bindgen_test]
 fn wasm_async_spawn_await() {
     check(
-        "fn main() { let h = spawn(|| 21 * 2); println!(\"{}\", h.await); }",
+        "fn main() { val h = spawn(|| 21 * 2); io::println(\"{}\", h.await); }",
         "42\n",
     );
 }
@@ -114,7 +114,7 @@ fn wasm_async_spawn_await() {
 #[wasm_bindgen_test]
 fn wasm_string_methods() {
     check(
-        "fn main() { let s = \"hello\"; println!(\"{} {}\", s.to_uppercase(), s.len()); }",
+        "fn main() { val s = \"hello\"; io::println(\"{} {}\", s.to_uppercase(), s.len()); }",
         "HELLO 5\n",
     );
 }
@@ -122,7 +122,7 @@ fn wasm_string_methods() {
 // The #[test]-runner entry point (run_tests_oxy) must also execute on wasm.
 #[wasm_bindgen_test]
 fn wasm_run_tests_entry() {
-    let json = run_tests_oxy("#[test]\nfn t_ok() { assert_eq!(1 + 1, 2); }");
+    let json = run_tests_oxy("#[test]\nfn t_ok() { assert_eq(1 + 1, 2); }");
     assert!(
         json.contains("\"name\":\"t_ok\"") && json.contains("\"passed\":true"),
         "unexpected test JSON: {json}"
