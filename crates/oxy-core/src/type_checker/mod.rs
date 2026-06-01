@@ -184,7 +184,31 @@ impl TypeInfo {
         if name.starts_with('(') && name.ends_with(')') && name != "()" {
             return TypeInfo::Unknown;
         }
-        // Parse function type syntax: fn(P1, P2, ...) -> R
+        // Parse function type syntax: Fn(P1, P2, ...) -> R
+        if let Some(inner) = name.strip_prefix("Fn(") {
+            if let Some(paren_end) = inner.find(')') {
+                let params_str = &inner[..paren_end];
+                let after_paren = &inner[paren_end + 1..];
+                let ret_str = after_paren
+                    .strip_prefix(" -> ")
+                    .or_else(|| after_paren.trim_start().strip_prefix("-> "));
+                let params: Vec<TypeInfo> = if params_str.is_empty() {
+                    vec![]
+                } else {
+                    params_str
+                        .split(',')
+                        .map(|s| Self::from_name(s.trim()))
+                        .collect()
+                };
+                let ret = if let Some(r) = ret_str {
+                    Box::new(Self::from_name(r))
+                } else {
+                    Box::new(TypeInfo::Unit)
+                };
+                return TypeInfo::Function { params, ret };
+            }
+        }
+        // Parse function type syntax: fn(P1, P2, ...) -> R (legacy lowercase)
         if let Some(inner) = name.strip_prefix("fn(") {
             if let Some(paren_end) = inner.find(')') {
                 let params_str = &inner[..paren_end];
