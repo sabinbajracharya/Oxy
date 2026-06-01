@@ -250,6 +250,22 @@ static ITEMS: &[Item] = &[
         handler: assert_handler,
     },
     Item {
+        path: &["io", "println"],
+        handler: io_println_handler,
+    },
+    Item {
+        path: &["io", "print"],
+        handler: io_print_handler,
+    },
+    Item {
+        path: &["io", "dbg"],
+        handler: io_dbg_handler,
+    },
+    Item {
+        path: &["string", "format"],
+        handler: string_format_handler,
+    },
+    Item {
         path: &["panic"],
         handler: panic_handler,
     },
@@ -414,4 +430,63 @@ fn assert_handler(args: &[Value]) -> Result<Value, String> {
 fn panic_handler(args: &[Value]) -> Result<Value, String> {
     let msg = args.first().map(|v| v.to_string()).unwrap_or_default();
     Err(msg)
+}
+
+fn io_println_handler(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        println!();
+    } else {
+        let template = args[0].to_string();
+        let rendered = render_template(&template, &args[1..]);
+        println!("{}", rendered);
+    }
+    Ok(Value::Unit)
+}
+
+fn io_print_handler(args: &[Value]) -> Result<Value, String> {
+    if !args.is_empty() {
+        let template = args[0].to_string();
+        let rendered = render_template(&template, &args[1..]);
+        print!("{}", rendered);
+    }
+    Ok(Value::Unit)
+}
+
+fn io_dbg_handler(args: &[Value]) -> Result<Value, String> {
+    for (i, val) in args.iter().enumerate() {
+        if i > 0 {
+            print!(" ");
+        }
+        print!("{:?}", val);
+    }
+    println!();
+    Ok(Value::Unit)
+}
+
+fn string_format_handler(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Ok(Value::String(String::new()));
+    }
+    let template = args[0].to_string();
+    let rendered = render_template(&template, &args[1..]);
+    Ok(Value::String(rendered))
+}
+
+/// Simple template rendering: replaces {} placeholders with args.
+fn render_template(template: &str, args: &[Value]) -> String {
+    let mut result = String::new();
+    let mut remaining = template;
+    let mut arg_idx = 0;
+    while let Some(pos) = remaining.find("{}") {
+        result.push_str(&remaining[..pos]);
+        if arg_idx < args.len() {
+            result.push_str(&args[arg_idx].to_string());
+            arg_idx += 1;
+        } else {
+            result.push_str("{}");
+        }
+        remaining = &remaining[pos + 2..];
+    }
+    result.push_str(remaining);
+    result
 }

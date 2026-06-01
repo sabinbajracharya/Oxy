@@ -294,8 +294,8 @@ fn test_keywords_not_empty() {
 fn test_macros_not_empty() {
     assert!(!symbols::ALL_MACROS.is_empty());
     let names: Vec<&str> = symbols::ALL_MACROS.iter().map(|m| m.name).collect();
-    assert!(names.contains(&"println"));
-    assert!(names.contains(&"format"));
+    assert!(names.contains(&"io::println"));
+    assert!(names.contains(&"string::format"));
     assert!(names.contains(&"panic"));
 }
 

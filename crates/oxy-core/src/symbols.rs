@@ -142,29 +142,24 @@ pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
 
 pub const ALL_MACROS: &[MacroInfo] = &[
     MacroInfo {
-        name: "println",
+        name: "io::println",
         detail: "PrInt with newline",
-        hover_text: "**println(fmt, ...)** — PrInt to stdout with a newline",
+        hover_text: "**io::println(fmt, ...)** — PrInt to stdout with a newline",
     },
     MacroInfo {
-        name: "print",
+        name: "io::print",
         detail: "PrInt without newline",
-        hover_text: "**print(fmt, ...)** — PrInt to stdout without a newline",
+        hover_text: "**io::print(fmt, ...)** — PrInt to stdout without a newline",
     },
     MacroInfo {
-        name: "format",
+        name: "string::format",
         detail: "Format a string",
-        hover_text: "**format(fmt, ...)** — Format into a String",
+        hover_text: "**string::format(fmt, ...)** — Format into a String",
     },
     MacroInfo {
-        name: "eprintln",
-        detail: "PrInt to stderr",
-        hover_text: "**eprintln(fmt, ...)** — PrInt to stderr with a newline",
-    },
-    MacroInfo {
-        name: "dbg",
+        name: "io::dbg",
         detail: "Debug print",
-        hover_text: "**dbg(expr)** — Debug-print an expression and return it",
+        hover_text: "**io::dbg(expr)** — Debug-print an expression and return it",
     },
     MacroInfo {
         name: "panic",
