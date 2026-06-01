@@ -25,7 +25,7 @@ fn main() {
     val strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
     val groups = group_anagrams(strs);
     for g in groups {
-        println("{:?}", g);
+        io::println("{:?}", g);
     }
 }
 
@@ -58,20 +58,20 @@ fn group_anagrams(strs: List) -> List {
 fn test_basic() {
     val strs = ["eat", "tea", "tan", "ate", "nat", "bat"];
     val result = group_anagrams(strs);
-    assert_eq(result.len(), 3);
+    assert::eq(result.len(), 3);
 }
 
 #[test]
 fn test_single_word() {
     val strs = ["abc"];
     val result = group_anagrams(strs);
-    assert_eq(result.len(), 1);
-    assert_eq(result[0].len(), 1);
+    assert::eq(result.len(), 1);
+    assert::eq(result[0].len(), 1);
 }
 
 #[test]
 fn test_no_anagrams() {
     val strs = ["abc", "def", "ghi"];
     val result = group_anagrams(strs);
-    assert_eq(result.len(), 3);
+    assert::eq(result.len(), 3);
 }

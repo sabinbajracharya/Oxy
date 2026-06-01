@@ -8,8 +8,8 @@
 #[test]
 fn test_new_empty() {
     val s = BTreeSet::new();
-    assert_eq(s.len(), 0);
-    assert(s.is_empty());
+    assert::eq(s.len(), 0);
+    assert::true(s.is_empty());
 }
 
 // === insert ===
@@ -18,8 +18,8 @@ fn test_new_empty() {
 fn test_insert() {
     var s = BTreeSet::new();
     val was_new = s.insert(1);
-    assert(was_new);
-    assert_eq(s.len(), 1);
+    assert::true(was_new);
+    assert::eq(s.len(), 1);
 }
 
 #[test]
@@ -27,8 +27,8 @@ fn test_insert_duplicate() {
     var s = BTreeSet::new();
     s.insert(1);
     val was_new = s.insert(1);
-    assert(!was_new);
-    assert_eq(s.len(), 1);
+    assert::true(!was_new);
+    assert::eq(s.len(), 1);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_insert_multiple() {
     s.insert("c");
     s.insert("a");
     s.insert("b");
-    assert_eq(s.len(), 3);
+    assert::eq(s.len(), 3);
 }
 
 // === contains ===
@@ -46,14 +46,14 @@ fn test_insert_multiple() {
 fn test_contains() {
     var s = BTreeSet::new();
     s.insert(42);
-    assert(s.contains(42));
-    assert(!s.contains(99));
+    assert::true(s.contains(42));
+    assert::true(!s.contains(99));
 }
 
 #[test]
 fn test_contains_empty() {
     val s = BTreeSet::new();
-    assert(!s.contains(1));
+    assert::true(!s.contains(1));
 }
 
 // === remove ===
@@ -63,9 +63,9 @@ fn test_remove_existing() {
     var s = BTreeSet::new();
     s.insert("hello");
     val existed = s.remove("hello");
-    assert(existed);
-    assert_eq(s.len(), 0);
-    assert(!s.contains("hello"));
+    assert::true(existed);
+    assert::eq(s.len(), 0);
+    assert::true(!s.contains("hello"));
 }
 
 #[test]
@@ -73,8 +73,8 @@ fn test_remove_missing() {
     var s = BTreeSet::new();
     s.insert(1);
     val existed = s.remove(42);
-    assert(!existed);
-    assert_eq(s.len(), 1);
+    assert::true(!existed);
+    assert::eq(s.len(), 1);
 }
 
 // === union ===
@@ -88,7 +88,7 @@ fn test_union() {
     b.insert(2);
     b.insert(3);
     val u = a.union(b);
-    assert_eq(u.len(), 3);
+    assert::eq(u.len(), 3);
 }
 
 // === intersection ===
@@ -104,7 +104,7 @@ fn test_intersection() {
     b.insert(3);
     b.insert(4);
     val inter = a.intersection(b);
-    assert_eq(inter.len(), 2);
+    assert::eq(inter.len(), 2);
 }
 
 // === difference ===
@@ -118,7 +118,7 @@ fn test_difference() {
     var b = BTreeSet::new();
     b.insert(2);
     val diff = a.difference(b);
-    assert_eq(diff.len(), 2);
+    assert::eq(diff.len(), 2);
 }
 
 // === to_vec ===
@@ -130,11 +130,11 @@ fn test_to_vec() {
     s.insert(1);
     s.insert(2);
     val v = s.to_vec();
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
     // BTreeSet returns elements in sorted order
-    assert_eq(v[0], 1);
-    assert_eq(v[1], 2);
-    assert_eq(v[2], 3);
+    assert::eq(v[0], 1);
+    assert::eq(v[1], 2);
+    assert::eq(v[2], 3);
 }
 
 // === Iteration ===
@@ -149,7 +149,7 @@ fn test_iteration() {
     for v in s {
         count = count + 1;
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }
 
 // === clone ===
@@ -159,6 +159,6 @@ fn test_clone() {
     var s = BTreeSet::new();
     s.insert("x");
     val s2 = s.clone();
-    assert_eq(s2.len(), 1);
-    assert(s2.contains("x"));
+    assert::eq(s2.len(), 1);
+    assert::true(s2.contains("x"));
 }

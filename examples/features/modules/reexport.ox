@@ -25,14 +25,14 @@ mod public_api {
 #[test]
 fn test_pub_use_simple_reexport() {
     use public_api::secret;
-    assert_eq(secret(), "secret sauce");
+    assert::eq(secret(), "secret sauce");
 }
 
 #[test]
 fn test_pub_use_reexport_struct() {
     use public_api::Data;
     val d = Data { value: 99 };
-    assert_eq(d.value, 99);
+    assert::eq(d.value, 99);
 }
 
 // === pub use glob re-export ===
@@ -59,8 +59,8 @@ mod facade {
 fn test_pub_use_glob_reexport() {
     use facade::alpha;
     use facade::beta;
-    assert_eq(alpha(), "a");
-    assert_eq(beta(), "b");
+    assert::eq(alpha(), "a");
+    assert::eq(beta(), "b");
 }
 
 // === Re-export chain ===
@@ -82,7 +82,7 @@ mod layer3 {
 #[test]
 fn test_reexport_chain() {
     use layer3::value;
-    assert_eq(value(), 42);
+    assert::eq(value(), 42);
 }
 
 // === Re-export with rename ===
@@ -100,5 +100,5 @@ mod renamed {
 #[test]
 fn test_pub_use_with_rename() {
     use renamed::short;
-    assert_eq(short(), "short");
+    assert::eq(short(), "short");
 }

@@ -27,7 +27,7 @@ fn main() {
     val new_interval = [2, 5];
     val result = insert(intervals, new_interval);
     for r in result {
-        println("{:?}", r);
+        io::println("{:?}", r);
     }
 }
 
@@ -64,19 +64,19 @@ fn insert(intervals: List, new_interval: List) -> List {
 fn test_example() {
     val intervals = [[1, 3], [6, 9]];
     val result = insert(intervals, [2, 5]);
-    assert_eq(result, [[1, 5], [6, 9]]);
+    assert::eq(result, [[1, 5], [6, 9]]);
 }
 
 #[test]
 fn test_no_overlap() {
     val intervals = [[1, 2], [5, 6]];
     val result = insert(intervals, [3, 4]);
-    assert_eq(result, [[1, 2], [3, 4], [5, 6]]);
+    assert::eq(result, [[1, 2], [3, 4], [5, 6]]);
 }
 
 #[test]
 fn test_merge_all() {
     val intervals = [[1, 3], [4, 6]];
     val result = insert(intervals, [2, 5]);
-    assert_eq(result, [[1, 6]]);
+    assert::eq(result, [[1, 6]]);
 }

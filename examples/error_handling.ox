@@ -27,63 +27,63 @@ fn safe_divide(a: Float, b: Float) -> Result<Float, String> {
 
 fn main() {
     // Result usage
-    println("=== Result ===");
+    io::println("=== Result ===");
     match divide(10.0, 3.0) {
-        Ok(result) => println("10 / 3 = {}", result),
-        Err(e) => println("Error: {}", e),
+        Ok(result) => io::println("10 / 3 = {}", result),
+        Err(e) => io::println("Error: {}", e),
     }
 
     match divide(10.0, 0.0) {
-        Ok(result) => println("10 / 0 = {}", result),
-        Err(e) => println("Error: {}", e),
+        Ok(result) => io::println("10 / 0 = {}", result),
+        Err(e) => io::println("Error: {}", e),
     }
 
     // Result methods
     val ok_val: Result<Int, String> = Ok(42);
-    println("is_ok: {}", ok_val.is_ok());
-    println("unwrap: {}", ok_val.unwrap());
+    io::println("is_ok: {}", ok_val.is_ok());
+    io::println("unwrap: {}", ok_val.unwrap());
 
     // Option usage
-    println("\n=== Option ===");
+    io::println("\n=== Option ===");
     val items = ["apple", "banana", "cherry"];
     val found = find_item(items, "banana");
 
     if val Some(idx) = found {
-        println("Found banana at index {}", idx);
+        io::println("Found banana at index {}", idx);
     } else {
-        println("Not found");
+        io::println("Not found");
     }
 
     // Option methods
     val some_val = Some(10);
     val none_val: Option<Int> = None;
-    println("some is_some: {}", some_val.is_some());
-    println("none is_none: {}", none_val.is_none());
-    println("unwrap_or: {}", none_val.unwrap_or(99));
+    io::println("some is_some: {}", some_val.is_some());
+    io::println("none is_none: {}", none_val.is_none());
+    io::println("unwrap_or: {}", none_val.unwrap_or(99));
 
     // while val with List::pop()
-    println("\n=== while val ===");
+    io::println("\n=== while val ===");
     var stack = [1, 2, 3];
     while val Some(top) = stack.pop() {
-        println("popped: {}", top);
+        io::println("popped: {}", top);
     }
 
     // ? operator
-    println("\n=== ? operator ===");
+    io::println("\n=== ? operator ===");
     match safe_divide(10.0, 2.0) {
-        Ok(result) => println("safe_divide(10, 2) = {}", result),
-        Err(e) => println("Error: {}", e),
+        Ok(result) => io::println("safe_divide(10, 2) = {}", result),
+        Err(e) => io::println("Error: {}", e),
     }
 
     match safe_divide(10.0, 0.0) {
-        Ok(result) => println("safe_divide(10, 0) = {}", result),
-        Err(e) => println("Error: {}", e),
+        Ok(result) => io::println("safe_divide(10, 0) = {}", result),
+        Err(e) => io::println("Error: {}", e),
     }
 
     // dbg function
-    println("\n=== dbg ===");
+    io::println("\n=== dbg ===");
     val x = 42;
-    dbg(x);
+    sys::dbg(x);
 
-    println("\nDone!");
+    io::println("\nDone!");
 }

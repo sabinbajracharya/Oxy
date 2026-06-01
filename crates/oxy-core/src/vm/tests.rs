@@ -10,7 +10,7 @@ mod tests {
         let source = r#"
         fn main() {
             val arr = [1, 2, 3];
-            println(arr);
+            io::println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -22,7 +22,7 @@ mod tests {
         let source = r#"
         fn main() {
             val arr = [];
-            println(arr);
+            io::println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -34,7 +34,7 @@ mod tests {
         let source = r#"
         fn main() {
             val arr = [[1, 2], [3, 4]];
-            println(arr);
+            io::println(arr);
         }
         "#;
         let result = run_compiled(source);
@@ -48,8 +48,8 @@ mod tests {
         let source = r#"
         fn main() {
             val arr = [10, 20, 30];
-            println(arr[0]);
-            println(arr[2]);
+            io::println(arr[0]);
+            io::println(arr[2]);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -63,8 +63,8 @@ mod tests {
         let source = r#"
         fn main() {
             val s = "ab";
-            println(s[0]);
-            println(s[1]);
+            io::println(s[0]);
+            io::println(s[1]);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -78,8 +78,8 @@ mod tests {
         let source = r#"
         fn main() {
             val t = (10, 20);
-            println(t.0);
-            println(t.1);
+            io::println(t.0);
+            io::println(t.1);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -92,8 +92,8 @@ mod tests {
     fn test_compiled_io_println_captured() {
         let source = r#"
         fn main() {
-            io::println("fib({}) = {}", 8, 21);
-            io::print("done");
+            io::io::println("fib({}) = {}", 8, 21);
+            io::io::print("done");
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -113,7 +113,7 @@ mod tests {
         let source = r#"
         fn main() {
             for (a, b) in [(1, 10), (2, 20)] {
-                println(a + b);
+                io::println(a + b);
             }
         }
         "#;
@@ -133,7 +133,7 @@ mod tests {
             for i in 0..3 {
                 sum = sum + i;
             }
-            println("{}", sum);
+            io::println("{}", sum);
         }
         "#;
         let result = run_compiled(source);
@@ -145,7 +145,7 @@ mod tests {
         let source = r#"
         fn main() {
             for i in 0..3 {
-                println(i);
+                io::println(i);
             }
         }
         "#;
@@ -163,7 +163,7 @@ mod tests {
             for i in 0..5 {
                 sum = sum + i;
             }
-            println(sum);
+            io::println(sum);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -178,7 +178,7 @@ mod tests {
         fn main() {
             for i in 0..10 {
                 if i == 3 { break; }
-                println(i);
+                io::println(i);
             }
         }
         "#;
@@ -195,7 +195,7 @@ mod tests {
         fn main() {
             var i = 0;
             while i < 3 {
-                println(i);
+                io::println(i);
                 i = i + 1;
             }
         }
@@ -213,7 +213,7 @@ mod tests {
             var i = 0;
             while i < 10 {
                 if i == 3 { break; }
-                println(i);
+                io::println(i);
                 i = i + 1;
             }
         }
@@ -231,7 +231,7 @@ mod tests {
             var i = 0;
             loop {
                 if i >= 3 { break; }
-                println(i);
+                io::println(i);
                 i = i + 1;
             }
         }
@@ -248,7 +248,7 @@ mod tests {
         fn main() {
             for i in 0..5 {
                 if i == 2 { continue; }
-                println(i);
+                io::println(i);
             }
         }
         "#;
@@ -266,7 +266,7 @@ mod tests {
             while i < 5 {
                 i = i + 1;
                 if i == 3 { continue; }
-                println(i);
+                io::println(i);
             }
         }
         "#;
@@ -285,7 +285,7 @@ mod tests {
                 i = i + 1;
                 if i == 2 { continue; }
                 if i > 3 { break; }
-                println(i);
+                io::println(i);
             }
         }
         "#;
@@ -300,7 +300,7 @@ mod tests {
         let source = r#"
         fn main() {
             for c in "ab" {
-                println(c);
+                io::println(c);
             }
         }
         "#;
@@ -317,7 +317,7 @@ mod tests {
             for i in 0..3 {
                 for j in 0..3 {
                     if j == 1 { break; }
-                    println(j);
+                    io::println(j);
                 }
             }
         }
@@ -359,7 +359,7 @@ mod tests {
             val y = x * 2;
             val z = y - 4;
             val w = z / 2;
-            println("{}", w);
+            io::println("{}", w);
         }
         "#;
         let result = run_compiled(source);
@@ -372,7 +372,7 @@ mod tests {
         fn add(x: Int, y: Int) -> Int { x + y }
         fn main() {
             val r = add(3, 4);
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled(source);
@@ -387,8 +387,8 @@ mod tests {
             if n <= 1 { n } else { 99 }
         }
         fn main() {
-            println("{}", check(0));
-            println("{}", check(5));
+            io::println("{}", check(0));
+            io::println("{}", check(5));
         }
         "#;
         let result = run_compiled(source);
@@ -402,7 +402,7 @@ mod tests {
         fn main() {
             var x = 0;
             while x < 3 {
-                println("{}", x);
+                io::println("{}", x);
                 x = x + 1;
             }
         }
@@ -417,7 +417,7 @@ mod tests {
         fn fib(n: Int) -> Int {
             if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
         }
-        fn main() { println("{}", fib(2)); }
+        fn main() { io::println("{}", fib(2)); }
         "#;
         let result = run_compiled(source);
         assert!(result.is_ok(), "compiled failed: {:?}", result.err());
@@ -431,7 +431,7 @@ mod tests {
         }
         fn main() {
             val r = fib(10);
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled(source);
@@ -448,7 +448,7 @@ mod tests {
                 sum = sum + i;
                 i = i + 1;
             }
-            println("{}", sum);
+            io::println("{}", sum);
         }
         "#;
         let result = run_compiled(source);
@@ -462,8 +462,8 @@ mod tests {
             if n % 2 == 0 { true } else { false }
         }
         fn main() {
-            println("{}", is_even(4));
-            println("{}", is_even(7));
+            io::println("{}", is_even(4));
+            io::println("{}", is_even(7));
         }
         "#;
         let result = run_compiled(source);
@@ -478,7 +478,7 @@ mod tests {
         }
         fn main() {
             val r = fib(10);
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         // Both should produce the same result
@@ -496,7 +496,7 @@ mod tests {
         fn main() {
             var x = 10;
             x += 5;
-            println("{}", x);
+            io::println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -511,7 +511,7 @@ mod tests {
         fn main() {
             var x = 10;
             x -= 3;
-            println("{}", x);
+            io::println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -526,7 +526,7 @@ mod tests {
         fn main() {
             var x = 7;
             x *= 3;
-            println("{}", x);
+            io::println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -541,7 +541,7 @@ mod tests {
         fn main() {
             var x = 20;
             x /= 4;
-            println("{}", x);
+            io::println("{}", x);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -557,7 +557,7 @@ mod tests {
         let source = r#"
         fn main() {
             val msg = f"hello world";
-            println("{}", msg);
+            io::println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -572,7 +572,7 @@ mod tests {
         fn main() {
             val name = "Oxy";
             val msg = f"Hello, {name}!";
-            println("{}", msg);
+            io::println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -592,7 +592,7 @@ mod tests {
             val x = 10;
             val y = 20;
             val msg = f"{x} + {y} = {x + y}";
-            println("{}", msg);
+            io::println("{}", msg);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -613,7 +613,7 @@ mod tests {
         struct PoInt { x: Int, y: Int }
         enum Shape { Circle, Square(Int) }
         fn main() {
-            println("ok");
+            io::println("ok");
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -638,7 +638,7 @@ mod tests {
         fn main() {
             val c = Counter { n: 0 };
             val c2 = c.inc();
-            println("{}", c2.n);
+            io::println("{}", c2.n);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -658,7 +658,7 @@ mod tests {
         }
         fn main() {
             val v = Value { x: 42 };
-            println("{}", v.get());
+            io::println("{}", v.get());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -678,7 +678,7 @@ mod tests {
                 1 => "one",
                 _ => "other",
             };
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -696,7 +696,7 @@ mod tests {
                 1 => "one",
                 _ => "other",
             };
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -713,7 +713,7 @@ mod tests {
             val r = match x {
                 v => v + 1,
             };
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -736,7 +736,7 @@ mod tests {
                 Opt::Some(v) => v,
                 Opt::None => 0,
             };
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -758,7 +758,7 @@ mod tests {
         fn main() {
             val x = Opt::Some(42);
             if val Opt::Some(v) = x {
-                println("{}", v);
+                io::println("{}", v);
             }
         }
         "#;
@@ -775,9 +775,9 @@ mod tests {
         fn main() {
             val x = Opt::None;
             if val Opt::Some(v) = x {
-                println("{}", v);
+                io::println("{}", v);
             } else {
-                println("nothing");
+                io::println("nothing");
             }
         }
         "#;
@@ -797,7 +797,7 @@ mod tests {
     fn test_compiled_pathcall_math_sqrt() {
         let source = r#"
         fn main() {
-            println("{}", math::sqrt(16.0));
+            io::println("{}", math::sqrt(16.0));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -810,7 +810,7 @@ mod tests {
     fn test_compiled_pathcall_math_abs() {
         let source = r#"
         fn main() {
-            println("{}", math::abs(-42));
+            io::println("{}", math::abs(-42));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -824,7 +824,7 @@ mod tests {
         let source = r#"
         fn main() {
             val s = String::from("hello");
-            println("{}", s);
+            io::println("{}", s);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -842,7 +842,7 @@ mod tests {
         let source = r#"
         fn main() {
             val m = Map::new();
-            println("{}", m.len());
+            io::println("{}", m.len());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -864,7 +864,7 @@ mod tests {
             pub fn double(x: Int) -> Int { x * 2 }
         }
         fn main() {
-            println("{}", math::double(21));
+            io::println("{}", math::double(21));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -886,7 +886,7 @@ mod tests {
             }
         }
         fn main() {
-            println("{}", outer::inner::value());
+            io::println("{}", outer::inner::value());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -903,7 +903,7 @@ mod tests {
         }
         use calc::triple;
         fn main() {
-            println("{}", triple(7));
+            io::println("{}", triple(7));
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -922,7 +922,7 @@ mod tests {
             pub fn two() -> Int { a::one() + a::one() }
         }
         fn main() {
-            println("{}", b::two());
+            io::println("{}", b::two());
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -937,7 +937,7 @@ mod tests {
         fn main() {
             val v = [1, 2, 3];
             val r = v.iter().any(|x| x == 2);
-            println("{}", r);
+            io::println("{}", r);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -953,7 +953,7 @@ mod tests {
         let source = r#"
         fn main() {
             val h = spawn(|| 42);
-            println("{}", h.await);
+            io::println("{}", h.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -968,8 +968,8 @@ mod tests {
         fn main() {
             val a = spawn(|| 100);
             val b = spawn(|| 200);
-            println("{}", a.await);
-            println("{}", b.await);
+            io::println("{}", a.await);
+            io::println("{}", b.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -986,7 +986,7 @@ mod tests {
                 sleep(0);
                 99
             });
-            println("{}", h.await);
+            io::println("{}", h.await);
         }
         "#;
         let result = run_compiled_capturing(source);
@@ -1002,7 +1002,7 @@ mod tests {
             val a = spawn(|| 42);
             val b = spawn(|| 99);
             val result = select(a, b);
-            println("{}", result);
+            io::println("{}", result);
         }
         "#;
         let result = run_compiled_capturing(source);

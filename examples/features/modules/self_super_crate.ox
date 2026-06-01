@@ -26,12 +26,12 @@ mod food {
 
 #[test]
 fn test_self_in_module() {
-    assert_eq(food::fruits::call_self(), "banana");
+    assert::eq(food::fruits::call_self(), "banana");
 }
 
 #[test]
 fn test_super_in_module() {
-    assert_eq(food::fruits::call_super(), "apple");
+    assert::eq(food::fruits::call_super(), "apple");
 }
 
 // === crate: refers to root ===
@@ -46,7 +46,7 @@ mod animals {
 fn test_crate_qualified_path() {
     // crate::animals::dog() from test context
     // In Oxy, tests run at root level, so this should work
-    assert_eq(animals::dog(), "dog");
+    assert::eq(animals::dog(), "dog");
 }
 
 // === Deep module hierarchy ===
@@ -65,7 +65,7 @@ mod lib {
 
 #[test]
 fn test_deep_path() {
-    assert_eq(lib::sub::gamma(), "gamma");
+    assert::eq(lib::sub::gamma(), "gamma");
 }
 
 // === super::super for going up two levels ===
@@ -94,5 +94,5 @@ mod level1 {
 
 #[test]
 fn test_super_super() {
-    assert_eq(level1::level2::level3::call_l1_via_super_super(), 1);
+    assert::eq(level1::level2::level3::call_l1_via_super_super(), 1);
 }

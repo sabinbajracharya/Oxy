@@ -6,25 +6,25 @@
 
 pub fn header(text: String) {
     val bar = "=".repeat(text.len() + 4);
-    println(bar);
-    println("  " + text);
-    println(bar);
+    io::println(bar);
+    io::println("  " + text);
+    io::println(bar);
 }
 
 pub fn info(text: String) {
-    println("  " + text);
+    io::println("  " + text);
 }
 
 pub fn success(text: String) {
-    println("  ok  " + text);
+    io::println("  ok  " + text);
 }
 
 pub fn warn(text: String) {
-    println("  warn  " + text);
+    io::println("  warn  " + text);
 }
 
 pub fn fail(text: String) {
-    println("  FAIL  " + text);
+    io::println("  FAIL  " + text);
 }
 
 pub fn die(text: String) {

@@ -15,8 +15,8 @@ fn test_add_for_struct() {
     val a = V2 { x: 1, y: 2 };
     val b = V2 { x: 10, y: 20 };
     val c = a + b;
-    assert_eq(c.x, 11);
-    assert_eq(c.y, 22);
+    assert::eq(c.x, 11);
+    assert::eq(c.y, 22);
 }
 
 // --- Sub for custom struct ---
@@ -31,8 +31,8 @@ fn test_sub_for_struct() {
     val a = V2 { x: 10, y: 20 };
     val b = V2 { x: 1, y: 2 };
     val c = a - b;
-    assert_eq(c.x, 9);
-    assert_eq(c.y, 18);
+    assert::eq(c.x, 9);
+    assert::eq(c.y, 18);
 }
 
 // --- Mul for custom struct (scalar) ---
@@ -48,8 +48,8 @@ fn test_mul_for_struct() {
     val a = V2 { x: 2, y: 3 };
     val b = V2 { x: 4, y: 5 };
     val c = a * b;
-    assert_eq(c.x, 8);
-    assert_eq(c.y, 15);
+    assert::eq(c.x, 8);
+    assert::eq(c.y, 15);
 }
 
 // --- PartialEq from derive ---
@@ -57,14 +57,14 @@ fn test_mul_for_struct() {
 fn test_partial_eq_derived() {
     val a = V2 { x: 1, y: 2 };
     val b = V2 { x: 1, y: 2 };
-    assert_eq(a, b);
+    assert::eq(a, b);
 }
 
 #[test]
 fn test_partial_eq_inequality() {
     val a = V2 { x: 1, y: 2 };
     val b = V2 { x: 1, y: 3 };
-    assert(a != b);
+    assert::true(a != b);
 }
 
 // --- Display via to_string ---
@@ -73,14 +73,14 @@ struct Named { name: String }
 
 impl Named {
     fn fmt(self) -> String {
-        format("Named({})", self.name)
+        string::format("Named({})", self.name)
     }
 }
 
 #[test]
 fn test_custom_display() {
     val n = Named { name: "test".to_string() };
-    assert_eq(n.fmt(), "Named(test)");
+    assert::eq(n.fmt(), "Named(test)");
 }
 
 // --- Chained operator with custom struct ---
@@ -90,8 +90,8 @@ fn test_chained_add() {
     val b = V2 { x: 2, y: 2 };
     val c = V2 { x: 3, y: 3 };
     val r = a + b + c;
-    assert_eq(r.x, 6);
-    assert_eq(r.y, 6);
+    assert::eq(r.x, 6);
+    assert::eq(r.y, 6);
 }
 
 // --- Self in impl ---
@@ -107,7 +107,7 @@ fn test_self_in_impl() {
     val c = Counter1::new();
     val c2 = c.bumped();
     val c3 = c2.bumped();
-    assert_eq(c3.value, 2);
+    assert::eq(c3.value, 2);
 }
 
 // --- self vs mut self ---
@@ -128,7 +128,7 @@ fn test_mut_self_in_method() {
     val b = b.add(1);
     val b = b.add(2);
     val b = b.add(3);
-    assert_eq(b.count(), 3);
+    assert::eq(b.count(), 3);
 }
 
 // --- Static method (no self) ---
@@ -141,8 +141,8 @@ impl Util {
 
 #[test]
 fn test_static_methods() {
-    assert_eq(Util::double(5), 10);
-    assert_eq(Util::triple(5), 15);
+    assert::eq(Util::double(5), 10);
+    assert::eq(Util::triple(5), 15);
 }
 
 // --- Builder pattern ---
@@ -157,8 +157,8 @@ impl Config {
 #[test]
 fn test_builder_pattern() {
     val c = Config::new().name("foo".to_string()).retries(3);
-    assert_eq(c.name, "foo");
-    assert_eq(c.retries, 3);
+    assert::eq(c.name, "foo");
+    assert::eq(c.retries, 3);
 }
 
 // --- ordering — comparisons on i64 ---
@@ -166,8 +166,8 @@ fn test_builder_pattern() {
 fn test_int_ordering_in_data() {
     var v = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5];
     v.sort();
-    assert_eq(v[0], 1);
-    assert_eq(v[v.len() - 1], 9);
+    assert::eq(v[0], 1);
+    assert::eq(v[v.len() - 1], 9);
 }
 
 // --- ordering on String ---
@@ -175,7 +175,7 @@ fn test_int_ordering_in_data() {
 fn test_string_ordering() {
     var v = ["banana".to_string(), "apple".to_string(), "cherry".to_string()];
     v.sort();
-    assert_eq(v[0], "apple");
-    assert_eq(v[1], "banana");
-    assert_eq(v[2], "cherry");
+    assert::eq(v[0], "apple");
+    assert::eq(v[1], "banana");
+    assert::eq(v[2], "cherry");
 }

@@ -245,7 +245,6 @@ register; `vA`/`vB` = canonical names of operand registers; `$k` = slot index.
 | `ReadResult(R)` | `vR = read.result` | vR |
 | `CheckError(R)` | `vR = check.error` | vR |
 | `WriteResult(R)` | `write.result vR` | **— (use)** |
-| `SetError(R)` | `set.error vR` | **— (use)** |
 | `CallBuiltin{result,func,args,immediates,strings}` | see below | result |
 
 **`CallBuiltin` form:**
@@ -267,12 +266,12 @@ vR = call @<func>(<arg0>, <arg1>, ...)[ imm[<i0>, <i1>, ...]][ str["<s0>", "<s1>
 ### 6.1 Def/use classification (overrides `result_reg()`)
 
 The serializer's register-numbering pass uses **this** table, not
-`IrOp::result_reg()` (`ir.rs:124`). `result_reg()` reports `WriteResult` and
-`SetError` as *defining* their register, but semantically both **consume** it
-(write a value to `ctx.result` / set the error from a register). For snapshots they
-are **uses, not defs** — they introduce no new `vN`. `StoreLocal` likewise defines
-no register. This discrepancy with `result_reg()` is a known IR inconsistency
-(track it; do not "fix" it by trusting `result_reg` here).
+`IrOp::result_reg()` (`ir.rs:124`). `result_reg()` reports `WriteResult` as
+*defining* its register, but semantically it **consumes** it (writes the value
+to `ctx.result`). For snapshots it is a **use, not def** — it introduces no new
+`vN`. `StoreLocal` likewise defines no register. This discrepancy with
+`result_reg()` is a known IR inconsistency (track it; do not "fix" it by trusting
+`result_reg` here).
 
 ### 6.2 Excluded information (and why)
 

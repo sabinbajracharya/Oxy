@@ -9,7 +9,7 @@ fn test_function_call_with_string_param() {
     let output = run_and_capture(
         r#"
 fn greet(name: String) {
-    println("Hello, {}!", name);
+    io::println("Hello, {}!", name);
 }
 fn main() {
     val name = "Oxy";
@@ -22,7 +22,7 @@ fn main() {
 
 #[test]
 fn test_reject_amp_in_type_position() {
-    let result = run_compiled(r#"fn greet(name: &str) { println("{}", name); } fn main() {}"#);
+    let result = run_compiled(r#"fn greet(name: &str) { io::println("{}", name); } fn main() {}"#);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -54,7 +54,7 @@ fn main() {}
 
 #[test]
 fn test_reject_amp_prefix_expression() {
-    let result = run_compiled(r#"fn main() { val x = 5; val r = &x; println("{}", r); }"#);
+    let result = run_compiled(r#"fn main() { val x = 5; val r = &x; io::println("{}", r); }"#);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -77,7 +77,7 @@ impl Counter {
 }
 fn main() {
     val c = Counter { n: 5 };
-    println("{}", c.bump());
+    io::println("{}", c.bump());
 }"#,
     );
     assert_eq!(output, vec!["6\n"]);
@@ -92,7 +92,7 @@ fn double_in_place(x: Int) -> Int {
     x
 }
 fn main() {
-    println("{}", double_in_place(21));
+    io::println("{}", double_in_place(21));
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);
@@ -112,7 +112,7 @@ impl Counter {
 }
 fn main() {
     val c = Counter { n: 5 };
-    println("{}", c.try_bump());
+    io::println("{}", c.try_bump());
 }"#,
     );
     assert_eq!(output, vec!["6\n"]);
@@ -147,7 +147,7 @@ struct PoInt { x: Int }
 fn main() {
     var p = PoInt { x: 1 };
     p.x = 42;
-    println("{}", p.x);
+    io::println("{}", p.x);
 }"#,
     );
     assert_eq!(output, vec!["42\n"]);

@@ -66,7 +66,7 @@ fn test_extern_flag_resolves_module() {
     let mut f = std::fs::File::create(&extern_file).unwrap();
     writeln!(
         f,
-        "pub fn hello() {{ io::println(\"hello from extern\"); }}"
+        "pub fn hello() {{ io::io::println(\"hello from extern\"); }}"
     )
     .unwrap();
 

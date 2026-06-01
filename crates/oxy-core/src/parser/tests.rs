@@ -776,6 +776,15 @@ fn test_path_call_expr() {
 }
 
 #[test]
+fn test_path_call_expr_with_keyword_segment() {
+    let stmts = parse_fn_body("fn main() { assert::true(1 == 1); }");
+    let Stmt::Expr { expr, .. } = &stmts[0] else {
+        panic!();
+    };
+    assert!(matches!(expr, Expr::PathCall { path, .. } if path == &["assert", "true"]));
+}
+
+#[test]
 fn test_path_expr() {
     let stmts = parse_fn_body("fn main() { Color::Red; }");
     let Stmt::Expr { expr, .. } = &stmts[0] else {

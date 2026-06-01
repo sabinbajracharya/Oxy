@@ -3,13 +3,13 @@
 #[test]
 fn test_vec_known_method_ok() {
     val v: List<Int> = [1, 2, 3];
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_string_known_method_ok() {
     val s = "hello".to_string();
-    assert_eq(s.len(), 5);
+    assert::eq(s.len(), 5);
 }
 
 #[compile_error]

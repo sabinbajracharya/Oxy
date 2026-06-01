@@ -8,8 +8,8 @@
 fn test_new_returns_increasing_handle() {
     val a = std::server::new();
     val b = std::server::new();
-    assert(a > 0);
-    assert(b > a);
+    assert::true(a > 0);
+    assert::true(b > a);
 }
 
 #[test]
@@ -27,36 +27,36 @@ fn test_register_routes_all_methods() {
 #[test]
 fn test_text_response_shape() {
     val r = std::server::text("hello");
-    assert_eq(r.status, 200);
-    assert_eq(r.body, "hello");
-    assert_eq(r.content_type, "text/plain; charset=utf-8");
+    assert::eq(r.status, 200);
+    assert::eq(r.body, "hello");
+    assert::eq(r.content_type, "text/plain; charset=utf-8");
 }
 
 #[test]
 fn test_json_response_shape() {
     val r = std::server::json("{\"k\":1}");
-    assert_eq(r.status, 200);
-    assert_eq(r.body, "{\"k\":1}");
-    assert_eq(r.content_type, "application/json; charset=utf-8");
+    assert::eq(r.status, 200);
+    assert::eq(r.body, "{\"k\":1}");
+    assert::eq(r.content_type, "application/json; charset=utf-8");
 }
 
 #[test]
 fn test_html_response_shape() {
     val r = std::server::html("<h1>hi</h1>");
-    assert_eq(r.status, 200);
-    assert_eq(r.content_type, "text/html; charset=utf-8");
+    assert::eq(r.status, 200);
+    assert::eq(r.content_type, "text/html; charset=utf-8");
 }
 
 #[test]
 fn test_status_helper_arbitrary_code() {
     val r = std::server::status(404, "missing");
-    assert_eq(r.status, 404);
-    assert_eq(r.body, "missing");
+    assert::eq(r.status, 404);
+    assert::eq(r.body, "missing");
 }
 
 #[test]
 fn test_listen_invalid_port_returns_err() {
     val app = std::server::new();
     val r = std::server::listen(app, 99999);
-    assert(r.is_err());
+    assert::true(r.is_err());
 }

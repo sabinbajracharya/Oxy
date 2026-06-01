@@ -72,11 +72,11 @@ fn main() {
                 val links = extract_hrefs(body);
 
                 if as_json {
-                    println("{}", links.to_json());
+                    io::println("{}", links.to_json());
                 } else {
                     cli_utils::header("Links (" + links.len().to_string() + ")");
                     for link in links {
-                        println("  " + link);
+                        io::println("  " + link);
                     }
                 }
                 return;
@@ -87,11 +87,11 @@ fn main() {
                 val items = extract_matches(body, pat);
 
                 if as_json {
-                    println("{}", items.to_json());
+                    io::println("{}", items.to_json());
                 } else {
                     cli_utils::header("Matches (" + items.len().to_string() + ")");
                     for item in items {
-                        println("  " + item);
+                        io::println("  " + item);
                     }
                 }
                 return;

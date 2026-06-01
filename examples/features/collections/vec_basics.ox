@@ -8,26 +8,26 @@
 #[test]
 fn test_vec_macro_empty() {
     val v = [];
-    assert_eq(v.len(), 0);
-    assert(v.is_empty());
+    assert::eq(v.len(), 0);
+    assert::true(v.is_empty());
 }
 
 #[test]
 fn test_vec_macro_elements() {
     val v = [1, 2, 3];
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_array_literal() {
     val v = [10, 20, 30];
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_array_literal_empty() {
     val v = [];
-    assert_eq(v.len(), 0);
+    assert::eq(v.len(), 0);
 }
 
 // === push / pop ===
@@ -38,11 +38,11 @@ fn test_push_pop() {
     v.push(10);
     v.push(20);
     v.push(30);
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 
     val x = v.pop();
-    assert(x.is_some());
-    assert_eq(v.len(), 2);
+    assert::true(x.is_some());
+    assert::eq(v.len(), 2);
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn test_pop_empty() {
     var v = [];
     val x = v.pop();
     // pop on empty returns None
-    assert(x.is_none());
+    assert::true(x.is_none());
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_push_many() {
         v.push(i);
         i = i + 1;
     }
-    assert_eq(v.len(), 100);
+    assert::eq(v.len(), 100);
 }
 
 // === len / is_empty ===
@@ -69,12 +69,12 @@ fn test_push_many() {
 #[test]
 fn test_len_and_is_empty() {
     val v = [1, 2, 3];
-    assert_eq(v.len(), 3);
-    assert(!v.is_empty());
+    assert::eq(v.len(), 3);
+    assert::true(!v.is_empty());
 
     val empty = [];
-    assert_eq(empty.len(), 0);
-    assert(empty.is_empty());
+    assert::eq(empty.len(), 0);
+    assert::true(empty.is_empty());
 }
 
 // === contains ===
@@ -82,15 +82,15 @@ fn test_len_and_is_empty() {
 #[test]
 fn test_contains() {
     val v = [10, 20, 30];
-    assert(v.contains(10));
-    assert(v.contains(30));
-    assert(!v.contains(99));
+    assert::true(v.contains(10));
+    assert::true(v.contains(30));
+    assert::true(!v.contains(99));
 }
 
 #[test]
 fn test_contains_empty() {
     val v = [];
-    assert(!v.contains(42));
+    assert::true(!v.contains(42));
 }
 
 // === first / last ===
@@ -99,29 +99,29 @@ fn test_contains_empty() {
 fn test_first() {
     val v = ["a", "b", "c"];
     val f = v.first();
-    assert(f.is_some());
-    assert(!f.is_none());
+    assert::true(f.is_some());
+    assert::true(!f.is_none());
 }
 
 #[test]
 fn test_first_empty() {
     val v = [];
     val f = v.first();
-    assert(f.is_none());
+    assert::true(f.is_none());
 }
 
 #[test]
 fn test_last() {
     val v = ["a", "b", "c"];
     val l = v.last();
-    assert(l.is_some());
+    assert::true(l.is_some());
 }
 
 #[test]
 fn test_last_empty() {
     val v = [];
     val l = v.last();
-    assert(l.is_none());
+    assert::true(l.is_none());
 }
 
 // === get ===
@@ -130,14 +130,14 @@ fn test_last_empty() {
 fn test_get_valid() {
     val v = ["a", "b", "c"];
     val x = v.get(1);
-    assert(x.is_some());
+    assert::true(x.is_some());
 }
 
 #[test]
 fn test_get_out_of_bounds() {
     val v = ["a", "b", "c"];
     val x = v.get(10);
-    assert(x.is_none());
+    assert::true(x.is_none());
 }
 
 // === insert ===
@@ -146,14 +146,14 @@ fn test_get_out_of_bounds() {
 fn test_insert_front() {
     var v = [2, 3];
     v.insert(0, 1);
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_insert_middle() {
     var v = [1, 3];
     v.insert(1, 2);
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 // === remove ===
@@ -162,7 +162,7 @@ fn test_insert_middle() {
 fn test_remove_valid() {
     var v = ["a", "b", "c"];
     v.remove(1);
-    assert_eq(v.len(), 2);
+    assert::eq(v.len(), 2);
 }
 
 // === clear ===
@@ -171,6 +171,6 @@ fn test_remove_valid() {
 fn test_clear() {
     var v = [1, 2, 3];
     v.clear();
-    assert_eq(v.len(), 0);
-    assert(v.is_empty());
+    assert::eq(v.len(), 0);
+    assert::true(v.is_empty());
 }

@@ -13,21 +13,21 @@
 fn test_fstring_single_variable() {
     val name = "Alice";
     val s = f"Hello {name}";
-    assert_eq(s, "Hello Alice");
+    assert::eq(s, "Hello Alice");
 }
 
 #[test]
 fn test_fstring_int_interpolation() {
     val x = 42;
     val s = f"value: {x}";
-    assert_eq(s, "value: 42");
+    assert::eq(s, "value: 42");
 }
 
 #[test]
 fn test_fstring_float_interpolation() {
     val pi = 3.14;
     val s = f"pi is {pi}";
-    assert(s.contains("3.14"));
+    assert::true(s.contains("3.14"));
 }
 
 // === Multiple Interpolations ===
@@ -37,8 +37,8 @@ fn test_fstring_multiple() {
     val x = 10;
     val y = 20;
     val s = f"x={x}, y={y}";
-    assert(s.contains("x=10"));
-    assert(s.contains("y=20"));
+    assert::true(s.contains("x=10"));
+    assert::true(s.contains("y=20"));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_fstring_three_exprs() {
     val b = "b";
     val c = "c";
     val s = f"{a}{b}{c}";
-    assert_eq(s, "abc");
+    assert::eq(s, "abc");
 }
 
 // === F-String Literal Text ===
@@ -55,13 +55,13 @@ fn test_fstring_three_exprs() {
 #[test]
 fn test_fstring_no_interpolation() {
     val s = f"hello world";
-    assert_eq(s, "hello world");
+    assert::eq(s, "hello world");
 }
 
 #[test]
 fn test_fstring_empty_interpolation() {
     val s = f"";
-    assert_eq(s, "");
+    assert::eq(s, "");
 }
 
 // === Expressions in F-Strings ===
@@ -69,19 +69,19 @@ fn test_fstring_empty_interpolation() {
 #[test]
 fn test_fstring_arithmetic_expression() {
     val s = f"1 + 2 = {1 + 2}";
-    assert_eq(s, "1 + 2 = 3");
+    assert::eq(s, "1 + 2 = 3");
 }
 
 #[test]
 fn test_fstring_method_call() {
     val s = f"uppercase: {"hello".to_uppercase()}";
-    assert_eq(s, "uppercase: HELLO");
+    assert::eq(s, "uppercase: HELLO");
 }
 
 #[test]
 fn test_fstring_function_call() {
     val s = f"len: {"abc".len()}";
-    assert_eq(s, "len: 3");
+    assert::eq(s, "len: 3");
 }
 
 // === F-String with String Variable ===
@@ -91,7 +91,7 @@ fn test_fstring_string_var() {
     val greeting = "Hey";
     val name = "Bob";
     val s = f"{greeting} {name}!";
-    assert_eq(s, "Hey Bob!");
+    assert::eq(s, "Hey Bob!");
 }
 
 // === F-String with Chars ===
@@ -100,5 +100,5 @@ fn test_fstring_string_var() {
 fn test_fstring_char() {
     val c = 'X';
     val s = f"char: {c}";
-    assert_eq(s, "char: X");
+    assert::eq(s, "char: X");
 }

@@ -102,7 +102,7 @@ fn run_executes_project_main() {
     );
     write(
         &proj.join("src/main.ox"),
-        "fn main() { println(\"hello from tug run\"); }\n",
+        "fn main() { io::println(\"hello from tug run\"); }\n",
     );
 
     tug_cmd(&proj)
@@ -123,7 +123,7 @@ fn run_passes_script_args_through() {
     // Oxy's std::env::args() returns Vec<String>; the test script prints them.
     write(
         &proj.join("src/main.ox"),
-        "fn main() {\n    val args = std::env::args();\n    for a in args { println(\"arg:{}\", a); }\n}\n",
+        "fn main() {\n    val args = std::env::args();\n    for a in args { io::println(\"arg:{}\", a); }\n}\n",
     );
 
     tug_cmd(&proj)
@@ -160,7 +160,7 @@ fn run_resolves_dependency_through_extern() {
     );
     write(
         &pkg_src.join("src/lib.ox"),
-        "pub fn hi() { println(\"hi from greet pkg\"); }\n",
+        "pub fn hi() { io::println(\"hi from greet pkg\"); }\n",
     );
     oxy_tug::install::install_from_path(&pkg_src).unwrap();
 
@@ -213,7 +213,7 @@ fn test_runs_test_functions() {
     // The CLI's `test` subcommand runs all #[test] fns.
     write(
         &proj.join("src/main.ox"),
-        "fn main() {}\n#[test]\nfn one_plus_one() { assert_eq(1 + 1, 2); }\n",
+        "fn main() {}\n#[test]\nfn one_plus_one() { assert::eq(1 + 1, 2); }\n",
     );
 
     tug_cmd(&proj)

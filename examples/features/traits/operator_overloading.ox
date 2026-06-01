@@ -23,8 +23,8 @@ fn test_add_operator() {
     val a = Vec2 { x: 1.5, y: 2.5 };
     val b = Vec2 { x: 3.0, y: 1.0 };
     val c = a + b;
-    assert_eq(c.x, 4.5);
-    assert_eq(c.y, 3.5);
+    assert::eq(c.x, 4.5);
+    assert::eq(c.y, 3.5);
 }
 
 // === Sub Operator ===
@@ -43,8 +43,8 @@ fn test_sub_operator() {
     val a = Vec2 { x: 5.0, y: 3.0 };
     val b = Vec2 { x: 2.0, y: 1.0 };
     val c = a - b;
-    assert_eq(c.x, 3.0);
-    assert_eq(c.y, 2.0);
+    assert::eq(c.x, 3.0);
+    assert::eq(c.y, 2.0);
 }
 
 // === Mul Operator ===
@@ -63,8 +63,8 @@ fn test_mul_operator() {
     val a = Vec2 { x: 2.0, y: 3.0 };
     val b = Vec2 { x: 4.0, y: 5.0 };
     val c = a * b;
-    assert_eq(c.x, 8.0);
-    assert_eq(c.y, 15.0);
+    assert::eq(c.x, 8.0);
+    assert::eq(c.y, 15.0);
 }
 
 // === Neg Operator (unary -) ===
@@ -82,8 +82,8 @@ impl Neg for Vec2 {
 fn test_neg_operator() {
     val v = Vec2 { x: 3.0, y: -4.0 };
     val n = -v;
-    assert_eq(n.x, -3.0);
-    assert_eq(n.y, 4.0);
+    assert::eq(n.x, -3.0);
+    assert::eq(n.y, 4.0);
 }
 
 // === Rem (modulo) Operator ===
@@ -101,7 +101,7 @@ fn test_rem_operator() {
     val a = WrappedInt(17);
     val b = WrappedInt(5);
     val c = a % b;
-    assert_eq(c.0, 2);
+    assert::eq(c.0, 2);
 }
 
 // === Div Operator ===
@@ -117,7 +117,7 @@ fn test_div_operator() {
     val a = WrappedInt(20);
     val b = WrappedInt(4);
     val c = a / b;
-    assert_eq(c.0, 5);
+    assert::eq(c.0, 5);
 }
 
 // === Operator on Enum ===
@@ -137,7 +137,7 @@ fn test_operator_on_enum() {
     val a = BoxedInt { value: 10 };
     val b = BoxedInt { value: 20 };
     val c = a + b;
-    assert_eq(c.value, 30);
+    assert::eq(c.value, 30);
 }
 
 // === Method Overrides Operator ===
@@ -150,6 +150,6 @@ fn test_operator_chaining() {
     val b = Vec2 { x: 3.0, y: 4.0 };
     val c = Vec2 { x: 1.0, y: 1.0 };
     val result = a + b - c;
-    assert_eq(result.x, 4.0);
-    assert_eq(result.y, 4.0);
+    assert::eq(result.x, 4.0);
+    assert::eq(result.y, 4.0);
 }

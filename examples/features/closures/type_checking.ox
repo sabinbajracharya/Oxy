@@ -7,7 +7,7 @@
 #[test]
 fn test_closure_no_annotations() {
     val add = |x, y| x + y;
-    assert_eq(add(10, 20), 30);
+    assert::eq(add(10, 20), 30);
 }
 
 // === Void Closure (empty body / no return) ===
@@ -17,7 +17,7 @@ fn test_closure_empty_body() {
     var called = false;
     val set = || { called = true; };
     set();
-    assert(called);
+    assert::true(called);
 }
 
 // === Closure with Return Type Annotation (matching) ===
@@ -29,7 +29,7 @@ fn make_increment() -> fn(Int) -> Int {
 #[test]
 fn test_closure_with_matching_return_annotation() {
     val inc = make_increment();
-    assert_eq(inc(5), 6);
+    assert::eq(inc(5), 6);
 }
 
 // === Closure with Param Type Annotations ===
@@ -37,7 +37,7 @@ fn test_closure_with_matching_return_annotation() {
 #[test]
 fn test_closure_with_param_type_annotations() {
     val mul = |x: Int, y: Int| x * y;
-    assert_eq(mul(3, 4), 12);
+    assert::eq(mul(3, 4), 12);
 }
 
 // === Closure with Both Param and Return Type Annotations ===
@@ -49,7 +49,7 @@ fn make_doubler() -> fn(Int) -> Int {
 #[test]
 fn test_closure_with_both_annotations() {
     val double = make_doubler();
-    assert_eq(double(7), 14);
+    assert::eq(double(7), 14);
 }
 
 // === Nested Closure ===
@@ -60,7 +60,7 @@ fn test_nested_closure() {
         val inner = |y: Int| x + y;
         inner(x)
     };
-    assert_eq(outer(5), 10);
+    assert::eq(outer(5), 10);
 }
 
 // === Store in Variable with Fn Type Annotation ===
@@ -68,7 +68,7 @@ fn test_nested_closure() {
 #[test]
 fn test_store_in_variable_with_fn_annotation() {
     val op: Fn = |x: Int| -> Int { x + 10 };
-    assert_eq(op(3), 13);
+    assert::eq(op(3), 13);
 }
 
 // === Return Type Mismatch — should be a compile error ===

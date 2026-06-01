@@ -14,9 +14,9 @@ struct DebugPoint {
 fn test_derive_debug() {
     val p = DebugPoint { x: 1, y: 2 };
     val s = p.to_string();
-    assert(s.contains("DebugPoint"));
-    assert(s.contains("x"));
-    assert(s.contains("y"));
+    assert::true(s.contains("DebugPoint"));
+    assert::true(s.contains("x"));
+    assert::true(s.contains("y"));
 }
 
 // === #[derive(Clone)] ===
@@ -30,7 +30,7 @@ struct CloneData {
 fn test_derive_clone() {
     val a = CloneData { value: 42 };
     val b = a.clone();
-    assert_eq(b.value, 42);
+    assert::eq(b.value, 42);
 }
 
 // === #[derive(PartialEq)] ===
@@ -45,14 +45,14 @@ struct EqData {
 fn test_derive_partial_eq_equal() {
     val a = EqData { id: 1, name: "hello" };
     val b = EqData { id: 1, name: "hello" };
-    assert(a == b);
+    assert::true(a == b);
 }
 
 #[test]
 fn test_derive_partial_eq_not_equal() {
     val a = EqData { id: 1, name: "hello" };
     val b = EqData { id: 2, name: "hello" };
-    assert(a != b);
+    assert::true(a != b);
 }
 
 // === #[derive(Default)] ===
@@ -67,9 +67,9 @@ struct Config {
 #[test]
 fn test_derive_default() {
     val c = Config::default();
-    assert_eq(c.port, 0);
-    assert_eq(c.host, "");
-    assert_eq(c.debug, false);
+    assert::eq(c.port, 0);
+    assert::eq(c.host, "");
+    assert::eq(c.debug, false);
 }
 
 // === Multiple Derives ===
@@ -84,9 +84,9 @@ struct FullData {
 fn test_multiple_derives() {
     val a = FullData { count: 10, label: "test" };
     val b = a.clone();
-    assert(a == b);
+    assert::true(a == b);
 
     val d = FullData::default();
-    assert_eq(d.count, 0);
-    assert_eq(d.label, "");
+    assert::eq(d.count, 0);
+    assert::eq(d.label, "");
 }

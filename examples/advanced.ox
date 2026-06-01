@@ -8,8 +8,8 @@ const VERSION: Int = 1;
 
 fn main() {
     // Constants
-    println("Max items: {}", MAX_ITEMS);
-    println("Version: {}", VERSION);
+    io::println("Max items: {}", MAX_ITEMS);
+    io::println("Version: {}", VERSION);
 
     // Map
     var scores = Map::new();
@@ -17,24 +17,24 @@ fn main() {
     scores.insert("bob", 87);
     scores.insert("carol", 92);
 
-    println("Scores: {:?}", scores);
-    println("Alice's score: {}", scores.get("alice").unwrap());
-    println("Has bob? {}", scores.contains_key("bob"));
-    println("Keys: {:?}", scores.keys());
-    println("Count: {}", scores.len());
+    io::println("Scores: {:?}", scores);
+    io::println("Alice's score: {}", scores.get("alice").unwrap());
+    io::println("Has bob? {}", scores.contains_key("bob"));
+    io::println("Keys: {:?}", scores.keys());
+    io::println("Count: {}", scores.len());
 
     // Map iteration with destructuring
     for (name, score) in scores {
-        println("  {} scored {}", name, score);
+        io::println("  {} scored {}", name, score);
     }
 
     // Tuple destructuring in for loops
     val pairs = [(1, "one"), (2, "two"), (3, "three")];
     for (num, word) in pairs {
-        println("{} = {}", num, word);
+        io::println("{} = {}", num, word);
     }
 
     // CLI args
     val args = std::env::args();
-    println("Program args: {:?}", args);
+    io::println("Program args: {:?}", args);
 }

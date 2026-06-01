@@ -18,7 +18,7 @@ fn my_map(v: List<Int>, f: fn(Int) -> Int) -> List<Int> {
 fn test_custom_map() {
     val v = [1, 2, 3];
     val doubled = my_map(v, |x| x * 2);
-    assert_eq(doubled.len(), 3);
+    assert::eq(doubled.len(), 3);
 }
 
 // === Custom filter ===
@@ -39,7 +39,7 @@ fn my_filter(v: List<Int>, pred: fn(Int) -> bool) -> List<Int> {
 fn test_custom_filter() {
     val v = [1, 2, 3, 4, 5, 6];
     val evens = my_filter(v, |x| x % 2 == 0);
-    assert_eq(evens.len(), 3);
+    assert::eq(evens.len(), 3);
 }
 
 // === Custom fold ===
@@ -58,7 +58,7 @@ fn my_fold(v: List<Int>, init: Int, f: fn(Int, Int) -> Int) -> Int {
 fn test_custom_fold() {
     val v = [1, 2, 3, 4, 5];
     val sum = my_fold(v, 0, |acc, x| acc + x);
-    assert_eq(sum, 15);
+    assert::eq(sum, 15);
 }
 
 // === Closure That Returns a Closure ===
@@ -72,7 +72,7 @@ fn test_compose() {
     val double = |x: Int| x * 2;
     val add_one = |x: Int| x + 1;
     val double_then_add = compose(add_one, double);
-    assert_eq(double_then_add(5), 11); // (5*2)+1
+    assert::eq(double_then_add(5), 11); // (5*2)+1
 }
 
 // === Callback Pattern ===
@@ -84,5 +84,5 @@ fn with_callback(cb: fn(Int) -> String) -> String {
 #[test]
 fn test_callback() {
     val result = with_callback(|x| "value: " + x);
-    assert(result.contains("42"));
+    assert::true(result.contains("42"));
 }

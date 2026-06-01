@@ -22,8 +22,8 @@
 // - Handle 0 — returns 0
 
 fn main() {
-    println("{}", hamming_weight(11));
-    println("{}", hamming_weight(128));
+    io::println("{}", hamming_weight(11));
+    io::println("{}", hamming_weight(128));
 }
 
 fn hamming_weight(n: Int) -> Int {
@@ -38,15 +38,15 @@ fn hamming_weight(n: Int) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(hamming_weight(11), 3); // 1011
+    assert::eq(hamming_weight(11), 3); // 1011
 }
 
 #[test]
 fn test_power_of_two() {
-    assert_eq(hamming_weight(128), 1); // 10000000
+    assert::eq(hamming_weight(128), 1); // 10000000
 }
 
 #[test]
 fn test_zero() {
-    assert_eq(hamming_weight(0), 0);
+    assert::eq(hamming_weight(0), 0);
 }

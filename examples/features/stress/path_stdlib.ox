@@ -13,109 +13,109 @@ fn sep() -> String {
 
 #[test]
 fn test_basename_simple() {
-    assert_eq(std::path::basename("/a/b/c.txt"), "c.txt");
+    assert::eq(std::path::basename("/a/b/c.txt"), "c.txt");
 }
 
 #[test]
 fn test_basename_no_slash() {
-    assert_eq(std::path::basename("file.txt"), "file.txt");
+    assert::eq(std::path::basename("file.txt"), "file.txt");
 }
 
 #[test]
 fn test_basename_trailing_slash() {
     // file_name() returns "" for a path ending in "/" with no name.
-    assert_eq(std::path::basename("/a/b/"), "b");
+    assert::eq(std::path::basename("/a/b/"), "b");
 }
 
 #[test]
 fn test_basename_empty() {
-    assert_eq(std::path::basename(""), "");
+    assert::eq(std::path::basename(""), "");
 }
 
 #[test]
 fn test_dirname_simple() {
-    assert_eq(std::path::dirname("/a/b/c.txt"), "/a/b");
+    assert::eq(std::path::dirname("/a/b/c.txt"), "/a/b");
 }
 
 #[test]
 fn test_dirname_root_child() {
-    assert_eq(std::path::dirname("/foo"), "/");
+    assert::eq(std::path::dirname("/foo"), "/");
 }
 
 #[test]
 fn test_dirname_bare_name() {
-    assert_eq(std::path::dirname("foo"), "");
+    assert::eq(std::path::dirname("foo"), "");
 }
 
 #[test]
 fn test_stem_with_extension() {
-    assert_eq(std::path::stem("/a/b/c.txt"), "c");
+    assert::eq(std::path::stem("/a/b/c.txt"), "c");
 }
 
 #[test]
 fn test_stem_double_extension() {
     // "foo.tar.gz" — stem strips only the final extension.
-    assert_eq(std::path::stem("foo.tar.gz"), "foo.tar");
+    assert::eq(std::path::stem("foo.tar.gz"), "foo.tar");
 }
 
 #[test]
 fn test_stem_no_extension() {
-    assert_eq(std::path::stem("README"), "README");
+    assert::eq(std::path::stem("README"), "README");
 }
 
 #[test]
 fn test_extension_present() {
     val e = std::path::extension("/a/b/c.txt");
-    assert(e.is_some());
-    assert_eq(e.unwrap(), "txt");
+    assert::true(e.is_some());
+    assert::eq(e.unwrap(), "txt");
 }
 
 #[test]
 fn test_extension_missing() {
     val e = std::path::extension("README");
-    assert(e.is_none());
+    assert::true(e.is_none());
 }
 
 #[test]
 fn test_extension_double() {
     // Only the trailing extension is returned.
     val e = std::path::extension("foo.tar.gz");
-    assert_eq(e.unwrap(), "gz");
+    assert::eq(e.unwrap(), "gz");
 }
 
 #[test]
 fn test_extension_dotfile() {
     // Leading-dot files like ".gitignore" have no extension in Rust's model.
     val e = std::path::extension(".gitignore");
-    assert(e.is_none());
+    assert::true(e.is_none());
 }
 
 #[test]
 fn test_with_extension_replace() {
     val s = sep();
     val expected = "foo" + s + "bar.json";
-    assert_eq(std::path::with_extension("foo/bar.txt", "json"), expected);
+    assert::eq(std::path::with_extension("foo/bar.txt", "json"), expected);
 }
 
 #[test]
 fn test_with_extension_add() {
     val s = sep();
     val expected = "foo" + s + "bar.json";
-    assert_eq(std::path::with_extension("foo/bar", "json"), expected);
+    assert::eq(std::path::with_extension("foo/bar", "json"), expected);
 }
 
 #[test]
 fn test_with_extension_remove() {
     val s = sep();
     val expected = "foo" + s + "bar";
-    assert_eq(std::path::with_extension("foo/bar.txt", ""), expected);
+    assert::eq(std::path::with_extension("foo/bar.txt", ""), expected);
 }
 
 #[test]
 fn test_with_file_name_replace() {
     val s = sep();
     val expected = "foo" + s + "baz.rs";
-    assert_eq(std::path::with_file_name("foo/bar.txt", "baz.rs"), expected);
+    assert::eq(std::path::with_file_name("foo/bar.txt", "baz.rs"), expected);
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn test_join_two_parts() {
     val s = sep();
     val expected = "a" + s + "b";
     val p = std::path::join(["a".to_string(), "b".to_string()]);
-    assert_eq(p, expected);
+    assert::eq(p, expected);
 }
 
 #[test]
@@ -135,63 +135,63 @@ fn test_join_three_parts() {
         "b".to_string(),
         "c.txt".to_string(),
     ]);
-    assert_eq(p, expected);
+    assert::eq(p, expected);
 }
 
 #[test]
 fn test_join_absolute_resets() {
     // PathBuf::push of an absolute resets the buffer — this matches Rust.
     val p = std::path::join(["a".to_string(), "/b".to_string()]);
-    assert_eq(p, "/b");
+    assert::eq(p, "/b");
 }
 
 #[test]
 fn test_join_empty_vec_is_empty() {
     val p = std::path::join([]);
-    assert_eq(p, "");
+    assert::eq(p, "");
 }
 
 #[test]
 fn test_is_absolute_unix() {
-    assert(std::path::is_absolute("/a/b"));
-    assert(!std::path::is_absolute("a/b"));
+    assert::true(std::path::is_absolute("/a/b"));
+    assert::true(!std::path::is_absolute("a/b"));
 }
 
 #[test]
 fn test_is_relative_unix() {
-    assert(std::path::is_relative("a/b"));
-    assert(!std::path::is_relative("/a/b"));
+    assert::true(std::path::is_relative("a/b"));
+    assert::true(!std::path::is_relative("/a/b"));
 }
 
 #[test]
 fn test_components_absolute() {
     val v = std::path::components("/a/b/c");
     // Rust gives ["/", "a", "b", "c"] on POSIX.
-    assert(v.len() >= 3);
-    assert_eq(v[v.len() - 1], "c");
-    assert_eq(v[v.len() - 2], "b");
+    assert::true(v.len() >= 3);
+    assert::eq(v[v.len() - 1], "c");
+    assert::eq(v[v.len() - 2], "b");
 }
 
 #[test]
 fn test_components_relative() {
     val v = std::path::components("a/b/c");
-    assert_eq(v.len(), 3);
-    assert_eq(v[0], "a");
-    assert_eq(v[2], "c");
+    assert::eq(v.len(), 3);
+    assert::eq(v[0], "a");
+    assert::eq(v[2], "c");
 }
 
 #[test]
 fn test_normalize_collapses_curdir() {
     val s = sep();
     val expected = "a" + s + "b";
-    assert_eq(std::path::normalize("a/./b"), expected);
+    assert::eq(std::path::normalize("a/./b"), expected);
 }
 
 #[test]
 fn test_normalize_collapses_parent() {
     val s = sep();
     val expected = "a" + s + "c";
-    assert_eq(std::path::normalize("a/b/../c"), expected);
+    assert::eq(std::path::normalize("a/b/../c"), expected);
 }
 
 #[test]
@@ -199,21 +199,21 @@ fn test_normalize_preserves_leading_parent() {
     // Without a root, leading ".." cannot be collapsed.
     val s = sep();
     val expected = ".." + s + "a";
-    assert_eq(std::path::normalize("../a"), expected);
+    assert::eq(std::path::normalize("../a"), expected);
 }
 
 #[test]
 fn test_normalize_empty_becomes_dot() {
-    assert_eq(std::path::normalize(""), ".");
+    assert::eq(std::path::normalize(""), ".");
 }
 
 #[test]
 fn test_normalize_only_curdir() {
-    assert_eq(std::path::normalize("./."), ".");
+    assert::eq(std::path::normalize("./."), ".");
 }
 
 #[test]
 fn test_separator_nonempty() {
     val s = std::path::separator();
-    assert(s.len() >= 1);
+    assert::true(s.len() >= 1);
 }

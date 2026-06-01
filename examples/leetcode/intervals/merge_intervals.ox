@@ -25,7 +25,7 @@ fn main() {
     val intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
     val merged = merge(intervals);
     for m in merged {
-        println("{:?}", m);
+        io::println("{:?}", m);
     }
 }
 
@@ -60,17 +60,17 @@ fn merge(intervals: List) -> List {
 fn test_example() {
     val intervals = [[1, 3], [2, 6], [8, 10], [15, 18]];
     val result = merge(intervals);
-    assert_eq(result, [[1, 6], [8, 10], [15, 18]]);
+    assert::eq(result, [[1, 6], [8, 10], [15, 18]]);
 }
 
 #[test]
 fn test_no_overlap() {
     val intervals = [[1, 2], [3, 4]];
-    assert_eq(merge(intervals), [[1, 2], [3, 4]]);
+    assert::eq(merge(intervals), [[1, 2], [3, 4]]);
 }
 
 #[test]
 fn test_contained() {
     val intervals = [[1, 4], [2, 3]];
-    assert_eq(merge(intervals), [[1, 4]]);
+    assert::eq(merge(intervals), [[1, 4]]);
 }

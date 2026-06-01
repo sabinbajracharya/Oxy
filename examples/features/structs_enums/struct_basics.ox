@@ -13,14 +13,14 @@ struct Point {
 #[test]
 fn test_named_struct_construction() {
     val p = Point { x: 10, y: 20 };
-    assert_eq(p.x, 10);
-    assert_eq(p.y, 20);
+    assert::eq(p.x, 10);
+    assert::eq(p.y, 20);
 }
 
 #[test]
 fn test_named_struct_field_access() {
     val p = Point { x: 1, y: 2 };
-    assert_eq(p.x, 1);
+    assert::eq(p.x, 1);
 }
 
 // === Struct Field Mutation ===
@@ -30,8 +30,8 @@ fn test_struct_field_mutation() {
     var p = Point { x: 0, y: 0 };
     p.x = 42;
     p.y = 99;
-    assert_eq(p.x, 42);
-    assert_eq(p.y, 99);
+    assert::eq(p.x, 42);
+    assert::eq(p.y, 99);
 }
 
 // === Shorthand Field Init ===
@@ -41,8 +41,8 @@ fn test_struct_shorthand_init() {
     val x = 5;
     val y = 15;
     val p = Point { x, y };
-    assert_eq(p.x, 5);
-    assert_eq(p.y, 15);
+    assert::eq(p.x, 5);
+    assert::eq(p.y, 15);
 }
 
 // === Tuple Struct ===
@@ -52,7 +52,7 @@ struct Pair(Int, String);
 #[test]
 fn test_tuple_struct_field_access() {
     val p = Pair { 0: 42, 1: "hello" };
-    assert_eq(p.0, 42);
+    assert::eq(p.0, 42);
 }
 
 // === Unit Struct ===
@@ -63,7 +63,7 @@ struct Marker;
 fn test_unit_struct() {
     val m = Marker {};
     // Unit struct exists and can be matched
-    assert(true);
+    assert::true(true);
 }
 
 // === Multiple Struct Instances ===
@@ -72,6 +72,6 @@ fn test_unit_struct() {
 fn test_multiple_instances() {
     val a = Point { x: 1, y: 2 };
     val b = Point { x: 3, y: 4 };
-    assert_eq(a.x + b.x, 4);
-    assert_eq(a.y + b.y, 6);
+    assert::eq(a.x + b.x, 4);
+    assert::eq(a.y + b.y, 6);
 }

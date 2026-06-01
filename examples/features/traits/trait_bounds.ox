@@ -21,7 +21,7 @@ fn print_val<T: AsText>(x: T) -> String {
 #[test]
 fn test_basic_trait_bound() {
     val s = print_val(42);
-    assert_eq(s, "42");
+    assert::eq(s, "42");
 }
 
 // === Multiple Trait Bounds ===
@@ -43,7 +43,7 @@ fn double_and_print<T: AsText + Doublable>(x: T) -> String {
 #[test]
 fn test_multiple_bounds() {
     val s = double_and_print(10);
-    assert_eq(s, "20");
+    assert::eq(s, "20");
 }
 
 // === Where Clause ===
@@ -56,7 +56,7 @@ fn add_str<T: AsText>(x: T) -> String
 #[test]
 fn test_where_clause() {
     val s = add_str(99);
-    assert_eq(s, "99");
+    assert::eq(s, "99");
 }
 
 // === Where Clause with Multiple Bounds ===
@@ -69,7 +69,7 @@ fn transform<T: AsText + Doublable>(x: T) -> String
 #[test]
 fn test_where_clause_multi() {
     val s = transform(5);
-    assert_eq(s, "10");
+    assert::eq(s, "10");
 }
 
 // === Trait Bound on Struct Generic ===
@@ -86,5 +86,5 @@ fn show_wrapper<T: AsText>(w: Wrapper<T>) -> String {
 fn test_trait_bound_on_struct() {
     val w = Wrapper { inner: 7 };
     val s = show_wrapper(w);
-    assert_eq(s, "7");
+    assert::eq(s, "7");
 }

@@ -12,7 +12,7 @@ fn test_select_first_of_two() {
     val a = spawn(|| 42);
     val b = spawn(|| 99);
     val result = select(a, b);
-    assert_eq(result == 42 || result == 99, true);
+    assert::eq(result == 42 || result == 99, true);
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn test_select_with_sleep_faster() {
         "slow"
     });
     val result = select(fast, slow);
-    assert_eq(result, "fast");
+    assert::eq(result, "fast");
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn test_select_slow_wins_when_fast_yields() {
     });
     val b = spawn(|| "b");
     val result = select(a, b);
-    assert_eq(result, "b");
+    assert::eq(result, "b");
 }
 
 // --- select with three handles ---
@@ -51,7 +51,7 @@ fn test_select_three_handles() {
         "c"
     });
     val result = select(a, b, c);
-    assert_eq(result, "b");
+    assert::eq(result, "b");
 }
 
 // --- select with sleep as timeout ---
@@ -67,7 +67,7 @@ fn test_select_timeout_pattern() {
         "timeout"
     });
     val result = select(work, timeout);
-    assert_eq(result, "done");
+    assert::eq(result, "done");
 }
 
 // --- select where both are ready (no sleep) ---
@@ -77,7 +77,7 @@ fn test_select_both_ready() {
     val x = spawn(|| 1);
     val y = spawn(|| 2);
     val result = select(x, y);
-    assert_eq(result == 1 || result == 2, true);
+    assert::eq(result == 1 || result == 2, true);
 }
 
 // --- nested select inside spawn ---
@@ -92,7 +92,7 @@ fn test_select_inside_spawn() {
         });
         select(a, b)
     });
-    assert_eq(outer.await, "inner_a");
+    assert::eq(outer.await, "inner_a");
 }
 
 // --- select with captured variables ---
@@ -104,7 +104,7 @@ fn test_select_with_captures() {
     val a = spawn(|| x * 2);
     val b = spawn(|| y * 3);
     val result = select(a, b);
-    assert_eq(result == 20 || result == 60, true);
+    assert::eq(result == 20 || result == 60, true);
 }
 
 // --- compile_error: select with zero args ---

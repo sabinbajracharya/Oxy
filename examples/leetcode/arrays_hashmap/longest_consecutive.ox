@@ -24,7 +24,7 @@
 
 fn main() {
     val nums = [100, 4, 200, 1, 3, 2];
-    println("{}", longest_consecutive(nums));
+    io::println("{}", longest_consecutive(nums));
 }
 
 fn longest_consecutive(nums: List) -> Int {
@@ -52,21 +52,21 @@ fn longest_consecutive(nums: List) -> Int {
 #[test]
 fn test_example() {
     val nums = [100, 4, 200, 1, 3, 2];
-    assert_eq(longest_consecutive(nums), 4);
+    assert::eq(longest_consecutive(nums), 4);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(longest_consecutive([]), 0);
+    assert::eq(longest_consecutive([]), 0);
 }
 
 #[test]
 fn test_single() {
-    assert_eq(longest_consecutive([5]), 1);
+    assert::eq(longest_consecutive([5]), 1);
 }
 
 #[test]
 fn test_duplicates() {
     val nums = [1, 2, 0, 1, 3];
-    assert_eq(longest_consecutive(nums), 4);
+    assert::eq(longest_consecutive(nums), 4);
 }

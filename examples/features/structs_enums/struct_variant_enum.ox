@@ -39,11 +39,11 @@ fn test_match_after_struct_variant_no_underflow() {
     // ate from the caller's frame.
     val c = Shape::Circle(5.0);
     val ac = area(c);
-    assert(ac > 78.0 && ac < 79.0);
+    assert::true(ac > 78.0 && ac < 79.0);
 
     val r = Shape::Rectangle { w: 4.0, h: 6.0 };
-    assert_eq(area(r) as Int, 24);
+    assert::eq(area(r) as Int, 24);
 
     val n = Shape::Nothing;
-    assert_eq(area(n), 0.0);
+    assert::eq(area(n), 0.0);
 }

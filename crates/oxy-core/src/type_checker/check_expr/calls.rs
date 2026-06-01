@@ -279,23 +279,6 @@ impl TypeChecker {
                         self.infer_expr(&args[1])?;
                         return Ok(data_ty);
                     }
-                    // Former `!` macro calls — now regular built-in functions.
-                    "println" | "print" | "eprintln" => {
-                        return Ok(TypeInfo::Unit);
-                    }
-                    "format" => {
-                        return Ok(TypeInfo::String);
-                    }
-                    "dbg" => {
-                        return Ok(arg_types.first().cloned().unwrap_or(TypeInfo::Unknown));
-                    }
-                    "panic" | "todo" => {
-                        return Ok(TypeInfo::Unknown);
-                    }
-                    "assert_eq" | "assert_ne" | "assert" | "unimplemented" => {
-                        // varargs — type-checked at runtime via registry
-                        return Ok(TypeInfo::Unit);
-                    }
                     "http::fetch" | "http::fetch_post" => {
                         // async HTTP call → Future<HttpResponse>
                         let _ = arg_types; // validate args but don't constrain
@@ -306,6 +289,28 @@ impl TypeChecker {
                     }
                     _ => {}
                 }
+                // Namespace purity pivot: legacy naked builtins are removed.
+                // They must be called via io:: / sys:: / assert:: routes.
+                if matches!(
+                    name.as_str(),
+                    "println"
+                        | "print"
+                        | "eprintln"
+                        | "format"
+                        | "dbg"
+                        | "panic"
+                        | "todo"
+                        | "unimplemented"
+                        | "assert"
+                        | "assert_eq"
+                        | "assert_ne"
+                ) {
+                    return Err(PipelineError::TypeError {
+                        message: format!("undefined function '{}'", name),
+                        line: span.line,
+                        column: span.column,
+                    });
+                }
             }
         } else {
             for arg in args {
@@ -313,11 +318,9 @@ impl TypeChecker {
             }
         }
         // Fallback: check if callee is a function-typed value (closure, async closure).
-        // A bare-ident callee that isn't a local binding may be a builtin
-        // or global function resolved at codegen (e.g. `println(..)`); it
-        // is not an undefined *variable*, so don't infer it as a value
-        // (which would trip the undefined-variable check). Undefined value
-        // references in argument position were already checked above.
+        // A bare-ident callee that isn't a local binding may still be resolved
+        // later (e.g. function-valued globals/imports), so don't infer it as a
+        // value (which would trip undefined-variable checks here).
         if let Expr::Ident(cname, _) = callee {
             if self.env.borrow().get(cname).is_none() {
                 return Ok(TypeInfo::Unknown);
@@ -563,6 +566,56 @@ impl TypeChecker {
                     name: "HttpResponse".to_string(),
                     generic_args: vec![],
                 })));
+            }
+            if matches!(name, "string::format" | "std::string::format") {
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+                return Ok(TypeInfo::String);
+            }
+            if matches!(
+                name,
+                "io::println"
+                    | "std::io::println"
+                    | "io::print"
+                    | "std::io::print"
+                    | "assert::true"
+                    | "assert::eq"
+                    | "assert::ne"
+                    | "std::sys::assert::true"
+                    | "std::sys::assert::eq"
+                    | "std::sys::assert::ne"
+            ) {
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+                return Ok(TypeInfo::Unit);
+            }
+            if matches!(
+                name,
+                "sys::dbg" | "std::sys::dbg" | "io::dbg" | "std::io::dbg"
+            ) {
+                let arg_types: Vec<TypeInfo> = args
+                    .iter()
+                    .map(|a| self.infer_expr(a))
+                    .collect::<Result<_, _>>()?;
+                return Ok(arg_types.first().cloned().unwrap_or(TypeInfo::Unknown));
+            }
+            if matches!(
+                name,
+                "sys::panic"
+                    | "sys::todo"
+                    | "sys::unimplemented"
+                    | "sys::exit"
+                    | "std::sys::panic"
+                    | "std::sys::todo"
+                    | "std::sys::unimplemented"
+                    | "std::sys::exit"
+            ) {
+                for arg in args {
+                    self.infer_expr(arg)?;
+                }
+                return Ok(TypeInfo::Unknown);
             }
             for arg in args {
                 self.infer_expr(arg)?;

@@ -11,7 +11,7 @@ fn test_option_some_none() {
 fn main() {
     val x = Some(42);
     val y = None;
-    println("{:?} {:?}", x, y);
+    io::println("{:?} {:?}", x, y);
 }
 "#,
     );
@@ -24,7 +24,7 @@ fn test_option_unwrap() {
         r#"
 fn main() {
     val x = Some(42);
-    println("{}", x.unwrap());
+    io::println("{}", x.unwrap());
 }
 "#,
     );
@@ -38,7 +38,7 @@ fn test_option_is_some_is_none() {
 fn main() {
     val x = Some(42);
     val y = None;
-    println("{} {} {} {}", x.is_some(), x.is_none(), y.is_some(), y.is_none());
+    io::println("{} {} {} {}", x.is_some(), x.is_none(), y.is_some(), y.is_none());
 }
 "#,
     );
@@ -52,7 +52,7 @@ fn test_option_unwrap_or() {
 fn main() {
     val x = Some(42);
     val y = None;
-    println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
+    io::println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
 }
 "#,
     );
@@ -66,7 +66,7 @@ fn test_result_ok_err() {
 fn main() {
     val x = Ok(42);
     val y = Err("failed");
-    println("{:?} {:?}", x, y);
+    io::println("{:?} {:?}", x, y);
 }
 "#,
     );
@@ -79,7 +79,7 @@ fn test_result_unwrap() {
         r#"
 fn main() {
     val x = Ok(42);
-    println("{}", x.unwrap());
+    io::println("{}", x.unwrap());
 }
 "#,
     );
@@ -93,7 +93,7 @@ fn test_result_is_ok_is_err() {
 fn main() {
     val x = Ok(42);
     val y = Err("oops");
-    println("{} {} {} {}", x.is_ok(), x.is_err(), y.is_ok(), y.is_err());
+    io::println("{} {} {} {}", x.is_ok(), x.is_err(), y.is_ok(), y.is_err());
 }
 "#,
     );
@@ -107,7 +107,7 @@ fn test_result_unwrap_or() {
 fn main() {
     val x = Ok(42);
     val y = Err("oops");
-    println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
+    io::println("{} {}", x.unwrap_or(0), y.unwrap_or(0));
 }
 "#,
     );
@@ -120,7 +120,7 @@ fn test_result_unwrap_err() {
         r#"
 fn main() {
     val y = Err("oops");
-    println("{}", y.unwrap_err());
+    io::println("{}", y.unwrap_err());
 }
 "#,
     );
@@ -134,9 +134,9 @@ fn test_if_let_some() {
 fn main() {
     val x = Some(42);
     if val Some(v) = x {
-        println("got {}", v);
+        io::println("got {}", v);
     } else {
-        println("nothing");
+        io::println("nothing");
     }
 }
 "#,
@@ -151,9 +151,9 @@ fn test_if_let_none() {
 fn main() {
     val x = None;
     if val Some(v) = x {
-        println("got {}", v);
+        io::println("got {}", v);
     } else {
-        println("nothing");
+        io::println("nothing");
     }
 }
 "#,
@@ -168,7 +168,7 @@ fn test_while_let() {
 fn main() {
     var v = [1, 2, 3];
     while val Some(v) = v.pop() {
-        println("{}", v);
+        io::println("{}", v);
     }
 }
 "#,
@@ -183,8 +183,8 @@ fn test_match_option() {
 fn main() {
     val x = Some(42);
     match x {
-        Some(v) => println("value: {}", v),
-        None => println("nothing"),
+        Some(v) => io::println("value: {}", v),
+        None => io::println("nothing"),
     }
 }
 "#,
@@ -199,8 +199,8 @@ fn test_match_result() {
 fn main() {
     val x = Err("problem");
     match x {
-        Ok(v) => println("ok: {}", v),
-        Err(e) => println("err: {}", e),
+        Ok(v) => io::println("ok: {}", v),
+        Err(e) => io::println("err: {}", e),
     }
 }
 "#,
@@ -227,7 +227,7 @@ fn do_work() -> Result {
 
 fn main() {
     val result = do_work();
-    println("{:?}", result);
+    io::println("{:?}", result);
 }
 "#,
     );
@@ -253,7 +253,7 @@ fn do_work() -> Result {
 
 fn main() {
     val result = do_work();
-    println("{:?}", result);
+    io::println("{:?}", result);
 }
 "#,
     );
@@ -264,7 +264,7 @@ fn main() {
 fn test_panic_macro() {
     let src = r#"
 fn main() {
-    panic("something went wrong");
+    sys::panic("something went wrong");
 }
 "#;
     let result = run_compiled(src);
@@ -280,8 +280,8 @@ fn test_dbg_macro() {
     let out = run_and_capture(
         r#"
 fn main() {
-    val x = dbg(42);
-    println("{}", x);
+    val x = sys::dbg(42);
+    io::println("{}", x);
 }
 "#,
     );
@@ -297,11 +297,11 @@ fn double(x: Int) -> Int { x * 2 }
 fn main() {
     val x = Some(21);
     val y = x.map(double);
-    println("{:?}", y);
+    io::println("{:?}", y);
 
     val z = None;
     val w = z.map(double);
-    println("{:?}", w);
+    io::println("{:?}", w);
 }
 "#,
     );
@@ -317,7 +317,7 @@ fn double(x: Int) -> Int { x * 2 }
 fn main() {
     val x = Ok(21);
     val y = x.map(double);
-    println("{:?}", y);
+    io::println("{:?}", y);
 }
 "#,
     );
@@ -331,7 +331,7 @@ fn test_result_ok_to_option() {
 fn main() {
     val x = Ok(42);
     val y = Err("bad");
-    println("{:?} {:?}", x.ok(), y.ok());
+    io::println("{:?} {:?}", x.ok(), y.ok());
 }
 "#,
     );
@@ -345,9 +345,9 @@ fn test_if_let_result() {
 fn main() {
     val x = Ok(42);
     if val Ok(v) = x {
-        println("ok: {}", v);
+        io::println("ok: {}", v);
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#,
@@ -372,8 +372,8 @@ fn main() {
     val items = [10, 20, 30, 40];
     val result = find_item(items, 30);
     match result {
-        Some(idx) => println("found at {}", idx),
-        None => println("not found"),
+        Some(idx) => io::println("found at {}", idx),
+        None => io::println("not found"),
     }
 }
 "#,
@@ -401,7 +401,7 @@ fn process() -> Option {
 
 fn main() {
     val result = process();
-    println("{:?}", result);
+    io::println("{:?}", result);
 }
 "#,
     );
@@ -446,7 +446,7 @@ fn test_int_parse() {
         r#"
 fn main() {
     val r = Int::parse("42");
-    println("{}", r.unwrap());
+    io::println("{}", r.unwrap());
 }
 "#,
     );
@@ -459,7 +459,7 @@ fn test_int_parse_invalid() {
         r#"
 fn main() {
     val r = Int::parse("abc");
-    println("{}", r.is_err());
+    io::println("{}", r.is_err());
 }
 "#,
     );
@@ -472,7 +472,7 @@ fn test_float_parse() {
         r#"
 fn main() {
     val r = Float::parse("3.14");
-    println("{}", r.unwrap());
+    io::println("{}", r.unwrap());
 }
 "#,
     );
@@ -484,8 +484,8 @@ fn test_int_parse_hex() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", Int::parse("0xFF").unwrap());
-    println("{}", Int::parse("0x10").unwrap());
+    io::println("{}", Int::parse("0xFF").unwrap());
+    io::println("{}", Int::parse("0x10").unwrap());
 }
 "#,
     );
@@ -498,7 +498,7 @@ fn test_string_parse_int_method() {
         r#"
 fn main() {
     val r = "42".parse_int();
-    println("{}", r.unwrap());
+    io::println("{}", r.unwrap());
 }
 "#,
     );
@@ -511,7 +511,7 @@ fn test_string_parse_float_method() {
         r#"
 fn main() {
     val r = "3.14".parse_float();
-    println("{}", r.unwrap());
+    io::println("{}", r.unwrap());
 }
 "#,
     );

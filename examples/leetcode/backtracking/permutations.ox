@@ -19,7 +19,7 @@ fn main() {
     val nums = [1, 2, 3];
     val result = permute(nums);
     for p in result {
-        println("{:?}", p);
+        io::println("{:?}", p);
     }
 }
 
@@ -58,12 +58,12 @@ fn permute(nums: List) -> List {
 #[test]
 fn test_example() {
     val result = permute([1, 2, 3]);
-    assert_eq(result.len(), 6);
+    assert::eq(result.len(), 6);
 }
 
 #[test]
 fn test_single() {
     val result = permute([1]);
-    assert_eq(result.len(), 1);
-    assert_eq(result[0], [1]);
+    assert::eq(result.len(), 1);
+    assert::eq(result[0], [1]);
 }

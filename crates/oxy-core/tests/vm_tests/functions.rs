@@ -14,7 +14,7 @@ fn add(a: Int, b: Int) -> Int {
 
 fn main() {
     val result = add(3, 4);
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -33,8 +33,8 @@ fn early(x: Int) -> Int {
 }
 
 fn main() {
-    println("{}", early(5));
-    println("{}", early(-1));
+    io::println("{}", early(5));
+    io::println("{}", early(-1));
 }
 "#,
     );
@@ -50,7 +50,7 @@ fn double(x: Int) -> Int {
 }
 
 fn main() {
-    println("{}", double(21));
+    io::println("{}", double(21));
 }
 "#,
     );
@@ -84,7 +84,7 @@ fn factorial(n: Int) -> Int {
 }
 
 fn main() {
-    println("{}", factorial(5));
+    io::println("{}", factorial(5));
 }
 "#,
     );

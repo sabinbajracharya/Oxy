@@ -11,8 +11,8 @@ fn main() {
     // .await resolves the future
     val result = future.await;
     match result {
-        Ok(body) => println("Got: {}", body),
-        Err(e) => println("Error: {}", e),
+        Ok(body) => io::println("Got: {}", body),
+        Err(e) => io::println("Error: {}", e),
     }
 
     // spawn runs a task eagerly
@@ -23,9 +23,9 @@ fn main() {
         }
         sum
     });
-    println("Sum: {}", handle.await);
+    io::println("Sum: {}", handle.await);
 
     // sleep pauses execution
     sleep(10);
-    println("Done!");
+    io::println("Done!");
 }

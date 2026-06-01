@@ -23,8 +23,8 @@
 
 fn main() {
     val nums = [-1, 0, 3, 5, 9, 12];
-    println("{}", search(nums, 9));
-    println("{}", search(nums, 2));
+    io::println("{}", search(nums, 9));
+    io::println("{}", search(nums, 2));
 }
 
 fn search(nums: List, target: Int) -> Int {
@@ -47,17 +47,17 @@ fn search(nums: List, target: Int) -> Int {
 #[test]
 fn test_found() {
     val nums = [-1, 0, 3, 5, 9, 12];
-    assert_eq(search(nums, 9), 4);
+    assert::eq(search(nums, 9), 4);
 }
 
 #[test]
 fn test_not_found() {
     val nums = [-1, 0, 3, 5, 9, 12];
-    assert_eq(search(nums, 2), -1);
+    assert::eq(search(nums, 2), -1);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(search([5], 5), 0);
-    assert_eq(search([5], 3), -1);
+    assert::eq(search([5], 5), 0);
+    assert::eq(search([5], 3), -1);
 }

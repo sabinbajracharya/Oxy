@@ -1138,6 +1138,96 @@ extern "C" fn oxy_path_call_builtin(
 
     use crate::stdlib::registry;
 
+    // Keep namespaced stdlib routes ergonomically equivalent to legacy print/
+    // format/dbg behavior (capture-aware and Display::fmt-aware).
+    match seg_refs.as_slice() {
+        ["io", "print"] | ["std", "io", "print"] => {
+            if !args.is_empty() {
+                let rendered = if args.len() == 1 {
+                    args[0].to_string()
+                } else {
+                    let template = args[0].to_string();
+                    // Safety: display_via_user_fmt dereferences valid runtime pointers.
+                    format_template_with(&template, &args[1..], |v| unsafe {
+                        display_via_user_fmt(ctx, v)
+                    })
+                };
+                if !ctx.output.is_null() {
+                    // Safety: ctx.output is valid when non-null.
+                    let output = unsafe { &*ctx.output };
+                    output.borrow_mut().push(rendered);
+                } else {
+                    print!("{rendered}");
+                }
+            }
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+        ["io", "println"] | ["std", "io", "println"] => {
+            let line = if args.is_empty() {
+                String::new()
+            } else if args.len() == 1 {
+                args[0].to_string()
+            } else {
+                let template = args[0].to_string();
+                // Safety: display_via_user_fmt dereferences valid runtime pointers.
+                format_template_with(&template, &args[1..], |v| unsafe {
+                    display_via_user_fmt(ctx, v)
+                })
+            };
+            if !ctx.output.is_null() {
+                // Safety: ctx.output is valid when non-null.
+                let output = unsafe { &*ctx.output };
+                output.borrow_mut().push(format!("{line}\n"));
+            } else {
+                println!("{line}");
+            }
+            unsafe {
+                push(ctx, Value::Unit);
+            }
+            return;
+        }
+        ["io", "dbg"] | ["sys", "dbg"] | ["std", "io", "dbg"] | ["std", "sys", "dbg"] => {
+            let value = match args.len() {
+                0 => Value::Unit,
+                1 => args[0].clone(),
+                _ => Value::Tuple(args.clone()),
+            };
+            let line = value.to_debug_string();
+            if !ctx.output.is_null() {
+                // Safety: ctx.output is valid when non-null.
+                let output = unsafe { &*ctx.output };
+                output.borrow_mut().push(format!("{line}\n"));
+            } else {
+                println!("{line}");
+            }
+            unsafe {
+                push(ctx, value);
+            }
+            return;
+        }
+        ["string", "format"] | ["std", "string", "format"] => {
+            let rendered = if args.is_empty() {
+                String::new()
+            } else if args.len() == 1 {
+                args[0].to_string()
+            } else {
+                let template = args[0].to_string();
+                // Safety: display_via_user_fmt dereferences valid runtime pointers.
+                format_template_with(&template, &args[1..], |v| unsafe {
+                    display_via_user_fmt(ctx, v)
+                })
+            };
+            unsafe {
+                push(ctx, Value::String(rendered));
+            }
+            return;
+        }
+        _ => {}
+    }
+
     // Try exact-path items first
     if let Some(handler) = registry::lookup_item(&seg_refs) {
         let result =

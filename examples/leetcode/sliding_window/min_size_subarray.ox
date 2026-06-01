@@ -24,7 +24,7 @@
 
 fn main() {
     val nums = [2, 3, 1, 2, 4, 3];
-    println("{}", min_sub_array_len(7, nums));
+    io::println("{}", min_sub_array_len(7, nums));
 }
 
 fn min_sub_array_len(target: Int, nums: List) -> Int {
@@ -50,20 +50,20 @@ fn min_sub_array_len(target: Int, nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(min_sub_array_len(7, [2, 3, 1, 2, 4, 3]), 2);
+    assert::eq(min_sub_array_len(7, [2, 3, 1, 2, 4, 3]), 2);
 }
 
 #[test]
 fn test_no_solution() {
-    assert_eq(min_sub_array_len(100, [1, 2, 3]), 0);
+    assert::eq(min_sub_array_len(100, [1, 2, 3]), 0);
 }
 
 #[test]
 fn test_exact_single() {
-    assert_eq(min_sub_array_len(4, [1, 4, 4]), 1);
+    assert::eq(min_sub_array_len(4, [1, 4, 4]), 1);
 }
 
 #[test]
 fn test_entire_array() {
-    assert_eq(min_sub_array_len(15, [1, 2, 3, 4, 5]), 5);
+    assert::eq(min_sub_array_len(15, [1, 2, 3, 4, 5]), 5);
 }

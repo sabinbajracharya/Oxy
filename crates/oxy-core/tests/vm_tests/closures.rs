@@ -9,7 +9,7 @@ fn test_closure_basic() {
     let output = run_and_capture(
         r#"fn main() {
 val add = |a: Int, b: Int| a + b;
-println("{}", add(3, 4));
+io::println("{}", add(3, 4));
 }"#,
     );
     assert_eq!(output, vec!["7\n"]);
@@ -20,7 +20,7 @@ fn test_closure_no_type_annotation() {
     let output = run_and_capture(
         r#"fn main() {
 val double = |x| x * 2;
-println("{}", double(5));
+io::println("{}", double(5));
 }"#,
     );
     assert_eq!(output, vec!["10\n"]);
@@ -31,7 +31,7 @@ fn test_closure_no_params() {
     let output = run_and_capture(
         r#"fn main() {
 val greet = || "hello";
-println("{}", greet());
+io::println("{}", greet());
 }"#,
     );
     assert_eq!(output, vec!["hello\n"]);
@@ -45,7 +45,7 @@ val compute = |x: Int| {
     val y = x * 2;
     y + 1
 };
-println("{}", compute(10));
+io::println("{}", compute(10));
 }"#,
     );
     assert_eq!(output, vec!["21\n"]);
@@ -57,7 +57,7 @@ fn test_closure_captures_variable() {
         r#"fn main() {
 val factor = 3;
 val multiply = |x| x * factor;
-println("{}", multiply(5));
+io::println("{}", multiply(5));
 }"#,
     );
     assert_eq!(output, vec!["15\n"]);
@@ -71,7 +71,7 @@ fn test_closure_as_argument() {
 }
 fn main() {
     val result = apply(|x| x * x, 7);
-    println("{}", result);
+    io::println("{}", result);
 }"#,
     );
     assert_eq!(output, vec!["49\n"]);
@@ -85,7 +85,7 @@ fn test_closure_returned_from_function() {
 }
 fn main() {
     val add5 = make_adder(5);
-    println("{}", add5(10));
+    io::println("{}", add5(10));
 }"#,
     );
     assert_eq!(output, vec!["15\n"]);
@@ -96,8 +96,8 @@ fn test_closure() {
     let output = run_and_capture(
         r#"fn main() {
 val name = "world";
-val greet = || format("hello {}", name);
-println("{}", greet());
+val greet = || string::format("hello {}", name);
+io::println("{}", greet());
 }"#,
     );
     assert_eq!(output, vec!["hello world\n"]);
@@ -109,7 +109,7 @@ fn test_vec_map() {
         r#"fn main() {
 val v = [1, 2, 3];
 val doubled = v.map(|x| x * 2).collect();
-println("{:?}", doubled);
+io::println("{:?}", doubled);
 }"#,
     );
     assert_eq!(output, vec!["[2, 4, 6]\n"]);
@@ -121,7 +121,7 @@ fn test_vec_filter() {
         r#"fn main() {
 val v = [1, 2, 3, 4, 5];
 val evens = v.filter(|x| x % 2 == 0).collect();
-println("{:?}", evens);
+io::println("{:?}", evens);
 }"#,
     );
     assert_eq!(output, vec!["[2, 4]\n"]);
@@ -132,7 +132,7 @@ fn test_vec_for_each() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [10, 20, 30];
-v.for_each(|x| println("{}", x));
+v.for_each(|x| io::println("{}", x));
 }"#,
     );
     assert_eq!(output, vec!["10\n", "20\n", "30\n"]);
@@ -144,7 +144,7 @@ fn test_vec_fold() {
         r#"fn main() {
 val v = [1, 2, 3, 4];
 val sum = v.fold(0, |acc, x| acc + x);
-println("{}", sum);
+io::println("{}", sum);
 }"#,
     );
     assert_eq!(output, vec!["10\n"]);
@@ -155,9 +155,9 @@ fn test_vec_any_all() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [1, 2, 3, 4, 5];
-println("{}", v.any(|x| x > 4));
-println("{}", v.all(|x| x > 0));
-println("{}", v.all(|x| x > 3));
+io::println("{}", v.any(|x| x > 4));
+io::println("{}", v.all(|x| x > 0));
+io::println("{}", v.all(|x| x > 3));
 }"#,
     );
     assert_eq!(output, vec!["true\n", "true\n", "false\n"]);
@@ -169,9 +169,9 @@ fn test_vec_find() {
         r#"fn main() {
 val v = [1, 2, 3, 4, 5];
 val found = v.find(|x| x > 3);
-println("{:?}", found);
+io::println("{:?}", found);
 val not_found = v.find(|x| x > 10);
-println("{:?}", not_found);
+io::println("{:?}", not_found);
 }"#,
     );
     assert_eq!(output, vec!["Some(4)\n", "None\n"]);
@@ -183,7 +183,7 @@ fn test_vec_enumerate() {
         r#"fn main() {
 val v = ["a", "b", "c"];
 val pairs = v.enumerate().collect();
-println("{:?}", pairs);
+io::println("{:?}", pairs);
 }"#,
     );
     assert_eq!(output, vec!["[(0, \"a\"), (1, \"b\"), (2, \"c\")]\n"]);
@@ -195,7 +195,7 @@ fn test_vec_chain_map_filter() {
         r#"fn main() {
 val v = [1, 2, 3, 4, 5];
 val result = v.map(|x| x * 2).filter(|x| x > 4).collect();
-println("{:?}", result);
+io::println("{:?}", result);
 }"#,
     );
     assert_eq!(output, vec!["[6, 8, 10]\n"]);
@@ -207,7 +207,7 @@ fn test_vec_flat_map() {
         r#"fn main() {
 val v = [1, 2, 3];
 val result = v.flat_map(|x| [x, x * 10]).collect();
-println("{:?}", result);
+io::println("{:?}", result);
 }"#,
     );
     assert_eq!(output, vec!["[1, 10, 2, 20, 3, 30]\n"]);
@@ -218,8 +218,8 @@ fn test_vec_position() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [10, 20, 30];
-println("{:?}", v.position(|x| x == 20));
-println("{:?}", v.position(|x| x == 99));
+io::println("{:?}", v.position(|x| x == 20));
+io::println("{:?}", v.position(|x| x == 99));
 }"#,
     );
     assert_eq!(output, vec!["Some(1)\n", "None\n"]);
@@ -235,7 +235,7 @@ fn test_bitwise_op_inside_closure() {
 fn main() {
     val v = [0xFF, 0x0F, 0xF0];
     val masked: List<Int> = v.iter().map(|x| x & 0x0F).collect::<List<_>>();
-    for m in masked { println("{}", m); }
+    for m in masked { io::println("{}", m); }
 }
 "#,
     );
@@ -255,7 +255,7 @@ fn main() {
         Some(v) => v,
         None => 0,
     }).collect::<List<_>>();
-    for u in unwrapped { println("{}", u); }
+    for u in unwrapped { io::println("{}", u); }
 }
 "#,
     );
@@ -268,10 +268,10 @@ fn test_option_map_with_closure() {
         r#"fn main() {
 val value = Some(5);
 val doubled = value.map(|x| x * 2);
-println("{:?}", doubled);
+io::println("{:?}", doubled);
 val none_val: Option<Int> = None;
 val mapped = none_val.map(|x| x * 2);
-println("{:?}", mapped);
+io::println("{:?}", mapped);
 }"#,
     );
     assert_eq!(output, vec!["Some(10)\n", "None\n"]);
@@ -283,7 +283,7 @@ fn test_result_map_with_closure() {
         r#"fn main() {
 val value: Result<Int, String> = Ok(5);
 val doubled = value.map(|x| x * 2);
-println("{:?}", doubled);
+io::println("{:?}", doubled);
 }"#,
     );
     assert_eq!(output, vec!["Ok(10)\n"]);
@@ -296,7 +296,7 @@ fn test_closure_as_method_callback() {
 val v = [1, 2, 3];
 val sum = v.fold(0, |acc, x| acc + x);
 val product = v.fold(1, |acc, x| acc * x);
-println("{} {}", sum, product);
+io::println("{} {}", sum, product);
 }"#,
     );
     assert_eq!(output, vec!["6 6\n"]);
@@ -308,7 +308,7 @@ fn test_iter_collect() {
         r#"fn main() {
 val v = [1, 2, 3];
 val v2 = v.iter().collect();
-println("{:?}", v2);
+io::println("{:?}", v2);
 }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
@@ -321,7 +321,7 @@ fn test_vec_zip() {
             val a = [1, 2, 3];
             val b = ["a", "b", "c"];
             val zipped = a.zip(b).collect();
-            println("{:?}", zipped);
+            io::println("{:?}", zipped);
             }"#,
     );
     assert_eq!(output, vec!["[(1, \"a\"), (2, \"b\"), (3, \"c\")]\n"]);
@@ -334,7 +334,7 @@ fn test_vec_take_skip() {
             val v = [1, 2, 3, 4, 5];
             val first = v.take(3).collect();
             val rest = v.skip(2).collect();
-            println("{:?} {:?}", first, rest);
+            io::println("{:?} {:?}", first, rest);
             }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3] [3, 4, 5]\n"]);
@@ -347,7 +347,7 @@ fn test_vec_chain() {
             val a = [1, 2];
             val b = [3, 4];
             val c = a.chain(b).collect();
-            println("{:?}", c);
+            io::println("{:?}", c);
             }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3, 4]\n"]);
@@ -359,7 +359,7 @@ fn test_vec_flatten() {
         r#"fn main() {
             val nested = [[1, 2], [3, 4]];
             val flat = nested.flatten().collect();
-            println("{:?}", flat);
+            io::println("{:?}", flat);
             }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3, 4]\n"]);
@@ -370,7 +370,7 @@ fn test_vec_sum() {
     let output = run_and_capture(
         r#"fn main() {
             val v = [1, 2, 3, 4, 5];
-            println("{}", v.sum());
+            io::println("{}", v.sum());
             }"#,
     );
     assert_eq!(output, vec!["15\n"]);
@@ -382,7 +382,7 @@ fn test_vec_rev() {
         r#"fn main() {
             var v = [1, 2, 3];
             v.rev();
-            println("{:?}", v);
+            io::println("{:?}", v);
             }"#,
     );
     assert_eq!(output, vec!["[3, 2, 1]\n"]);
@@ -394,7 +394,7 @@ fn test_vec_sort() {
         r#"fn main() {
             var v = [3, 1, 4, 1, 5];
             v.sort();
-            println("{:?}", v);
+            io::println("{:?}", v);
             }"#,
     );
     assert_eq!(output, vec!["[1, 1, 3, 4, 5]\n"]);
@@ -406,7 +406,7 @@ fn test_vec_sort_by() {
         r#"fn main() {
             var v = [3, 1, 4, 1, 5];
             v.sort_by(|a, b| b - a);
-            println("{:?}", v);
+            io::println("{:?}", v);
             }"#,
     );
     assert_eq!(output, vec!["[5, 4, 3, 1, 1]\n"]);
@@ -418,7 +418,7 @@ fn test_vec_sort_by_key() {
         r#"fn main() {
             var v = ["aa", "b", "ccc"];
             v.sort_by_key(|s| s.len());
-            println("{:?}", v);
+            io::println("{:?}", v);
             }"#,
     );
     assert_eq!(output, vec!["[\"b\", \"aa\", \"ccc\"]\n"]);
@@ -430,7 +430,7 @@ fn test_vec_dedup() {
         r#"fn main() {
             var v = [1, 1, 2, 2, 3];
             v.dedup();
-            println("{:?}", v);
+            io::println("{:?}", v);
             }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
@@ -441,7 +441,7 @@ fn test_vec_min_max() {
     let output = run_and_capture(
         r#"fn main() {
             val v = [3, 1, 4, 1, 5];
-            println("{:?} {:?}", v.min(), v.max());
+            io::println("{:?} {:?}", v.min(), v.max());
             }"#,
     );
     assert_eq!(output, vec!["Some(1) Some(5)\n"]);
@@ -453,7 +453,7 @@ fn test_vec_windows() {
         r#"fn main() {
             val v = [1, 2, 3, 4];
             val w = v.windows(2);
-            println("{:?}", w);
+            io::println("{:?}", w);
             }"#,
     );
     assert_eq!(output, vec!["[[1, 2], [2, 3], [3, 4]]\n"]);
@@ -465,7 +465,7 @@ fn test_vec_chunks() {
         r#"fn main() {
             val v = [1, 2, 3, 4, 5];
             val c = v.chunks(2);
-            println("{:?}", c);
+            io::println("{:?}", c);
             }"#,
     );
     assert_eq!(output, vec!["[[1, 2], [3, 4], [5]]\n"]);
@@ -477,7 +477,7 @@ fn test_iterator_chaining() {
         r#"fn main() {
             val v = [1, 2, 3, 4, 5, 6];
             val result = v.filter(|x| x % 2 == 0).collect().map(|x| x * 10).sum();
-            println("{}", result);
+            io::println("{}", result);
             }"#,
     );
     assert_eq!(output, vec!["120\n"]);
@@ -492,7 +492,7 @@ fn test_mutable_closure_capture() {
                 inc();
                 inc();
                 inc();
-                println("{}", count);
+                io::println("{}", count);
             }"#,
     );
     assert_eq!(output, vec!["3\n"]);
@@ -509,7 +509,7 @@ fn test_closure_counter_pattern() {
             }
             fn main() {
                 val c = make_counter();
-                println("{} {} {}", c(), c(), c());
+                io::println("{} {} {}", c(), c(), c());
             }
             "#,
     );

@@ -128,11 +128,9 @@ pub(crate) fn builtin_hover(word: &str) -> Option<String> {
             return Some(ty.hover_text.to_string());
         }
     }
-    // Check built-in free functions (symbols::ALL_MACROS). Hover requests often
-    // provide only the identifier segment under the cursor (e.g. `println`
-    // inside `io::println`), so support both fully-qualified and tail matches.
+    // Check built-in namespaced callables.
     for m in oxy_core::symbols::ALL_MACROS {
-        if word == m.name || m.name.rsplit("::").next() == Some(word) {
+        if word == m.name {
             return Some(m.hover_text.to_string());
         }
     }

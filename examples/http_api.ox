@@ -4,13 +4,13 @@ fn main() {
     val resp = http::get("https://jsonplaceholder.typicode.com/todos/1");
     match resp {
         Ok(response) => {
-            println("Status: {}", response.status);
+            io::println("Status: {}", response.status);
             if response.status_ok() {
                 val data = response.json().unwrap();
-                println("Title: {}", data.get("title").unwrap());
+                io::println("Title: {}", data.get("title").unwrap());
             }
         }
-        Err(e) => println("Error: {}", e),
+        Err(e) => io::println("Error: {}", e),
     }
 
     // POST with JSON
@@ -20,8 +20,8 @@ fn main() {
 
     val resp = http::post_json("https://jsonplaceholder.typicode.com/posts", user);
     match resp {
-        Ok(response) => println("Created with status: {}", response.status),
-        Err(e) => println("Error: {}", e),
+        Ok(response) => io::println("Created with status: {}", response.status),
+        Err(e) => io::println("Error: {}", e),
     }
 
     // Request builder
@@ -29,7 +29,7 @@ fn main() {
         .header("Accept", "application/json")
         .send();
     match resp {
-        Ok(response) => println("Builder status: {}", response.status),
-        Err(e) => println("Error: {}", e),
+        Ok(response) => io::println("Builder status: {}", response.status),
+        Err(e) => io::println("Error: {}", e),
     }
 }

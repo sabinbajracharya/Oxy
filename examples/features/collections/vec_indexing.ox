@@ -7,19 +7,19 @@
 #[test]
 fn test_index_first() {
     val v = [10, 20, 30];
-    assert_eq(v[0], 10);
+    assert::eq(v[0], 10);
 }
 
 #[test]
 fn test_index_middle() {
     val v = [10, 20, 30];
-    assert_eq(v[1], 20);
+    assert::eq(v[1], 20);
 }
 
 #[test]
 fn test_index_last() {
     val v = [10, 20, 30];
-    assert_eq(v[2], 30);
+    assert::eq(v[2], 30);
 }
 
 // === Index Assignment ===
@@ -28,7 +28,7 @@ fn test_index_last() {
 fn test_index_assign() {
     var v = [10, 20, 30];
     v[0] = 100;
-    assert_eq(v[0], 100);
+    assert::eq(v[0], 100);
 }
 
 #[test]
@@ -37,9 +37,9 @@ fn test_index_assign_multiple() {
     v[0] = 10;
     v[1] = 20;
     v[2] = 30;
-    assert_eq(v[0], 10);
-    assert_eq(v[1], 20);
-    assert_eq(v[2], 30);
+    assert::eq(v[0], 10);
+    assert::eq(v[1], 20);
+    assert::eq(v[2], 30);
 }
 
 // === Range Slicing ===
@@ -48,26 +48,26 @@ fn test_index_assign_multiple() {
 fn test_slice_full() {
     val v = [10, 20, 30];
     val s = v[0..3];
-    assert_eq(s.len(), 3);
+    assert::eq(s.len(), 3);
 }
 
 #[test]
 fn test_slice_partial() {
     val v = [10, 20, 30, 40];
     val s = v[1..3];
-    assert_eq(s.len(), 2);
+    assert::eq(s.len(), 2);
 }
 
 #[test]
 fn test_slice_empty() {
     val v = [10, 20, 30];
     val s = v[1..1];
-    assert_eq(s.len(), 0);
+    assert::eq(s.len(), 0);
 }
 
 #[test]
 fn test_slice_from_start() {
     val v = [10, 20, 30];
     val s = v[..2];
-    assert_eq(s.len(), 2);
+    assert::eq(s.len(), 2);
 }

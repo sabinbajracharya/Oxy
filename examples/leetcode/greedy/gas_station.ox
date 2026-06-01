@@ -26,7 +26,7 @@
 fn main() {
     val gas = [1, 2, 3, 4, 5];
     val cost = [3, 4, 5, 1, 2];
-    println("{}", can_complete_circuit(gas, cost));
+    io::println("{}", can_complete_circuit(gas, cost));
 }
 
 fn can_complete_circuit(gas: List, cost: List) -> Int {
@@ -52,12 +52,12 @@ fn can_complete_circuit(gas: List, cost: List) -> Int {
 fn test_possible() {
     val gas = [1, 2, 3, 4, 5];
     val cost = [3, 4, 5, 1, 2];
-    assert_eq(can_complete_circuit(gas, cost), 3);
+    assert::eq(can_complete_circuit(gas, cost), 3);
 }
 
 #[test]
 fn test_impossible() {
     val gas = [2, 3, 4];
     val cost = [3, 4, 3];
-    assert_eq(can_complete_circuit(gas, cost), -1);
+    assert::eq(can_complete_circuit(gas, cost), -1);
 }

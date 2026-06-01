@@ -10,7 +10,7 @@
 fn test_map() {
     val v = [1, 2, 3];
     val doubled = v.map(|x| x * 2);
-    assert_eq(doubled.len(), 3);
+    assert::eq(doubled.len(), 3);
 }
 
 // === filter ===
@@ -19,7 +19,7 @@ fn test_map() {
 fn test_filter() {
     val v = [1, 2, 3, 4, 5, 6];
     val evens = v.filter(|x| x % 2 == 0);
-    assert_eq(evens.len(), 3);
+    assert::eq(evens.len(), 3);
 }
 
 // === fold ===
@@ -28,14 +28,14 @@ fn test_filter() {
 fn test_fold_sum() {
     val v = [1, 2, 3, 4];
     val result = v.fold(0, |acc, x| acc + x);
-    assert_eq(result, 10);
+    assert::eq(result, 10);
 }
 
 #[test]
 fn test_fold_multiply() {
     val v = [1, 2, 3, 4];
     val result = v.fold(1, |acc, x| acc * x);
-    assert_eq(result, 24);
+    assert::eq(result, 24);
 }
 
 // === any / all ===
@@ -43,25 +43,25 @@ fn test_fold_multiply() {
 #[test]
 fn test_any_true() {
     val v = [1, 3, 5, 8];
-    assert(v.any(|x| x % 2 == 0));
+    assert::true(v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_any_false() {
     val v = [1, 3, 5, 7];
-    assert(!v.any(|x| x % 2 == 0));
+    assert::true(!v.any(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_true() {
     val v = [2, 4, 6, 8];
-    assert(v.all(|x| x % 2 == 0));
+    assert::true(v.all(|x| x % 2 == 0));
 }
 
 #[test]
 fn test_all_false() {
     val v = [2, 3, 4];
-    assert(!v.all(|x| x % 2 == 0));
+    assert::true(!v.all(|x| x % 2 == 0));
 }
 
 // === find ===
@@ -70,14 +70,14 @@ fn test_all_false() {
 fn test_find_some() {
     val v = [1, 3, 5, 8, 9];
     val r = v.find(|x| x % 2 == 0);
-    assert(r.is_some());
+    assert::true(r.is_some());
 }
 
 #[test]
 fn test_find_none() {
     val v = [1, 3, 5, 7];
     val r = v.find(|x| x % 2 == 0);
-    assert(r.is_none());
+    assert::true(r.is_none());
 }
 
 // === position ===
@@ -86,14 +86,14 @@ fn test_find_none() {
 fn test_position_found() {
     val v = ["a", "b", "c", "d"];
     val r = v.position(|x| x == "c");
-    assert(r.is_some());
+    assert::true(r.is_some());
 }
 
 #[test]
 fn test_position_not_found() {
     val v = ["a", "b", "c"];
     val r = v.position(|x| x == "z");
-    assert(r.is_none());
+    assert::true(r.is_none());
 }
 
 // === sum / count ===
@@ -101,13 +101,13 @@ fn test_position_not_found() {
 #[test]
 fn test_sum() {
     val v = [1, 2, 3, 4, 5];
-    assert_eq(v.sum(), 15);
+    assert::eq(v.sum(), 15);
 }
 
 #[test]
 fn test_count() {
     val v = [1, 2, 3, 4, 5];
-    assert_eq(v.count(), 5);
+    assert::eq(v.count(), 5);
 }
 
 // === for_each ===
@@ -117,7 +117,7 @@ fn test_for_each() {
     val v = [1, 2, 3, 4, 5];
     var count = 0;
     v.for_each(|x| count = count + 1);
-    assert_eq(count, 5);
+    assert::eq(count, 5);
 }
 
 // === enumerate (returns Iterator) ===
@@ -130,7 +130,7 @@ fn test_enumerate() {
     for pair in pairs {
         count = count + 1;
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }
 
 // === zip (returns Iterator) ===
@@ -144,7 +144,7 @@ fn test_zip() {
     for pair in zipped {
         count = count + 1;
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }
 
 // === take (returns Iterator) ===
@@ -157,7 +157,7 @@ fn test_take() {
     for x in first_two {
         count = count + 1;
     }
-    assert_eq(count, 2);
+    assert::eq(count, 2);
 }
 
 // === skip (returns Iterator) ===
@@ -170,7 +170,7 @@ fn test_skip() {
     for x in rest {
         count = count + 1;
     }
-    assert_eq(count, 2);
+    assert::eq(count, 2);
 }
 
 // === chain (returns Iterator) ===
@@ -184,7 +184,7 @@ fn test_chain() {
     for x in combined {
         count = count + 1;
     }
-    assert_eq(count, 4);
+    assert::eq(count, 4);
 }
 
 // === rev / reverse (mutates in place) ===
@@ -198,5 +198,5 @@ fn test_rev_iter() {
     for x in v {
         count = count + 1;
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }

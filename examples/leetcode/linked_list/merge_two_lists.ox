@@ -45,10 +45,10 @@ fn main() {
 fn print_list(head: Option) {
     var curr = head;
     while val Some(node) = curr {
-        print("{} ", node.value);
+        io::print("{} ", node.value);
         curr = node.next;
     }
-    println("");
+    io::println("");
 }
 
 fn merge_two_lists(l1: Option, l2: Option) -> Option {
@@ -82,12 +82,12 @@ fn test_merge_basic() {
     l2.next = Some(n4);
 
     val result = merge_two_lists(Some(l1), Some(l2));
-    assert_eq(result.unwrap().value, 1);
+    assert::eq(result.unwrap().value, 1);
 }
 
 #[test]
 fn test_merge_one_empty() {
     val l1 = ListNode::new(5);
     val result = merge_two_lists(Some(l1), None);
-    assert_eq(result.unwrap().value, 5);
+    assert::eq(result.unwrap().value, 5);
 }

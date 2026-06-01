@@ -58,20 +58,20 @@ use geometry::*;
 
 fn main() {
     // Using imported functions
-    println("3 + 4 = {}", add(3, 4));
-    println("3 * 4 = {}", multiply(3, 4));
+    io::println("3 + 4 = {}", add(3, 4));
+    io::println("3 * 4 = {}", multiply(3, 4));
 
     // Using module path directly
-    println("5! = {}", math::factorial(5));
+    io::println("5! = {}", math::factorial(5));
 
     // Using imported struct
     val p1 = Point::new(0.0, 0.0);
     val p2 = Point::new(3.0, 4.0);
-    println("Distance: {}", p1.distance(p2));
+    io::println("Distance: {}", p1.distance(p2));
 
     // Using imported enum
     val circle = Shape::Circle(5.0);
     val rect = Shape::Rectangle(3.0, 4.0);
-    println("Circle area: {}", circle.area());
-    println("Rectangle area: {}", rect.area());
+    io::println("Circle area: {}", circle.area());
+    io::println("Rectangle area: {}", rect.area());
 }

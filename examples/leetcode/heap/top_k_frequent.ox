@@ -24,7 +24,7 @@
 
 fn main() {
     val nums = [1, 1, 1, 2, 2, 3];
-    println("{:?}", top_k_frequent(nums, 2));
+    io::println("{:?}", top_k_frequent(nums, 2));
 }
 
 fn top_k_frequent(nums: List, k: Int) -> List {
@@ -57,12 +57,12 @@ fn top_k_frequent(nums: List, k: Int) -> List {
 fn test_example() {
     val nums = [1, 1, 1, 2, 2, 3];
     val result = top_k_frequent(nums, 2);
-    assert_eq(result.len(), 2);
-    assert(result.contains(1));
-    assert(result.contains(2));
+    assert::eq(result.len(), 2);
+    assert::true(result.contains(1));
+    assert::true(result.contains(2));
 }
 
 #[test]
 fn test_single() {
-    assert_eq(top_k_frequent([1], 1), [1]);
+    assert::eq(top_k_frequent([1], 1), [1]);
 }

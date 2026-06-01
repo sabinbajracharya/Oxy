@@ -12,8 +12,8 @@ fn try_option_some() -> Option {
 #[test]
 fn test_try_option_some() {
     val r = try_option_some();
-    assert(r.is_some());
-    assert_eq(r.unwrap(), 43);
+    assert::true(r.is_some());
+    assert::eq(r.unwrap(), 43);
 }
 
 fn try_option_none() -> Option {
@@ -24,7 +24,7 @@ fn try_option_none() -> Option {
 #[test]
 fn test_try_option_none() {
     val r = try_option_none();
-    assert(r.is_none());
+    assert::true(r.is_none());
 }
 
 // === ? on Result ===
@@ -37,7 +37,7 @@ fn try_result_ok() -> Result {
 #[test]
 fn test_try_result_ok() {
     val r = try_result_ok();
-    assert(r.is_ok());
+    assert::true(r.is_ok());
 }
 
 fn try_result_err() -> Result {
@@ -48,7 +48,7 @@ fn try_result_err() -> Result {
 #[test]
 fn test_try_result_err() {
     val r = try_result_err();
-    assert(r.is_err());
+    assert::true(r.is_err());
 }
 
 // === Chaining ? operators ===
@@ -63,8 +63,8 @@ fn chain_try() -> Result {
 #[test]
 fn test_chain_try() {
     val r = chain_try();
-    assert(r.is_ok());
-    assert_eq(r.unwrap(), 60);
+    assert::true(r.is_ok());
+    assert::eq(r.unwrap(), 60);
 }
 
 // === ? propagates first error ===
@@ -79,7 +79,7 @@ fn first_error_short_circuits() -> Result {
 #[test]
 fn test_first_error_short_circuits() {
     val r = first_error_short_circuits();
-    assert(r.is_err());
+    assert::true(r.is_err());
 }
 
 // === ? in middle of chain ===
@@ -94,7 +94,7 @@ fn middle_error() -> Result {
 #[test]
 fn test_middle_error() {
     val r = middle_error();
-    assert(r.is_err());
+    assert::true(r.is_err());
 }
 
 // === ? with mixed Option and Result ===
@@ -108,5 +108,5 @@ fn try_option_chain() -> Option {
 #[test]
 fn test_try_option_chain() {
     val r = try_option_chain();
-    assert_eq(r.unwrap(), 15);
+    assert::eq(r.unwrap(), 15);
 }

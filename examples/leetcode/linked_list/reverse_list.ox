@@ -40,10 +40,10 @@ fn main() {
 fn print_list(head: Option) {
     var curr = head;
     while val Some(node) = curr {
-        print("{} ", node.value);
+        io::print("{} ", node.value);
         curr = node.next;
     }
-    println("");
+    io::println("");
 }
 
 fn reverse_list(head: Option) -> Option {
@@ -61,15 +61,15 @@ fn reverse_list(head: Option) -> Option {
 
 #[test]
 fn test_reverse_empty() {
-    assert(reverse_list(None).is_none());
+    assert::true(reverse_list(None).is_none());
 }
 
 #[test]
 fn test_reverse_single() {
     val n = ListNode::new(42);
     val result = reverse_list(Some(n));
-    assert_eq(result.unwrap().value, 42);
-    assert(result.unwrap().next.is_none());
+    assert::eq(result.unwrap().value, 42);
+    assert::true(result.unwrap().next.is_none());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn test_reverse_multiple() {
     n2.next = Some(n3);
     n1.next = Some(n2);
     val result = reverse_list(Some(n1));
-    assert_eq(result.unwrap().value, 3);
+    assert::eq(result.unwrap().value, 3);
     val r2 = result.unwrap().next.unwrap();
-    assert_eq(r2.value, 2);
+    assert::eq(r2.value, 2);
 }

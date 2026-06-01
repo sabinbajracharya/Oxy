@@ -61,10 +61,10 @@ fn main() {
     s.push(-2);
     s.push(0);
     s.push(-3);
-    println("min: {}", s.get_min());
+    io::println("min: {}", s.get_min());
     s.pop();
-    println("top: {}", s.top());
-    println("min: {}", s.get_min());
+    io::println("top: {}", s.top());
+    io::println("min: {}", s.get_min());
 }
 
 #[test]
@@ -73,8 +73,8 @@ fn test_min_stack() {
     s.push(-2);
     s.push(0);
     s.push(-3);
-    assert_eq(s.get_min(), -3);
+    assert::eq(s.get_min(), -3);
     s.pop();
-    assert_eq(s.top(), 0);
-    assert_eq(s.get_min(), -2);
+    assert::eq(s.top(), 0);
+    assert::eq(s.get_min(), -2);
 }

@@ -11,7 +11,7 @@ impl Point {
     }
 
     fn display(self) {
-        println("Point({}, {})", self.x, self.y);
+        io::println("Point({}, {})", self.x, self.y);
     }
 }
 
@@ -30,8 +30,8 @@ impl Shape {
 
     fn describe(self) {
         match self {
-            Shape::Circle(r) => println("Circle with radius {}", r),
-            Shape::Rectangle(w, h) => println("Rectangle {}x{}", w, h),
+            Shape::Circle(r) => io::println("Circle with radius {}", r),
+            Shape::Rectangle(w, h) => io::println("Rectangle {}x{}", w, h),
         }
     }
 }
@@ -46,19 +46,19 @@ fn main() {
     val dx = p1.x - p2.x;
     val dy = p1.y - p2.y;
     val dist_sq = dx * dx + dy * dy;
-    println("Distance squared: {}", dist_sq);
+    io::println("Distance squared: {}", dist_sq);
 
     // Enum variants
     val circle = Shape::Circle(5.0);
     val rect = Shape::Rectangle(4.0, 3.0);
 
     circle.describe();
-    println("Area: {}", circle.area());
+    io::println("Area: {}", circle.area());
 
     rect.describe();
-    println("Area: {}", rect.area());
+    io::println("Area: {}", rect.area());
 
     // Debug format
-    println("{:?}", circle);
-    println("{:?}", rect);
+    io::println("{:?}", circle);
+    io::println("{:?}", rect);
 }

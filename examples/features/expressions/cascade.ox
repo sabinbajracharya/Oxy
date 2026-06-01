@@ -27,7 +27,7 @@ fn test_apply_trailing_closure_implicit_it() {
     val api = ApiService::new().apply {
         it.port = 80;
     };
-    assert_eq(api.port, 80);
+    assert::eq(api.port, 80);
 }
 
 #[test]
@@ -35,15 +35,15 @@ fn test_apply_trailing_closure_with_parens() {
     val api = ApiService::new().apply() {
         it.port = 81;
     };
-    assert_eq(api.port, 81);
+    assert::eq(api.port, 81);
 }
 
 #[test]
 fn test_map_trailing_closure_implicit_it() {
     val xs = [1, 2, 3];
     val ys = xs.map { it + 1 };
-    assert_eq(ys.len(), 3);
-    assert_eq(ys[0], 2);
+    assert::eq(ys.len(), 3);
+    assert::eq(ys[0], 2);
 }
 
 #[test]
@@ -54,8 +54,8 @@ fn test_try_apply_returns_result() {
     };
 
     match api_result {
-        Ok(api) => assert_eq(api.port, 90),
-        Err(_) => assert(false),
+        Ok(api) => assert::eq(api.port, 90),
+        Err(_) => assert::true(false),
     }
 }
 
@@ -68,8 +68,8 @@ fn test_try_apply_error_stays_local() {
     };
 
     match api_result {
-        Ok(_) => assert(false),
-        Err(_) => assert(true),
+        Ok(_) => assert::true(false),
+        Err(_) => assert::true(true),
     }
 }
 
@@ -83,8 +83,8 @@ fn test_try_apply_allows_explicit_return_err() {
     };
 
     match api_result {
-        Ok(_) => assert(false),
-        Err(_) => assert(true),
+        Ok(_) => assert::true(false),
+        Err(_) => assert::true(true),
     }
 }
 
@@ -100,8 +100,8 @@ fn setup_api() -> Result<ApiService, AuthError> {
 #[test]
 fn test_try_apply_outer_question_bubbles() {
     match setup_api() {
-        Ok(api) => assert_eq(api.port, 92),
-        Err(_) => assert(false),
+        Ok(api) => assert::eq(api.port, 92),
+        Err(_) => assert::true(false),
     }
 }
 
@@ -141,4 +141,19 @@ fn test_try_apply_rejects_wrong_closure_param_type() {
         val _ = it + 1;
         Ok(())
     });
+}
+
+#[compile_error]
+fn test_global_println_is_rejected() {
+    println("legacy");
+}
+
+#[compile_error]
+fn test_global_dbg_is_rejected() {
+    dbg(123);
+}
+
+#[compile_error]
+fn test_global_assert_is_rejected() {
+    assert(true);
 }

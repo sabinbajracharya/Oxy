@@ -37,7 +37,7 @@ pub struct TypeDoc {
     pub methods: &'static [MethodInfo],
 }
 
-/// A built-in macro (e.g. `println!`).
+/// Metadata for a built-in callable exposed by stdlib module routes.
 pub struct MacroInfo {
     pub name: &'static str,
     /// One-line description for completions.
@@ -74,7 +74,7 @@ pub fn keyword_hover_text(kw: &str) -> Option<&'static str> {
         "else" => Some("Alternative branch of an `if` expression."),
         "while" => Some("Loop while a condition is true."),
         "loop" => Some("Loop forever (until `break`)."),
-        "for" => Some("Iterate over a range or collection.\n\n```oxy\nfor i in 0..10 { println!(\"{}\", i); }\n```"),
+        "for" => Some("Iterate over a range or collection.\n\n```oxy\nfor i in 0..10 { io::println(\"{}\", i); }\n```"),
         "in" => Some("Used in `for` loops to specify the iterator."),
         "match" => Some("Pattern matching.\n\n```oxy\nmatch value { 1 => \"one\", _ => \"other\" }\n```"),
         "return" => Some("Return a value from a function."),
@@ -137,7 +137,7 @@ pub const PRIMITIVE_TYPES: &[(&str, &str)] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Built-in free functions (formerly `!` macros)
+// Built-in namespaced callables
 // ---------------------------------------------------------------------------
 
 pub const ALL_MACROS: &[MacroInfo] = &[
@@ -162,19 +162,39 @@ pub const ALL_MACROS: &[MacroInfo] = &[
         hover_text: "**io::dbg(expr)** — Debug-print an expression and return it",
     },
     MacroInfo {
-        name: "panic",
+        name: "sys::dbg",
+        detail: "System diagnostics",
+        hover_text: "**sys::dbg(expr)** — Debug-print an expression and return it",
+    },
+    MacroInfo {
+        name: "assert::true",
+        detail: "Assertion",
+        hover_text: "**assert::true(cond, ...)** — Assert that condition is truthy",
+    },
+    MacroInfo {
+        name: "assert::eq",
+        detail: "Assertion equality",
+        hover_text: "**assert::eq(left, right)** — Assert that values are equal",
+    },
+    MacroInfo {
+        name: "assert::ne",
+        detail: "Assertion inequality",
+        hover_text: "**assert::ne(left, right)** — Assert that values are not equal",
+    },
+    MacroInfo {
+        name: "sys::panic",
         detail: "Panic with message",
-        hover_text: "**panic(msg)** — Abort with an error message",
+        hover_text: "**sys::panic(msg)** — Abort with an error message",
     },
     MacroInfo {
-        name: "todo",
+        name: "sys::todo",
         detail: "Mark unfinished code",
-        hover_text: "**todo()** — Mark unfinished code (panics at runtime)",
+        hover_text: "**sys::todo()** — Mark unfinished code (panics at runtime)",
     },
     MacroInfo {
-        name: "unimplemented",
+        name: "sys::unimplemented",
         detail: "Mark unimplemented code",
-        hover_text: "**unimplemented()** — Mark unimplemented code (panics at runtime)",
+        hover_text: "**sys::unimplemented()** — Mark unimplemented code (panics at runtime)",
     },
 ];
 
@@ -766,6 +786,18 @@ pub mod generic_m {
 
 pub const ALL_MODULES: &[ModuleInfo] = &[
     ModuleInfo {
+        path: "io::",
+        detail: "I/O routes (alias of std::io::)",
+    },
+    ModuleInfo {
+        path: "sys::",
+        detail: "System diagnostics/runtime routes (alias of std::sys::)",
+    },
+    ModuleInfo {
+        path: "assert::",
+        detail: "Assertion routes (alias of std::sys::assert::)",
+    },
+    ModuleInfo {
         path: "json::",
         detail: "JSON parsing and serialization",
     },
@@ -776,6 +808,18 @@ pub const ALL_MODULES: &[ModuleInfo] = &[
     ModuleInfo {
         path: "math::",
         detail: "Mathematical functions and constants",
+    },
+    ModuleInfo {
+        path: "std::io::",
+        detail: "Standard I/O utilities",
+    },
+    ModuleInfo {
+        path: "std::sys::",
+        detail: "System diagnostics/runtime utilities",
+    },
+    ModuleInfo {
+        path: "std::sys::assert::",
+        detail: "Assertion utilities",
     },
     ModuleInfo {
         path: "std::fs::",

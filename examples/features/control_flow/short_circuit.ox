@@ -7,52 +7,52 @@
 
 #[test]
 fn test_and_both_true() {
-    assert(true && true);
+    assert::true(true && true);
 }
 
 #[test]
 fn test_and_left_false() {
-    assert(!(false && true));
+    assert::true(!(false && true));
 }
 
 #[test]
 fn test_and_both_false() {
-    assert(!(false && false));
+    assert::true(!(false && false));
 }
 
 #[test]
 fn test_and_truthy_values() {
-    assert(1 == 1 && 2 == 2);
+    assert::true(1 == 1 && 2 == 2);
 }
 
 // === || (OR) Short-Circuit ===
 
 #[test]
 fn test_or_both_false() {
-    assert(!(false || false));
+    assert::true(!(false || false));
 }
 
 #[test]
 fn test_or_left_true() {
-    assert(true || false);
+    assert::true(true || false);
 }
 
 #[test]
 fn test_or_right_true() {
-    assert(false || true);
+    assert::true(false || true);
 }
 
 #[test]
 fn test_or_both_true() {
-    assert(true || true);
+    assert::true(true || true);
 }
 
 // === Combined && and || ===
 
 #[test]
 fn test_combined_short_circuit() {
-    assert(true || false && false);
-    assert(!(false && true || false));
+    assert::true(true || false && false);
+    assert::true(!(false && true || false));
 }
 
 // === && with Comparisons ===
@@ -60,8 +60,8 @@ fn test_combined_short_circuit() {
 #[test]
 fn test_and_with_comparisons() {
     val x = 10;
-    assert(x > 5 && x < 20);
-    assert(!(x > 5 && x < 8));
+    assert::true(x > 5 && x < 20);
+    assert::true(!(x > 5 && x < 8));
 }
 
 // === || with Comparisons ===
@@ -69,8 +69,8 @@ fn test_and_with_comparisons() {
 #[test]
 fn test_or_with_comparisons() {
     val x = 10;
-    assert(x < 5 || x > 8);
-    assert(!(x < 5 || x < 0));
+    assert::true(x < 5 || x > 8);
+    assert::true(!(x < 5 || x < 0));
 }
 
 // === Nested Short-Circuit ===
@@ -80,8 +80,8 @@ fn test_nested_and_or() {
     val a = true;
     val b = false;
     val c = true;
-    assert((a && c) || b);
-    assert(!(a && b && c));
+    assert::true((a && c) || b);
+    assert::true(!(a && b && c));
 }
 
 // === Short-Circuit with Function Calls ===
@@ -94,8 +94,8 @@ fn test_short_circuit_skips_function() {
         called = true;
         true
     };
-    assert(!result);
-    assert(!called);
+    assert::true(!result);
+    assert::true(!called);
 }
 
 #[test]
@@ -106,8 +106,8 @@ fn test_or_short_circuit_skips_function() {
         called = true;
         false
     };
-    assert(result);
-    assert(!called);
+    assert::true(result);
+    assert::true(!called);
 }
 
 // === Multiple Short-Circuits in Sequence ===
@@ -115,13 +115,13 @@ fn test_or_short_circuit_skips_function() {
 #[test]
 fn test_chain_of_ands() {
     val x = 15;
-    assert(x > 0 && x < 100 && x != 50 && x > 10);
-    assert(!(x > 0 && x < 100 && x == 15 && x > 20));
+    assert::true(x > 0 && x < 100 && x != 50 && x > 10);
+    assert::true(!(x > 0 && x < 100 && x == 15 && x > 20));
 }
 
 #[test]
 fn test_chain_of_ors() {
     val x = 5;
-    assert(x == 0 || x == 5 || x == 10);
-    assert(!(x == 1 || x == 2 || x == 3));
+    assert::true(x == 0 || x == 5 || x == 10);
+    assert::true(!(x == 1 || x == 2 || x == 3));
 }

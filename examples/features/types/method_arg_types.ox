@@ -21,19 +21,19 @@ impl Counter {
 #[test]
 fn test_method_call_matching_arg() {
     val c = Counter::new();
-    assert_eq(c.add(5), 5);
+    assert::eq(c.add(5), 5);
 }
 
 #[test]
 fn test_method_call_string_arg() {
     val c = Counter::new();
-    assert_eq(c.label("count".to_string()), "count: 0".to_string());
+    assert::eq(c.label("count".to_string()), "count: 0".to_string());
 }
 
 #[test]
 fn test_path_call_with_correct_types() {
     val c = Counter::new();
-    assert_eq(c.add(10), 10);
+    assert::eq(c.add(10), 10);
 }
 
 #[compile_error]
@@ -72,7 +72,7 @@ mod math {
 
 #[test]
 fn test_path_call_matching_args() {
-    assert_eq(math::scale(3, 4), 12);
+    assert::eq(math::scale(3, 4), 12);
 }
 
 #[compile_error]

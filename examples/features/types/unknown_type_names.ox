@@ -20,7 +20,7 @@ fn identity(x: Int) -> Int {
 
 #[test]
 fn test_known_param_type_ok() {
-    assert_eq(identity(5), 5);
+    assert::eq(identity(5), 5);
 }
 
 #[compile_error]

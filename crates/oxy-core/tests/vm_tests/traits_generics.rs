@@ -18,13 +18,13 @@ struct Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format("Hello, I'm {}!", self.name)
+        string::format("Hello, I'm {}!", self.name)
     }
 }
 
 fn main() {
     val p = Person { name: String::from("Alice") };
-    println("{}", p.greet());
+    io::println("{}", p.greet());
 }
 "#,
     );
@@ -56,7 +56,7 @@ impl Shape for Circle {
 
 fn main() {
     val c = Circle { radius: 5.0 };
-    println("{}: {}", c.name(), c.area());
+    io::println("{}: {}", c.name(), c.area());
 }
 "#,
     );
@@ -70,7 +70,7 @@ fn test_trait_default_method() {
 trait Describable {
     fn name(self) -> String;
     fn describe(self) -> String {
-        format("I am {}", self.name())
+        string::format("I am {}", self.name())
     }
 }
 
@@ -86,7 +86,7 @@ impl Describable for Dog {
 
 fn main() {
     val d = Dog { breed: String::from("Labrador") };
-    println("{}", d.describe());
+    io::println("{}", d.describe());
 }
 "#,
     );
@@ -98,11 +98,11 @@ fn test_format_macro() {
     let out = run_and_capture(
         r#"
 fn main() {
-    val s = format("Hello, {}!", "world");
-    println("{}", s);
+    val s = string::format("Hello, {}!", "world");
+    io::println("{}", s);
     val n = 42;
-    val msg = format("The answer is {}", n);
-    println("{}", msg);
+    val msg = string::format("The answer is {}", n);
+    io::println("{}", msg);
 }
 "#,
     );
@@ -134,7 +134,7 @@ fn main() {
     val a = Vec2::new(1.0, 2.0);
     val b = Vec2::new(3.0, 4.0);
     val c = a + b;
-    println("{} {}", c.x, c.y);
+    io::println("{} {}", c.x, c.y);
 }
 "#,
     );
@@ -160,7 +160,7 @@ fn main() {
     val a = Vec2 { x: 2.0, y: 3.0 };
     val b = Vec2 { x: 4.0, y: 5.0 };
     val c = a * b;
-    println("{} {}", c.x, c.y);
+    io::println("{} {}", c.x, c.y);
 }
 "#,
     );
@@ -178,7 +178,7 @@ fn identity<T>(x: T) -> T {
 fn main() {
     val a = identity(42);
     val b = identity("hello");
-    println("{} {}", a, b);
+    io::println("{} {}", a, b);
 }
 "#,
     );
@@ -190,7 +190,7 @@ fn test_generic_function_with_bounds() {
     let out = run_and_capture(
         r#"
 fn print_val<T: Display>(x: T) {
-    println("{}", x);
+    io::println("{}", x);
 }
 
 fn main() {
@@ -223,13 +223,13 @@ impl Article {
 
 impl Summary for Article {
     fn summarize(self) -> String {
-        format("{}: {}", self.title, self.content)
+        string::format("{}: {}", self.title, self.content)
     }
 }
 
 fn main() {
     val a = Article::new(String::from("Oxy"), String::from("A Rust-like language"));
-    println("{}", a.summarize());
+    io::println("{}", a.summarize());
 }
 "#,
     );
@@ -254,20 +254,20 @@ struct Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format("Hi, I'm {}", self.name)
+        string::format("Hi, I'm {}", self.name)
     }
 }
 
 impl Farewell for Person {
     fn farewell(self) -> String {
-        format("Goodbye from {}", self.name)
+        string::format("Goodbye from {}", self.name)
     }
 }
 
 fn main() {
     val p = Person { name: String::from("Bob") };
-    println("{}", p.greet());
-    println("{}", p.farewell());
+    io::println("{}", p.greet());
+    io::println("{}", p.farewell());
 }
 "#,
     );
@@ -280,7 +280,7 @@ fn test_string_from() {
         r#"
 fn main() {
     val s = String::from("hello");
-    println("{}", s);
+    io::println("{}", s);
 }
 "#,
     );
@@ -313,7 +313,7 @@ impl Describe for Color {
 
 fn main() {
     val c = Color::Green;
-    println("{}", c.describe());
+    io::println("{}", c.describe());
 }
 "#,
     );
@@ -327,7 +327,7 @@ fn test_clone_method_on_string() {
 fn main() {
     val s = String::from("hello");
     val s2 = s.clone();
-    println("{} {}", s, s2);
+    io::println("{} {}", s, s2);
 }
 "#,
     );
@@ -341,7 +341,7 @@ fn test_type_alias() {
 type Meters = Float;
 fn main() {
     val d: Meters = 42.0;
-    println("{}", d);
+    io::println("{}", d);
 }
 "#,
     );
@@ -354,7 +354,7 @@ fn test_const() {
         r#"
 const MAX: Int = 100;
 fn main() {
-    println("{}", MAX);
+    io::println("{}", MAX);
 }
 "#,
     );
@@ -367,7 +367,7 @@ fn test_const_float() {
         r#"
 const PI: Float = 3.14;
 fn main() {
-    println("{}", PI);
+    io::println("{}", PI);
 }
 "#,
     );
@@ -380,7 +380,7 @@ fn test_const_no_type_ann() {
         r#"
 const GREETING = "hello";
 fn main() {
-    println("{}", GREETING);
+    io::println("{}", GREETING);
 }
 "#,
     );
@@ -396,7 +396,7 @@ fn multiply(x: Int) -> Int {
     x * FACTOR
 }
 fn main() {
-    println("{}", multiply(5));
+    io::println("{}", multiply(5));
 }
 "#,
     );
@@ -412,7 +412,7 @@ struct PoInt { x: Float, y: Float }
 
 fn main() {
     val p = PoInt { x: 1.0, y: 2.0 };
-    println("{:?}", p);
+    io::println("{:?}", p);
 }
 "#,
     );
@@ -429,7 +429,7 @@ struct PoInt { x: Float, y: Float }
 fn main() {
     val p = PoInt { x: 1.0, y: 2.0 };
     val p2 = p.clone();
-    println("{} {}", p2.x, p2.y);
+    io::println("{} {}", p2.x, p2.y);
 }
 "#,
     );
@@ -447,8 +447,8 @@ fn main() {
     val a = PoInt { x: 1.0, y: 2.0 };
     val b = PoInt { x: 1.0, y: 2.0 };
     val c = PoInt { x: 3.0, y: 4.0 };
-    println("{}", a == b);
-    println("{}", a == c);
+    io::println("{}", a == b);
+    io::println("{}", a == c);
 }
 "#,
     );
@@ -465,8 +465,8 @@ struct Color { r: Int, g: Int, b: Int }
 fn main() {
     val c1 = Color { r: 255, g: 0, b: 0 };
     val c2 = c1.clone();
-    println("{:?}", c1);
-    println("{}", c1 == c2);
+    io::println("{:?}", c1);
+    io::println("{}", c1 == c2);
 }
 "#,
     );
@@ -482,7 +482,7 @@ struct Config { width: Int, height: Int, title: String }
 
 fn main() {
     val c = Config::default();
-    println("{:?}", c);
+    io::println("{:?}", c);
 }
 "#,
     );
@@ -499,7 +499,7 @@ fn test_derive_enum_debug() {
 enum Color { Red, Green, Blue }
 
 fn main() {
-    println("{:?}", Color::Red);
+    io::println("{:?}", Color::Red);
 }
 "#,
     );
@@ -514,8 +514,8 @@ fn test_derive_enum_partial_eq() {
 enum Direction { Up, Down, Left, Right }
 
 fn main() {
-    println("{}", Direction::Up == Direction::Up);
-    println("{}", Direction::Up == Direction::Down);
+    io::println("{}", Direction::Up == Direction::Up);
+    io::println("{}", Direction::Up == Direction::Down);
 }
 "#,
     );
@@ -533,7 +533,7 @@ struct Foo { x: Int }
 fn main() {
     val f = Foo { x: 1 };
     val f2 = f.clone();
-    println("{}", f2.x);
+    io::println("{}", f2.x);
 }
 "#,
     );
@@ -549,7 +549,7 @@ struct Foo { x: Int }
 
 fn main() {
     val f = Foo { x: 42 };
-    println("{}", f.x);
+    io::println("{}", f.x);
 }
 "#,
     );
@@ -566,7 +566,7 @@ enum Shape { Circle(Float), Square(Float) }
 fn main() {
     val s = Shape::Circle(5.0);
     val s2 = s.clone();
-    println("{:?}", s2);
+    io::println("{:?}", s2);
 }
 "#,
     );
@@ -581,7 +581,7 @@ fn test_type_alias_struct() {
             type Pos = PoInt;
             fn main() {
                 val p = Pos { x: 1.0, y: 2.0 };
-                println("{} {}", p.x, p.y);
+                io::println("{} {}", p.x, p.y);
             }
             "#,
     );
@@ -609,7 +609,7 @@ fn test_type_alias_associated_fn() {
             type P = PoInt;
             fn main() {
                 val p = P::origin();
-                println("{} {}", p.x, p.y);
+                io::println("{} {}", p.x, p.y);
             }
             "#,
     );
@@ -622,9 +622,9 @@ fn test_trait_bound_inline() {
         r#"
             trait Greet { fn greet(self) -> String; }
             struct Dog { name: String }
-            impl Greet for Dog { fn greet(self) -> String { format("Woof! I'm {}", self.name) } }
+            impl Greet for Dog { fn greet(self) -> String { string::format("Woof! I'm {}", self.name) } }
             fn say_hi<T: Greet>(item: T) {
-                println("{}", item.greet());
+                io::println("{}", item.greet());
             }
             fn main() {
                 say_hi(Dog { name: "Rex".to_string() });

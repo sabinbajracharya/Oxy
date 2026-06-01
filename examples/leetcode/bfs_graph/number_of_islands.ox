@@ -23,7 +23,7 @@ fn main() {
         ['1', '1', '0', '0', '0'],
         ['0', '0', '0', '0', '0']
     ];
-    println("{}", num_islands(grid));
+    io::println("{}", num_islands(grid));
 }
 
 fn dfs(grid: List, i: Int, j: Int) -> List {
@@ -74,7 +74,7 @@ fn test_example() {
         ['1', '1', '0', '0', '0'],
         ['0', '0', '0', '0', '0']
     ];
-    assert_eq(num_islands(grid), 1);
+    assert::eq(num_islands(grid), 1);
 }
 
 #[test]
@@ -85,5 +85,5 @@ fn test_multiple() {
         ['0', '0', '1', '0', '0'],
         ['0', '0', '0', '1', '1']
     ];
-    assert_eq(num_islands(grid), 3);
+    assert::eq(num_islands(grid), 3);
 }

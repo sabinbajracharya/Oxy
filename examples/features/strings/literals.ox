@@ -11,23 +11,23 @@
 #[test]
 fn test_empty_string() {
     val s = "";
-    assert_eq(s, "");
-    assert_eq(s.len(), 0);
-    assert(s.is_empty());
+    assert::eq(s, "");
+    assert::eq(s.len(), 0);
+    assert::true(s.is_empty());
 }
 
 #[test]
 fn test_simple_string() {
     val s = "hello";
-    assert_eq(s, "hello");
-    assert_eq(s.len(), 5);
-    assert(!s.is_empty());
+    assert::eq(s, "hello");
+    assert::eq(s.len(), 5);
+    assert::true(!s.is_empty());
 }
 
 #[test]
 fn test_string_with_spaces() {
     val s = "hello world";
-    assert_eq(s.len(), 11);
+    assert::eq(s.len(), 11);
 }
 
 // === Escape Sequences ===
@@ -35,31 +35,31 @@ fn test_string_with_spaces() {
 #[test]
 fn test_escape_newline() {
     val s = "line1\nline2";
-    assert(s.contains("\n"));
+    assert::true(s.contains("\n"));
 }
 
 #[test]
 fn test_escape_tab() {
     val s = "col1\tcol2";
-    assert(s.contains("\t"));
+    assert::true(s.contains("\t"));
 }
 
 #[test]
 fn test_escape_quote() {
     val s = "he said \"hello\"";
-    assert(s.contains("\""));
+    assert::true(s.contains("\""));
 }
 
 #[test]
 fn test_escape_backslash() {
     val s = "path\\to\\file";
-    assert(s.contains("\\"));
+    assert::true(s.contains("\\"));
 }
 
 #[test]
 fn test_escape_null() {
     val s = "a\0b";
-    assert_eq(s.len(), 3);
+    assert::eq(s.len(), 3);
 }
 
 // === Raw String Literals ===
@@ -68,20 +68,20 @@ fn test_escape_null() {
 fn test_raw_string_no_escapes() {
     val s = r"hello\nworld";
     // Raw string: backslash-n is literal, not newline
-    assert(s.contains("\\n"));
-    assert(!s.contains("\n"));
+    assert::true(s.contains("\\n"));
+    assert::true(!s.contains("\n"));
 }
 
 #[test]
 fn test_raw_string_with_quotes() {
     val s = r#"he said "hello""#;
-    assert(s.contains("\""));
+    assert::true(s.contains("\""));
 }
 
 #[test]
 fn test_raw_string_backslash() {
     val s = r"path\to\file";
-    assert_eq(s, "path\\to\\file");
+    assert::eq(s, "path\\to\\file");
 }
 
 // === Char Literals ===
@@ -89,19 +89,19 @@ fn test_raw_string_backslash() {
 #[test]
 fn test_char_literal() {
     val c = 'a';
-    assert_eq(c, 'a');
+    assert::eq(c, 'a');
 }
 
 #[test]
 fn test_char_newline() {
     val c = '\n';
-    assert_eq(c, '\n');
+    assert::eq(c, '\n');
 }
 
 #[test]
 fn test_char_unicode() {
     val c = '字';
-    assert_eq(c, '字');
+    assert::eq(c, '字');
 }
 
 // === Unicode Strings ===
@@ -109,13 +109,13 @@ fn test_char_unicode() {
 #[test]
 fn test_unicode_string() {
     val s = "héllo 世界";
-    assert_eq(s.len(), 8);
+    assert::eq(s.len(), 8);
 }
 
 #[test]
 fn test_emoji_string() {
     val s = "hello 👋 world 🌍";
-    assert(s.len() > 10);
+    assert::true(s.len() > 10);
 }
 
 // === String with Type Annotation ===
@@ -123,7 +123,7 @@ fn test_emoji_string() {
 #[test]
 fn test_type_annotation_string() {
     val s: String = "hello";
-    assert_eq(s, "hello");
+    assert::eq(s, "hello");
 }
 
 // === Multi-line Strings ===
@@ -132,5 +132,5 @@ fn test_type_annotation_string() {
 fn test_multiline_string() {
     val s = "line one
 line two";
-    assert(s.contains("\n"));
+    assert::true(s.contains("\n"));
 }

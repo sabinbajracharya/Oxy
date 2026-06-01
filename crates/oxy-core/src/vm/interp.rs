@@ -250,7 +250,7 @@ impl<'e> Interpreter<'e> {
                 }
                 Terminator::Halt => return discriminant(ctx),
                 Terminator::Panic(_msg_reg) => {
-                    // Error is already set by the preceding SetError op or oxy_try_pop.
+                    // Error is already set by the preceding oxy_try_pop.
                     // Just exit with the error discriminant; the register is informational.
                     return 2;
                 }
@@ -358,10 +358,6 @@ impl<'e> Interpreter<'e> {
             IrOp::WriteResult(src) => {
                 let v = Self::reg_val(regs, *src);
                 self.call_named(ctx, "oxy_return", &[v], &[], &[]);
-            }
-            IrOp::SetError(src) => {
-                let v = Self::reg_val(regs, *src);
-                self.call_named(ctx, "oxy_panic", &[v], &[], &[]);
             }
             IrOp::CheckError(r) => {
                 regs.insert(*r, Value::I64(discriminant(ctx) as i64));
@@ -1012,7 +1008,7 @@ mod tests {
     /// result must match the JIT's.
     #[test]
     fn interp_async_spawn_await() {
-        assert_parity("fn main() { val h = spawn(|| 42); println(\"{}\", h.await); }");
+        assert_parity("fn main() { val h = spawn(|| 42); io::println(\"{}\", h.await); }");
     }
 
     /// A higher-order built-in (`map`/`filter`/`sum`) drives its closure through
@@ -1022,7 +1018,7 @@ mod tests {
         assert_parity(
             "fn main() { val v = [1, 2, 3, 4]; \
              val s: Int = v.iter().map(|x| x * 2).filter(|x| x > 4).sum(); \
-             println(\"{}\", s); }",
+             io::println(\"{}\", s); }",
         );
     }
 
@@ -1033,91 +1029,91 @@ mod tests {
 
     #[test]
     fn interp_arithmetic_and_println() {
-        assert_parity("fn main() { println(\"{}\", 1 + 2 * 3 - 4); }");
+        assert_parity("fn main() { io::println(\"{}\", 1 + 2 * 3 - 4); }");
     }
 
     #[test]
     fn interp_let_bindings_and_mutation() {
         assert_parity(
-            "fn main() { var x = 10; x = x + 5; val y = x / 3; println(\"{} {}\", x, y); }",
+            "fn main() { var x = 10; x = x + 5; val y = x / 3; io::println(\"{} {}\", x, y); }",
         );
     }
 
     #[test]
     fn interp_if_else() {
         assert_parity(
-            "fn main() { val n = 7; if n % 2 == 0 { println(\"even\"); } else { println(\"odd\"); } }",
+            "fn main() { val n = 7; if n % 2 == 0 { io::println(\"even\"); } else { io::println(\"odd\"); } }",
         );
     }
 
     #[test]
     fn interp_while_loop() {
         assert_parity(
-            "fn main() { var i = 0; var sum = 0; while i < 5 { sum = sum + i; i = i + 1; } println(\"{}\", sum); }",
+            "fn main() { var i = 0; var sum = 0; while i < 5 { sum = sum + i; i = i + 1; } io::println(\"{}\", sum); }",
         );
     }
 
     #[test]
     fn interp_vec_and_index() {
-        assert_parity("fn main() { val v = [10, 20, 30]; println(\"{} {}\", v[0], v[2]); }");
+        assert_parity("fn main() { val v = [10, 20, 30]; io::println(\"{} {}\", v[0], v[2]); }");
     }
 
     #[test]
     fn interp_string_and_bool() {
         assert_parity(
-            "fn main() { val s = \"hi\"; val b = s == \"hi\"; println(\"{} {}\", s, b); }",
+            "fn main() { val s = \"hi\"; val b = s == \"hi\"; io::println(\"{} {}\", s, b); }",
         );
     }
 
     #[test]
     fn interp_float_arithmetic() {
-        assert_parity("fn main() { val x = 3.5; val y = 2.0; println(\"{}\", x * y); }");
+        assert_parity("fn main() { val x = 3.5; val y = 2.0; io::println(\"{}\", x * y); }");
     }
 
     #[test]
     fn interp_function_call() {
         assert_parity(
-            "fn add(a: Int, b: Int) -> Int { a + b }\nfn main() { println(\"{}\", add(2, 3)); }",
+            "fn add(a: Int, b: Int) -> Int { a + b }\nfn main() { io::println(\"{}\", add(2, 3)); }",
         );
     }
 
     #[test]
     fn interp_recursion() {
         assert_parity(
-            "fn fib(n: Int) -> Int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { println(\"{}\", fib(10)); }",
+            "fn fib(n: Int) -> Int { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\nfn main() { io::println(\"{}\", fib(10)); }",
         );
     }
 
     #[test]
     fn interp_nested_calls() {
         assert_parity(
-            "fn dbl(x: Int) -> Int { x * 2 }\nfn inc(x: Int) -> Int { x + 1 }\nfn main() { println(\"{}\", dbl(inc(dbl(5)))); }",
+            "fn dbl(x: Int) -> Int { x * 2 }\nfn inc(x: Int) -> Int { x + 1 }\nfn main() { io::println(\"{}\", dbl(inc(dbl(5)))); }",
         );
     }
 
     #[test]
     fn interp_struct_method() {
         assert_parity(
-            "struct Counter { n: Int }\nimpl Counter { fn get(self) -> Int { self.n } fn bump(self) { self.n = self.n + 1; } }\nfn main() { var c = Counter { n: 5 }; c.bump(); println(\"{}\", c.get()); }",
+            "struct Counter { n: Int }\nimpl Counter { fn get(self) -> Int { self.n } fn bump(self) { self.n = self.n + 1; } }\nfn main() { var c = Counter { n: 5 }; c.bump(); io::println(\"{}\", c.get()); }",
         );
     }
 
     #[test]
     fn interp_result_ok() {
         assert_parity(
-            "fn half(n: Int) -> Result<Int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => println(\"ok {}\", v), Err(e) => println(\"err {}\", e) } }",
+            "fn half(n: Int) -> Result<Int, String> { if n % 2 == 0 { Ok(n / 2) } else { Err(\"odd\") } }\nfn main() { match half(10) { Ok(v) => io::println(\"ok {}\", v), Err(e) => io::println(\"err {}\", e) } }",
         );
     }
 
     #[test]
     fn interp_closure_direct_call() {
-        assert_parity("fn main() { val f = |x| x + 1; println(\"{}\", f(5)); }");
+        assert_parity("fn main() { val f = |x| x + 1; io::println(\"{}\", f(5)); }");
     }
 
     #[test]
     fn interp_closure_capture() {
         assert_parity(
-            "fn main() { val base = 100; val add = |x| x + base; println(\"{}\", add(7)); }",
+            "fn main() { val base = 100; val add = |x| x + base; io::println(\"{}\", add(7)); }",
         );
     }
 
@@ -1126,7 +1122,7 @@ mod tests {
         assert_parity(
             "struct V2 { x: Int, y: Int }\n\
              impl V2 { fn add(self, o: V2) -> V2 { V2 { x: self.x + o.x, y: self.y + o.y } } }\n\
-             fn main() { val a = V2 { x: 1, y: 2 }; val b = V2 { x: 3, y: 4 }; val c = a + b; println(\"{} {}\", c.x, c.y); }",
+             fn main() { val a = V2 { x: 1, y: 2 }; val b = V2 { x: 3, y: 4 }; val c = a + b; io::println(\"{} {}\", c.x, c.y); }",
         );
     }
 
@@ -1135,7 +1131,7 @@ mod tests {
         assert_parity(
             "struct Counter { n: Int }\n\
              impl Counter { fn new() -> Counter { Counter { n: 42 } } }\n\
-             fn main() { val c = Counter::new(); println(\"{}\", c.n); }",
+             fn main() { val c = Counter::new(); io::println(\"{}\", c.n); }",
         );
     }
 
@@ -1143,14 +1139,14 @@ mod tests {
     fn interp_module_function_call() {
         assert_parity(
             "mod math { pub fn square(x: Int) -> Int { x * x } }\n\
-             fn main() { println(\"{}\", math::square(7)); }",
+             fn main() { io::println(\"{}\", math::square(7)); }",
         );
     }
 
     #[test]
     fn interp_question_propagation() {
         assert_parity(
-            "fn parse(n: Int) -> Result<Int, String> { if n < 0 { Err(\"neg\") } else { Ok(n) } }\nfn run(n: Int) -> Result<Int, String> { val x = parse(n)?; Ok(x + 1) }\nfn main() { match run(5) { Ok(v) => println(\"{}\", v), Err(e) => println(\"{}\", e) } match run(-1) { Ok(v) => println(\"{}\", v), Err(e) => println(\"{}\", e) } }",
+            "fn parse(n: Int) -> Result<Int, String> { if n < 0 { Err(\"neg\") } else { Ok(n) } }\nfn run(n: Int) -> Result<Int, String> { val x = parse(n)?; Ok(x + 1) }\nfn main() { match run(5) { Ok(v) => io::println(\"{}\", v), Err(e) => io::println(\"{}\", e) } match run(-1) { Ok(v) => io::println(\"{}\", v), Err(e) => io::println(\"{}\", e) } }",
         );
     }
 }

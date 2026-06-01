@@ -6,20 +6,20 @@ use super::*;
 
 #[test]
 fn test_if_true() {
-    let output = run_and_capture(r#"fn main() { if true { println("yes"); } }"#);
+    let output = run_and_capture(r#"fn main() { if true { io::println("yes"); } }"#);
     assert_eq!(output, vec!["yes\n"]);
 }
 
 #[test]
 fn test_if_false() {
-    let output = run_and_capture(r#"fn main() { if false { println("yes"); } }"#);
+    let output = run_and_capture(r#"fn main() { if false { io::println("yes"); } }"#);
     assert!(output.is_empty());
 }
 
 #[test]
 fn test_if_else() {
     let output =
-        run_and_capture(r#"fn main() { val x = if true { 1 } else { 2 }; println("{}", x); }"#);
+        run_and_capture(r#"fn main() { val x = if true { 1 } else { 2 }; io::println("{}", x); }"#);
     assert_eq!(output, vec!["1\n"]);
 }
 
@@ -38,7 +38,7 @@ fn classify(x: Int) -> Int {
 }
 
 fn main() {
-    println("{} {} {}", classify(5), classify(-3), classify(0));
+    io::println("{} {} {}", classify(5), classify(-3), classify(0));
 }
 "#,
     );
@@ -56,7 +56,7 @@ fn main() {
         sum += i;
         i += 1;
     }
-    println("{}", sum);
+    io::println("{}", sum);
 }
 "#,
     );
@@ -65,8 +65,9 @@ fn main() {
 
 #[test]
 fn test_while_false() {
-    let output =
-        run_and_capture(r#"fn main() { while false { println("never"); } println("done"); }"#);
+    let output = run_and_capture(
+        r#"fn main() { while false { io::println("never"); } io::println("done"); }"#,
+    );
     assert_eq!(output, vec!["done\n"]);
 }
 
@@ -80,7 +81,7 @@ fn main() {
         if i >= 3 {
             break;
         }
-        println("{}", i);
+        io::println("{}", i);
         i += 1;
     }
 }
@@ -101,7 +102,7 @@ fn main() {
             break i * 10;
         }
     };
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -119,7 +120,7 @@ fn main() {
         if i == 3 {
             continue;
         }
-        println("{}", i);
+        io::println("{}", i);
     }
 }
 "#,
@@ -136,7 +137,7 @@ fn main() {
     for i in 0..5 {
         sum += i;
     }
-    println("{}", sum);
+    io::println("{}", sum);
 }
 "#,
     );
@@ -152,7 +153,7 @@ fn main() {
     for i in 0..=5 {
         sum += i;
     }
-    println("{}", sum);
+    io::println("{}", sum);
 }
 "#,
     );
@@ -168,7 +169,7 @@ fn main() {
         if i == 3 {
             break;
         }
-        println("{}", i);
+        io::println("{}", i);
     }
 }
 "#,
@@ -185,7 +186,7 @@ fn main() {
         if i % 2 == 0 {
             continue;
         }
-        println("{}", i);
+        io::println("{}", i);
     }
 }
 "#,
@@ -205,7 +206,7 @@ fn main() {
         3 => "three",
         _ => "other",
     };
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -222,7 +223,7 @@ fn main() {
         1 => "one",
         _ => "other",
     };
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -237,10 +238,10 @@ fn main() {
     val x = 1;
     match x {
         1 => {
-            println("it's one!");
+            io::println("it's one!");
         }
         _ => {
-            println("something else");
+            io::println("something else");
         }
     }
 }
@@ -260,7 +261,7 @@ fn main() {
         "bye" => "farewell",
         _ => "unknown",
     };
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -277,7 +278,7 @@ fn main() {
         true => "yes",
         false => "no",
     };
-    println("{}", s);
+    io::println("{}", s);
 }
 "#,
     );
@@ -293,7 +294,7 @@ fn main() {
     val result = match x {
         n => n + 1,
     };
-    println("{}", result);
+    io::println("{}", result);
 }
 "#,
     );
@@ -328,7 +329,7 @@ fn main() {
             count += 1;
         }
     }
-    println("{}", count);
+    io::println("{}", count);
 }
 "#,
     );
@@ -350,7 +351,7 @@ fn find_first_multiple(n: Int, target: Int) -> Int {
 }
 
 fn main() {
-    println("{}", find_first_multiple(7, 50));
+    io::println("{}", find_first_multiple(7, 50));
 }
 "#,
     );
@@ -364,13 +365,13 @@ fn test_fizzbuzz() {
 fn main() {
     for i in 1..=15 {
         if i % 15 == 0 {
-            println("FizzBuzz");
+            io::println("FizzBuzz");
         } else if i % 3 == 0 {
-            println("Fizz");
+            io::println("Fizz");
         } else if i % 5 == 0 {
-            println("Buzz");
+            io::println("Buzz");
         } else {
-            println("{}", i);
+            io::println("{}", i);
         }
     }
 }
@@ -410,7 +411,7 @@ fn test_labeled_break_outer() {
                         break 'outer;
                     }
                 }
-                println("{}", i);
+                io::println("{}", i);
             }
             "#,
     );
@@ -431,7 +432,7 @@ fn test_labeled_break_nested() {
                         count = count + 1;
                     }
                 }
-                println("{}", count);
+                io::println("{}", count);
             }
             "#,
     );
@@ -452,7 +453,7 @@ fn test_labeled_continue_outer() {
                         result = result + 1;
                     }
                 }
-                println("{}", result);
+                io::println("{}", result);
             }
             "#,
     );
@@ -472,7 +473,7 @@ fn test_match_range_inclusive() {
                     4..=7 => "mid",
                     _ => "other",
                 };
-                println("{}", result);
+                io::println("{}", result);
             }
             "#,
     );
@@ -489,7 +490,7 @@ fn test_match_range_exclusive() {
                     1..5 => "yes",
                     _ => "no",
                 };
-                println("{}", result);
+                io::println("{}", result);
             }
             "#,
     );

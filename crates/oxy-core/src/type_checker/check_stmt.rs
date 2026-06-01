@@ -319,7 +319,7 @@ impl TypeChecker {
 }
 
 /// Returns true if a statement unconditionally transfers control out of the
-/// current block (return, break, continue, or a direct panic!() call).
+/// current block (return, break, continue, or direct sys panic-family calls).
 fn stmt_always_terminates(stmt: &Stmt) -> bool {
     match stmt {
         Stmt::Return { .. } | Stmt::Break { .. } | Stmt::Continue { .. } => true,
@@ -329,5 +329,17 @@ fn stmt_always_terminates(stmt: &Stmt) -> bool {
 }
 
 fn expr_always_terminates(expr: &Expr) -> bool {
-    matches!(&expr, Expr::Call { callee, .. } if matches!(callee.as_ref(), Expr::Ident(name, _) if name == "panic"))
+    let Expr::PathCall { path, .. } = expr else {
+        return false;
+    };
+
+    match path.as_slice() {
+        [root, leaf] if root == "sys" => {
+            matches!(leaf.as_str(), "panic" | "todo" | "unimplemented")
+        }
+        [std_root, sys_root, leaf] if std_root == "std" && sys_root == "sys" => {
+            matches!(leaf.as_str(), "panic" | "todo" | "unimplemented")
+        }
+        _ => false,
+    }
 }

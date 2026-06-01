@@ -23,14 +23,14 @@ impl Counter {
 fn test_method_return_type_resolved() {
     val c = Counter::new();
     val n: Int = c.get_count();
-    assert_eq(n, 0);
+    assert::eq(n, 0);
 }
 
 #[test]
 fn test_method_return_type_with_args() {
     val c = Counter::new();
     val n: Int = c.add(5);
-    assert_eq(n, 5);
+    assert::eq(n, 5);
 }
 
 #[compile_error]

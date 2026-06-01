@@ -73,7 +73,7 @@ fn main() {
                         val text = row.get("text").unwrap();
                         val done = row.get("done").unwrap();
                         val marker = if done.to_string() == "1" { "x" } else { " " };
-                        println("  [" + marker + "] [" + id.to_string() + "] " + text.to_string());
+                        io::println("  [" + marker + "] [" + id.to_string() + "] " + text.to_string());
                     }
                 }
             }
@@ -130,7 +130,7 @@ fn main() {
     } else if cmd == "clear" {
         val exec_result = db_exec(handle, "DELETE FROM todos WHERE done = 1");
         match exec_result {
-            Ok(rows) => success("cleared " + rows.to_string() + " completed todo(s)"),
+            Ok(rows) => success("cleared " + rows.to_string() + " completed sys::todo(s)"),
             Err(e) => fail("error: " + e),
         }
     } else {

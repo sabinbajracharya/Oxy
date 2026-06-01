@@ -14,42 +14,42 @@
 #[test]
 fn test_empty_argv() {
     val a = std::args::parse_from([]);
-    assert_eq(a.program, "");
-    assert_eq(a.flags.len(), 0);
-    assert_eq(a.positionals.len(), 0);
+    assert::eq(a.program, "");
+    assert::eq(a.flags.len(), 0);
+    assert::eq(a.positionals.len(), 0);
 }
 
 #[test]
 fn test_program_extracted() {
     val a = std::args::parse_from(["script.ox".to_string()]);
-    assert_eq(a.program, "script.ox");
-    assert_eq(a.flags.len(), 0);
-    assert_eq(a.positionals.len(), 0);
+    assert::eq(a.program, "script.ox");
+    assert::eq(a.flags.len(), 0);
+    assert::eq(a.positionals.len(), 0);
 }
 
 #[test]
 fn test_long_flag_presence_only() {
     val a = std::args::parse_from(["p".to_string(), "--verbose".to_string()]);
-    assert_eq(a.flags.get("verbose").unwrap(), "");
-    assert(a.flags.contains_key("verbose"));
+    assert::eq(a.flags.get("verbose").unwrap(), "");
+    assert::true(a.flags.contains_key("verbose"));
 }
 
 #[test]
 fn test_long_flag_with_value() {
     val a = std::args::parse_from(["p".to_string(), "--name=alice".to_string()]);
-    assert_eq(a.flags.get("name").unwrap(), "alice");
+    assert::eq(a.flags.get("name").unwrap(), "alice");
 }
 
 #[test]
 fn test_short_flag_with_value() {
     val a = std::args::parse_from(["p".to_string(), "-k=v".to_string()]);
-    assert_eq(a.flags.get("k").unwrap(), "v");
+    assert::eq(a.flags.get("k").unwrap(), "v");
 }
 
 #[test]
 fn test_short_flag_presence() {
     val a = std::args::parse_from(["p".to_string(), "-v".to_string()]);
-    assert_eq(a.flags.get("v").unwrap(), "");
+    assert::eq(a.flags.get("v").unwrap(), "");
 }
 
 #[test]
@@ -60,11 +60,11 @@ fn test_positionals_only() {
         "b".to_string(),
         "c".to_string(),
     ]);
-    assert_eq(a.positionals.len(), 3);
-    assert_eq(a.positionals[0], "a");
-    assert_eq(a.positionals[1], "b");
-    assert_eq(a.positionals[2], "c");
-    assert_eq(a.flags.len(), 0);
+    assert::eq(a.positionals.len(), 3);
+    assert::eq(a.positionals[0], "a");
+    assert::eq(a.positionals[1], "b");
+    assert::eq(a.positionals[2], "c");
+    assert::eq(a.flags.len(), 0);
 }
 
 #[test]
@@ -76,12 +76,12 @@ fn test_mixed_flags_and_positionals() {
         "--name=bob".to_string(),
         "file2".to_string(),
     ]);
-    assert_eq(a.flags.len(), 2);
-    assert_eq(a.flags.get("verbose").unwrap(), "");
-    assert_eq(a.flags.get("name").unwrap(), "bob");
-    assert_eq(a.positionals.len(), 2);
-    assert_eq(a.positionals[0], "file1");
-    assert_eq(a.positionals[1], "file2");
+    assert::eq(a.flags.len(), 2);
+    assert::eq(a.flags.get("verbose").unwrap(), "");
+    assert::eq(a.flags.get("name").unwrap(), "bob");
+    assert::eq(a.positionals.len(), 2);
+    assert::eq(a.positionals[0], "file1");
+    assert::eq(a.positionals[1], "file2");
 }
 
 #[test]
@@ -93,23 +93,23 @@ fn test_double_dash_terminator() {
         "--not-a-flag".to_string(),
         "x".to_string(),
     ]);
-    assert_eq(a.flags.len(), 1);
-    assert_eq(a.flags.get("verbose").unwrap(), "");
-    assert_eq(a.positionals[0], "--not-a-flag");
-    assert_eq(a.positionals[1], "x");
+    assert::eq(a.flags.len(), 1);
+    assert::eq(a.flags.get("verbose").unwrap(), "");
+    assert::eq(a.positionals[0], "--not-a-flag");
+    assert::eq(a.positionals[1], "x");
 }
 
 #[test]
 fn test_bare_dash_is_positional() {
     val a = std::args::parse_from(["p".to_string(), "-".to_string()]);
-    assert_eq(a.positionals[0], "-");
-    assert_eq(a.flags.len(), 0);
+    assert::eq(a.positionals[0], "-");
+    assert::eq(a.flags.len(), 0);
 }
 
 #[test]
 fn test_value_with_embedded_equals() {
     val a = std::args::parse_from(["p".to_string(), "--query=a=b=c".to_string()]);
-    assert_eq(a.flags.get("query").unwrap(), "a=b=c");
+    assert::eq(a.flags.get("query").unwrap(), "a=b=c");
 }
 
 #[test]
@@ -119,5 +119,5 @@ fn test_later_flag_overrides_earlier() {
         "--name=first".to_string(),
         "--name=second".to_string(),
     ]);
-    assert_eq(a.flags.get("name").unwrap(), "second");
+    assert::eq(a.flags.get("name").unwrap(), "second");
 }

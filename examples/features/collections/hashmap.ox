@@ -7,8 +7,8 @@
 #[test]
 fn test_new_empty() {
     val m = Map::new();
-    assert_eq(m.len(), 0);
-    assert(m.is_empty());
+    assert::eq(m.len(), 0);
+    assert::true(m.is_empty());
 }
 
 // === insert ===
@@ -19,8 +19,8 @@ fn test_insert() {
     m.insert("a", 1);
     m.insert("b", 2);
     m.insert("c", 3);
-    assert_eq(m.len(), 3);
-    assert(!m.is_empty());
+    assert::eq(m.len(), 3);
+    assert::true(!m.is_empty());
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn test_insert_overwrite() {
     var m = Map::new();
     m.insert("key", 1);
     m.insert("key", 99);
-    assert_eq(m.len(), 1);
+    assert::eq(m.len(), 1);
 }
 
 // === get ===
@@ -38,7 +38,7 @@ fn test_get_existing() {
     var m = Map::new();
     m.insert("hello", 42);
     val v = m.get("hello");
-    assert(v.is_some());
+    assert::true(v.is_some());
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_get_missing() {
     var m = Map::new();
     m.insert("a", 1);
     val v = m.get("nonexistent");
-    assert(v.is_none());
+    assert::true(v.is_none());
 }
 
 // === get_or ===
@@ -56,14 +56,14 @@ fn test_get_or_existing() {
     var m = Map::new();
     m.insert("x", 10);
     val v = m.get_or("x", 99);
-    assert_eq(v, 10);
+    assert::eq(v, 10);
 }
 
 #[test]
 fn test_get_or_missing() {
     var m = Map::new();
     val v = m.get_or("missing", 42);
-    assert_eq(v, 42);
+    assert::eq(v, 42);
 }
 
 // === remove ===
@@ -74,8 +74,8 @@ fn test_remove_existing() {
     m.insert("a", 1);
     m.insert("b", 2);
     m.remove("a");
-    assert_eq(m.len(), 1);
-    assert(m.get("a").is_none());
+    assert::eq(m.len(), 1);
+    assert::true(m.get("a").is_none());
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn test_remove_missing() {
     var m = Map::new();
     m.insert("a", 1);
     m.remove("nope");
-    assert_eq(m.len(), 1);
+    assert::eq(m.len(), 1);
 }
 
 // === contains_key ===
@@ -92,8 +92,8 @@ fn test_remove_missing() {
 fn test_contains_key() {
     var m = Map::new();
     m.insert("hello", "world");
-    assert(m.contains_key("hello"));
-    assert(!m.contains_key("missing"));
+    assert::true(m.contains_key("hello"));
+    assert::true(!m.contains_key("missing"));
 }
 
 // === keys / values ===
@@ -104,7 +104,7 @@ fn test_keys() {
     m.insert("a", 1);
     m.insert("b", 2);
     val keys = m.keys();
-    assert_eq(keys.len(), 2);
+    assert::eq(keys.len(), 2);
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn test_values() {
     m.insert("a", 1);
     m.insert("b", 2);
     val vals = m.values();
-    assert_eq(vals.len(), 2);
+    assert::eq(vals.len(), 2);
 }
 
 // === Bracket Access ===
@@ -122,7 +122,7 @@ fn test_values() {
 fn test_bracket_get() {
     var m = Map::new();
     m.insert("key", 42);
-    assert_eq(m["key"], 42);
+    assert::eq(m["key"], 42);
 }
 
 // === Iteration ===
@@ -136,7 +136,7 @@ fn test_iteration() {
     for pair in m {
         count = count + 1;
     }
-    assert_eq(count, 2);
+    assert::eq(count, 2);
 }
 
 // === clone ===
@@ -146,5 +146,5 @@ fn test_clone() {
     var m = Map::new();
     m.insert("a", 1);
     val m2 = m.clone();
-    assert_eq(m2.len(), 1);
+    assert::eq(m2.len(), 1);
 }

@@ -24,7 +24,7 @@
 
 fn main() {
     val nums = [3, 2, 1, 5, 6, 4];
-    println("{}", find_kth_largest(nums, 2));
+    io::println("{}", find_kth_largest(nums, 2));
 }
 
 fn find_kth_largest(nums: List, k: Int) -> Int {
@@ -42,15 +42,15 @@ fn find_kth_largest(nums: List, k: Int) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(find_kth_largest([3, 2, 1, 5, 6, 4], 2), 5);
+    assert::eq(find_kth_largest([3, 2, 1, 5, 6, 4], 2), 5);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(find_kth_largest([1], 1), 1);
+    assert::eq(find_kth_largest([1], 1), 1);
 }
 
 #[test]
 fn test_all_same() {
-    assert_eq(find_kth_largest([7, 7, 7, 7], 2), 7);
+    assert::eq(find_kth_largest([7, 7, 7, 7], 2), 7);
 }

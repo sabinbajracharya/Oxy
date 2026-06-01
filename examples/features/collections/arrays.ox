@@ -5,18 +5,18 @@
 #[test]
 fn test_array_repeat() {
     val arr = [0; 5];
-    assert_eq(arr.len(), 5);
-    assert_eq(arr[0], 0);
-    assert_eq(arr[4], 0);
+    assert::eq(arr.len(), 5);
+    assert::eq(arr[0], 0);
+    assert::eq(arr[4], 0);
 }
 
 #[test]
 fn test_array_repeat_with_expression() {
     val arr = [42; 3];
-    assert_eq(arr.len(), 3);
-    assert_eq(arr[0], 42);
-    assert_eq(arr[1], 42);
-    assert_eq(arr[2], 42);
+    assert::eq(arr.len(), 3);
+    assert::eq(arr[0], 42);
+    assert::eq(arr[1], 42);
+    assert::eq(arr[2], 42);
 }
 
 // === Type Annotation ===
@@ -24,10 +24,10 @@ fn test_array_repeat_with_expression() {
 #[test]
 fn test_array_type_annotation() {
     val arr: [Int; 3] = [10, 20, 30];
-    assert_eq(arr.len(), 3);
-    assert_eq(arr[0], 10);
-    assert_eq(arr[1], 20);
-    assert_eq(arr[2], 30);
+    assert::eq(arr.len(), 3);
+    assert::eq(arr[0], 10);
+    assert::eq(arr[1], 20);
+    assert::eq(arr[2], 30);
 }
 
 // === Indexing ===
@@ -35,8 +35,8 @@ fn test_array_type_annotation() {
 #[test]
 fn test_array_indexing() {
     val arr = [100, 200, 300];
-    assert_eq(arr[0], 100);
-    assert_eq(arr[2], 300);
+    assert::eq(arr[0], 100);
+    assert::eq(arr[2], 300);
 }
 
 // === Equality ===
@@ -46,8 +46,8 @@ fn test_array_equality() {
     val a = [1, 2, 3];
     val b = [1, 2, 3];
     val c = [4, 5, 6];
-    assert_eq(a, b);
-    assert_ne(a, c);
+    assert::eq(a, b);
+    assert::ne(a, c);
 }
 
 // === Nested Arrays ===
@@ -55,10 +55,10 @@ fn test_array_equality() {
 #[test]
 fn test_nested_array() {
     val matrix: [[Int; 2]; 2] = [[1, 2], [3, 4]];
-    assert_eq(matrix[0][0], 1);
-    assert_eq(matrix[0][1], 2);
-    assert_eq(matrix[1][0], 3);
-    assert_eq(matrix[1][1], 4);
+    assert::eq(matrix[0][0], 1);
+    assert::eq(matrix[0][1], 2);
+    assert::eq(matrix[1][0], 3);
+    assert::eq(matrix[1][1], 4);
 }
 
 // === Iteration ===
@@ -70,7 +70,7 @@ fn test_array_iteration() {
     for v in arr {
         sum = sum + v;
     }
-    assert_eq(sum, 6);
+    assert::eq(sum, 6);
 }
 
 // === Display ===
@@ -78,7 +78,7 @@ fn test_array_iteration() {
 #[test]
 fn test_array_display() {
     val arr = [1, 2, 3];
-    assert_eq(format("{}", arr), "[1, 2, 3]");
+    assert::eq(string::format("{}", arr), "[1, 2, 3]");
 }
 
 // === String Array ===
@@ -86,8 +86,8 @@ fn test_array_display() {
 #[test]
 fn test_string_array() {
     val arr: [String; 2] = ["hello".to_string(), "world".to_string()];
-    assert_eq(arr[0], "hello");
-    assert_eq(arr[1], "world");
+    assert::eq(arr[0], "hello");
+    assert::eq(arr[1], "world");
 }
 
 // === Bool Array ===
@@ -95,9 +95,9 @@ fn test_string_array() {
 #[test]
 fn test_bool_array() {
     val arr = [true, false, true];
-    assert(arr[0]);
-    assert(!arr[1]);
-    assert(arr[2]);
+    assert::true(arr[0]);
+    assert::true(!arr[1]);
+    assert::true(arr[2]);
 }
 
 // === Compile Error: Non-constant repeat count ===

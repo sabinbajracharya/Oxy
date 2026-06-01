@@ -23,7 +23,7 @@
 
 fn main() {
     val nums = [1, 2, 3, 1];
-    println("{}", rob(nums));
+    io::println("{}", rob(nums));
 }
 
 fn rob(nums: List) -> Int {
@@ -46,15 +46,15 @@ fn rob(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(rob([1, 2, 3, 1]), 4);
+    assert::eq(rob([1, 2, 3, 1]), 4);
 }
 
 #[test]
 fn test_two_houses() {
-    assert_eq(rob([2, 1]), 2);
+    assert::eq(rob([2, 1]), 2);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(rob([]), 0);
+    assert::eq(rob([]), 0);
 }

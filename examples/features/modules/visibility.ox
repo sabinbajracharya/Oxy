@@ -34,19 +34,19 @@ mod api {
 
 #[test]
 fn test_public_fn_accessible() {
-    assert_eq(api::public_fn(), 42);
+    assert::eq(api::public_fn(), 42);
 }
 
 #[test]
 fn test_private_fn_not_directly_accessible() {
     // Access private fn through public wrapper
-    assert_eq(api::call_private(), 99);
+    assert::eq(api::call_private(), 99);
 }
 
 #[test]
 fn test_private_struct_via_wrapper() {
     val s = api::make_private_struct();
-    assert_eq(api::get_private_x(s), 7);
+    assert::eq(api::get_private_x(s), 7);
 }
 
 // === Visibility with nested modules ===
@@ -75,12 +75,12 @@ mod parent {
 
 #[test]
 fn test_nested_pub_access() {
-    assert_eq(parent::child::child_fn(), 20);
+    assert::eq(parent::child::child_fn(), 20);
 }
 
 #[test]
 fn test_private_child_via_wrapper() {
-    assert_eq(parent::access_private_child(), 30);
+    assert::eq(parent::access_private_child(), 30);
 }
 
 // === Impl methods on structs with private fields ===
@@ -105,8 +105,8 @@ mod store {
 #[test]
 fn test_pub_struct_with_private_fields() {
     val item = store::Item::new("widget".to_string(), 100);
-    assert_eq(item.name, "widget");
-    assert_eq(item.get_price(), 100);
+    assert::eq(item.name, "widget");
+    assert::eq(item.get_price(), 100);
 }
 
 // === Negative tests: private items NOT accessible from outside ===

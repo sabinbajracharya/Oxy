@@ -20,7 +20,7 @@ fn main() {
     val candidates = [2, 3, 6, 7];
     val result = combination_sum(candidates, 7);
     for c in result {
-        println("{:?}", c);
+        io::println("{:?}", c);
     }
 }
 
@@ -51,11 +51,11 @@ fn combination_sum(candidates: List, target: Int) -> List {
 #[test]
 fn test_example() {
     val result = combination_sum([2, 3, 6, 7], 7);
-    assert(result.len() > 0);
+    assert::true(result.len() > 0);
 }
 
 #[test]
 fn test_no_solution() {
     val result = combination_sum([2], 1);
-    assert_eq(result.len(), 0);
+    assert::eq(result.len(), 0);
 }

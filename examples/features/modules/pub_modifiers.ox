@@ -19,13 +19,13 @@ mod crate_lib {
 
 #[test]
 fn test_pub_crate_fn_accessible_from_root() {
-    assert_eq(crate_lib::get_value(), 42);
+    assert::eq(crate_lib::get_value(), 42);
 }
 
 #[test]
 fn test_pub_crate_struct_accessible_from_root() {
     val d = crate_lib::make_data(10);
-    assert_eq(d.x, 10);
+    assert::eq(d.x, 10);
 }
 
 // === pub accessible from a different (sibling) module ===
@@ -38,7 +38,7 @@ mod other_mod {
 
 #[test]
 fn test_pub_crate_from_sibling_module() {
-    assert_eq(other_mod::use_crate_lib(), 42);
+    assert::eq(other_mod::use_crate_lib(), 42);
 }
 
 // === pub: accessible from parent module ===
@@ -61,18 +61,18 @@ mod parent_lib {
 fn test_pub_super_accessible_from_parent() {
     // Root is the parent of parent_lib, so pub items
     // should be visible from root.
-    assert_eq(parent_lib::super_data(), 100);
+    assert::eq(parent_lib::super_data(), 100);
 }
 
 #[test]
 fn test_pub_super_struct_from_parent() {
     val s = parent_lib::SuperInfo { value: 77 };
-    assert_eq(s.value, 77);
+    assert::eq(s.value, 77);
 }
 
 #[test]
 fn test_regular_pub_still_works() {
-    assert_eq(parent_lib::public_data(), 200);
+    assert::eq(parent_lib::public_data(), 200);
 }
 
 // === pub: child modules can access parent's pub ===
@@ -91,5 +91,5 @@ mod container {
 
 #[test]
 fn test_pub_super_from_child_via_super() {
-    assert_eq(container::child::access_parent(), 300);
+    assert::eq(container::child::access_parent(), 300);
 }

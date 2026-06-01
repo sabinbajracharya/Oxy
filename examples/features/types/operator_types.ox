@@ -3,26 +3,26 @@
 #[test]
 fn test_unary_neg_on_int_ok() {
     val n: Int = -5;
-    assert_eq(n, -5);
+    assert::eq(n, -5);
 }
 
 #[test]
 fn test_unary_not_on_bool_ok() {
     val b = !true;
-    assert_eq(b, false);
+    assert::eq(b, false);
 }
 
 #[test]
 fn test_binary_compare_compatible_types_ok() {
     val a: Int = 5;
     val b: Int = 5;
-    assert_eq(a == b as Int, true);
+    assert::eq(a == b as Int, true);
 }
 
 #[test]
 fn test_binary_string_concat_ok() {
     val s = "foo".to_string() + "bar";
-    assert_eq(s, "foobar".to_string());
+    assert::eq(s, "foobar".to_string());
 }
 
 #[compile_error]

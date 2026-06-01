@@ -23,8 +23,8 @@
 // - Empty string is valid
 
 fn main() {
-    println("{}", is_valid("()[]{}"));
-    println("{}", is_valid("([)]"));
+    io::println("{}", is_valid("()[]{}"));
+    io::println("{}", is_valid("([)]"));
 }
 
 fn is_valid(s: String) -> bool {
@@ -50,18 +50,18 @@ fn is_valid(s: String) -> bool {
 
 #[test]
 fn test_valid() {
-    assert(is_valid("()"));
-    assert(is_valid("()[]{}"));
-    assert(is_valid("{[]}"));
+    assert::true(is_valid("()"));
+    assert::true(is_valid("()[]{}"));
+    assert::true(is_valid("{[]}"));
 }
 
 #[test]
 fn test_invalid() {
-    assert(!is_valid("(]"));
-    assert(!is_valid("([)]"));
+    assert::true(!is_valid("(]"));
+    assert::true(!is_valid("([)]"));
 }
 
 #[test]
 fn test_empty() {
-    assert(is_valid(""));
+    assert::true(is_valid(""));
 }

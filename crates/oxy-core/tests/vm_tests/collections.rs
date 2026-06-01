@@ -6,25 +6,25 @@ use super::*;
 
 #[test]
 fn test_array_literal() {
-    let output = run_and_capture("fn main() { val a = [1, 2, 3]; println(\"{:?}\", a); }");
+    let output = run_and_capture("fn main() { val a = [1, 2, 3]; io::println(\"{:?}\", a); }");
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
 }
 
 #[test]
 fn test_empty_array() {
-    let output = run_and_capture("fn main() { val a = []; println(\"{:?}\", a); }");
+    let output = run_and_capture("fn main() { val a = []; io::println(\"{:?}\", a); }");
     assert_eq!(output, vec!["[]\n"]);
 }
 
 #[test]
 fn test_vec_macro() {
-    let output = run_and_capture("fn main() { val v = [10, 20, 30]; println(\"{:?}\", v); }");
+    let output = run_and_capture("fn main() { val v = [10, 20, 30]; io::println(\"{:?}\", v); }");
     assert_eq!(output, vec!["[10, 20, 30]\n"]);
 }
 
 #[test]
 fn test_vec_index() {
-    let output = run_and_capture("fn main() { val v = [10, 20, 30]; println(\"{}\", v[1]); }");
+    let output = run_and_capture("fn main() { val v = [10, 20, 30]; io::println(\"{}\", v[1]); }");
     assert_eq!(output, vec!["20\n"]);
 }
 
@@ -34,7 +34,7 @@ fn test_vec_push() {
         r#"fn main() {
 var v = [1, 2];
 v.push(3);
-println("{:?}", v);
+io::println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[1, 2, 3]\n"]);
@@ -46,7 +46,7 @@ fn test_vec_pop() {
         r#"fn main() {
 var v = [1, 2, 3];
 val x = v.pop();
-println("{:?} {:?}", x, v);
+io::println("{:?} {:?}", x, v);
 }"#,
     );
     assert_eq!(output, vec!["Some(3) [1, 2]\n"]);
@@ -54,7 +54,7 @@ println("{:?} {:?}", x, v);
 
 #[test]
 fn test_vec_len() {
-    let output = run_and_capture("fn main() { val v = [1, 2, 3]; println(\"{}\", v.len()); }");
+    let output = run_and_capture("fn main() { val v = [1, 2, 3]; io::println(\"{}\", v.len()); }");
     assert_eq!(output, vec!["3\n"]);
 }
 
@@ -64,7 +64,7 @@ fn test_vec_is_empty() {
         r#"fn main() {
 val a = [];
 val b = [1];
-println("{} {}", a.is_empty(), b.is_empty());
+io::println("{} {}", a.is_empty(), b.is_empty());
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -75,7 +75,7 @@ fn test_vec_contains() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [1, 2, 3];
-println("{} {}", v.contains(2), v.contains(5));
+io::println("{} {}", v.contains(2), v.contains(5));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -87,7 +87,7 @@ fn test_vec_index_assign() {
         r#"fn main() {
 var v = [1, 2, 3];
 v[1] = 99;
-println("{:?}", v);
+io::println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[1, 99, 3]\n"]);
@@ -102,7 +102,7 @@ var sum = 0;
 for x in v {
     sum += x;
 }
-println("{}", sum);
+io::println("{}", sum);
 }"#,
     );
     assert_eq!(output, vec!["60\n"]);
@@ -113,7 +113,7 @@ fn test_vec_join() {
     let output = run_and_capture(
         r#"fn main() {
 val v = ["a", "b", "c"];
-println("{}", v.join(", "));
+io::println("{}", v.join(", "));
 }"#,
     );
     assert_eq!(output, vec!["a, b, c\n"]);
@@ -121,7 +121,7 @@ println("{}", v.join(", "));
 
 #[test]
 fn test_tuple_literal() {
-    let output = run_and_capture("fn main() { val t = (1, 2, 3); println(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { val t = (1, 2, 3); io::println(\"{:?}\", t); }");
     assert_eq!(output, vec!["(1, 2, 3)\n"]);
 }
 
@@ -130,7 +130,7 @@ fn test_tuple_index() {
     let output = run_and_capture(
         r#"fn main() {
 val t = (10, "hello", true);
-println("{} {} {}", t.0, t.1, t.2);
+io::println("{} {} {}", t.0, t.1, t.2);
 }"#,
     );
     assert_eq!(output, vec!["10 hello true\n"]);
@@ -138,19 +138,19 @@ println("{} {} {}", t.0, t.1, t.2);
 
 #[test]
 fn test_empty_tuple() {
-    let output = run_and_capture("fn main() { val t = (); println(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { val t = (); io::println(\"{:?}\", t); }");
     assert_eq!(output, vec!["()\n"]);
 }
 
 #[test]
 fn test_single_element_tuple() {
-    let output = run_and_capture("fn main() { val t = (42,); println(\"{:?}\", t); }");
+    let output = run_and_capture("fn main() { val t = (42,); io::println(\"{:?}\", t); }");
     assert_eq!(output, vec!["(42,)\n"]);
 }
 
 #[test]
 fn test_string_len() {
-    let output = run_and_capture(r#"fn main() { val s = "hello"; println("{}", s.len()); }"#);
+    let output = run_and_capture(r#"fn main() { val s = "hello"; io::println("{}", s.len()); }"#);
     assert_eq!(output, vec!["5\n"]);
 }
 
@@ -159,7 +159,7 @@ fn test_string_contains() {
     let output = run_and_capture(
         r#"fn main() {
 val s = "hello world";
-println("{} {}", s.contains("world"), s.contains("xyz"));
+io::println("{} {}", s.contains("world"), s.contains("xyz"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -168,21 +168,21 @@ println("{} {}", s.contains("world"), s.contains("xyz"));
 #[test]
 fn test_string_to_uppercase() {
     let output =
-        run_and_capture(r#"fn main() { val s = "hello"; println("{}", s.to_uppercase()); }"#);
+        run_and_capture(r#"fn main() { val s = "hello"; io::println("{}", s.to_uppercase()); }"#);
     assert_eq!(output, vec!["HELLO\n"]);
 }
 
 #[test]
 fn test_string_to_lowercase() {
     let output =
-        run_and_capture(r#"fn main() { val s = "HELLO"; println("{}", s.to_lowercase()); }"#);
+        run_and_capture(r#"fn main() { val s = "HELLO"; io::println("{}", s.to_lowercase()); }"#);
     assert_eq!(output, vec!["hello\n"]);
 }
 
 #[test]
 fn test_string_trim() {
     let output =
-        run_and_capture(r#"fn main() { val s = "  hello  "; println(">{}<", s.trim()); }"#);
+        run_and_capture(r#"fn main() { val s = "  hello  "; io::println(">{}<", s.trim()); }"#);
     assert_eq!(output, vec![">hello<\n"]);
 }
 
@@ -191,7 +191,7 @@ fn test_string_starts_with() {
     let output = run_and_capture(
         r#"fn main() {
 val s = "hello world";
-println("{} {}", s.starts_with("hello"), s.starts_with("world"));
+io::println("{} {}", s.starts_with("hello"), s.starts_with("world"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -202,7 +202,7 @@ fn test_string_ends_with() {
     let output = run_and_capture(
         r#"fn main() {
 val s = "hello world";
-println("{} {}", s.ends_with("world"), s.ends_with("hello"));
+io::println("{} {}", s.ends_with("world"), s.ends_with("hello"));
 }"#,
     );
     assert_eq!(output, vec!["true false\n"]);
@@ -213,7 +213,7 @@ fn test_string_replace() {
     let output = run_and_capture(
         r#"fn main() {
 val s = "hello world";
-println("{}", s.replace("world", "oxy"));
+io::println("{}", s.replace("world", "oxy"));
 }"#,
     );
     assert_eq!(output, vec!["hello oxy\n"]);
@@ -225,7 +225,7 @@ fn test_string_split() {
         r#"fn main() {
 val s = "a,b,c";
 val parts = s.split(",");
-println("{:?}", parts);
+io::println("{:?}", parts);
 }"#,
     );
     assert_eq!(output, vec!["[\"a\", \"b\", \"c\"]\n"]);
@@ -237,7 +237,7 @@ fn test_string_chars() {
         r#"fn main() {
 val s = "hi";
 val chars = s.chars();
-println("{:?}", chars);
+io::println("{:?}", chars);
 }"#,
     );
     assert_eq!(output, vec!["['h', 'i']\n"]);
@@ -245,7 +245,7 @@ println("{:?}", chars);
 
 #[test]
 fn test_string_repeat() {
-    let output = run_and_capture(r#"fn main() { println("{}", "ab".repeat(3)); }"#);
+    let output = run_and_capture(r#"fn main() { io::println("{}", "ab".repeat(3)); }"#);
     assert_eq!(output, vec!["ababab\n"]);
 }
 
@@ -254,7 +254,7 @@ fn test_string_iteration() {
     let output = run_and_capture(
         r#"fn main() {
 for c in "abc" {
-    println("{}", c);
+    io::println("{}", c);
 }
 }"#,
     );
@@ -266,7 +266,7 @@ fn test_vec_first_last() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [10, 20, 30];
-println("{:?} {:?}", v.first(), v.last());
+io::println("{:?} {:?}", v.first(), v.last());
 }"#,
     );
     assert_eq!(output, vec!["Some(10) Some(30)\n"]);
@@ -278,7 +278,7 @@ fn test_vec_reverse() {
         r#"fn main() {
 var v = [1, 2, 3];
 v.reverse();
-println("{:?}", v);
+io::println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["[3, 2, 1]\n"]);
@@ -289,8 +289,8 @@ fn test_nested_list() {
     let output = run_and_capture(
         r#"fn main() {
 val v = [[1, 2], [3, 4]];
-println("{}", v[0][1]);
-println("{:?}", v);
+io::println("{}", v[0][1]);
+io::println("{:?}", v);
 }"#,
     );
     assert_eq!(output, vec!["2\n", "[[1, 2], [3, 4]]\n"]);
@@ -301,9 +301,9 @@ fn test_debug_format_collections() {
     let output = run_and_capture(
         r#"fn main() {
 val v = ["hello", "world"];
-println("{:?}", v);
+io::println("{:?}", v);
 val t = (1, "two", true);
-println("{:?}", t);
+io::println("{:?}", t);
 }"#,
     );
     assert_eq!(
@@ -336,7 +336,7 @@ fn main() {
     var m = Map::new();
     m.insert("a", 1);
     m.insert("b", 2);
-    println("{}", m.len());
+    io::println("{}", m.len());
 }
 "#,
     );
@@ -351,7 +351,7 @@ fn main() {
     var m = Map::new();
     m.insert("key", 42);
     val value = m.get("key");
-    println("{}", value.unwrap());
+    io::println("{}", value.unwrap());
 }
 "#,
     );
@@ -365,7 +365,7 @@ fn test_hashmap_get_missing() {
 fn main() {
     val m = Map::new();
     val value = m.get("nope");
-    println("{}", value.is_none());
+    io::println("{}", value.is_none());
 }
 "#,
     );
@@ -379,8 +379,8 @@ fn test_hashmap_contains_key() {
 fn main() {
     var m = Map::new();
     m.insert("x", 1);
-    println("{}", m.contains_key("x"));
-    println("{}", m.contains_key("y"));
+    io::println("{}", m.contains_key("x"));
+    io::println("{}", m.contains_key("y"));
 }
 "#,
     );
@@ -395,8 +395,8 @@ fn main() {
     var m = Map::new();
     m.insert("a", 10);
     val removed = m.remove("a");
-    println("{}", removed.unwrap());
-    println("{}", m.is_empty());
+    io::println("{}", removed.unwrap());
+    io::println("{}", m.is_empty());
 }
 "#,
     );
@@ -411,8 +411,8 @@ fn main() {
     var m = Map::new();
     m.insert("b", 2);
     m.insert("a", 1);
-    println("{:?}", m.keys());
-    println("{:?}", m.values());
+    io::println("{:?}", m.keys());
+    io::println("{:?}", m.values());
 }
 "#,
     );
@@ -426,7 +426,7 @@ fn test_hashmap_debug_format() {
 fn main() {
     var m = Map::new();
     m.insert("x", 1);
-    println("{:?}", m);
+    io::println("{:?}", m);
 }
 "#,
     );
@@ -442,7 +442,7 @@ fn main() {
     m.insert("a", 1);
     m.insert("b", 2);
     for (k, v) in m {
-        println("{}: {}", k, v);
+        io::println("{}: {}", k, v);
     }
 }
 "#,
@@ -456,7 +456,7 @@ fn test_hashmap_is_empty() {
         r#"
 fn main() {
     val m = Map::new();
-    println("{}", m.is_empty());
+    io::println("{}", m.is_empty());
 }
 "#,
     );
@@ -472,7 +472,7 @@ fn main() {
     s.insert(1);
     s.insert(2);
     s.insert(1);
-    println("{}", s.len());
+    io::println("{}", s.len());
 }
 "#,
     );
@@ -487,8 +487,8 @@ fn main() {
     var s = Set::new();
     s.insert("a");
     s.insert("b");
-    println("{}", s.contains("a"));
-    println("{}", s.contains("c"));
+    io::println("{}", s.contains("a"));
+    io::println("{}", s.contains("c"));
 }
 "#,
     );
@@ -503,9 +503,9 @@ fn main() {
     var s = Set::new();
     s.insert(1);
     s.insert(2);
-    println("{}", s.remove(1));
-    println("{}", s.len());
-    println("{}", s.remove(3));
+    io::println("{}", s.remove(1));
+    io::println("{}", s.len());
+    io::println("{}", s.remove(3));
 }
 "#,
     );
@@ -518,7 +518,7 @@ fn test_hashset_is_empty() {
         r#"
 fn main() {
     val s = Set::new();
-    println("{}", s.is_empty());
+    io::println("{}", s.is_empty());
 }
 "#,
     );
@@ -537,9 +537,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     val c = a.union(b);
-    println("{}", c.len());
-    println("{}", c.contains(1));
-    println("{}", c.contains(3));
+    io::println("{}", c.len());
+    io::println("{}", c.contains(1));
+    io::println("{}", c.contains(3));
 }
 "#,
     );
@@ -558,9 +558,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     val c = a.intersection(b);
-    println("{}", c.len());
-    println("{}", c.contains(2));
-    println("{}", c.contains(1));
+    io::println("{}", c.len());
+    io::println("{}", c.contains(2));
+    io::println("{}", c.contains(1));
 }
 "#,
     );
@@ -579,9 +579,9 @@ fn main() {
     b.insert(2);
     b.insert(3);
     val c = a.difference(b);
-    println("{}", c.len());
-    println("{}", c.contains(1));
-    println("{}", c.contains(2));
+    io::println("{}", c.len());
+    io::println("{}", c.contains(1));
+    io::println("{}", c.contains(2));
 }
 "#,
     );
@@ -598,10 +598,10 @@ fn main() {
     s.insert(1);
     s.insert(2);
     val v = s.to_vec();
-    println("{}", v.len());
+    io::println("{}", v.len());
     // to_vec returns sorted elements
-    println("{}", v[0]);
-    println("{}", v[2]);
+    io::println("{}", v[0]);
+    io::println("{}", v[2]);
 }
 "#,
     );
@@ -616,8 +616,8 @@ fn main() {
     var s = Set::new();
     s.insert(1);
     val c = s.clone();
-    println("{}", c.len());
-    println("{}", c.contains(1));
+    io::println("{}", c.len());
+    io::println("{}", c.contains(1));
 }
 "#,
     );
@@ -633,7 +633,7 @@ fn main() {
     s.insert(1);
     s.insert(2);
     for x in s {
-        println("{}", x);
+        io::println("{}", x);
     }
 }
 "#,
@@ -650,8 +650,8 @@ fn main() {
     var s = Set::new();
     s.insert("hello");
     s.insert("world");
-    println("{}", s.contains("hello"));
-    println("{}", s.len());
+    io::println("{}", s.contains("hello"));
+    io::println("{}", s.len());
 }
 "#,
     );
@@ -667,7 +667,7 @@ fn main() {
     h.push(3);
     h.push(1);
     h.push(2);
-    println("{}", h.len());
+    io::println("{}", h.len());
 }
 "#,
     );
@@ -684,7 +684,7 @@ fn main() {
     h.push(5);
     h.push(3);
     // peek returns max
-    println("{}", h.peek().unwrap());
+    io::println("{}", h.peek().unwrap());
 }
 "#,
     );
@@ -701,10 +701,10 @@ fn main() {
     h.push(3);
     h.push(2);
     // pop returns max each time
-    println("{}", h.pop().unwrap());
-    println("{}", h.pop().unwrap());
-    println("{}", h.pop().unwrap());
-    println("{}", h.pop().is_none());
+    io::println("{}", h.pop().unwrap());
+    io::println("{}", h.pop().unwrap());
+    io::println("{}", h.pop().unwrap());
+    io::println("{}", h.pop().is_none());
 }
 "#,
     );
@@ -717,7 +717,7 @@ fn test_binary_heap_pop_empty() {
         r#"
 fn main() {
     var h = BinaryHeap::new();
-    println("{}", h.pop().is_none());
+    io::println("{}", h.pop().is_none());
 }
 "#,
     );
@@ -734,9 +734,9 @@ fn main() {
     h.push(-3);
     h.push(-2);
     // max-heap on negated values = min-heap on original values
-    println("{}", -(h.pop().unwrap()));
-    println("{}", -(h.pop().unwrap()));
-    println("{}", -(h.pop().unwrap()));
+    io::println("{}", -(h.pop().unwrap()));
+    io::println("{}", -(h.pop().unwrap()));
+    io::println("{}", -(h.pop().unwrap()));
 }
 "#,
     );
@@ -754,8 +754,8 @@ fn main() {
     h.push(2);
     val v = h.to_vec();
     // into_sorted_vec returns ascending order
-    println("{}", v[0]);
-    println("{}", v[2]);
+    io::println("{}", v[0]);
+    io::println("{}", v[2]);
 }
 "#,
     );
@@ -771,7 +771,7 @@ fn main() {
     d.push_back(1);
     d.push_back(2);
     d.push_front(0);
-    println("{}", d.len());
+    io::println("{}", d.len());
 }
 "#,
     );
@@ -786,8 +786,8 @@ fn main() {
     var d = VecDeque::new();
     d.push_back(1);
     d.push_back(3);
-    println("{}", d.front());
-    println("{}", d.back());
+    io::println("{}", d.front());
+    io::println("{}", d.back());
 }
 "#,
     );
@@ -803,9 +803,9 @@ fn main() {
     d.push_back(1);
     d.push_back(2);
     d.push_back(3);
-    println("{:?}", d.pop_front());
-    println("{:?}", d.pop_back());
-    println("{}", d.len());
+    io::println("{:?}", d.pop_front());
+    io::println("{:?}", d.pop_back());
+    io::println("{}", d.len());
 }
 "#,
     );
@@ -822,8 +822,8 @@ fn main() {
     d.push_back(2);
     d.push_back(3);
     val v = d.to_vec();
-    println("{}", v[0]);
-    println("{}", v[2]);
+    io::println("{}", v[0]);
+    io::println("{}", v[2]);
 }
 "#,
     );
@@ -837,7 +837,7 @@ fn test_turbofish_collect_list() {
             fn main() {
                 val v = [1, 2, 3];
                 val doubled = v.iter().map(|x| x * 2).collect::<List>();
-                println("{:?}", doubled);
+                io::println("{:?}", doubled);
             }
             "#,
     );

@@ -24,7 +24,7 @@
 
 fn main() {
     val nums = [3, 4, 5, 1, 2];
-    println("{}", find_min(nums));
+    io::println("{}", find_min(nums));
 }
 
 fn find_min(nums: List) -> Int {
@@ -43,15 +43,15 @@ fn find_min(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(find_min([3, 4, 5, 1, 2]), 1);
+    assert::eq(find_min([3, 4, 5, 1, 2]), 1);
 }
 
 #[test]
 fn test_not_rotated() {
-    assert_eq(find_min([1, 2, 3, 4, 5]), 1);
+    assert::eq(find_min([1, 2, 3, 4, 5]), 1);
 }
 
 #[test]
 fn test_two_elements() {
-    assert_eq(find_min([2, 1]), 1);
+    assert::eq(find_min([2, 1]), 1);
 }

@@ -16,14 +16,14 @@ fn main() {
         factorial *= i;
         i += 1;
     }
-    println("5! = {}", factorial);
+    io::println("5! = {}", factorial);
 
     // For loop with range
     var sum = 0;
     for i in 1..=100 {
         sum += i;
     }
-    println("Sum 1..=100 = {}", sum);
+    io::println("Sum 1..=100 = {}", sum);
 
     // Loop with break value
     var x = 1;
@@ -33,24 +33,24 @@ fn main() {
             break x;
         }
     };
-    println("First power of 2 > 100: {}", result);
+    io::println("First power of 2 > 100: {}", result);
 
     // FizzBuzz
-    println("FizzBuzz 1..=15:");
+    io::println("FizzBuzz 1..=15:");
     for i in 1..=15 {
         if i % 15 == 0 {
-            println("  FizzBuzz");
+            io::println("  FizzBuzz");
         } else if i % 3 == 0 {
-            println("  Fizz");
+            io::println("  Fizz");
         } else if i % 5 == 0 {
-            println("  Buzz");
+            io::println("  Buzz");
         } else {
-            println("  {}", i);
+            io::println("  {}", i);
         }
     }
 
     // Match expression
     for i in 0..4 {
-        println("classify({}) = {}", i, classify(i));
+        io::println("classify({}) = {}", i, classify(i));
     }
 }

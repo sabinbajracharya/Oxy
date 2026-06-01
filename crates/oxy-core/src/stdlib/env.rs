@@ -106,9 +106,9 @@ mod tests {
 fn main() {
     var maybe_path = std::env::get("PATH");
     if val Some(v) = maybe_path {
-        println("found");
+        io::println("found");
     } else {
-        println("missing");
+        io::println("missing");
     }
 }
 "#);
@@ -121,9 +121,9 @@ fn main() {
 fn main() {
     var maybe_path = std::env::get("FERRITE_NONEXISTENT_VAR_XYZ_12345");
     if val Some(v) = maybe_path {
-        println("found");
+        io::println("found");
     } else {
-        println("none");
+        io::println("none");
     }
 }
 "#);
@@ -136,7 +136,7 @@ fn main() {
 fn main() {
     val vars = std::env::vars();
     val len = vars.len();
-    println("{}", len > 0);
+    io::println("{}", len > 0);
 }
 "#);
         assert_eq!(out, "true\n");
@@ -149,9 +149,9 @@ fn main() {
     val result = std::env::current_dir();
     if val Ok(dir) = result {
         val len = dir.len();
-        println("{}", len > 0);
+        io::println("{}", len > 0);
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);
@@ -165,9 +165,9 @@ fn main() {
     val result = std::env::home_dir();
     if val Some(dir) = result {
         val len = dir.len();
-        println("{}", len > 0);
+        io::println("{}", len > 0);
     } else {
-        println("none");
+        io::println("none");
     }
 }
 "#);

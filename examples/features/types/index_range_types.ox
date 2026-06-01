@@ -3,13 +3,13 @@
 #[test]
 fn test_vec_index_with_int_ok() {
     val v = [10, 20, 30];
-    assert_eq(v[1], 20);
+    assert::eq(v[1], 20);
 }
 
 #[test]
 fn test_string_index_with_int_ok() {
     val s = "hi".to_string();
-    assert_eq(s[0], 'h');
+    assert::eq(s[0], 'h');
 }
 
 #[test]
@@ -18,7 +18,7 @@ fn test_range_with_ints_ok() {
     for i in 1..=3 {
         total += i;
     }
-    assert_eq(total, 6);
+    assert::eq(total, 6);
 }
 
 #[compile_error]

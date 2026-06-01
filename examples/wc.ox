@@ -35,7 +35,7 @@ fn main() {
 
     if args.positionals.len() == 0 {
         val text = std::io::read_to_string().unwrap();
-        println("{}", count(text, lines, words, chars));
+        io::println("{}", count(text, lines, words, chars));
         return;
     }
 
@@ -48,9 +48,9 @@ fn main() {
             total_lines = total_lines + text.lines().collect().len();
             total_words = total_words + text.split_whitespace().collect().len();
             total_chars = total_chars + text.len();
-            println("{}\t{}", count(text, lines, words, chars), path);
+            io::println("{}\t{}", count(text, lines, words, chars), path);
         } else {
-            println("error reading {}", path);
+            io::println("error reading {}", path);
         }
     }
     if args.positionals.len() > 1 {
@@ -58,6 +58,6 @@ fn main() {
         if lines { parts.push(total_lines.to_string()); }
         if words { parts.push(total_words.to_string()); }
         if chars { parts.push(total_chars.to_string()); }
-        println("{}\ttotal", parts.join("\t"));
+        io::println("{}\ttotal", parts.join("\t"));
     }
 }

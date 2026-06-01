@@ -9,17 +9,17 @@ use mymath::fib;
 
 #[test]
 fn test_file_module_function() {
-    assert_eq(add(2, 3), 5);
+    assert::eq(add(2, 3), 5);
 }
 
 #[test]
 fn test_file_module_qualified_call() {
-    assert_eq(mymath::sub(10, 3), 7);
+    assert::eq(mymath::sub(10, 3), 7);
 }
 
 #[test]
 fn test_file_module_public_function() {
-    assert_eq(fib(10), 55);
+    assert::eq(fib(10), 55);
 }
 
 // === Subdirectory module: subpkg/mod.ox ===
@@ -29,7 +29,7 @@ use subpkg::helper;
 
 #[test]
 fn test_subdir_module() {
-    assert_eq(helper::greet(), "hello from subpkg");
+    assert::eq(helper::greet(), "hello from subpkg");
 }
 
 // === Struct from file module ===
@@ -38,8 +38,8 @@ use mymath::Point;
 #[test]
 fn test_struct_from_file_module() {
     val p = Point { x: 1.0, y: 2.0 };
-    assert_eq(p.x, 1.0);
-    assert_eq(p.y, 2.0);
+    assert::eq(p.x, 1.0);
+    assert::eq(p.y, 2.0);
 }
 
 // === Enum from file module ===
@@ -48,7 +48,7 @@ use mymath::Operation;
 #[test]
 fn test_enum_from_file_module() {
     val add_op = Operation::Add(3, 4);
-    assert_eq(mymath::execute(add_op), 7);
+    assert::eq(mymath::execute(add_op), 7);
     val mul_op = Operation::Mul(3, 4);
-    assert_eq(mymath::execute(mul_op), 12);
+    assert::eq(mymath::execute(mul_op), 12);
 }

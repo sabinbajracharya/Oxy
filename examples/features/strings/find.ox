@@ -5,56 +5,56 @@
 fn find_basic() {
     val s = "hello world";
     val result = s.find("world");
-    assert_eq(result, Some(6));
+    assert::eq(result, Some(6));
 }
 
 #[test]
 fn find_at_start() {
     val s = "hello world";
     val result = s.find("hello");
-    assert_eq(result, Some(0));
+    assert::eq(result, Some(0));
 }
 
 #[test]
 fn find_at_end() {
     val s = "hello";
     val result = s.find("o");
-    assert_eq(result, Some(4));
+    assert::eq(result, Some(4));
 }
 
 #[test]
 fn find_not_found() {
     val s = "hello world";
     val result = s.find("xyz");
-    assert_eq(result, None);
+    assert::eq(result, None);
 }
 
 #[test]
 fn find_empty_pattern() {
     val s = "hello";
     val result = s.find("");
-    assert_eq(result, Some(0));
+    assert::eq(result, Some(0));
 }
 
 #[test]
 fn find_empty_string() {
     val s = "";
     val result = s.find("a");
-    assert_eq(result, None);
+    assert::eq(result, None);
 }
 
 #[test]
 fn find_first_occurrence() {
     val s = "ababa";
     val result = s.find("ba");
-    assert_eq(result, Some(1));
+    assert::eq(result, Some(1));
 }
 
 #[test]
 fn find_single_char() {
     val s = "abcdef";
     val result = s.find("d");
-    assert_eq(result, Some(3));
+    assert::eq(result, Some(3));
 }
 
 #[test]
@@ -62,12 +62,12 @@ fn find_unicode() {
     // CJK characters — each is one codepoint, no precomposed/decomposed ambiguity
     val s = "hello 世界你好";
     val result = s.find("世界");
-    assert_eq(result, Some(6));
+    assert::eq(result, Some(6));
 }
 
 #[test]
 fn find_partial_not_match() {
     val s = "hello";
     val result = s.find("helloo");
-    assert_eq(result, None);
+    assert::eq(result, None);
 }

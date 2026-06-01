@@ -13,7 +13,7 @@ fn test_match_integer_literal() {
         3 => "three",
         _ => "other",
     };
-    assert_eq(result, "two");
+    assert::eq(result, "two");
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_match_wildcard_fallback() {
         1 => "one",
         _ => "other",
     };
-    assert_eq(result, "other");
+    assert::eq(result, "other");
 }
 
 // === Match as Expression ===
@@ -35,7 +35,7 @@ fn test_match_returns_value() {
         1..=9 => "small",
         _ => "large",
     };
-    assert_eq(category, "large");
+    assert::eq(category, "large");
 }
 
 // === Match with Variable Binding ===
@@ -46,7 +46,7 @@ fn test_match_binding() {
     val y = match x {
         v => v,
     };
-    assert_eq(y, 42);
+    assert::eq(y, 42);
 }
 
 // === Match on Strings ===
@@ -58,7 +58,7 @@ fn test_match_string() {
         "hello" => 2,
         _ => 3,
     };
-    assert_eq(result, 2);
+    assert::eq(result, 2);
 }
 
 // === Match on Booleans ===
@@ -69,7 +69,7 @@ fn test_match_bool() {
         true => "yes",
         false => "no",
     };
-    assert_eq(result, "yes");
+    assert::eq(result, "yes");
 }
 
 // === Match with Guard (if clause) ===
@@ -82,7 +82,7 @@ fn test_match_guard() {
         x if x < 20 => "medium",
         _ => "large",
     };
-    assert_eq(result, "medium");
+    assert::eq(result, "medium");
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_match_guard_false_falls_through() {
         x if x < 10 => "small",
         _ => "other",
     };
-    assert_eq(result, "small");
+    assert::eq(result, "small");
 }
 
 // === Match on Enum Variants (Option) ===
@@ -105,7 +105,7 @@ fn test_match_option_some() {
         Some(v) => v,
         None => 0,
     };
-    assert_eq(result, 42);
+    assert::eq(result, 42);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_match_option_none() {
         Some(v) => v,
         None => -1,
     };
-    assert_eq(result, -1);
+    assert::eq(result, -1);
 }
 
 // === Match on Enum Variants (Result) ===
@@ -127,7 +127,7 @@ fn test_match_result_ok() {
         Ok(v) => v,
         Err(_) => -1,
     };
-    assert_eq(result, 100);
+    assert::eq(result, 100);
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn test_match_result_err() {
         Ok(v) => v.to_string(),
         Err(e) => e,
     };
-    assert_eq(result, "oops");
+    assert::eq(result, "oops");
 }
 
 // === Match with Range Patterns ===
@@ -150,7 +150,7 @@ fn test_match_range() {
         4..=6 => "mid",
         _ => "high",
     };
-    assert_eq(result, "mid");
+    assert::eq(result, "mid");
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn test_match_range_exclusive() {
         3..5 => "mid",
         _ => "other",
     };
-    assert_eq(result, "mid");
+    assert::eq(result, "mid");
 }
 
 // === Match with Multiple Patterns (same arm via multiple match arms) ===
@@ -174,7 +174,7 @@ fn test_match_multiple_patterns() {
         'e' => "vowel-e",
         _ => "consonant",
     };
-    assert_eq(result, "consonant");
+    assert::eq(result, "consonant");
 }
 
 // === Or Patterns ===
@@ -186,7 +186,7 @@ fn test_or_pattern_vowels() {
         'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
         _ => "consonant",
     };
-    assert_eq(kind, "vowel");
+    assert::eq(kind, "vowel");
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn test_or_pattern_consonant_falls_through() {
         'a' | 'e' | 'i' | 'o' | 'u' => "vowel",
         _ => "consonant",
     };
-    assert_eq(kind, "consonant");
+    assert::eq(kind, "consonant");
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn test_or_pattern_int_literals() {
         }
     }
     // 10 + 10 + 1 + 1 = 22
-    assert_eq(hits, 22);
+    assert::eq(hits, 22);
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn test_or_pattern_combined_with_range_and_guard_in_for_loop() {
         };
         buf = f"{buf}{label};";
     }
-    assert_eq(buf, "zero;or;range;guard;neg;");
+    assert::eq(buf, "zero;or;range;guard;neg;");
 }
 
 // === Match with Option Enum Variant ===
@@ -239,7 +239,7 @@ fn test_match_option_enum() {
         Some(v) => v,
         None => -1,
     };
-    assert_eq(result, 42);
+    assert::eq(result, 42);
 }
 
 // === Match with underscore in enum ===
@@ -251,7 +251,7 @@ fn test_match_some_wildcard() {
         Some(_) => 1,
         None => 0,
     };
-    assert_eq(result, 1);
+    assert::eq(result, 1);
 }
 
 // === Tuple patterns in match arms ===
@@ -262,7 +262,7 @@ fn test_match_tuple_all_bindings() {
     val label = match pair {
         (a, b) => f"{a}+{b}",
     };
-    assert_eq(label, "3+4");
+    assert::eq(label, "3+4");
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn test_match_tuple_literal_then_binding() {
         (1, y) => f"one-{y}",
         (x, y) => f"{x}-{y}",
     };
-    assert_eq(label, "one-99");
+    assert::eq(label, "one-99");
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn test_match_tuple_binding_then_literal() {
         (x, 0) => f"{x}-zero",
         (x, y) => f"{x}-{y}",
     };
-    assert_eq(label, "5-zero");
+    assert::eq(label, "5-zero");
 }
 
 #[test]
@@ -293,7 +293,7 @@ fn test_match_tuple_all_literals() {
         (2, 3) => "two-three",
         (_, _) => "other",
     };
-    assert_eq(label, "two-three");
+    assert::eq(label, "two-three");
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn test_match_tuple_with_wildcards() {
         (_, 0) => "second-zero",
         (_, y) => f"second-{y}",
     };
-    assert_eq(label, "second-8");
+    assert::eq(label, "second-8");
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn test_match_three_tuple() {
         (1, b, c) => f"one-{b}-{c}",
         (a, b, c) => f"{a}-{b}-{c}",
     };
-    assert_eq(label, "one-2-3");
+    assert::eq(label, "one-2-3");
 }
 
 #[test]
@@ -329,14 +329,14 @@ fn test_match_tuple_inside_for_loop() {
         };
         buf = f"{buf}{label};";
     }
-    assert_eq(buf, "one-2;3-four;5+6;");
+    assert::eq(buf, "one-2;3-four;5+6;");
 }
 
 #[test]
 fn test_if_let_tuple_pattern() {
     val pair = (10, 20);
     if val (x, y) = pair {
-        assert_eq(x, 10);
-        assert_eq(y, 20);
+        assert::eq(x, 10);
+        assert::eq(y, 20);
     }
 }

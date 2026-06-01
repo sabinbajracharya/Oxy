@@ -23,13 +23,13 @@ fn list_sum(l: List) -> Int {
 #[test]
 fn test_linked_list_empty() {
     val l = List::Empty;
-    assert_eq(list_len(l), 0);
+    assert::eq(list_len(l), 0);
 }
 
 #[test]
 fn test_linked_list_three_nodes() {
     val l = List::Node(1, [List::Node(2, [List::Node(3, [List::Empty])])]);
-    assert_eq(list_sum(l), 6);
+    assert::eq(list_sum(l), 6);
 }
 
 // --- recursive enum: binary tree ---
@@ -54,13 +54,13 @@ fn tree_sum(t: Tree) -> Int {
 #[test]
 fn test_tree_single_node() {
     val t = Tree::Node(5, []);
-    assert_eq(tree_sum(t), 5);
+    assert::eq(tree_sum(t), 5);
 }
 
 #[test]
 fn test_tree_with_children() {
     val t = Tree::Node(1, [Tree::Node(2, []), Tree::Node(3, [])]);
-    assert_eq(tree_sum(t), 6);
+    assert::eq(tree_sum(t), 6);
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn test_tree_deep() {
             Tree::Node(6, []),
         ]),
     ]);
-    assert_eq(tree_sum(t), 21);
+    assert::eq(tree_sum(t), 21);
 }
 
 // --- recursive fn: factorial ---
@@ -83,13 +83,13 @@ fn factorial(n: Int) -> Int {
 }
 
 #[test]
-fn test_factorial_zero() { assert_eq(factorial(0), 1); }
+fn test_factorial_zero() { assert::eq(factorial(0), 1); }
 #[test]
-fn test_factorial_one() { assert_eq(factorial(1), 1); }
+fn test_factorial_one() { assert::eq(factorial(1), 1); }
 #[test]
-fn test_factorial_five() { assert_eq(factorial(5), 120); }
+fn test_factorial_five() { assert::eq(factorial(5), 120); }
 #[test]
-fn test_factorial_ten() { assert_eq(factorial(10), 3628800); }
+fn test_factorial_ten() { assert::eq(factorial(10), 3628800); }
 
 // --- mutual recursion ---
 fn is_even(n: Int) -> bool {
@@ -101,15 +101,15 @@ fn is_odd(n: Int) -> bool {
 
 #[test]
 fn test_mutual_recursion_even() {
-    assert_eq(is_even(0), true);
-    assert_eq(is_even(4), true);
-    assert_eq(is_even(7), false);
+    assert::eq(is_even(0), true);
+    assert::eq(is_even(4), true);
+    assert::eq(is_even(7), false);
 }
 #[test]
 fn test_mutual_recursion_odd() {
-    assert_eq(is_odd(0), false);
-    assert_eq(is_odd(3), true);
-    assert_eq(is_odd(6), false);
+    assert::eq(is_odd(0), false);
+    assert::eq(is_odd(3), true);
+    assert::eq(is_odd(6), false);
 }
 
 // --- recursive fn with accumulator ---
@@ -121,11 +121,11 @@ fn sum_to(n: Int) -> Int {
 }
 
 #[test]
-fn test_sum_to_ten() { assert_eq(sum_to(10), 55); }
+fn test_sum_to_ten() { assert::eq(sum_to(10), 55); }
 #[test]
-fn test_sum_to_zero() { assert_eq(sum_to(0), 0); }
+fn test_sum_to_zero() { assert::eq(sum_to(0), 0); }
 #[test]
-fn test_sum_to_hundred() { assert_eq(sum_to(100), 5050); }
+fn test_sum_to_hundred() { assert::eq(sum_to(100), 5050); }
 
 // --- deep recursion (small enough to fit on the stack) ---
 fn countdown(n: Int) -> Int {
@@ -134,7 +134,7 @@ fn countdown(n: Int) -> Int {
 
 #[test]
 fn test_countdown() {
-    assert_eq(countdown(100), 100);
+    assert::eq(countdown(100), 100);
 }
 
 // --- recursive struct via List (no direct self-ref allowed) ---
@@ -162,5 +162,5 @@ fn test_tree_node_count() {
             ]},
         ],
     };
-    assert_eq(count_nodes(t), 4);
+    assert::eq(count_nodes(t), 4);
 }

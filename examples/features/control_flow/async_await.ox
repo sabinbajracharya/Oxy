@@ -34,27 +34,27 @@ fn sync_double(x: Int) -> Int { x * 2 }
 #[test]
 fn test_async_fn_returns_future() {
     val f = answer();
-    assert_eq(f.await, 42);
+    assert::eq(f.await, 42);
 }
 
 #[test]
 fn test_async_fn_with_params() {
     val f = add(3, 4);
-    assert_eq(f.await, 7);
+    assert::eq(f.await, 7);
 }
 
 #[test]
 fn test_async_fn_multiple_calls() {
     val a = double(5);
     val b = double(10);
-    assert_eq(a.await, 10);
-    assert_eq(b.await, 20);
+    assert::eq(a.await, 10);
+    assert::eq(b.await, 20);
 }
 
 #[test]
 fn test_async_fn_string_return() {
     val f = greet("World".to_string());
-    assert_eq(f.await, "Hello, World");
+    assert::eq(f.await, "Hello, World");
 }
 
 // --- await passthrough ---
@@ -62,13 +62,13 @@ fn test_async_fn_string_return() {
 #[test]
 fn test_await_on_plain_value_passes_through() {
     val x = 42;
-    assert_eq(x.await, 42);
+    assert::eq(x.await, 42);
 }
 
 #[test]
 fn test_await_on_string_passes_through() {
     val s = "hello".to_string();
-    assert_eq(s.await, "hello");
+    assert::eq(s.await, "hello");
 }
 
 // --- spawn ---
@@ -76,22 +76,22 @@ fn test_await_on_string_passes_through() {
 #[test]
 fn test_spawn_returns_join_handle() {
     val h = spawn(|| 42);
-    assert_eq(h.await, 42);
+    assert::eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_capture() {
     val x = 10;
     val h = spawn(|| x * 2);
-    assert_eq(h.await, 20);
+    assert::eq(h.await, 20);
 }
 
 #[test]
 fn test_spawn_multiple() {
     val a = spawn(|| 100);
     val b = spawn(|| 200);
-    assert_eq(a.await, 100);
-    assert_eq(b.await, 200);
+    assert::eq(a.await, 100);
+    assert::eq(b.await, 200);
 }
 
 // --- sleep ---
@@ -106,12 +106,12 @@ fn test_sleep_runs_without_error() {
 #[test]
 fn test_nested_async_calls() {
     val f = outer(5);
-    assert_eq(f.await, 12);
+    assert::eq(f.await, 12);
 }
 
 #[test]
 fn test_async_fn_chain() {
-    assert_eq(step3(1).await, 4);
+    assert::eq(step3(1).await, 4);
 }
 
 // --- await on non-Future from fn call ---
@@ -119,7 +119,7 @@ fn test_async_fn_chain() {
 #[test]
 fn test_await_on_sync_fn_result() {
     val v = sync_double(21);
-    assert_eq(v.await, 42);
+    assert::eq(v.await, 42);
 }
 
 // --- compile_error: spawn with wrong arg count ---
@@ -201,14 +201,14 @@ fn await_spawn_wrong_type() {
 #[test]
 fn test_spawn_basic() {
     val h = spawn(|| 42);
-    assert_eq(h.await, 42);
+    assert::eq(h.await, 42);
 }
 
 #[test]
 fn test_spawn_with_captured_var() {
     val x = 10;
     val h = spawn(|| x * 3);
-    assert_eq(h.await, 30);
+    assert::eq(h.await, 30);
 }
 
 #[test]
@@ -217,9 +217,9 @@ fn test_spawn_multiple_independent() {
     val b = spawn(|| 200);
     val c = spawn(|| 300);
     // Results are collected in any order
-    assert_eq(a.await, 100);
-    assert_eq(b.await, 200);
-    assert_eq(c.await, 300);
+    assert::eq(a.await, 100);
+    assert::eq(b.await, 200);
+    assert::eq(c.await, 300);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn test_spawn_sequential_await() {
     val r1 = a.await;
     val b = spawn(|| r1 + 1);
     val r2 = b.await;
-    assert_eq(r2, 2);
+    assert::eq(r2, 2);
 }
 
 // --- sleep yields to scheduler ---
@@ -239,7 +239,7 @@ fn test_sleep_inside_spawn() {
         sleep(0);
         99
     });
-    assert_eq(h.await, 99);
+    assert::eq(h.await, 99);
 }
 
 #[test]
@@ -252,8 +252,8 @@ fn test_sleep_multiple_spawns() {
         sleep(0);
         "b"
     });
-    assert_eq(a.await, "a");
-    assert_eq(b.await, "b");
+    assert::eq(a.await, "a");
+    assert::eq(b.await, "b");
 }
 
 // --- nested spawn ---
@@ -264,7 +264,7 @@ fn test_nested_spawn() {
         val inner = spawn(|| 42);
         inner.await
     });
-    assert_eq(outer.await, 42);
+    assert::eq(outer.await, 42);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn test_spawn_chain() {
         val inner = spawn(|| 7);
         inner.await * 6
     });
-    assert_eq(h.await, 42);
+    assert::eq(h.await, 42);
 }
 
 // --- await on plain values still pass-through ---
@@ -284,7 +284,7 @@ fn test_await_passthrough_inside_spawn() {
         val x = 42;
         x.await
     });
-    assert_eq(h.await, 42);
+    assert::eq(h.await, 42);
 }
 
 // --- async fn inside spawn ---
@@ -295,7 +295,7 @@ fn test_async_fn_inside_spawn() {
         val f = answer();
         f.await
     });
-    assert_eq(h.await, 42);
+    assert::eq(h.await, 42);
 }
 
 // --- spawn with string return ---
@@ -303,7 +303,7 @@ fn test_async_fn_inside_spawn() {
 #[test]
 fn test_spawn_string_result() {
     val h = spawn(|| "hello".to_string());
-    assert_eq(h.await, "hello");
+    assert::eq(h.await, "hello");
 }
 
 // --- async methods on structs ---
@@ -338,21 +338,21 @@ impl Greeter {
 fn test_async_method_basic() {
     val c = Calculator::new(21);
     val f = c.compute();
-    assert_eq(f.await, 42);
+    assert::eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_with_param() {
     val c = Calculator::new(40);
     val f = c.add(2);
-    assert_eq(f.await, 42);
+    assert::eq(f.await, 42);
 }
 
 #[test]
 fn test_async_method_string_return() {
     val g = Greeter { name: "World".to_string() };
     val f = g.greet();
-    assert_eq(f.await, "Hello, World");
+    assert::eq(f.await, "Hello, World");
 }
 
 #[test]
@@ -361,23 +361,23 @@ fn test_async_method_multiple_calls() {
     val c2 = Calculator::new(20);
     val a = c1.compute();
     val b = c2.compute();
-    assert_eq(a.await, 20);
-    assert_eq(b.await, 40);
+    assert::eq(a.await, 20);
+    assert::eq(b.await, 40);
 }
 
 #[test]
 fn test_async_method_with_formal_param() {
     val g = Greeter { name: "Smith".to_string() };
     val f = g.greet_formal("Dr.".to_string());
-    assert_eq(f.await, "Dr. Smith");
+    assert::eq(f.await, "Dr. Smith");
 }
 
 #[test]
 fn test_async_method_chain_with_sync() {
     val c = Calculator::new(21);
-    assert_eq(c.sync_get(), 21);
+    assert::eq(c.sync_get(), 21);
     val f = c.compute();
-    assert_eq(f.await, 42);
+    assert::eq(f.await, 42);
 }
 
 // --- type-checker: async method .await resolves to correct type ---

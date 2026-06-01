@@ -28,7 +28,7 @@
 fn main() {
     val temps = [73, 74, 75, 71, 69, 72, 76, 73];
     val result = daily_temperatures(temps);
-    println("{:?}", result);
+    io::println("{:?}", result);
 }
 
 fn daily_temperatures(temps: List) -> List {
@@ -56,7 +56,7 @@ fn daily_temperatures(temps: List) -> List {
 #[test]
 fn test_example() {
     val temps = [73, 74, 75, 71, 69, 72, 76, 73];
-    assert_eq(
+    assert::eq(
         daily_temperatures(temps),
         [1, 1, 4, 2, 1, 1, 0, 0]
     );
@@ -65,11 +65,11 @@ fn test_example() {
 #[test]
 fn test_all_decreasing() {
     val temps = [5, 4, 3, 2, 1];
-    assert_eq(daily_temperatures(temps), [0, 0, 0, 0, 0]);
+    assert::eq(daily_temperatures(temps), [0, 0, 0, 0, 0]);
 }
 
 #[test]
 fn test_all_increasing() {
     val temps = [1, 2, 3, 4];
-    assert_eq(daily_temperatures(temps), [1, 1, 1, 0]);
+    assert::eq(daily_temperatures(temps), [1, 1, 1, 0]);
 }

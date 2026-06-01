@@ -19,7 +19,7 @@ fn main() {
     val nums = [1, 2, 3];
     val result = subsets(nums);
     for s in result {
-        println("{:?}", s);
+        io::println("{:?}", s);
     }
 }
 
@@ -44,12 +44,12 @@ fn subsets(nums: List) -> List {
 #[test]
 fn test_example() {
     val result = subsets([1, 2, 3]);
-    assert_eq(result.len(), 8);
+    assert::eq(result.len(), 8);
 }
 
 #[test]
 fn test_empty() {
     val result = subsets([]);
-    assert_eq(result.len(), 1);
-    assert_eq(result[0], []);
+    assert::eq(result.len(), 1);
+    assert::eq(result[0], []);
 }

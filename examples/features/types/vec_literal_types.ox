@@ -4,19 +4,19 @@
 #[test]
 fn test_vec_macro_homogeneous_ints() {
     val v = [1, 2, 3];
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_vec_macro_homogeneous_strings() {
     val v = ["a".to_string(), "b".to_string()];
-    assert_eq(v.len(), 2);
+    assert::eq(v.len(), 2);
 }
 
 #[test]
 fn test_vec_macro_empty_ok() {
     val v: List<Int> = [];
-    assert_eq(v.len(), 0);
+    assert::eq(v.len(), 0);
 }
 
 #[compile_error]
@@ -40,13 +40,13 @@ fn test_vec_macro_mixed_float_string_rejected() {
 #[test]
 fn test_vec_i64_accepts_int_elements() {
     val v: List<Int> = [1, 2, 3];
-    assert_eq(v.len(), 3);
+    assert::eq(v.len(), 3);
 }
 
 #[test]
 fn test_vec_string_accepts_string_elements() {
     val v: List<String> = ["a".to_string(), "b".to_string()];
-    assert_eq(v.len(), 2);
+    assert::eq(v.len(), 2);
 }
 
 #[compile_error]
@@ -69,7 +69,7 @@ fn test_vec_push_wrong_arg_type_rejected() {
 fn test_vec_index_returns_element_type() {
     val v: List<Int> = [10, 20, 30];
     val x: Int = v[1];
-    assert_eq(x, 20);
+    assert::eq(x, 20);
 }
 
 #[compile_error]

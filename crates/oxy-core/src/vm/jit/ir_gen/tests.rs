@@ -670,22 +670,21 @@ fn test_try_operator() {
 
 #[test]
 fn test_panic_macro_lowering() {
-    let ir = gen("fn main() { panic(\"boom\"); }");
+    let ir = gen("fn main() { sys::panic(\"boom\"); }");
     let f = find_fn(&ir, "main");
-    // Must have SetError op in some block.
+    // Namespaced panic lowers to a path builtin call.
     assert!(
-        f.blocks
-            .iter()
-            .flat_map(|b| b.ops.iter())
-            .any(|op| matches!(op, IrOp::SetError(_))),
-        "panic! should emit SetError"
+        f.blocks.iter().flat_map(|b| b.ops.iter()).any(
+            |op| matches!(op, IrOp::CallBuiltin { func, .. } if *func == "oxy_path_call_builtin")
+        ),
+        "sys::panic should lower via oxy_path_call_builtin"
     );
-    // Must have Panic terminator (explicit CFG exit edge).
+    // No dedicated panic terminator is emitted for namespaced runtime calls.
     assert!(
         f.blocks
             .iter()
-            .any(|b| matches!(b.terminator, Terminator::Panic(_))),
-        "panic! should use Terminator::Panic, not an opaque FFI call"
+            .all(|b| !matches!(b.terminator, Terminator::Panic(_))),
+        "sys::panic should not emit a dedicated Terminator::Panic edge"
     );
 }
 
@@ -838,7 +837,7 @@ fn test_grouped_expression() {
 
 #[test]
 fn test_macro_call_println() {
-    let ir = gen("fn main() { println(\"hello\") }");
+    let ir = gen("fn main() { io::println(\"hello\") }");
     let f = find_fn(&ir, "main");
     let ops = &f.blocks[f.entry].ops;
     assert!(

@@ -24,7 +24,7 @@
 // - This is the foundation for diff/merge/edit-distance algorithms
 
 fn main() {
-    println("{}", longest_common_subsequence("abcde", "ace"));
+    io::println("{}", longest_common_subsequence("abcde", "ace"));
 }
 
 fn longest_common_subsequence(text1: String, text2: String) -> Int {
@@ -62,15 +62,15 @@ fn longest_common_subsequence(text1: String, text2: String) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(longest_common_subsequence("abcde", "ace"), 3);
+    assert::eq(longest_common_subsequence("abcde", "ace"), 3);
 }
 
 #[test]
 fn test_no_common() {
-    assert_eq(longest_common_subsequence("abc", "def"), 0);
+    assert::eq(longest_common_subsequence("abc", "def"), 0);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(longest_common_subsequence("abc", ""), 0);
+    assert::eq(longest_common_subsequence("abc", ""), 0);
 }

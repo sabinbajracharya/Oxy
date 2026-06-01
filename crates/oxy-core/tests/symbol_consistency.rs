@@ -296,7 +296,7 @@ fn test_macros_not_empty() {
     let names: Vec<&str> = symbols::ALL_MACROS.iter().map(|m| m.name).collect();
     assert!(names.contains(&"io::println"));
     assert!(names.contains(&"string::format"));
-    assert!(names.contains(&"panic"));
+    assert!(names.contains(&"sys::panic"));
 }
 
 // ---------------------------------------------------------------------------

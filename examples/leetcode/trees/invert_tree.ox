@@ -43,7 +43,7 @@ fn main() {
 
 fn print_tree(root: Option) {
     if val Some(node) = root {
-        print("{} ", node.value);
+        io::print("{} ", node.value);
         print_tree(node.left);
         print_tree(node.right);
     }
@@ -75,12 +75,12 @@ fn test_invert() {
     root.right = Some(r);
     val result = invert_tree(Some(root));
     val node = result.unwrap();
-    assert_eq(node.value, 4);
-    assert_eq(node.left.unwrap().value, 7);
-    assert_eq(node.right.unwrap().value, 2);
+    assert::eq(node.value, 4);
+    assert::eq(node.left.unwrap().value, 7);
+    assert::eq(node.right.unwrap().value, 2);
 }
 
 #[test]
 fn test_empty() {
-    assert(invert_tree(None).is_none());
+    assert::true(invert_tree(None).is_none());
 }

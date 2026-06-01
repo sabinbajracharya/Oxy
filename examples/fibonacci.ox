@@ -8,10 +8,10 @@ fn fib(n: Int) -> Int {
 }
 
 fn main() {
-    println("Fibonacci sequence:");
-    println("fib(0) = {}", fib(0));
-    println("fib(1) = {}", fib(1));
-    println("fib(2) = {}", fib(2));
-    println("fib(5) = {}", fib(5));
-    println("fib(10) = {}", fib(10));
+    io::println("Fibonacci sequence:");
+    io::println("fib(0) = {}", fib(0));
+    io::println("fib(1) = {}", fib(1));
+    io::println("fib(2) = {}", fib(2));
+    io::println("fib(5) = {}", fib(5));
+    io::println("fib(10) = {}", fib(10));
 }

@@ -22,7 +22,7 @@
 // - O(n) time, O(1) space
 
 fn main() {
-    println("{}", climb_stairs(5));
+    io::println("{}", climb_stairs(5));
 }
 
 fn climb_stairs(n: Int) -> Int {
@@ -41,12 +41,12 @@ fn climb_stairs(n: Int) -> Int {
 
 #[test]
 fn test_small() {
-    assert_eq(climb_stairs(2), 2);
-    assert_eq(climb_stairs(3), 3);
+    assert::eq(climb_stairs(2), 2);
+    assert::eq(climb_stairs(3), 3);
 }
 
 #[test]
 fn test_medium() {
-    assert_eq(climb_stairs(4), 5);
-    assert_eq(climb_stairs(5), 8);
+    assert::eq(climb_stairs(4), 5);
+    assert::eq(climb_stairs(5), 8);
 }

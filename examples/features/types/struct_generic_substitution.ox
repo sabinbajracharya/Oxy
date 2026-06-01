@@ -14,20 +14,20 @@ struct Pair<A, B> {
 #[test]
 fn test_generic_struct_init_ok() {
     val b: Box<Int> = Box { value: 5 };
-    assert_eq(b.value, 5);
+    assert::eq(b.value, 5);
 }
 
 #[test]
 fn test_generic_struct_string_field_ok() {
     val b: Box<String> = Box { value: "hi".to_string() };
-    assert_eq(b.value, "hi");
+    assert::eq(b.value, "hi");
 }
 
 #[test]
 fn test_two_param_generic_ok() {
     val p: Pair<Int, String> = Pair { first: 1, second: "x".to_string() };
-    assert_eq(p.first, 1);
-    assert_eq(p.second, "x");
+    assert::eq(p.first, 1);
+    assert::eq(p.second, "x");
 }
 
 #[compile_error]

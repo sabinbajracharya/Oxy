@@ -270,6 +270,15 @@ impl Parser {
                 self.advance();
                 Ok("crate".to_string())
             }
+            // Allow keyword segments where stdlib APIs intentionally use them.
+            TokenKind::True => {
+                self.advance();
+                Ok("true".to_string())
+            }
+            TokenKind::False => {
+                self.advance();
+                Ok("false".to_string())
+            }
             other => Err(self.error(format!(
                 "expected identifier or path segment, found {}",
                 other.description()

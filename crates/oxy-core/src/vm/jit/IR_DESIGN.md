@@ -52,7 +52,7 @@ Primary sources:
 | Bitwise | `BitAnd`, `BitOr`, `BitXor`, `Shl`, `Shr` |
 | Unary | `Neg`, `Not`, `BitNot` |
 | FFI | `CallBuiltin { result, func: &'static str, args: Vec<Reg>, immediates: Vec<usize>, strings: Vec<String> }` |
-| Result/error plumbing | `ReadResult(Reg)`, `WriteResult(Reg)`, `SetError(Reg)`, `CheckError(Reg)` |
+| Result/error plumbing | `ReadResult(Reg)`, `WriteResult(Reg)`, `CheckError(Reg)` |
 | Merge | `Phi(Reg, Reg, Reg)` (result + two sources) |
 | Misc | `Copy(Reg, Reg)` |
 

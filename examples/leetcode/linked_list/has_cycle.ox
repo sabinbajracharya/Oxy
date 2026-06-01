@@ -27,7 +27,7 @@ struct ListNode {
 
 fn main() {
     val n1 = ListNode::new(1);
-    println("{}", has_cycle(Some(n1)));
+    io::println("{}", has_cycle(Some(n1)));
 }
 
 fn has_cycle(head: Option) -> bool {
@@ -49,7 +49,7 @@ fn has_cycle(head: Option) -> bool {
 #[test]
 fn test_no_cycle_single() {
     val n = ListNode::new(1);
-    assert(!has_cycle(Some(n)));
+    assert::true(!has_cycle(Some(n)));
 }
 
 #[test]
@@ -59,5 +59,5 @@ fn test_no_cycle_multiple() {
     val n3 = ListNode::new(3);
     n2.next = Some(n3);
     n1.next = Some(n2);
-    assert(!has_cycle(Some(n1)));
+    assert::true(!has_cycle(Some(n1)));
 }

@@ -17,13 +17,13 @@ use secret::public_fn;
 
 #[test]
 fn test_public_fn_via_use() {
-    assert_eq(public_fn(), 42);
+    assert::eq(public_fn(), 42);
 }
 
 // Direct qualified path to public function — should work
 #[test]
 fn test_public_fn_direct_path() {
-    assert_eq(secret::public_fn(), 42);
+    assert::eq(secret::public_fn(), 42);
 }
 
 // === Negative tests: private functions ===
@@ -67,7 +67,7 @@ mod warehouse {
 fn test_public_struct_via_use() {
     use warehouse::PublicItem;
     val item = PublicItem { name: "test".to_string() };
-    assert_eq(item.name, "test");
+    assert::eq(item.name, "test");
 }
 
 #[compile_error]

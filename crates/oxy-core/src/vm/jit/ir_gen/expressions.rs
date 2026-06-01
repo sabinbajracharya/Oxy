@@ -228,22 +228,8 @@ impl IrGen {
                     return r;
                 }
 
-                // `panic(msg)` is lowered to SetError + Terminator::Panic.
-                if fname == "panic" {
-                    let msg_reg = if let Some(&m) = arg_regs.first() {
-                        m
-                    } else {
-                        let r = self.alloc_reg();
-                        self.emit(IrOp::ConstString(r, String::new()));
-                        r
-                    };
-                    self.emit(IrOp::SetError(msg_reg));
-                    self.terminate(Terminator::Panic(msg_reg));
-                    return msg_reg;
-                }
-
-                // Route spawn / sleep / select, pipeline-friendly free
-                // functions, and former `!` macros to their FFI functions.
+                // Route spawn / sleep / select and pipeline-friendly free
+                // functions to their FFI functions.
                 if let Some((ffi_func, immediates)) = match fname.as_str() {
                     "spawn" => Some(("oxy_spawn_ffi", vec![])),
                     "sleep" => Some(("oxy_sleep_ffi", vec![])),
@@ -257,10 +243,6 @@ impl IrGen {
                     "collect" => Some(("oxy_collect_ffi", vec![])),
                     "sort" => Some(("oxy_sort_ffi", vec![])),
                     "sort_by" => Some(("oxy_sort_by_ffi", vec![])),
-                    "println" => Some(("oxy_println_val", vec![args.len()])),
-                    "print" => Some(("oxy_print_val", vec![args.len()])),
-                    "format" => Some(("oxy_format", vec![args.len()])),
-                    "dbg" => Some(("oxy_dbg", vec![args.len()])),
                     _ => None,
                 } {
                     let r = self.alloc_reg();
@@ -270,23 +252,6 @@ impl IrGen {
                         args: arg_regs,
                         immediates,
                         strings: vec![],
-                    });
-                    return r;
-                }
-
-                // Route registry-based builtins (assert_eq, assert, etc.)
-                // through oxy_path_call_builtin.
-                if matches!(
-                    fname.as_str(),
-                    "assert_eq" | "assert_ne" | "assert" | "unimplemented"
-                ) {
-                    let r = self.alloc_reg();
-                    self.emit(IrOp::CallBuiltin {
-                        result: r,
-                        func: "oxy_path_call_builtin",
-                        args: arg_regs,
-                        immediates: vec![args.len()],
-                        strings: vec![fname],
                     });
                     return r;
                 }

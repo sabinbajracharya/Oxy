@@ -21,7 +21,7 @@ fn make_zero<T: Zero>() -> T {
 #[test]
 fn test_mono_single_impl() {
     val z = make_zero::<Int>();
-    assert_eq(z, 0);
+    assert::eq(z, 0);
 }
 
 // === Monomorphization: Single Type Arg, Multiple Impls ===
@@ -36,8 +36,8 @@ impl Zero for Float {
 fn test_mono_multi_impl_different_types() {
     val i: Int = make_zero::<Int>();
     val f: Float = make_zero::<Float>();
-    assert_eq(i, 0);
-    assert_eq(f, 0.0);
+    assert::eq(i, 0);
+    assert::eq(f, 0.0);
 }
 
 // === Monomorphization: Deduplication ===
@@ -47,8 +47,8 @@ fn test_mono_multi_impl_different_types() {
 fn test_mono_dedup() {
     val a = make_zero::<Int>();
     val b = make_zero::<Int>();
-    assert_eq(a, 0);
-    assert_eq(b, 0);
+    assert::eq(a, 0);
+    assert::eq(b, 0);
 }
 
 // === Monomorphization: Multiple Type Args ===
@@ -85,8 +85,8 @@ fn make_pair<A: DefaultValue, B: DefaultValue>() -> Pair<A, B>
 #[test]
 fn test_mono_multi_type_args() {
     val p = make_pair::<Int, String>();
-    assert_eq(p.first, 42);
-    assert_eq(p.second, "hello");
+    assert::eq(p.first, 42);
+    assert::eq(p.second, "hello");
 }
 
 // === Monomorphization: Mixed Turbofish and Inference ===
@@ -99,6 +99,6 @@ fn identity<T>(x: T) -> T {
 fn test_mono_with_inference() {
     val a = identity::<Int>(10);
     val b = identity("hello".to_string());
-    assert_eq(a, 10);
-    assert_eq(b, "hello");
+    assert::eq(a, 10);
+    assert::eq(b, "hello");
 }

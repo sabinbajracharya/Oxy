@@ -24,7 +24,7 @@
 
 fn main() {
     val coins = [1, 2, 5];
-    println("{}", coin_change(coins, 11));
+    io::println("{}", coin_change(coins, 11));
 }
 
 fn coin_change(coins: List, amount: Int) -> Int {
@@ -51,15 +51,15 @@ fn coin_change(coins: List, amount: Int) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(coin_change([1, 2, 5], 11), 3);
+    assert::eq(coin_change([1, 2, 5], 11), 3);
 }
 
 #[test]
 fn test_impossible() {
-    assert_eq(coin_change([2], 3), -1);
+    assert::eq(coin_change([2], 3), -1);
 }
 
 #[test]
 fn test_zero() {
-    assert_eq(coin_change([1], 0), 0);
+    assert::eq(coin_change([1], 0), 0);
 }

@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 
-use crate::errors::PipelineError;
+use crate::errors::{runtime_error, PipelineError};
 use crate::lexer::Span;
 use crate::types::Value;
 
@@ -160,6 +160,21 @@ static MODULES: &[Module] = &[
         call: crate::stdlib::io::call,
         constants: no_constants,
     },
+    Module {
+        name: "sys",
+        call: sys_module_call,
+        constants: no_constants,
+    },
+    Module {
+        name: "assert",
+        call: assert_module_call,
+        constants: no_constants,
+    },
+    Module {
+        name: "sys::assert",
+        call: assert_module_call,
+        constants: no_constants,
+    },
     #[cfg(feature = "db")]
     Module {
         name: "db",
@@ -278,15 +293,27 @@ static ITEMS: &[Item] = &[
         handler: regex_new,
     },
     Item {
-        path: &["assert_eq"],
+        path: &["assert", "eq"],
         handler: assert_eq_handler,
     },
     Item {
-        path: &["assert_ne"],
+        path: &["assert", "ne"],
         handler: assert_ne_handler,
     },
     Item {
-        path: &["assert"],
+        path: &["assert", "true"],
+        handler: assert_handler,
+    },
+    Item {
+        path: &["std", "sys", "assert", "eq"],
+        handler: assert_eq_handler,
+    },
+    Item {
+        path: &["std", "sys", "assert", "ne"],
+        handler: assert_ne_handler,
+    },
+    Item {
+        path: &["std", "sys", "assert", "true"],
         handler: assert_handler,
     },
     Item {
@@ -294,7 +321,15 @@ static ITEMS: &[Item] = &[
         handler: io_println_handler,
     },
     Item {
+        path: &["std", "io", "println"],
+        handler: io_println_handler,
+    },
+    Item {
         path: &["io", "print"],
+        handler: io_print_handler,
+    },
+    Item {
+        path: &["std", "io", "print"],
         handler: io_print_handler,
     },
     Item {
@@ -302,14 +337,97 @@ static ITEMS: &[Item] = &[
         handler: io_dbg_handler,
     },
     Item {
+        path: &["std", "io", "dbg"],
+        handler: io_dbg_handler,
+    },
+    Item {
+        path: &["sys", "dbg"],
+        handler: io_dbg_handler,
+    },
+    Item {
+        path: &["std", "sys", "dbg"],
+        handler: io_dbg_handler,
+    },
+    Item {
+        path: &["sys", "panic"],
+        handler: panic_handler,
+    },
+    Item {
+        path: &["std", "sys", "panic"],
+        handler: panic_handler,
+    },
+    Item {
+        path: &["sys", "todo"],
+        handler: todo_handler,
+    },
+    Item {
+        path: &["std", "sys", "todo"],
+        handler: todo_handler,
+    },
+    Item {
+        path: &["sys", "unimplemented"],
+        handler: unimplemented_handler,
+    },
+    Item {
+        path: &["std", "sys", "unimplemented"],
+        handler: unimplemented_handler,
+    },
+    Item {
+        path: &["sys", "exit"],
+        handler: sys_exit_handler,
+    },
+    Item {
+        path: &["std", "sys", "exit"],
+        handler: sys_exit_handler,
+    },
+    Item {
         path: &["string", "format"],
         handler: string_format_handler,
     },
     Item {
-        path: &["panic"],
-        handler: panic_handler,
+        path: &["std", "string", "format"],
+        handler: string_format_handler,
     },
 ];
+
+fn sys_module_call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: ClosureInvoker<'_>,
+) -> Result<Value, PipelineError> {
+    let handler = match func_name {
+        "dbg" => io_dbg_handler,
+        "panic" => panic_handler,
+        "todo" => todo_handler,
+        "unimplemented" => unimplemented_handler,
+        "exit" => sys_exit_handler,
+        other => return Err(runtime_error(format!("no function 'sys::{other}'"), span)),
+    };
+
+    handler(args).map_err(|msg| runtime_error(msg, span))
+}
+
+fn assert_module_call(
+    func_name: &str,
+    args: &[Value],
+    span: &Span,
+    _cb: ClosureInvoker<'_>,
+) -> Result<Value, PipelineError> {
+    let handler = match func_name {
+        "true" => assert_handler,
+        "eq" => assert_eq_handler,
+        "ne" => assert_ne_handler,
+        other => {
+            return Err(runtime_error(
+                format!("no function 'assert::{other}'"),
+                span,
+            ))
+        }
+    };
+
+    handler(args).map_err(|msg| runtime_error(msg, span))
+}
 
 // ---------------------------------------------------------------------------
 // Item handlers
@@ -470,6 +588,25 @@ fn assert_handler(args: &[Value]) -> Result<Value, String> {
 fn panic_handler(args: &[Value]) -> Result<Value, String> {
     let msg = args.first().map(|v| v.to_string()).unwrap_or_default();
     Err(msg)
+}
+
+fn todo_handler(_args: &[Value]) -> Result<Value, String> {
+    Err("todo: not yet implemented".to_string())
+}
+
+fn unimplemented_handler(_args: &[Value]) -> Result<Value, String> {
+    Err("unimplemented".to_string())
+}
+
+fn sys_exit_handler(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err(format!("sys::exit expects 1 argument, got {}", args.len()));
+    }
+    let code = match args[0] {
+        Value::I64(n) => n as i32,
+        _ => return Err("sys::exit expects an Int exit code".to_string()),
+    };
+    std::process::exit(code);
 }
 
 fn io_println_handler(args: &[Value]) -> Result<Value, String> {

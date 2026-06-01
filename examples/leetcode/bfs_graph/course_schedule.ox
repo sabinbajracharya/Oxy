@@ -25,7 +25,7 @@
 
 fn main() {
     val prereqs = [[1, 0], [2, 1], [3, 2]];
-    println("{}", can_finish(4, prereqs));
+    io::println("{}", can_finish(4, prereqs));
 }
 
 fn can_finish(num_courses: Int, prerequisites: List) -> bool {
@@ -66,16 +66,16 @@ fn can_finish(num_courses: Int, prerequisites: List) -> bool {
 #[test]
 fn test_possible() {
     val prereqs = [[1, 0], [2, 1], [3, 2]];
-    assert(can_finish(4, prereqs));
+    assert::true(can_finish(4, prereqs));
 }
 
 #[test]
 fn test_cycle() {
     val prereqs = [[0, 1], [1, 0]];
-    assert(!can_finish(2, prereqs));
+    assert::true(!can_finish(2, prereqs));
 }
 
 #[test]
 fn test_no_prereqs() {
-    assert(can_finish(3, []));
+    assert::true(can_finish(3, []));
 }

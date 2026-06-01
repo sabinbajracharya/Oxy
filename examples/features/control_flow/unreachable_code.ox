@@ -25,7 +25,7 @@ fn after_continue_in_loop() {
 
 #[compile_error]
 fn after_panic() {
-    panic("boom");
+    sys::panic("boom");
     val x = 1;  // unreachable
 }
 

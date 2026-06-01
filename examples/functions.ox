@@ -15,12 +15,12 @@ fn factorial(n: Int) -> Int {
 }
 
 fn greet(name: String) {
-    println("Hello, {}!", name);
+    io::println("Hello, {}!", name);
 }
 
 fn main() {
-    println("{}", add(3, 4));
-    println("{}", multiply(5, 6));
-    println("5! = {}", factorial(5));
+    io::println("{}", add(3, 4));
+    io::println("{}", multiply(5, 6));
+    io::println("5! = {}", factorial(5));
     greet("Oxy");
 }

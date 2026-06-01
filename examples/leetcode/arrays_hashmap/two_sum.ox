@@ -28,8 +28,8 @@ fn main() {
     val nums = [2, 7, 11, 15];
     val target = 9;
     match two_sum(nums, target) {
-        Some((i, j)) => println("Found: indices {} and {}", i, j),
-        None => println("No solution"),
+        Some((i, j)) => io::println("Found: indices {} and {}", i, j),
+        None => io::println("No solution"),
     }
 }
 
@@ -51,26 +51,26 @@ fn two_sum(nums: List, target: Int) -> Option {
 fn test_basic_case() {
     val nums = [2, 7, 11, 15];
     val result = two_sum(nums, 9);
-    assert_eq(result, Some((0, 1)));
+    assert::eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_reversed_order() {
     val nums = [3, 3, 4, 1];
     val result = two_sum(nums, 6);
-    assert_eq(result, Some((0, 1)));
+    assert::eq(result, Some((0, 1)));
 }
 
 #[test]
 fn test_no_solution() {
     val nums = [1, 2, 3];
     val result = two_sum(nums, 10);
-    assert(result.is_none());
+    assert::true(result.is_none());
 }
 
 #[test]
 fn test_negative_numbers() {
     val nums = [-3, 4, 3, 90];
     val result = two_sum(nums, 0);
-    assert_eq(result, Some((0, 2)));
+    assert::eq(result, Some((0, 2)));
 }

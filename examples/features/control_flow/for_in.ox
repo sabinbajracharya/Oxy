@@ -10,7 +10,7 @@ fn test_for_range() {
     for i in 0..5 {
         sum = sum + i;
     }
-    assert_eq(sum, 10);
+    assert::eq(sum, 10);
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn test_for_range_empty() {
     for i in 0..0 {
         count = count + 1;
     }
-    assert_eq(count, 0);
+    assert::eq(count, 0);
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn test_for_range_single() {
     for i in 5..6 {
         sum = sum + i;
     }
-    assert_eq(sum, 5);
+    assert::eq(sum, 5);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_for_range_large() {
     for i in 0..100 {
         sum = sum + i;
     }
-    assert_eq(sum, 4950);
+    assert::eq(sum, 4950);
 }
 
 // === For over String (iterates chars) ===
@@ -49,7 +49,7 @@ fn test_for_string() {
         chars = chars + c;
     }
     // For-in appends each char — string concatenation
-    assert(chars.len() > 0);
+    assert::true(chars.len() > 0);
 }
 
 // === For over List ===
@@ -61,7 +61,7 @@ fn test_for_list() {
     for item in items {
         count = count + 1;
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }
 
 // === For with Break ===
@@ -75,7 +75,7 @@ fn test_for_break() {
         }
         sum = sum + i;
     }
-    assert_eq(sum, 10);
+    assert::eq(sum, 10);
 }
 
 // === For with Continue ===
@@ -89,7 +89,7 @@ fn test_for_continue() {
         }
         sum = sum + i;
     }
-    assert_eq(sum, 1 + 3 + 5 + 7 + 9);
+    assert::eq(sum, 1 + 3 + 5 + 7 + 9);
 }
 
 // === For with Labeled Break ===
@@ -105,7 +105,7 @@ fn test_for_labeled_break() {
             }
         }
     }
-    assert_eq(count, 3);
+    assert::eq(count, 3);
 }
 
 // === Nested For Loops ===
@@ -118,7 +118,7 @@ fn test_nested_for() {
             pairs = pairs + 1;
         }
     }
-    assert_eq(pairs, 9);
+    assert::eq(pairs, 9);
 }
 
 // === For with Reversed Range (empty) ===
@@ -129,5 +129,5 @@ fn test_for_reversed_range() {
     for i in 5..0 {
         count = count + 1;
     }
-    assert_eq(count, 0);
+    assert::eq(count, 0);
 }

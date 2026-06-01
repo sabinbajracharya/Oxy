@@ -8,7 +8,7 @@ fn fib(n: Int) -> Int {
 }
 fn main() {
     val r = fib(30);
-    println("{}", r);
+    io::println("{}", r);
 }
 "#;
 

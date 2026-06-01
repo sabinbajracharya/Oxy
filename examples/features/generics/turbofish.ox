@@ -11,7 +11,7 @@ struct Box<T> {
 #[test]
 fn test_turbofish_struct_init() {
     val b = Box::<Int> { value: 42 };
-    assert_eq(b.value, 42);
+    assert::eq(b.value, 42);
 }
 
 // === Turbofish on Generic Function ===
@@ -23,7 +23,7 @@ fn identity<T>(x: T) -> T {
 #[test]
 fn test_turbofish_function() {
     val x = identity::<Int>(42);
-    assert_eq(x, 42);
+    assert::eq(x, 42);
 }
 
 // === Turbofish on Generic Enum Variant ===
@@ -38,7 +38,7 @@ fn test_turbofish_enum() {
     val x: MyOption<Int> = MyOption::<Int>::Some(42);
     match x {
         MyOption::Some(_) => {},
-        MyOption::None => panic("expected Some"),
+        MyOption::None => sys::panic("expected Some"),
     }
 }
 
@@ -52,5 +52,5 @@ struct Pair<A, B> {
 #[test]
 fn test_turbofish_multi_struct() {
     val p = Pair::<Int, String> { first: 10, second: "ten".to_string() };
-    assert_eq(p.first, 10);
+    assert::eq(p.first, 10);
 }

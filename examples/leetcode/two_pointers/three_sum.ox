@@ -27,7 +27,7 @@ fn main() {
     val nums = [-1, 0, 1, 2, -1, -4];
     val triplets = three_sum(nums);
     for t in triplets {
-        println("{:?}", t);
+        io::println("{:?}", t);
     }
 }
 
@@ -79,19 +79,19 @@ fn three_sum(nums: List) -> List {
 fn test_example() {
     val nums = [-1, 0, 1, 2, -1, -4];
     val result = three_sum(nums);
-    assert_eq(result.len(), 2);
+    assert::eq(result.len(), 2);
 }
 
 #[test]
 fn test_no_solution() {
     val nums = [1, 2, 3];
     val result = three_sum(nums);
-    assert_eq(result.len(), 0);
+    assert::eq(result.len(), 0);
 }
 
 #[test]
 fn test_all_zeros() {
     val nums = [0, 0, 0, 0];
     val result = three_sum(nums);
-    assert_eq(result.len(), 1);
+    assert::eq(result.len(), 1);
 }

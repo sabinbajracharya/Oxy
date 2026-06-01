@@ -15,7 +15,7 @@ struct PoInt {
 
 fn main() {
     val p = PoInt { x: 1.0, y: 2.0 };
-    println("{} {}", p.x, p.y);
+    io::println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -34,7 +34,7 @@ struct PoInt {
 fn main() {
     var p = PoInt { x: 1.0, y: 2.0 };
     p.x = 10.0;
-    println("{} {}", p.x, p.y);
+    io::println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -56,7 +56,7 @@ impl PoInt {
     }
 
     fn display(self) {
-        println("({}, {})", self.x, self.y);
+        io::println("({}, {})", self.x, self.y);
     }
 }
 
@@ -86,7 +86,7 @@ impl Rect {
 
 fn main() {
     val r = Rect { w: 5.0, h: 3.0 };
-    println("{}", r.area());
+    io::println("{}", r.area());
 }
 "#,
     );
@@ -104,7 +104,7 @@ struct PoInt {
 
 fn main() {
     val p = PoInt { x: 1.0, y: 2.0 };
-    println("{:?}", p);
+    io::println("{:?}", p);
 }
 "#,
     );
@@ -123,7 +123,7 @@ enum Color {
 
 fn main() {
     val c = Color::Red;
-    println("{}", c);
+    io::println("{}", c);
 }
 "#,
     );
@@ -141,7 +141,7 @@ enum Shape {
 
 fn main() {
     val s = Shape::Circle(5.0);
-    println("{}", s);
+    io::println("{}", s);
 }
 "#,
     );
@@ -168,9 +168,9 @@ impl Shape {
 
 fn main() {
     val s = Shape::Circle(5.0);
-    println("{}", s.area());
+    io::println("{}", s.area());
     val r = Shape::Rectangle(4.0, 3.0);
-    println("{}", r.area());
+    io::println("{}", r.area());
 }
 "#,
     );
@@ -189,13 +189,13 @@ enum E { Three(Int, Int, Int), Four(Int, Int, Int, Int) }
 fn main() {
     val v = E::Three(10, 20, 30);
     match v {
-        E::Three(a, b, c) => println("{} {} {}", a, b, c),
-        _ => println("no"),
+        E::Three(a, b, c) => io::println("{} {} {}", a, b, c),
+        _ => io::println("no"),
     }
     val w = E::Four(1, 2, 3, 4);
     match w {
-        E::Four(a, b, c, d) => println("{} {} {} {}", a, b, c, d),
-        _ => println("no"),
+        E::Four(a, b, c, d) => io::println("{} {} {} {}", a, b, c, d),
+        _ => io::println("no"),
     }
 }
 "#,
@@ -223,8 +223,8 @@ fn describe(d: Direction) -> String {
 }
 
 fn main() {
-    println("{}", describe(Direction::Up));
-    println("{}", describe(Direction::Left));
+    io::println("{}", describe(Direction::Up));
+    io::println("{}", describe(Direction::Left));
 }
 "#,
     );
@@ -243,8 +243,8 @@ enum Shape {
 fn main() {
     val s = Shape::Circle(2.5);
     val p = Shape::PoInt;
-    println("{:?}", s);
-    println("{:?}", p);
+    io::println("{:?}", s);
+    io::println("{:?}", p);
 }
 "#,
     );
@@ -272,7 +272,7 @@ fn main() {
     val dx = p1.x - p2.x;
     val dy = p1.y - p2.y;
     val dist_sq = dx * dx + dy * dy;
-    println("{}", dist_sq);
+    io::println("{}", dist_sq);
 }
 "#,
     );
@@ -299,7 +299,7 @@ impl Counter {
 
 fn main() {
     val c = Counter::new();
-    println("{}", c.value());
+    io::println("{}", c.value());
 }
 "#,
     );
@@ -319,7 +319,7 @@ fn main() {
     val x = 1.0;
     val y = 2.0;
     val p = PoInt { x, y };
-    println("{} {}", p.x, p.y);
+    io::println("{} {}", p.x, p.y);
 }
 "#,
     );
@@ -339,7 +339,7 @@ fn test_enum_impl_methods() {
                     }
                 }
             }
-            fn main() { println("{}", Color::Red.name()); }
+            fn main() { io::println("{}", Color::Red.name()); }
             "#,
     );
     assert_eq!(output, vec!["red\n"]);
@@ -367,7 +367,7 @@ fn test_struct_field_mutation_via_method() {
                 var c = Counter::new();
                 c.inc();
                 c.inc();
-                println("{}", c.count);
+                io::println("{}", c.count);
             }
             "#,
     );
@@ -396,8 +396,8 @@ fn test_struct_field_mutation_via_self_push() {
                 var s = Stack::new();
                 s.push(10);
                 s.push(20);
-                println("{}", s.items.len());
-                println("{}", s.items[0]);
+                io::println("{}", s.items.len());
+                io::println("{}", s.items[0]);
             }
             "#,
     );
@@ -410,8 +410,8 @@ fn test_listnode_new() {
         r#"
             fn main() {
                 val n = ListNode::new(5);
-                println("{}", n.value);
-                println("{}", n.next.is_none());
+                io::println("{}", n.value);
+                io::println("{}", n.next.is_none());
             }
             "#,
     );
@@ -424,9 +424,9 @@ fn test_treenode_new() {
         r#"
             fn main() {
                 val t = TreeNode::new(10);
-                println("{}", t.value);
-                println("{}", t.left.is_none());
-                println("{}", t.right.is_none());
+                io::println("{}", t.value);
+                io::println("{}", t.left.is_none());
+                io::println("{}", t.right.is_none());
             }
             "#,
     );
@@ -441,8 +441,8 @@ fn test_listnode_linking() {
                 var head = ListNode::new(1);
                 val second = ListNode::new(2);
                 head.next = Some(second);
-                println("{}", head.value);
-                println("{}", head.next.unwrap().value);
+                io::println("{}", head.value);
+                io::println("{}", head.next.unwrap().value);
             }
             "#,
     );
@@ -459,9 +459,9 @@ fn test_treenode_linking() {
                 val right = TreeNode::new(7);
                 root.left = Some(left);
                 root.right = Some(right);
-                println("{}", root.value);
-                println("{}", root.left.unwrap().value);
-                println("{}", root.right.unwrap().value);
+                io::println("{}", root.value);
+                io::println("{}", root.left.unwrap().value);
+                io::println("{}", root.right.unwrap().value);
             }
             "#,
     );

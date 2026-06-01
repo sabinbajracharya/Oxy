@@ -207,7 +207,6 @@ fn serialize_op(op: &IrOp, reg_names: &HashMap<Reg, usize>) -> String {
 
         IrOp::ReadResult(dst) => format!("{} = read.result", r(dst)),
         IrOp::WriteResult(src) => format!("write.result {}", r(src)),
-        IrOp::SetError(src) => format!("set.error {}", r(src)),
         IrOp::CheckError(dst) => format!("{} = check.error", r(dst)),
 
         IrOp::CallBuiltin {
@@ -386,14 +385,13 @@ fn assign_register_names(func: &IrFunction, canonical_order: &[BlockId]) -> Hash
 }
 
 /// §6.1: which register an op *defines* for naming purposes.
-/// Overrides `IrOp::result_reg()` for WriteResult, SetError (they are uses).
+/// Overrides `IrOp::result_reg()` for WriteResult (it is a use).
 fn op_defined_reg(op: &IrOp) -> Option<Reg> {
     match op {
         // Explicit non-defs (§6.1 overrides)
         IrOp::StoreLocal(_, _) => None,
         IrOp::MakeCell(_) => None,
         IrOp::WriteResult(_) => None,
-        IrOp::SetError(_) => None,
         // Everything else that carries a result register
         IrOp::ConstInt(r, _)
         | IrOp::ConstFloat(r, _)

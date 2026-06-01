@@ -193,7 +193,7 @@ mod tests {
         let out = run(r#"
 fn main() {
     val p = std::path::join(["a".to_string(), "b".to_string()]);
-    println("{}", p);
+    io::println("{}", p);
 }
 "#);
         assert!(out.trim_end().ends_with("b"));
@@ -205,7 +205,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     val n = std::path::basename("/a/b/c.txt");
-    println("{}", n);
+    io::println("{}", n);
 }
 "#);
         assert_eq!(out, "c.txt\n");
@@ -216,7 +216,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     val e = std::path::extension("foo/bar.tar.gz");
-    if val Some(s) = e { println("{}", s); } else { println("none"); }
+    if val Some(s) = e { io::println("{}", s); } else { io::println("none"); }
 }
 "#);
         assert_eq!(out, "gz\n");
@@ -227,7 +227,7 @@ fn main() {
         let out = run(r#"
 fn main() {
     val n = std::path::normalize("a/b/./../c");
-    println("{}", n);
+    io::println("{}", n);
 }
 "#);
         let trimmed = out.trim_end();

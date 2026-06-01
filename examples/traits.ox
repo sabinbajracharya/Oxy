@@ -8,7 +8,7 @@ trait Describable {
     fn name(self) -> String;
     // Default method — uses self.name()
     fn describe(self) -> String {
-        format("I am {}", self.name())
+        string::format("I am {}", self.name())
     }
 }
 
@@ -25,7 +25,7 @@ impl Person {
 
 impl Greet for Person {
     fn greet(self) -> String {
-        format("Hello, I'm {} and I'm {} years old!", self.name, self.age)
+        string::format("Hello, I'm {} and I'm {} years old!", self.name, self.age)
     }
 }
 
@@ -43,7 +43,7 @@ fn identity<T>(x: T) -> T {
 
 // Generic with bounds (bounds parsed but not enforced in this phase)
 fn print_value<T: Display>(value: T) {
-    println("{}", value);
+    io::println("{}", value);
 }
 
 // Operator overloading via traits
@@ -73,17 +73,17 @@ impl Mul for Vec2 {
 fn main() {
     // Trait methods
     val p = Person::new(String::from("Alice"), 30);
-    println("{}", p.greet());
-    println("{}", p.describe());
+    io::println("{}", p.greet());
+    io::println("{}", p.describe());
 
     // format function
-    val msg = format("{}! You are {} years old.", p.name, p.age);
-    println("{}", msg);
+    val msg = string::format("{}! You are {} years old.", p.name, p.age);
+    io::println("{}", msg);
 
     // Generics
     val x = identity(42);
     val s = identity("hello");
-    println("identity: {} {}", x, s);
+    io::println("identity: {} {}", x, s);
 
     // Generic with bounds
     print_value(3.14);
@@ -93,14 +93,14 @@ fn main() {
     val a = Vec2::new(1.0, 2.0);
     val b = Vec2::new(3.0, 4.0);
     val c = a + b;
-    println("add: ({}, {})", c.x, c.y);
+    io::println("add: ({}, {})", c.x, c.y);
 
     val d = Vec2::new(2.0, 3.0);
     val e = Vec2::new(4.0, 5.0);
     val f = d * e;
-    println("mul: ({}, {})", f.x, f.y);
+    io::println("mul: ({}, {})", f.x, f.y);
 
     // String::from
     val greeting = String::from("Hello, Oxy!");
-    println("{}", greeting);
+    io::println("{}", greeting);
 }

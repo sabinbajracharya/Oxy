@@ -37,7 +37,7 @@ fn main() {
     root.right = Some(r);
     val levels = level_order(Some(root));
     for level in levels {
-        println("{:?}", level);
+        io::println("{:?}", level);
     }
 }
 
@@ -75,13 +75,13 @@ fn test_example() {
     r.right = Some(TreeNode::new(7));
     root.right = Some(r);
     val result = level_order(Some(root));
-    assert_eq(result.len(), 3);
-    assert_eq(result[0], [3]);
-    assert_eq(result[1], [9, 20]);
-    assert_eq(result[2], [15, 7]);
+    assert::eq(result.len(), 3);
+    assert::eq(result[0], [3]);
+    assert::eq(result[1], [9, 20]);
+    assert::eq(result[2], [15, 7]);
 }
 
 #[test]
 fn test_empty() {
-    assert_eq(level_order(None).len(), 0);
+    assert::eq(level_order(None).len(), 0);
 }

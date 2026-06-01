@@ -9,8 +9,8 @@ fn test_char_is_digit() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", '5'.is_digit());
-    println("{}", 'a'.is_digit());
+    io::println("{}", '5'.is_digit());
+    io::println("{}", 'a'.is_digit());
 }
 "#,
     );
@@ -22,8 +22,8 @@ fn test_char_is_alphabetic() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'a'.is_alphabetic());
-    println("{}", '5'.is_alphabetic());
+    io::println("{}", 'a'.is_alphabetic());
+    io::println("{}", '5'.is_alphabetic());
 }
 "#,
     );
@@ -35,9 +35,9 @@ fn test_char_is_alphanumeric() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'a'.is_alphanumeric());
-    println("{}", '5'.is_alphanumeric());
-    println("{}", ' '.is_alphanumeric());
+    io::println("{}", 'a'.is_alphanumeric());
+    io::println("{}", '5'.is_alphanumeric());
+    io::println("{}", ' '.is_alphanumeric());
 }
 "#,
     );
@@ -49,9 +49,9 @@ fn test_char_is_whitespace() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", ' '.is_whitespace());
-    println("{}", '\t'.is_whitespace());
-    println("{}", 'a'.is_whitespace());
+    io::println("{}", ' '.is_whitespace());
+    io::println("{}", '\t'.is_whitespace());
+    io::println("{}", 'a'.is_whitespace());
 }
 "#,
     );
@@ -63,8 +63,8 @@ fn test_char_is_lowercase() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'a'.is_lowercase());
-    println("{}", 'A'.is_lowercase());
+    io::println("{}", 'a'.is_lowercase());
+    io::println("{}", 'A'.is_lowercase());
 }
 "#,
     );
@@ -76,8 +76,8 @@ fn test_char_is_uppercase() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'A'.is_uppercase());
-    println("{}", 'a'.is_uppercase());
+    io::println("{}", 'A'.is_uppercase());
+    io::println("{}", 'a'.is_uppercase());
 }
 "#,
     );
@@ -89,8 +89,8 @@ fn test_char_to_uppercase() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'a'.to_uppercase());
-    println("{}", 'A'.to_uppercase());
+    io::println("{}", 'a'.to_uppercase());
+    io::println("{}", 'A'.to_uppercase());
 }
 "#,
     );
@@ -102,8 +102,8 @@ fn test_char_to_lowercase() {
     let output = run_and_capture(
         r#"
 fn main() {
-    println("{}", 'A'.to_lowercase());
-    println("{}", 'a'.to_lowercase());
+    io::println("{}", 'A'.to_lowercase());
+    io::println("{}", 'a'.to_lowercase());
 }
 "#,
     );
@@ -116,8 +116,8 @@ fn test_string_char_at() {
         r#"
 fn main() {
     val s = "hello";
-    println("{}", s.char_at(0));
-    println("{}", s.char_at(4));
+    io::println("{}", s.char_at(0));
+    io::println("{}", s.char_at(4));
 }
 "#,
     );
@@ -130,8 +130,8 @@ fn test_string_substring() {
         r#"
 fn main() {
     val s = "hello world";
-    println("{}", s.substring(0, 5));
-    println("{}", s.substring(6, 11));
+    io::println("{}", s.substring(0, 5));
+    io::println("{}", s.substring(6, 11));
 }
 "#,
     );
@@ -144,8 +144,8 @@ fn test_string_index_bracket() {
         r#"
 fn main() {
     val s = "abc";
-    println("{}", s[0]);
-    println("{}", s[2]);
+    io::println("{}", s[0]);
+    io::println("{}", s[2]);
 }
 "#,
     );
@@ -154,55 +154,59 @@ fn main() {
 
 #[test]
 fn test_fstring_basic() {
-    let out =
-        run_and_capture(r#"fn main() { val name = "World"; println("{}", f"Hello {name}!"); }"#);
+    let out = run_and_capture(
+        r#"fn main() { val name = "World"; io::println("{}", f"Hello {name}!"); }"#,
+    );
     assert_eq!(out, vec!["Hello World!\n"]);
 }
 
 #[test]
 fn test_fstring_expression() {
-    let out = run_and_capture(r#"fn main() { val x = 10; println("{}", f"x + 5 = {x + 5}"); }"#);
+    let out =
+        run_and_capture(r#"fn main() { val x = 10; io::println("{}", f"x + 5 = {x + 5}"); }"#);
     assert_eq!(out, vec!["x + 5 = 15\n"]);
 }
 
 #[test]
 fn test_fstring_multiple_interpolations() {
     let out = run_and_capture(
-        r#"fn main() { val a = 1; val b = 2; println("{}", f"{a} + {b} = {a + b}"); }"#,
+        r#"fn main() { val a = 1; val b = 2; io::println("{}", f"{a} + {b} = {a + b}"); }"#,
     );
     assert_eq!(out, vec!["1 + 2 = 3\n"]);
 }
 
 #[test]
 fn test_fstring_no_interpolation() {
-    let out = run_and_capture(r#"fn main() { println("{}", f"plain string"); }"#);
+    let out = run_and_capture(r#"fn main() { io::println("{}", f"plain string"); }"#);
     assert_eq!(out, vec!["plain string\n"]);
 }
 
 #[test]
 fn test_fstring_escaped_braces() {
-    let out = run_and_capture(r#"fn main() { println("{}", f"use {{braces}}"); }"#);
+    let out = run_and_capture(r#"fn main() { io::println("{}", f"use {{braces}}"); }"#);
     assert_eq!(out, vec!["use {braces}\n"]);
 }
 
 #[test]
 fn test_fstring_method_call() {
-    let out =
-        run_and_capture(r#"fn main() { val v = [1, 2, 3]; println("{}", f"len = {v.len()}"); }"#);
+    let out = run_and_capture(
+        r#"fn main() { val v = [1, 2, 3]; io::println("{}", f"len = {v.len()}"); }"#,
+    );
     assert_eq!(out, vec!["len = 3\n"]);
 }
 
 #[test]
 fn test_fstring_nested_function() {
     let out = run_and_capture(
-        r#"fn double(x: Int) -> Int { x * 2 } fn main() { println("{}", f"double(5) = {double(5)}"); }"#,
+        r#"fn double(x: Int) -> Int { x * 2 } fn main() { io::println("{}", f"double(5) = {double(5)}"); }"#,
     );
     assert_eq!(out, vec!["double(5) = 10\n"]);
 }
 
 #[test]
 fn test_fstring_in_variable() {
-    let out =
-        run_and_capture(r#"fn main() { val greeting = f"Hi {1 + 1}"; println("{}", greeting); }"#);
+    let out = run_and_capture(
+        r#"fn main() { val greeting = f"Hi {1 + 1}"; io::println("{}", greeting); }"#,
+    );
     assert_eq!(out, vec!["Hi 2\n"]);
 }

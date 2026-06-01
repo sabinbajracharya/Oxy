@@ -23,7 +23,7 @@
 
 fn main() {
     val nums = [4, 1, 2, 1, 2];
-    println("{}", single_number(nums));
+    io::println("{}", single_number(nums));
 }
 
 fn single_number(nums: List) -> Int {
@@ -36,11 +36,11 @@ fn single_number(nums: List) -> Int {
 
 #[test]
 fn test_example() {
-    assert_eq(single_number([2, 2, 1]), 1);
-    assert_eq(single_number([4, 1, 2, 1, 2]), 4);
+    assert::eq(single_number([2, 2, 1]), 1);
+    assert::eq(single_number([4, 1, 2, 1, 2]), 4);
 }
 
 #[test]
 fn test_single_element() {
-    assert_eq(single_number([1]), 1);
+    assert::eq(single_number([1]), 1);
 }

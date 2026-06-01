@@ -586,7 +586,7 @@ mod calls {
 
     #[test]
     fn call_println() {
-        assert_ir_snapshot("calls/call_println", "println(\"hello\");");
+        assert_ir_snapshot("calls/call_println", "io::println(\"hello\");");
     }
 
     #[test]

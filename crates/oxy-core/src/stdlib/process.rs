@@ -195,9 +195,9 @@ mod tests {
 fn main() {
     val result = std::process::command("echo");
     if val Ok(output) = result {
-        println("{}", output.success);
+        io::println("{}", output.success);
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);
@@ -211,7 +211,7 @@ fn main() {
     val result = std::process::command_with_args("echo", ["hello", "world"]);
     if val Ok(output) = result {
         val trimmed = output.stdout.trim();
-        println("{}", trimmed);
+        io::println("{}", trimmed);
     }
 }
 "#);
@@ -224,9 +224,9 @@ fn main() {
 fn main() {
     val result = std::process::command("nonexistent_program_xyz_12345");
     if val Ok(output) = result {
-        println("ok");
+        io::println("ok");
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);
@@ -239,7 +239,7 @@ fn main() {
 fn main() {
     val result = std::process::command("true");
     if val Ok(output) = result {
-        println("{}", output.status);
+        io::println("{}", output.status);
     }
 }
 "#);
@@ -252,7 +252,7 @@ fn main() {
 fn main() {
     val result = std::process::command("false");
     if val Ok(output) = result {
-        println("{}", output.success);
+        io::println("{}", output.success);
     }
 }
 "#);
@@ -280,12 +280,12 @@ fn main() {
         },
     );
     if val Ok(output) = result {
-        println("{}", output.success);
+        io::println("{}", output.success);
         for l in lines {
-            println("{}", l);
+            io::println("{}", l);
         }
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);
@@ -308,7 +308,7 @@ fn main() {
     // Sort for determinism — interleaving between stdout/stderr is racy.
     tagged.sort();
     for t in tagged {
-        println("{}", t);
+        io::println("{}", t);
     }
 }
 "#);
@@ -321,9 +321,9 @@ fn main() {
 fn main() {
     val result = std::process::spawn("false", [], |_line, _stream| {});
     if val Ok(output) = result {
-        println("{} {}", output.success, output.status);
+        io::println("{} {}", output.success, output.status);
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);
@@ -340,9 +340,9 @@ fn main() {
         |_line, _stream| {},
     );
     if val Ok(_) = result {
-        println("ok");
+        io::println("ok");
     } else {
-        println("err");
+        io::println("err");
     }
 }
 "#);

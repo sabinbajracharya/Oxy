@@ -21,19 +21,19 @@ fn fib_byte(n: Byte) -> Byte {
 
 #[test]
 fn test_return_wraps_to_byte() {
-    assert_eq(returns_byte(300) as Int, 44);
-    assert_eq(returns_byte(256) as Int, 0);
-    assert_eq(returns_byte(-1) as Int, 255);
+    assert::eq(returns_byte(300) as Int, 44);
+    assert::eq(returns_byte(256) as Int, 0);
+    assert::eq(returns_byte(-1) as Int, 255);
 }
 
 #[test]
 fn test_param_truncated_at_entry() {
     // 300 passed to a Byte param becomes 44 inside the fn.
-    assert_eq(takes_byte(300), 44);
+    assert::eq(takes_byte(300), 44);
 }
 
 #[test]
 fn test_recursive_byte_fn_keeps_width() {
     // fib(13) = 233 — still in Byte range.
-    assert_eq(fib_byte(13) as Int, 233);
+    assert::eq(fib_byte(13) as Int, 233);
 }

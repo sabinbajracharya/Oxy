@@ -11,7 +11,7 @@ fn square(x: Int) -> Int = x * x
 fn greet(name: String) = "Hello, " + name
 
 fn main() {
-    println("double(21) = {}", double(21));
-    println("add(10, 32) = {}", add(10, 32));
-    println("square(9) = {}", square(9));
+    io::println("double(21) = {}", double(21));
+    io::println("add(10, 32) = {}", add(10, 32));
+    io::println("square(9) = {}", square(9));
 }

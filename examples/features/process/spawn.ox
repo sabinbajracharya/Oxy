@@ -16,13 +16,13 @@ fn test_spawn_streams_stdout_lines_in_order() {
         },
     );
     if val Ok(output) = result {
-        assert_eq(output.success, true);
-        assert_eq(output.status, 0);
-        assert_eq(lines.len(), 2);
-        assert_eq(lines[0], "stdout:alpha");
-        assert_eq(lines[1], "stdout:beta");
+        assert::eq(output.success, true);
+        assert::eq(output.status, 0);
+        assert::eq(lines.len(), 2);
+        assert::eq(lines[0], "stdout:alpha");
+        assert::eq(lines[1], "stdout:beta");
     } else {
-        assert(false);
+        assert::true(false);
     }
 }
 
@@ -38,12 +38,12 @@ fn test_spawn_tags_stderr_separately_from_stdout() {
             tagged.push(stream + ":" + line);
         },
     );
-    assert(result.is_ok());
+    assert::true(result.is_ok());
     tagged.sort();
-    assert_eq(tagged.len(), 3);
-    assert_eq(tagged[0], "stderr:err1");
-    assert_eq(tagged[1], "stdout:out1");
-    assert_eq(tagged[2], "stdout:out2");
+    assert::eq(tagged.len(), 3);
+    assert::eq(tagged[0], "stderr:err1");
+    assert::eq(tagged[1], "stdout:out1");
+    assert::eq(tagged[2], "stdout:out2");
 }
 
 #[test]
@@ -53,11 +53,11 @@ fn test_spawn_reports_nonzero_exit_status() {
         count = count + 1;
     });
     if val Ok(output) = result {
-        assert_eq(output.success, false);
-        assert_eq(output.status, 1);
-        assert_eq(count, 0);
+        assert::eq(output.success, false);
+        assert::eq(output.status, 1);
+        assert::eq(count, 0);
     } else {
-        assert(false);
+        assert::true(false);
     }
 }
 
@@ -68,7 +68,7 @@ fn test_spawn_returns_err_for_nonexistent_program() {
         [],
         |_line, _stream| {},
     );
-    assert(result.is_err());
+    assert::true(result.is_err());
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn test_spawn_handles_many_lines() {
         received = received + 1;
         last = line;
     });
-    assert(result.is_ok());
-    assert_eq(received, 50);
-    assert_eq(last, "50");
+    assert::true(result.is_ok());
+    assert::eq(received, 50);
+    assert::eq(last, "50");
 }

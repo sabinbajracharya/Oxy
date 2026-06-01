@@ -30,13 +30,13 @@ impl Counter {
 #[test]
 fn test_impl_constructor() {
     val c = Counter::new(10);
-    assert_eq(c.value(), 10);
+    assert::eq(c.value(), 10);
 }
 
 #[test]
 fn test_impl_method_self() {
     val c = Counter::new(5);
-    assert_eq(c.value(), 5);
+    assert::eq(c.value(), 5);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn test_impl_method_chaining() {
         .increment()
         .increment()
         .increment();
-    assert_eq(c.value(), 4);
+    assert::eq(c.value(), 4);
 }
 
 // === Impl with Multiple Methods ===
@@ -68,8 +68,8 @@ impl Rect {
 #[test]
 fn test_rect_methods() {
     val r = Rect { width: 10, height: 5 };
-    assert_eq(r.area(), 50);
-    assert_eq(r.perimeter(), 30);
+    assert::eq(r.area(), 50);
+    assert::eq(r.perimeter(), 30);
 }
 
 // === Self Type in Return ===
@@ -91,5 +91,5 @@ impl Wrapper {
 #[test]
 fn test_self_return_type() {
     val w = Wrapper::wrap(42);
-    assert_eq(w.unwrap(), 42);
+    assert::eq(w.unwrap(), 42);
 }

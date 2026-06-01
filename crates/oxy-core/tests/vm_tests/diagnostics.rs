@@ -12,7 +12,7 @@ fn recurse(n: Int) -> Int {
     if n == 0 { 0 } else { 1 + recurse(n - 1) }
 }
 fn main() {
-    println("{}", recurse(10));
+    io::println("{}", recurse(10));
 }
 "#,
     );
@@ -25,7 +25,7 @@ fn test_did_you_mean_suggestion() {
         r#"
 fn main() {
     val name = "Alice";
-    println("{}", nme);
+    io::println("{}", nme);
 }
 "#,
     );
@@ -40,7 +40,7 @@ fn test_no_suggestion_for_distant_name() {
         r#"
 fn main() {
     val x = 1;
-    println("{}", completely_different);
+    io::println("{}", completely_different);
 }
 "#,
     );
@@ -96,43 +96,43 @@ fn test_suggest_name() {
 
 #[test]
 fn test_assert_pass() {
-    run_compiled_capturing("fn main() { assert(true); }").unwrap();
-    run_compiled_capturing("fn main() { assert(1 == 1); }").unwrap();
+    run_compiled_capturing("fn main() { assert::true(true); }").unwrap();
+    run_compiled_capturing("fn main() { assert::true(1 == 1); }").unwrap();
 }
 
 #[test]
 fn test_assert_fail() {
-    let err = run_compiled_capturing("fn main() { assert(false); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert::true(false); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 
 #[test]
 fn test_assert_with_message() {
-    let err =
-        run_compiled_capturing(r#"fn main() { assert(false, "custom message"); }"#).unwrap_err();
+    let err = run_compiled_capturing(r#"fn main() { assert::true(false, "custom message"); }"#)
+        .unwrap_err();
     assert!(format!("{err}").contains("custom message"));
 }
 
 #[test]
 fn test_assert_eq_pass() {
-    run_compiled_capturing("fn main() { assert_eq(1, 1); }").unwrap();
-    run_compiled_capturing(r#"fn main() { assert_eq("hello", "hello"); }"#).unwrap();
+    run_compiled_capturing("fn main() { assert::eq(1, 1); }").unwrap();
+    run_compiled_capturing(r#"fn main() { assert::eq("hello", "hello"); }"#).unwrap();
 }
 
 #[test]
 fn test_assert_eq_fail() {
-    let err = run_compiled_capturing("fn main() { assert_eq(1, 2); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert::eq(1, 2); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 
 #[test]
 fn test_assert_ne_pass() {
-    run_compiled_capturing("fn main() { assert_ne(1, 2); }").unwrap();
+    run_compiled_capturing("fn main() { assert::ne(1, 2); }").unwrap();
 }
 
 #[test]
 fn test_assert_ne_fail() {
-    let err = run_compiled_capturing("fn main() { assert_ne(1, 1); }").unwrap_err();
+    let err = run_compiled_capturing("fn main() { assert::ne(1, 1); }").unwrap_err();
     assert!(format!("{err}").contains("assertion failed"));
 }
 
@@ -141,12 +141,12 @@ fn test_test_runner_basic() {
     let source = r#"
             #[test]
             fn test_addition() {
-                assert_eq(1 + 1, 2);
+                assert::eq(1 + 1, 2);
             }
 
             #[test]
             fn test_string() {
-                assert_eq("hello".len(), 5);
+                assert::eq("hello".len(), 5);
             }
         "#;
     let results = oxy_core::vm::run_tests("test.ox", source).unwrap();
@@ -159,7 +159,7 @@ fn test_test_runner_failure() {
     let source = r#"
             #[test]
             fn test_bad() {
-                assert_eq(1, 2);
+                assert::eq(1, 2);
             }
         "#;
     let results = oxy_core::vm::run_tests("test.ox", source).unwrap();

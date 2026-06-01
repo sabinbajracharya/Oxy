@@ -123,8 +123,6 @@ pub(crate) enum IrOp {
     /// Write register to ctx.result for function return.
     #[allow(dead_code)]
     WriteResult(Reg),
-    /// Set error message in ctx. Emitted for explicit `panic!()` calls.
-    SetError(Reg),
     /// Check if ctx has an error set (returns bool-like in result register).
     CheckError(Reg),
 
@@ -171,7 +169,6 @@ impl IrOp {
             | IrOp::CallBuiltin { result: r, .. }
             | IrOp::ReadResult(r)
             | IrOp::WriteResult(r)
-            | IrOp::SetError(r)
             | IrOp::CheckError(r) => *r,
             IrOp::StoreLocal(_, _) | IrOp::MakeCell(_) => 0,
         }
@@ -196,8 +193,7 @@ pub(crate) enum Terminator {
     /// Early-exit with error discriminant 2. The register names the value that
     /// triggered the exit (informational — used in IR display and snapshots).
     /// The error state must already be set by a preceding op (e.g. oxy_try_pop
-    /// for `?`, or SetError for explicit panics). This terminator does NOT call
-    /// oxy_panic itself — it just exits.
+    /// for `?`). This terminator does NOT call oxy_panic itself — it just exits.
     Panic(Reg),
 }
 
@@ -303,7 +299,6 @@ impl std::fmt::Display for IrOp {
             }
             IrOp::ReadResult(r) => write!(f, "r{r} = ReadResult"),
             IrOp::WriteResult(r) => write!(f, "r{r} = WriteResult"),
-            IrOp::SetError(r) => write!(f, "r{r} = SetError"),
             IrOp::CheckError(r) => write!(f, "r{r} = CheckError"),
         }
     }
