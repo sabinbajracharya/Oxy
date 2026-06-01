@@ -28,7 +28,7 @@ this stage (or codegen) rejects the program.
 ## Key types & entry points
 
 - `TypeChecker` — fields: `struct_defs`, `type_aliases`, `fn_return_types`,
-  `use_aliases`, `module_stack`, `current_impl_type`.
+  `use_aliases`, `module_stack`, `current_impl_type`, `mutating_methods`.
 - `check_program()` — order matters: `collect_defs` → `collect_fn_types` →
   `check_item`.
 - `TypeInfo::from_name` — **always** use this for type-name conversion; never
@@ -44,6 +44,11 @@ this stage (or codegen) rejects the program.
 - Visibility (`check_field_visible`, `check_path_visible`) compares the defining
   module against `module_stack`. Use `module_names.contains(parent)` for top-level
   detection, never `contains("::")`.
+- `infer_method_call` must run `check_path_visible` for resolved user/impl method
+  keys so private methods remain module-scoped just like private functions.
+- `collect_impl_methods` computes a fixed-point set of mutating methods per impl
+  (`self` writes and `self.method()` edges). `infer_method_call` uses that set to
+  reject mutating method calls on immutable (`val`) receiver bindings.
 
 ## When you change this folder
 

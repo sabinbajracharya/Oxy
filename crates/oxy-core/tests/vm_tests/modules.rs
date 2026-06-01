@@ -589,6 +589,40 @@ fn main() {
 }
 
 #[test]
+fn test_cannot_call_private_method_from_outside_module() {
+    let result = run_compiled_capturing(
+        r#"
+mod model {
+    pub struct User {
+        pub name: String,
+        age: Int,
+    }
+    impl User {
+        fn printer(self) {
+            io::println("{} {}", self.name, self.age);
+        }
+    }
+    pub fn make_user() -> User {
+        User { name: "Sabin".to_string(), age: 33 }
+    }
+}
+fn main() {
+    val user = model::make_user();
+    user.printer();
+}"#,
+    );
+    assert!(
+        result.is_err(),
+        "should reject calling private method from outside module"
+    );
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("private"),
+        "error should mention 'private', got: {err}"
+    );
+}
+
+#[test]
 fn test_can_access_private_field_inside_same_module() {
     let output = run_and_capture(
         r#"

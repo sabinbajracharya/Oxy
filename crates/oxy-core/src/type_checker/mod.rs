@@ -4,7 +4,7 @@
 //! on `let` bindings, function params, and return types.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::*;
@@ -482,6 +482,9 @@ pub struct TypeChecker {
     /// to a consistent concrete type across all argument positions, and to
     /// substitute concrete types into the return type.
     fn_generic_info: HashMap<String, (Vec<String>, Vec<TypeAnnotation>, Option<TypeAnnotation>)>,
+    /// Method keys (`Type::method`, `module::Type::method`) whose bodies mutate
+    /// `self` directly or transitively through `self.other_mutating_method()`.
+    mutating_methods: HashSet<String>,
     /// Tracks nesting depth of loop constructs (while, for, loop) for
     /// detecting break/continue used outside any loop.
     loop_depth: usize,
@@ -522,6 +525,7 @@ impl TypeChecker {
             enum_defs: std::collections::HashSet::new(),
             current_fn_return: TypeInfo::Unit,
             fn_generic_info: HashMap::new(),
+            mutating_methods: HashSet::new(),
             loop_depth: 0,
             fn_defs: HashMap::new(),
             module_vis: HashMap::new(),

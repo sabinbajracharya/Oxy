@@ -76,7 +76,7 @@ impl Counter {
     }
 }
 fn main() {
-    val c = Counter { n: 5 };
+    var c = Counter { n: 5 };
     io::println("{}", c.bump());
 }"#,
     );
@@ -99,9 +99,8 @@ fn main() {
 }
 
 #[test]
-fn test_self_field_assign_works() {
-    // self is always mutable — field assignment works without `mut self`.
-    let output = run_and_capture(
+fn test_self_field_assign_requires_mutable_receiver() {
+    let result = run_compiled(
         r#"
 struct Counter { n: Int }
 impl Counter {
@@ -115,7 +114,13 @@ fn main() {
     io::println("{}", c.try_bump());
 }"#,
     );
-    assert_eq!(output, vec!["6\n"]);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("cannot call mutating method") && msg.contains("var c"),
+        "expected mutability error, got: {}",
+        msg
+    );
 }
 
 #[test]

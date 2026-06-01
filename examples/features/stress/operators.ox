@@ -110,7 +110,7 @@ fn test_self_in_impl() {
     assert::eq(c3.value, 2);
 }
 
-// --- self vs mut self ---
+// --- mutating self methods require var receivers ---
 struct Bag { items: List<Int> }
 
 impl Bag {
@@ -124,11 +124,17 @@ impl Bag {
 
 #[test]
 fn test_mut_self_in_method() {
-    val b = Bag::new();
-    val b = b.add(1);
-    val b = b.add(2);
-    val b = b.add(3);
+    var b = Bag::new();
+    b = b.add(1);
+    b = b.add(2);
+    b = b.add(3);
     assert::eq(b.count(), 3);
+}
+
+#[compile_error]
+fn test_mutating_method_on_val_receiver_errors() {
+    val b = Bag::new();
+    b.add(1);
 }
 
 // --- Static method (no self) ---

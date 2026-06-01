@@ -330,6 +330,19 @@ impl TypeChecker {
     /// needs `mut self`. Roots without a binding name (indexing a temporary,
     /// etc.) are left unchecked.
     fn check_assign_root_mutable(&self, object: &Expr, span: Span) -> Result<(), PipelineError> {
+        if let Some(name) = self.immutable_root_binding_name(object) {
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "cannot assign to a field of immutable variable `{name}`; declare it with `var {name}`"
+                ),
+                line: span.line,
+                column: span.column,
+            });
+        }
+        Ok(())
+    }
+
+    pub(super) fn immutable_root_binding_name(&self, object: &Expr) -> Option<String> {
         let mut cur = object;
         loop {
             match cur {
@@ -341,21 +354,15 @@ impl TypeChecker {
                 }
                 Expr::Ident(name, _) => {
                     if let Some(false) = self.env.borrow().get_mutable(name) {
-                        return Err(PipelineError::TypeError {
-                            message: format!(
-                                "cannot assign to a field of immutable variable `{name}`; declare it with `var {name}`"
-                            ),
-                            line: span.line,
-                            column: span.column,
-                        });
+                        return Some(name.clone());
                     }
-                    return Ok(());
+                    return None;
                 }
                 Expr::SelfRef { .. } => {
                     // self is always mutable — field assignment is always allowed.
-                    return Ok(());
+                    return None;
                 }
-                _ => return Ok(()),
+                _ => return None,
             }
         }
     }

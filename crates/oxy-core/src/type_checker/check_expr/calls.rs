@@ -399,6 +399,18 @@ impl TypeChecker {
                     HashMap::new()
                 };
             if let Some(key) = resolved_key {
+                self.check_path_visible(&key, *span)?;
+                if self.mutating_methods.contains(&key) {
+                    if let Some(name) = self.immutable_root_binding_name(object) {
+                        return Err(PipelineError::TypeError {
+                            message: format!(
+                                "cannot call mutating method `{key}` on immutable variable `{name}`; declare it with `var {name}`"
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
                 let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                 self.check_args_against_params_with_bindings(
                     &params,
@@ -437,6 +449,18 @@ impl TypeChecker {
                 None
             };
             if let Some(key) = prim_key {
+                self.check_path_visible(&key, *span)?;
+                if self.mutating_methods.contains(&key) {
+                    if let Some(name) = self.immutable_root_binding_name(object) {
+                        return Err(PipelineError::TypeError {
+                            message: format!(
+                                "cannot call mutating method `{key}` on immutable variable `{name}`; declare it with `var {name}`"
+                            ),
+                            line: span.line,
+                            column: span.column,
+                        });
+                    }
+                }
                 let params = self.fn_param_types.get(&key).cloned().unwrap_or_default();
                 self.check_args_against_params(&params, args, true, method, Some(&key), *span)?;
                 if let Some(ret_ty) = self.fn_return_types.get(&key) {

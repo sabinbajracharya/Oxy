@@ -141,6 +141,7 @@ impl TypeChecker {
         type_name: &str,
         prefix: &str,
     ) {
+        let mutating_names = compute_impl_mutating_methods(methods);
         let base = crate::ast::base_type_name(type_name);
         let type_prefix = if prefix.is_empty() {
             base.to_string()
@@ -185,8 +186,13 @@ impl TypeChecker {
             self.fn_return_types
                 .insert(unqualified.clone(), ret_ty.clone());
             self.fn_return_types.insert(qualified.clone(), ret_ty);
-            self.fn_param_types.insert(unqualified, param_tys.clone());
+            self.fn_param_types
+                .insert(unqualified.clone(), param_tys.clone());
             self.fn_param_types.insert(qualified.clone(), param_tys);
+            if mutating_names.contains(&method.name) {
+                self.mutating_methods.insert(qualified.clone());
+                self.mutating_methods.insert(unqualified);
+            }
             self.fn_defs.insert(qualified, method.clone());
         }
     }
@@ -387,4 +393,301 @@ impl TypeChecker {
             }
         }
     }
+}
+
+#[derive(Default)]
+struct MethodEffects {
+    writes_self: bool,
+    self_calls: std::collections::HashSet<String>,
+}
+
+fn compute_impl_mutating_methods(methods: &[FnDef]) -> std::collections::HashSet<String> {
+    let mut effects_by_name: HashMap<String, MethodEffects> = HashMap::new();
+    for method in methods {
+        effects_by_name.insert(method.name.clone(), analyze_method_effects(method));
+    }
+    let mut mutating: std::collections::HashSet<String> = effects_by_name
+        .iter()
+        .filter_map(|(name, effects)| effects.writes_self.then_some(name.clone()))
+        .collect();
+    loop {
+        let mut changed = false;
+        for (name, effects) in &effects_by_name {
+            if mutating.contains(name) {
+                continue;
+            }
+            if effects
+                .self_calls
+                .iter()
+                .any(|callee| mutating.contains(callee))
+            {
+                mutating.insert(name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    mutating
+}
+
+fn analyze_method_effects(method: &FnDef) -> MethodEffects {
+    let mut effects = MethodEffects::default();
+    if !matches!(method.params.first(), Some(param) if param.name == "self") {
+        return effects;
+    }
+    for stmt in &method.body.stmts {
+        stmt_collect_effects(stmt, &mut effects);
+    }
+    effects
+}
+
+fn stmt_collect_effects(stmt: &Stmt, effects: &mut MethodEffects) {
+    match stmt {
+        Stmt::Let { value, .. } => {
+            if let Some(value) = value {
+                expr_collect_effects(value, effects);
+            }
+        }
+        Stmt::Expr { expr, .. } => expr_collect_effects(expr, effects),
+        Stmt::Return { value, .. } => {
+            if let Some(value) = value {
+                expr_collect_effects(value, effects);
+            }
+        }
+        Stmt::While {
+            condition, body, ..
+        } => {
+            expr_collect_effects(condition, effects);
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Stmt::Loop { body, .. } => {
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Stmt::For { iterable, body, .. } => {
+            expr_collect_effects(iterable, effects);
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Stmt::Break { value, .. } => {
+            if let Some(value) = value {
+                expr_collect_effects(value, effects);
+            }
+        }
+        Stmt::WhileLet { expr, body, .. } => {
+            expr_collect_effects(expr, effects);
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Stmt::ForDestructure { iterable, body, .. } => {
+            expr_collect_effects(iterable, effects);
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Stmt::LetPattern { value, .. } => expr_collect_effects(value, effects),
+        Stmt::Continue { .. } | Stmt::Use(_) | Stmt::Item(_) => {}
+    }
+}
+
+fn expr_collect_effects(expr: &Expr, effects: &mut MethodEffects) {
+    match expr {
+        Expr::Assign { target, value, .. } | Expr::CompoundAssign { target, value, .. } => {
+            if target_roots_self(target) {
+                effects.writes_self = true;
+            }
+            expr_collect_effects(target, effects);
+            expr_collect_effects(value, effects);
+        }
+        Expr::MethodCall {
+            object,
+            method,
+            args,
+            ..
+        } => {
+            if expr_roots_self(object) {
+                effects.self_calls.insert(method.clone());
+                if is_builtin_mutator_method(method) {
+                    effects.writes_self = true;
+                }
+            }
+            expr_collect_effects(object, effects);
+            for arg in args {
+                expr_collect_effects(arg, effects);
+            }
+        }
+        Expr::Call { callee, args, .. } => {
+            expr_collect_effects(callee, effects);
+            for arg in args {
+                expr_collect_effects(arg, effects);
+            }
+        }
+        Expr::BinaryOp { left, right, .. } => {
+            expr_collect_effects(left, effects);
+            expr_collect_effects(right, effects);
+        }
+        Expr::UnaryOp { expr, .. } => expr_collect_effects(expr, effects),
+        Expr::Block(block) => {
+            for stmt in &block.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Expr::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expr_collect_effects(condition, effects);
+            for stmt in &then_block.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+            if let Some(else_block) = else_block {
+                expr_collect_effects(else_block, effects);
+            }
+        }
+        Expr::Match { expr, arms, .. } => {
+            expr_collect_effects(expr, effects);
+            for arm in arms {
+                if let Some(guard) = &arm.guard {
+                    expr_collect_effects(guard, effects);
+                }
+                expr_collect_effects(&arm.body, effects);
+            }
+        }
+        Expr::Range { start, end, .. } => {
+            if let Some(start) = start {
+                expr_collect_effects(start, effects);
+            }
+            if let Some(end) = end {
+                expr_collect_effects(end, effects);
+            }
+        }
+        Expr::Repeat { value, count, .. } => {
+            expr_collect_effects(value, effects);
+            expr_collect_effects(count, effects);
+        }
+        Expr::Array { elements, .. } | Expr::Tuple { elements, .. } => {
+            for element in elements {
+                expr_collect_effects(element, effects);
+            }
+        }
+        Expr::Index { object, index, .. } => {
+            expr_collect_effects(object, effects);
+            expr_collect_effects(index, effects);
+        }
+        Expr::FieldAccess { object, .. }
+        | Expr::Grouped(object, _)
+        | Expr::Try { expr: object, .. }
+        | Expr::Await { expr: object, .. } => expr_collect_effects(object, effects),
+        Expr::StructInit { fields, base, .. } => {
+            for (_, value) in fields {
+                expr_collect_effects(value, effects);
+            }
+            if let Some(base) = base {
+                expr_collect_effects(base, effects);
+            }
+        }
+        Expr::PathCall { args, .. } => {
+            for arg in args {
+                expr_collect_effects(arg, effects);
+            }
+        }
+        Expr::IfLet {
+            expr,
+            guard,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expr_collect_effects(expr, effects);
+            if let Some(guard) = guard {
+                expr_collect_effects(guard, effects);
+            }
+            for stmt in &then_block.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+            if let Some(else_block) = else_block {
+                expr_collect_effects(else_block, effects);
+            }
+        }
+        Expr::As { expr, .. } => expr_collect_effects(expr, effects),
+        Expr::Closure { body, .. } => expr_collect_effects(body, effects),
+        Expr::AsyncBlock { body, .. } => {
+            for stmt in &body.stmts {
+                stmt_collect_effects(stmt, effects);
+            }
+        }
+        Expr::FString { parts, .. } => {
+            for part in parts {
+                if let FStringPart::Expr(expr) = part {
+                    expr_collect_effects(expr, effects);
+                }
+            }
+        }
+        Expr::Return { value, .. } => {
+            if let Some(value) = value {
+                expr_collect_effects(value, effects);
+            }
+        }
+        Expr::IntLiteral(..)
+        | Expr::FloatLiteral(..)
+        | Expr::BoolLiteral(..)
+        | Expr::StringLiteral(..)
+        | Expr::CharLiteral(..)
+        | Expr::Ident(..)
+        | Expr::Path { .. }
+        | Expr::SelfRef(..) => {}
+    }
+}
+
+fn target_roots_self(expr: &Expr) -> bool {
+    match expr {
+        Expr::SelfRef(..) => true,
+        Expr::FieldAccess { object, .. } | Expr::Index { object, .. } => target_roots_self(object),
+        Expr::Grouped(inner, ..) => target_roots_self(inner),
+        _ => false,
+    }
+}
+
+fn expr_roots_self(expr: &Expr) -> bool {
+    match expr {
+        Expr::SelfRef(..) => true,
+        Expr::FieldAccess { object, .. } | Expr::Index { object, .. } => expr_roots_self(object),
+        Expr::Grouped(inner, ..) => expr_roots_self(inner),
+        _ => false,
+    }
+}
+
+fn is_builtin_mutator_method(method: &str) -> bool {
+    matches!(
+        method,
+        "push"
+            | "push_front"
+            | "push_back"
+            | "pop"
+            | "pop_front"
+            | "pop_back"
+            | "insert"
+            | "remove"
+            | "swap_remove"
+            | "clear"
+            | "truncate"
+            | "resize"
+            | "extend"
+            | "append"
+            | "retain"
+            | "drain"
+            | "sort"
+            | "sort_by"
+            | "reverse"
+            | "dedup"
+    )
 }
