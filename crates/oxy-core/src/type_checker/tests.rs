@@ -246,89 +246,6 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
 
-    // --- Phase 3.1: pipeline operator |> ---
-
-    #[test]
-    fn test_pipeline_basic_call() {
-        // `5 |> double()` desugars to `double(5)`
-        let result = run_compiled(
-            r#"
-            fn double(x: Int) -> Int { x * 2 }
-            fn main() {
-                val r = 5 |> double();
-                val _ = r;
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_pipeline_with_args() {
-        // `5 |> add(3)` desugars to `add(5, 3)`
-        let result = run_compiled(
-            r#"
-            fn add(a: Int, b: Int) -> Int { a + b }
-            fn main() {
-                val r = 5 |> add(3);
-                val _ = r;
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_pipeline_chain() {
-        // `5 |> double() |> add(3)` desugars to `add(double(5), 3)`
-        let result = run_compiled(
-            r#"
-            fn double(x: Int) -> Int { x * 2 }
-            fn add(a: Int, b: Int) -> Int { a + b }
-            fn main() {
-                val r = 5 |> double() |> add(3);
-                val _ = r;
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_pipeline_bare_ident() {
-        // `21 |> double` desugars to `double(21)`
-        let result = run_compiled(
-            r#"
-            fn double(x: Int) -> Int { x * 2 }
-            fn main() {
-                val r = 21 |> double;
-                val _ = r;
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_pipeline_type_mismatch_is_rejected() {
-        // `s |> doubler` where s is a String and doubler expects int
-        let result = run_compiled(
-            r#"
-            fn doubler(x: Int) -> Int { x * 2 }
-            fn main() {
-                val s = "hello";
-                val _ = s |> doubler;
-            }
-            "#,
-        );
-        assert!(result.is_err(), "expected type mismatch, got Ok");
-        let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("type mismatch"),
-            "expected type mismatch error, got: {err}"
-        );
-    }
-
     // --- Phase 3.2: single-line function syntax `fn name(params) -> T = expr` ---
 
     #[test]
@@ -365,21 +282,6 @@ mod tests {
             fn main() {
                 val v = [1, 2, 3];
                 val _ = first(v);
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_single_line_fn_pipeline_chain() {
-        // Single-line functions compose with pipelines
-        let result = run_compiled(
-            r#"
-            fn double(x: Int) -> Int = x * 2
-            fn add(a: Int, b: Int) -> Int = a + b
-            fn main() {
-                val _ = 5 |> double() |> add(3);
             }
             "#,
         );
@@ -491,22 +393,6 @@ mod tests {
             fn main() {
                 val v = [3, 1, 2];
                 val _ = sort(v);
-            }
-            "#,
-        );
-        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
-    }
-
-    #[test]
-    fn test_free_fn_with_pipeline() {
-        let result = run_compiled(
-            r#"
-            fn double(x: Int) -> Int = x * 2
-            fn is_positive(x: Int) -> bool = x > 0
-            fn main() {
-                val v = [1, 2, 3];
-                // Pipeline chain using free functions
-                val _ = v |> map(|x| x + 1) |> filter(|x| x > 2);
             }
             "#,
         );

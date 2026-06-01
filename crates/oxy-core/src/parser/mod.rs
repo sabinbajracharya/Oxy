@@ -49,7 +49,7 @@ pub struct Parser {
 enum Precedence {
     None = 0,
     Assignment = 1,  // = += -= etc.
-    Pipeline = 2,    // |>
+    Cascade = 2,     // ~>
     Range = 3,       // .. ..=
     Or = 4,          // ||
     And = 5,         // &&
@@ -72,7 +72,7 @@ impl Precedence {
             TokenKind::PipePipe => Precedence::Or,
             TokenKind::AmpAmp => Precedence::And,
             TokenKind::Pipe => Precedence::BitOr,
-            TokenKind::PipeArrow => Precedence::Pipeline,
+            TokenKind::TildeArrow => Precedence::Cascade,
             TokenKind::Caret => Precedence::BitXor,
             TokenKind::Amp => Precedence::BitAnd,
             TokenKind::EqEq | TokenKind::BangEq => Precedence::Equality,

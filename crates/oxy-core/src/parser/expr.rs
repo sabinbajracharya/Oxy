@@ -526,12 +526,12 @@ impl Parser {
             });
         }
 
-        // Pipeline operator: `x |> f(args)` desugars to `f(x, args)`
-        if op_kind == TokenKind::PipeArrow {
+        // Cascade operator: `x ~> method(args)` calls method on x, returns x
+        if op_kind == TokenKind::TildeArrow {
             self.advance();
             let right = self.parse_expr(prec)?;
             let span = self.merge_spans(left.span(), right.span());
-            return Self::desugar_pipeline(left, right, span);
+            return Self::desugar_cascade(left, right, span);
         }
 
         // Binary operators
@@ -1051,88 +1051,60 @@ impl Parser {
         }
     }
 
-    /// Desugar `left |> right` into a function call.
+    /// Desugar `left ~> right` — call method / assign field on left, return left.
     ///
-    /// | Right side form        | Desugared to                     |
-    /// |------------------------|----------------------------------|
-    /// | `f(args...)`           | `f(left, args...)`               |
-    /// | `y.method(args...)`    | `y.method(left, args...)`        |
-    /// | `path::func(args...)`  | `path::func(left, args...)`      |
-    /// | `f` (bare ident)       | `f(left)`                        |
-    /// | `y.method` (field)     | `y.method(left)`                 |
-    /// | `path::to::func` (path)| `path::to::func(left)`           |
-    fn desugar_pipeline(left: Expr, right: Expr, span: Span) -> Result<Expr, PipelineError> {
-        match right {
-            Expr::Call {
-                callee,
-                turbofish,
-                mut args,
-                ..
-            } => {
-                args.insert(0, left);
-                Ok(Expr::Call {
-                    callee,
-                    turbofish,
-                    args,
-                    span,
-                })
+    /// | Right side form        | Result                       |
+    /// |------------------------|------------------------------|
+    /// | `method(args...)`      | left.method(args...); left   |
+    /// | `field = value`        | left.field = value; left     |
+    fn desugar_cascade(left: Expr, right: Expr, span: Span) -> Result<Expr, PipelineError> {
+        let right_span = right.span();
+        let cascade_stmt = match right {
+            Expr::MethodCall { .. } | Expr::Call { .. } | Expr::PathCall { .. } => {
+                Stmt::Expr {
+                    expr: right,
+                    has_semicolon: true,
+                }
             }
-            Expr::MethodCall {
-                object,
-                method,
-                turbofish,
-                mut args,
-                ..
-            } => {
-                args.insert(0, left);
-                Ok(Expr::MethodCall {
-                    object,
-                    method,
-                    turbofish,
-                    args,
-                    span,
-                })
+            Expr::Assign { target, value, span: assign_span } => {
+                // Rewrite bare field name `field = val` to `left.field = val`
+                let rewritten = match *target {
+                    Expr::Ident(name, s) => Expr::FieldAccess {
+                        object: Box::new(left.clone()),
+                        field: name,
+                        span: s,
+                    },
+                    other => other,
+                };
+                let assign = Expr::Assign {
+                    target: Box::new(rewritten),
+                    value,
+                    span: assign_span,
+                };
+                Stmt::Expr {
+                    expr: assign,
+                    has_semicolon: true,
+                }
             }
-            Expr::PathCall {
-                path,
-                turbofish,
-                mut args,
-                ..
-            } => {
-                args.insert(0, left);
-                Ok(Expr::PathCall {
-                    path,
-                    turbofish,
-                    args,
-                    span,
-                })
+            _ => {
+                return Err(PipelineError::Parser {
+                    message: "right side of `~>` must be a method call or field assignment"
+                        .to_string(),
+                    line: right_span.line,
+                    column: right_span.column,
+                });
             }
-            Expr::Ident(name, ident_span) => Ok(Expr::Call {
-                callee: Box::new(Expr::Ident(name, ident_span)),
-                turbofish: None,
-                args: vec![left],
-                span,
-            }),
-            Expr::FieldAccess { object, field, .. } => Ok(Expr::MethodCall {
-                object,
-                method: field,
-                turbofish: None,
-                args: vec![left],
-                span,
-            }),
-            Expr::Path { segments, .. } => Ok(Expr::PathCall {
-                path: segments,
-                turbofish: None,
-                args: vec![left],
-                span,
-            }),
-            _ => Err(PipelineError::Parser {
-                message: "right side of `|>` must be a function call, method call, \
-                     or identifier"
-                    .to_string(),
-                line: span.line,
-                column: span.column,
-            }),
-        }
+        };
+
+        Ok(Expr::Block(Block {
+            stmts: vec![
+                cascade_stmt,
+                Stmt::Expr {
+                    expr: left,
+                    has_semicolon: false,
+                },
+            ],
+            span,
+        }))
     }
 }

@@ -165,8 +165,14 @@ impl<'src> Lexer<'src> {
                 }
             }
 
-            // Tilde (bitwise NOT)
-            '~' => TokenKind::Tilde,
+            // Tilde or TildeArrow (cascade)
+            '~' => {
+                if self.match_char('>') {
+                    TokenKind::TildeArrow
+                } else {
+                    TokenKind::Tilde
+                }
+            }
 
             // Lt, LtEq, Shl
             '<' => {
@@ -199,12 +205,10 @@ impl<'src> Lexer<'src> {
                 }
             }
 
-            // Pipe or PipePipe or PipeArrow
+            // Pipe or PipePipe
             '|' => {
                 if self.match_char('|') {
                     TokenKind::PipePipe
-                } else if self.match_char('>') {
-                    TokenKind::PipeArrow
                 } else {
                     TokenKind::Pipe
                 }
@@ -1002,11 +1006,11 @@ mod tests {
     #[test]
     fn test_arrows() {
         assert_eq!(
-            kinds("-> => |>"),
+            kinds("-> => ~>"),
             vec![
                 TokenKind::Arrow,
                 TokenKind::FatArrow,
-                TokenKind::PipeArrow,
+                TokenKind::TildeArrow,
                 TokenKind::Eof,
             ]
         );
