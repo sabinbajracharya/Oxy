@@ -541,10 +541,17 @@ fn jit_closure_invoker(
         unsafe { std::mem::transmute(fn_ptr as *const ()) };
     let disc = fn_ptr(&mut call_ctx as *mut JitContext);
     if disc == 0 {
-        Ok(std::mem::replace(&mut call_ctx.result, Value::Unit))
-    } else {
-        Err(String::from_utf8_lossy(&call_ctx.error_msg[..call_ctx.error_len]).into_owned())
+        return Ok(std::mem::replace(&mut call_ctx.result, Value::Unit));
     }
+
+    // `?` propagation sets a sentinel empty error (`error_len == 1`, '\0').
+    // Preserve the Result/Option value in ctx.result so higher-order callers
+    // can handle it as data instead of converting it into a string error.
+    if call_ctx.error_len == 1 && call_ctx.error_msg[0] == 0 {
+        return Ok(std::mem::replace(&mut call_ctx.result, Value::Unit));
+    }
+
+    Err(String::from_utf8_lossy(&call_ctx.error_msg[..call_ctx.error_len]).into_owned())
 }
 
 /// Invoke a JIT-compiled method (`fn_index`/`fp` resolved by the caller) with an
@@ -817,6 +824,49 @@ fn regex_method(receiver: &Value, method_name: &str, args: &[Value]) -> Result<V
     Ok(result)
 }
 
+fn dispatch_apply_method(
+    tables: &JitTables,
+    output: OutputPtr,
+    receiver: Value,
+    method_name: &str,
+    args: &[Value],
+) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err(format!(
+            "`{method_name}` expects exactly 1 closure argument, found {}",
+            args.len()
+        ));
+    }
+
+    let closure = &args[0];
+    let shared = Rc::new(RefCell::new(receiver));
+    let closure_result =
+        jit_closure_invoker(tables, output, closure, &[Value::Cell(Rc::clone(&shared))])?;
+    let updated = shared.borrow().clone();
+
+    if method_name == crate::symbols::generic_m::APPLY {
+        return Ok(updated);
+    }
+
+    match closure_result {
+        Value::EnumVariant {
+            enum_name, variant, ..
+        } if enum_name == "Result" && variant == "Ok" => Ok(Value::ok(updated)),
+        Value::EnumVariant {
+            enum_name,
+            variant,
+            data,
+        } if enum_name == "Result" && variant == "Err" => {
+            let err = data.first().cloned().unwrap_or(Value::Unit);
+            Ok(Value::err(err))
+        }
+        other => Err(format!(
+            "`{method_name}` closure must return Result<(), E>, got {}",
+            other.type_name()
+        )),
+    }
+}
+
 fn dispatch_builtin_method(
     tables: &JitTables,
     output: OutputPtr,
@@ -836,6 +886,12 @@ fn dispatch_builtin_method(
             Ok(s) => Ok(Value::ok(Value::String(s))),
             Err(e) => Ok(Value::err(Value::String(e))),
         };
+    }
+    if matches!(
+        method_name,
+        crate::symbols::generic_m::APPLY | crate::symbols::generic_m::TRY_APPLY
+    ) {
+        return dispatch_apply_method(tables, output, receiver, method_name, &args);
     }
     match &receiver {
         Value::Vec(rc) => {

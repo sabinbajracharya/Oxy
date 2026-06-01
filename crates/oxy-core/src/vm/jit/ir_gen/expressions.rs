@@ -878,12 +878,6 @@ impl IrGen {
                     strings: vec![],
                 });
                 r
-            }
-            Expr::Cascade { receiver, body, span } => {
-                // Lower cascade to a block with a temporary receiver.
-                // `receiver ..{ .field = val; .method(); }` becomes
-                // `{ var __t = receiver; __t.field = val; __t.method(); __t }`
-                self.gen_cascade(receiver, body, *span)
             } // Unreachable: all Expr variants are handled above.
         }
     }

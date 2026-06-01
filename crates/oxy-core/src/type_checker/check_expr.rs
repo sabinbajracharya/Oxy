@@ -378,7 +378,6 @@ impl TypeChecker {
             } => self.infer_closure(params, return_type, body, is_async, expected),
             Expr::AsyncBlock { body, .. } => self.infer_async_block(body),
             Expr::Await { expr: inner, .. } => self.infer_await(inner),
-            Expr::Cascade { receiver, body, span } => self.infer_cascade(receiver, body, span),
             Expr::FString { .. } => Ok(TypeInfo::String),
             Expr::Path { segments, .. } => self.infer_path(segments),
             Expr::SelfRef { .. } => self.infer_self_ref(),

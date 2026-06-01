@@ -667,6 +667,10 @@ impl<'e> Interpreter<'e> {
         let result = std::mem::replace(&mut ctx.result, Value::Unit);
         if disc == 0 {
             Ok(result)
+        } else if ctx.error_len == 1 && ctx.error_msg[0] == 0 {
+            // `?` propagation marker: treat as a value-carrying short-circuit,
+            // matching the native jit_closure_invoker path.
+            Ok(result)
         } else {
             Err(String::from_utf8_lossy(&ctx.error_msg[..ctx.error_len.min(1024)]).into_owned())
         }

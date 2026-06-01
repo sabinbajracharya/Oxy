@@ -16,30 +16,73 @@ impl TypeChecker {
     ) -> Result<TypeInfo, PipelineError> {
         // If the expected type is a function signature, use it to fill in
         // unannotated closure parameter types (bidirectional inference).
-        let expected_params: Option<&[TypeInfo]> = match expected {
-            Some(TypeInfo::Function { params: eps, .. }) if !eps.is_empty() => Some(eps.as_slice()),
-            _ => None,
+        let (expected_params, expected_ret): (Option<&[TypeInfo]>, Option<&TypeInfo>) =
+            match expected {
+                Some(TypeInfo::Function {
+                    params: eps, ret, ..
+                }) if !eps.is_empty() => (Some(eps.as_slice()), Some(ret.as_ref())),
+                Some(TypeInfo::Function { ret, .. }) => (None, Some(ret.as_ref())),
+                _ => (None, None),
+            };
+
+        // Trailing-closure sugar (`foo.apply { ... }`) parses as a closure with
+        // no explicit params. When the expected arity is exactly 1, bind `it`.
+        let use_implicit_it =
+            params.is_empty() && expected_params.is_some_and(|eps| eps.len() == 1);
+
+        let mut param_types = Vec::with_capacity(if use_implicit_it { 1 } else { params.len() });
+        let closure_env = TypeEnv::child(&self.env);
+        if use_implicit_it {
+            let p_ty = expected_params
+                .and_then(|eps| eps.first().cloned())
+                .unwrap_or(TypeInfo::Unknown);
+            closure_env
+                .borrow_mut()
+                .define_mut("it", p_ty.clone(), true);
+            param_types.push(p_ty);
+        } else {
+            for (i, p) in params.iter().enumerate() {
+                let p_ty = if let Some(ref ann) = p.type_ann {
+                    self.resolve_annotation(ann)
+                } else if let Some(eps) = expected_params {
+                    // Use the expected param type from the function signature
+                    // when the closure param is unannotated.
+                    eps.get(i).cloned().unwrap_or(TypeInfo::Unknown)
+                } else {
+                    TypeInfo::Unknown
+                };
+                // Closure parameters mirror function params: mutable by default.
+                closure_env
+                    .borrow_mut()
+                    .define_mut(&p.name, p_ty.clone(), true);
+                param_types.push(p_ty);
+            }
+        }
+
+        let saved_env = self.env.clone();
+        let expected_body_ret = if let Some(ann) = return_type {
+            self.resolve_annotation(ann)
+        } else if let Some(ret) = expected_ret {
+            if *is_async {
+                if let TypeInfo::Future(inner) = ret {
+                    (**inner).clone()
+                } else {
+                    (*ret).clone()
+                }
+            } else {
+                (*ret).clone()
+            }
+        } else {
+            TypeInfo::Unknown
         };
 
-        let mut param_types = Vec::with_capacity(params.len());
-        let closure_env = TypeEnv::child(&self.env);
-        for (i, p) in params.iter().enumerate() {
-            let p_ty = if let Some(ref ann) = p.type_ann {
-                self.resolve_annotation(ann)
-            } else if let Some(eps) = expected_params {
-                // Use the expected param type from the function signature
-                // when the closure param is unannotated.
-                eps.get(i).cloned().unwrap_or(TypeInfo::Unknown)
-            } else {
-                TypeInfo::Unknown
-            };
-            closure_env.borrow_mut().define(&p.name, p_ty.clone());
-            param_types.push(p_ty);
-        }
-        let saved_env = self.env.clone();
         self.env = closure_env;
-        let inferred_ret = self.infer_expr(body)?;
+        let saved_fn_return =
+            std::mem::replace(&mut self.current_fn_return, expected_body_ret.clone());
+        let inferred_ret = self.infer_expr_expected(body, Some(&expected_body_ret));
+        self.current_fn_return = saved_fn_return;
         self.env = saved_env;
+        let inferred_ret = inferred_ret?;
         if let Some(ref ann) = return_type {
             let declared_ret = self.resolve_annotation(ann);
             if !declared_ret.accepts(&inferred_ret) {

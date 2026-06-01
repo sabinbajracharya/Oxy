@@ -439,7 +439,9 @@ pub const CHAR_METHODS: &[MethodInfo] = methods![
 // --- Struct / EnumVariant / Tuple (generic methods) ---
 
 pub const GENERIC_METHODS: &[MethodInfo] = methods![
+    "apply": "(fn: (T) -> ()) -> T" => "Run a closure with `it` bound to self, then return self.",
     "clone": "() -> Self" => "Create a shallow copy.",
+    "try_apply": "(fn: (T) -> Result<(), E>) -> Result<T, E>" => "Run a fallible closure and return `Ok(self)` or the closure's `Err`.",
     "to_string": "() -> String" => "Convert to a string representation.",
     "to_json": "() -> String" => "Serialize to a JSON string.",
     "to_json_pretty": "() -> String" => "Serialize to indented JSON.",
@@ -752,7 +754,9 @@ pub mod char_m {
 }
 
 pub mod generic_m {
+    pub const APPLY: &str = "apply";
     pub const CLONE: &str = "clone";
+    pub const TRY_APPLY: &str = "try_apply";
     pub const TO_STRING: &str = "to_string";
 }
 

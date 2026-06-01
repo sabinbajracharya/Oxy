@@ -1,60 +1,99 @@
-// Cascade block `..{ }` examples — scoped mutation on a receiver.
-// `receiver ..{ .field = val; .method(); }` — leading dot targets the receiver.
+// apply/try_apply closure ergonomics and strict return-boundary checks.
 
-// --- Method calls ---
+struct ApiService {
+    port: Int,
+}
+
+enum AuthError {
+    Denied,
+}
+
+impl ApiService {
+    fn new() -> ApiService {
+        ApiService { port: 0 }
+    }
+
+    fn auth_ok(self) -> Result<(), AuthError> {
+        Ok(())
+    }
+
+    fn auth_fail(self) -> Result<(), AuthError> {
+        Err(AuthError::Denied)
+    }
+}
 
 #[test]
-fn test_cascade_method_chain() {
-    var v = [1, 2, 3];
-    v..{
-        .push(4);
-        .push(5);
+fn test_apply_trailing_closure_implicit_it() {
+    val api = ApiService::new().apply {
+        it.port = 80;
     };
-    assert_eq(v.len(), 5);
-    assert_eq(v[3], 4);
-    assert_eq(v[4], 5);
+    assert_eq(api.port, 80);
 }
 
 #[test]
-fn test_cascade_single_call() {
-    var v = [1, 2];
-    v..{ .push(3); };
-    assert_eq(v.len(), 3);
-    assert_eq(v[2], 3);
-}
-
-// --- Field assignment ---
-
-struct Point {
-    x: Int,
-    y: Int,
-}
-
-#[test]
-fn test_cascade_single_field() {
-    var p = Point { x: 0, y: 0 };
-    p..{ .x = 10; .y = 20; };
-    assert_eq(p.x, 10);
-    assert_eq(p.y, 20);
-}
-
-// --- Builder pattern ---
-
-struct Button {
-    text: String,
-    width: Int,
-    height: Int,
-}
-
-#[test]
-fn test_cascade_builder() {
-    var btn = Button { text: "", width: 0, height: 0 };
-    btn..{
-        .text = "Save";
-        .width = 120;
-        .height = 40;
+fn test_apply_trailing_closure_with_parens() {
+    val api = ApiService::new().apply() {
+        it.port = 81;
     };
-    assert_eq(btn.text, "Save");
-    assert_eq(btn.width, 120);
-    assert_eq(btn.height, 40);
+    assert_eq(api.port, 81);
+}
+
+#[test]
+fn test_try_apply_returns_result() {
+    val api_result = ApiService::new().try_apply {
+        it.port = 90;
+        Ok(())
+    };
+
+    match api_result {
+        Ok(api) => assert_eq(api.port, 90),
+        Err(_) => assert(false),
+    }
+}
+
+#[test]
+fn test_try_apply_error_stays_local() {
+    val api_result = ApiService::new().try_apply {
+        it.port = 91;
+        it.auth_fail()?;
+        Ok(())
+    };
+
+    match api_result {
+        Ok(_) => assert(false),
+        Err(_) => assert(true),
+    }
+}
+
+fn setup_api() -> Result<ApiService, AuthError> {
+    val api = ApiService::new().try_apply {
+        it.port = 92;
+        it.auth_ok()?;
+        Ok(())
+    }?;
+    Ok(api)
+}
+
+#[test]
+fn test_try_apply_outer_question_bubbles() {
+    match setup_api() {
+        Ok(api) => assert_eq(api.port, 92),
+        Err(_) => assert(false),
+    }
+}
+
+#[compile_error]
+fn test_apply_rejects_question_operator() {
+    val _api = ApiService::new().apply {
+        it.port = 80;
+        it.auth_fail()?;
+    };
+}
+
+#[compile_error]
+fn test_apply_rejects_result_return() {
+    val _api = ApiService::new().apply {
+        it.port = 80;
+        Err(AuthError::Denied)
+    };
 }

@@ -4,7 +4,6 @@
 
 use super::item::ClosureParam;
 use super::pattern::Pattern;
-use super::stmt::Stmt;
 use super::{Block, TypeAnnotation};
 use crate::lexer::Span;
 
@@ -169,12 +168,6 @@ pub enum Expr {
     AsyncBlock { body: Block, span: Span },
     /// Await expression: `expr.await`
     Await { expr: Box<Expr>, span: Span },
-    /// Cascade expression: `receiver ..{ .field = val; .method(); }`
-    Cascade {
-        receiver: Box<Expr>,
-        body: Vec<Stmt>,
-        span: Span,
-    },
     /// F-string expression: `f"Hello {name}!"`
     FString { parts: Vec<FStringPart>, span: Span },
     /// Return expression (diverges): `return expr` or `return`
@@ -219,7 +212,6 @@ impl Expr {
             | Expr::Closure { span: s, .. }
             | Expr::AsyncBlock { span: s, .. }
             | Expr::Await { span: s, .. }
-            | Expr::Cascade { span: s, .. }
             | Expr::FString { span: s, .. }
             | Expr::Return { span: s, .. } => *s,
             Expr::Block(block) => block.span,
@@ -527,7 +519,10 @@ impl Expr {
                 ..
             } => {
                 let pad = "  ".repeat(indent);
-                out.push_str(&format!("{pad}if {} ", if *mutable { "var" } else { "val" }));
+                out.push_str(&format!(
+                    "{pad}if {} ",
+                    if *mutable { "var" } else { "val" }
+                ));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 expr.pretty_print(out, 0);
@@ -584,14 +579,6 @@ impl Expr {
             Expr::Await { expr, .. } => {
                 expr.pretty_print(out, indent);
                 out.push_str(".await");
-            }
-            Expr::Cascade { receiver, body, .. } => {
-                receiver.pretty_print(out, indent);
-                out.push_str("..{\n");
-                for s in body {
-                    s.pretty_print(out, indent + 1);
-                }
-                out.push_str(&format!("{}}}", "  ".repeat(indent)));
             }
             Expr::FString { parts, .. } => {
                 out.push_str("f\"");

@@ -48,7 +48,7 @@ impl Parser {
         Ok(left)
     }
 
-    /// Core expression parser (prefix + infix loop), without cascade.
+    /// Core expression parser (prefix + infix loop).
     fn parse_expr_inner(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
         let mut left = self.parse_prefix()?;
 
@@ -503,13 +503,6 @@ impl Parser {
             };
         }
 
-        // Cascade: `receiver ..{ .method(); .field = val; }`
-        if op_kind == TokenKind::DotDot && self.pos + 1 < self.tokens.len() && matches!(&self.tokens[self.pos + 1].kind, TokenKind::LBrace) {
-            self.advance(); // skip DotDot
-            self.advance(); // skip LBrace
-            return self.parse_cascade_body(left);
-        }
-
         // Range operators: `..` and `..=`
         if matches!(op_kind, TokenKind::DotDot | TokenKind::DotDotEq) {
             let inclusive = op_kind == TokenKind::DotDotEq;
@@ -622,14 +615,34 @@ impl Parser {
             // Check for method call: `.name(...)`
             if self.check(&TokenKind::LParen) {
                 self.advance();
-                let args = self.parse_arg_list()?;
+                let mut args = self.parse_arg_list()?;
                 let end_span = self.current_span();
                 self.expect(TokenKind::RParen)?;
+                let mut full_end_span = end_span;
+                if Self::is_trailing_closure_method(&name) && self.check(&TokenKind::LBrace) {
+                    let closure = self.parse_trailing_closure_arg()?;
+                    full_end_span = closure.span();
+                    args.push(closure);
+                }
                 return Ok(Expr::MethodCall {
                     object: Box::new(left),
                     method: name,
                     turbofish,
                     args,
+                    span: self.merge_spans(op_span, full_end_span),
+                });
+            }
+
+            // Trailing-closure method call without parentheses:
+            // `receiver.apply { ... }`, `receiver.try_apply { ... }`.
+            if Self::is_trailing_closure_method(&name) && self.check(&TokenKind::LBrace) {
+                let closure = self.parse_trailing_closure_arg()?;
+                let end_span = closure.span();
+                return Ok(Expr::MethodCall {
+                    object: Box::new(left),
+                    method: name,
+                    turbofish,
+                    args: vec![closure],
                     span: self.merge_spans(op_span, end_span),
                 });
             }
@@ -1055,119 +1068,23 @@ impl Parser {
         }
     }
 
-    /// Parse a cascade body: statements inside `receiver ..{ ... }`.
-    /// Leading `.` accesses the receiver; no dot = outer scope.
-    fn parse_cascade_body(&mut self, receiver: Expr) -> Result<Expr, PipelineError> {
-        let start_span = receiver.span();
-        let mut stmts: Vec<Stmt> = Vec::new();
-
-        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-            // Leading dot = receiver access: `.field = val` or `.method()`
-            if self.check(&TokenKind::Dot) {
-                self.advance(); // skip dot
-                let stmt = self.parse_cascade_dot_stmt(&receiver)?;
-                stmts.push(stmt);
-            } else {
-                // No dot = outer scope statement
-                let stmt = self.parse_stmt()?;
-                stmts.push(stmt);
-            }
-        }
-
-        let end_span = self.current_span();
-        self.expect(TokenKind::RBrace)?;
-
-        Ok(Expr::Cascade {
-            receiver: Box::new(receiver),
-            body: stmts,
-            span: self.merge_spans(start_span, end_span),
+    fn parse_trailing_closure_arg(&mut self) -> Result<Expr, PipelineError> {
+        let block = self.parse_block()?;
+        let span = block.span;
+        Ok(Expr::Closure {
+            params: vec![ClosureParam {
+                name: "it".to_string(),
+                type_ann: None,
+                span,
+            }],
+            return_type: None,
+            body: Box::new(Expr::Block(block)),
+            span,
+            is_async: false,
         })
     }
 
-    /// Parse a dot-prefixed statement inside a cascade body:
-    /// `.field = value;` or `.method(args);`
-    fn parse_cascade_dot_stmt(&mut self, receiver: &Expr) -> Result<Stmt, PipelineError> {
-        match self.peek_kind() {
-            TokenKind::Ident(_) => {
-                let name = self.expect_ident()?;
-                // `.name = value;` — field assignment
-                if self.check(&TokenKind::Eq) && !matches!(self.peek_kind(), TokenKind::EqEq) {
-                    self.advance(); // skip =
-                    let value = self.parse_expr(Precedence::None)?;
-                    let span = self.current_span();
-                    self.expect(TokenKind::Semicolon)?;
-                    let assign = Expr::Assign {
-                        target: Box::new(Expr::FieldAccess {
-                            object: Box::new(receiver.clone()),
-                            field: name,
-                            span: span.clone(),
-                        }),
-                        value: Box::new(value),
-                        span: span,
-                    };
-                    Ok(Stmt::Expr { expr: assign, has_semicolon: true })
-                } else {
-                    // `.method(args);` or `.method(args)?;`
-                    let (args, turbofish) = self.parse_call_suffix()?;
-                    let try_op = self.check(&TokenKind::Question);
-                    if try_op { self.advance(); }
-                    let span = self.current_span();
-                    self.expect(TokenKind::Semicolon)?;
-                    let mut method_call = Expr::MethodCall {
-                        object: Box::new(receiver.clone()),
-                        method: name,
-                        turbofish,
-                        args,
-                        span: span.clone(),
-                    };
-                    let expr = if try_op {
-                        Expr::Try { expr: Box::new(method_call), span: span.clone() }
-                    } else {
-                        method_call
-                    };
-                    Ok(Stmt::Expr { expr, has_semicolon: true })
-                }
-            }
-            // `.await?;`
-            TokenKind::Await => {
-                self.advance();
-                self.expect(TokenKind::Semicolon)?;
-                Ok(Stmt::Expr {
-                    expr: Expr::Await {
-                        expr: Box::new(receiver.clone()),
-                        span: self.current_span(),
-                    },
-                    has_semicolon: true,
-                })
-            }
-            other => Err(self.error(format!(
-                "expected identifier or `await` after `.` in cascade, found {}",
-                other.description()
-            ))),
-        }
+    fn is_trailing_closure_method(name: &str) -> bool {
+        matches!(name, "apply" | "try_apply")
     }
-
-    /// Parse the call suffix: optional turbofish `::<T>` and `(args)`.
-    fn parse_call_suffix(&mut self) -> Result<(Vec<Expr>, Option<Vec<TypeAnnotation>>), PipelineError> {
-        let turbofish = if self.check(&TokenKind::ColonColon) {
-            self.advance();
-            if self.check(&TokenKind::Lt) {
-                Some(self.parse_turbofish()?)
-            } else {
-                return Err(self.error("expected `<` after `::` in turbofish".to_string()));
-            }
-        } else {
-            None
-        };
-        let args = if self.check(&TokenKind::LParen) {
-            self.advance();
-            let args = self.parse_arg_list()?;
-            self.expect(TokenKind::RParen)?;
-            args
-        } else {
-            vec![]
-        };
-        Ok((args, turbofish))
-    }
-
 }

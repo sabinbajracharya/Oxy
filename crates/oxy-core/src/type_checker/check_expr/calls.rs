@@ -347,6 +347,12 @@ impl TypeChecker {
         span: &Span,
     ) -> Result<TypeInfo, PipelineError> {
         let obj_ty = self.infer_expr(object)?;
+        if matches!(
+            method,
+            symbols::generic_m::APPLY | symbols::generic_m::TRY_APPLY
+        ) {
+            return self.infer_apply_like(&obj_ty, method, args, *span);
+        }
         if let TypeInfo::UserStruct {
             name: struct_name,
             generic_args,
@@ -554,5 +560,256 @@ impl TypeChecker {
             }
         }
         Ok(TypeInfo::Unknown)
+    }
+
+    fn infer_apply_like(
+        &mut self,
+        obj_ty: &TypeInfo,
+        method: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> Result<TypeInfo, PipelineError> {
+        if args.len() != 1 {
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "`{method}` expects exactly 1 closure argument, found {}",
+                    args.len()
+                ),
+                line: span.line,
+                column: span.column,
+            });
+        }
+
+        let closure_expr = &args[0];
+        if !matches!(closure_expr, Expr::Closure { .. }) {
+            return Err(PipelineError::TypeError {
+                message: format!("`{method}` expects a closure argument"),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        }
+
+        if method == symbols::generic_m::APPLY && Self::apply_closure_contains_try(closure_expr) {
+            return Err(PipelineError::TypeError {
+                message: "mismatched types. Expected closure to return `()`, found `Result<_, _>`. Consider using `try_apply` instead.".to_string(),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        }
+
+        let expected_closure_ty = if method == symbols::generic_m::APPLY {
+            TypeInfo::Function {
+                params: vec![obj_ty.clone()],
+                ret: Box::new(TypeInfo::Unit),
+            }
+        } else {
+            TypeInfo::Function {
+                params: vec![obj_ty.clone()],
+                ret: Box::new(TypeInfo::Result(
+                    Box::new(TypeInfo::Unit),
+                    Box::new(TypeInfo::Unknown),
+                )),
+            }
+        };
+
+        let closure_ty = self.infer_expr_expected(closure_expr, Some(&expected_closure_ty))?;
+        let TypeInfo::Function { params, ret } = closure_ty else {
+            return Err(PipelineError::TypeError {
+                message: format!("`{method}` expects a closure argument"),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        };
+
+        if params.len() != 1 {
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "`{method}` closure must take exactly 1 parameter, found {}",
+                    params.len()
+                ),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        }
+
+        if method == symbols::generic_m::APPLY {
+            if *ret != TypeInfo::Unit {
+                return Err(PipelineError::TypeError {
+                    message: format!(
+                        "mismatched types. Expected closure to return `()`, found `{}`. Consider using `try_apply` instead.",
+                        ret.display_name()
+                    ),
+                    line: closure_expr.span().line,
+                    column: closure_expr.span().column,
+                });
+            }
+            return Ok(obj_ty.clone());
+        }
+
+        let TypeInfo::Result(ok_ty, err_ty) = ret.as_ref() else {
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "mismatched types. Expected closure to return `Result<(), E>`, found `{}`",
+                    ret.display_name()
+                ),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        };
+
+        if **ok_ty != TypeInfo::Unit && **ok_ty != TypeInfo::Unknown {
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "mismatched types. Expected closure to return `Result<(), E>`, found `Result<{}, _>`",
+                    ok_ty.display_name()
+                ),
+                line: closure_expr.span().line,
+                column: closure_expr.span().column,
+            });
+        }
+
+        Ok(TypeInfo::Result(Box::new(obj_ty.clone()), err_ty.clone()))
+    }
+
+    fn apply_closure_contains_try(expr: &Expr) -> bool {
+        match expr {
+            Expr::Try { .. } => true,
+            Expr::UnaryOp { expr, .. }
+            | Expr::Grouped(expr, ..)
+            | Expr::Await { expr, .. }
+            | Expr::As { expr, .. } => Self::apply_closure_contains_try(expr),
+            Expr::BinaryOp { left, right, .. } => {
+                Self::apply_closure_contains_try(left) || Self::apply_closure_contains_try(right)
+            }
+            Expr::Call { callee, args, .. } => {
+                Self::apply_closure_contains_try(callee)
+                    || args.iter().any(Self::apply_closure_contains_try)
+            }
+            Expr::MethodCall { object, args, .. } => {
+                Self::apply_closure_contains_try(object)
+                    || args.iter().any(Self::apply_closure_contains_try)
+            }
+            Expr::PathCall { args, .. } | Expr::Tuple { elements: args, .. } => {
+                args.iter().any(Self::apply_closure_contains_try)
+            }
+            Expr::Array { elements, .. } => elements.iter().any(Self::apply_closure_contains_try),
+            Expr::Repeat { value, count, .. } => {
+                Self::apply_closure_contains_try(value) || Self::apply_closure_contains_try(count)
+            }
+            Expr::Index { object, index, .. } => {
+                Self::apply_closure_contains_try(object) || Self::apply_closure_contains_try(index)
+            }
+            Expr::Assign { target, value, .. } | Expr::CompoundAssign { target, value, .. } => {
+                Self::apply_closure_contains_try(target) || Self::apply_closure_contains_try(value)
+            }
+            Expr::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::apply_closure_contains_try(condition)
+                    || then_block
+                        .stmts
+                        .iter()
+                        .any(Self::apply_closure_stmt_contains_try)
+                    || else_block
+                        .as_deref()
+                        .is_some_and(Self::apply_closure_contains_try)
+            }
+            Expr::IfLet {
+                expr,
+                guard,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::apply_closure_contains_try(expr)
+                    || guard
+                        .as_deref()
+                        .is_some_and(Self::apply_closure_contains_try)
+                    || then_block
+                        .stmts
+                        .iter()
+                        .any(Self::apply_closure_stmt_contains_try)
+                    || else_block
+                        .as_deref()
+                        .is_some_and(Self::apply_closure_contains_try)
+            }
+            Expr::Match { expr, arms, .. } => {
+                Self::apply_closure_contains_try(expr)
+                    || arms.iter().any(|a| {
+                        a.guard
+                            .as_deref()
+                            .is_some_and(Self::apply_closure_contains_try)
+                            || Self::apply_closure_contains_try(&a.body)
+                    })
+            }
+            Expr::StructInit { fields, base, .. } => {
+                fields
+                    .iter()
+                    .any(|(_, e)| Self::apply_closure_contains_try(e))
+                    || base
+                        .as_deref()
+                        .is_some_and(Self::apply_closure_contains_try)
+            }
+            Expr::Block(block) | Expr::AsyncBlock { body: block, .. } => block
+                .stmts
+                .iter()
+                .any(Self::apply_closure_stmt_contains_try),
+            Expr::Closure { body, .. } => Self::apply_closure_contains_try(body),
+            Expr::Range { start, end, .. } => {
+                start
+                    .as_deref()
+                    .is_some_and(Self::apply_closure_contains_try)
+                    || end.as_deref().is_some_and(Self::apply_closure_contains_try)
+            }
+            Expr::FString { parts, .. } => parts
+                .iter()
+                .any(|p| matches!(p, FStringPart::Expr(e) if Self::apply_closure_contains_try(e))),
+            Expr::Return { value, .. } => value
+                .as_deref()
+                .is_some_and(Self::apply_closure_contains_try),
+            Expr::IntLiteral(..)
+            | Expr::FloatLiteral(..)
+            | Expr::BoolLiteral(..)
+            | Expr::StringLiteral(..)
+            | Expr::CharLiteral(..)
+            | Expr::Ident(..)
+            | Expr::FieldAccess { .. }
+            | Expr::Path { .. }
+            | Expr::SelfRef(..) => false,
+        }
+    }
+
+    fn apply_closure_stmt_contains_try(stmt: &Stmt) -> bool {
+        match stmt {
+            Stmt::Expr { expr, .. } => Self::apply_closure_contains_try(expr),
+            Stmt::Let { value, .. } => value.as_ref().is_some_and(Self::apply_closure_contains_try),
+            Stmt::LetPattern { value, .. } => Self::apply_closure_contains_try(value),
+            Stmt::Return { value, .. } => {
+                value.as_ref().is_some_and(Self::apply_closure_contains_try)
+            }
+            Stmt::While {
+                condition, body, ..
+            } => {
+                Self::apply_closure_contains_try(condition)
+                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
+            }
+            Stmt::WhileLet { expr, body, .. } => {
+                Self::apply_closure_contains_try(expr)
+                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
+            }
+            Stmt::For { iterable, body, .. } => {
+                Self::apply_closure_contains_try(iterable)
+                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
+            }
+            Stmt::ForDestructure { iterable, body, .. } => {
+                Self::apply_closure_contains_try(iterable)
+                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
+            }
+            Stmt::Loop { body, .. } => body.stmts.iter().any(Self::apply_closure_stmt_contains_try),
+            Stmt::Item(_) | Stmt::Use(_) | Stmt::Break { .. } | Stmt::Continue { .. } => false,
+        }
     }
 }
