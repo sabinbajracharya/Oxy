@@ -1307,3 +1307,4 @@ fn test_turbofish_call() {
         other => panic!("expected Call, got {:?}", other),
     }
 }
+

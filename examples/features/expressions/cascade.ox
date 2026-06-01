@@ -37,7 +37,15 @@ fn test_cascade_single_field() {
     assert_eq(p.y, 20);
 }
 
-// --- Field assignment (one per cascade statement) ---
+// --- Block with multiple field assignments (no cascade) ---
+
+#[test]
+fn test_block_field_assigns() {
+    var p = Point { x: 0, y: 0 };
+    { p.x = 10; p.y = 20; };
+    assert_eq(p.x, 10);
+    assert_eq(p.y, 20);
+}
 
 struct Button {
     text: String,

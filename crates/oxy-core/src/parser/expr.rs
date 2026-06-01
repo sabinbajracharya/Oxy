@@ -46,7 +46,6 @@ impl Parser {
     pub(super) fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
         let left = self.parse_expr_inner(min_prec)?;
 
-        // Cascade operator `~>` — postfix chain outside the precedence system.
         if !self.is_at_end() && self.check(&TokenKind::TildeArrow) {
             return self.parse_cascade_chain(left);
         }
