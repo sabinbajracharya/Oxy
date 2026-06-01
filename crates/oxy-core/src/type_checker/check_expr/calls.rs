@@ -635,14 +635,20 @@ impl TypeChecker {
 
         if method == symbols::generic_m::APPLY {
             if *ret != TypeInfo::Unit {
-                return Err(PipelineError::TypeError {
-                    message: format!(
-                        "mismatched types. Expected closure to return `()`, found `{}`. Consider using `try_apply` instead.",
+                let diag = crate::diagnostics::Diagnostic::error(
+                    crate::diagnostics::codes::TYP_MISMATCH,
+                    crate::diagnostics::DiagnosticCategory::TypeChecker,
+                    format!(
+                        "mismatched types. Expected closure to return `()`, found `{}`.",
                         ret.display_name()
                     ),
-                    line: closure_expr.span().line,
-                    column: closure_expr.span().column,
-                });
+                )
+                .with_primary_label(
+                    closure_expr.span(),
+                    format!("closure returns `{}`", ret.display_name()),
+                )
+                .with_help("consider using `try_apply` instead");
+                return Err(PipelineError::from_diagnostic(diag));
             }
             return Ok(obj_ty.clone());
         }

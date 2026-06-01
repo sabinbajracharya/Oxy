@@ -259,6 +259,30 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
 
+    #[test]
+    fn test_apply_closure_mismatch_emits_help_note() {
+        let source = r#"
+            fn main() {
+                val _ = [1, 2, 3].apply(|it| it.len());
+            }
+            "#;
+        let program = crate::parser::parse(source).expect("source should parse");
+        let err = crate::type_checker::TypeChecker::new()
+            .check_program(&program)
+            .expect_err("expected type mismatch");
+        let diagnostic = err.to_diagnostic();
+        assert_eq!(diagnostic.code, crate::diagnostics::codes::TYP_MISMATCH);
+        assert!(
+            diagnostic
+                .notes
+                .iter()
+                .any(|n| matches!(n.kind, crate::diagnostics::NoteKind::Help)
+                    && n.message.contains("try_apply")),
+            "expected help note suggesting try_apply, got: {:?}",
+            diagnostic.notes
+        );
+    }
+
     // --- Phase 3.2: single-line function syntax `fn name(params) -> T = expr` ---
 
     #[test]
