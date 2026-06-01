@@ -78,16 +78,22 @@ impl PipelineError {
                 message,
                 line,
                 column,
-            } => {
-                Diagnostic::error(codes::PAR_UNEXPECTED_TOKEN, DiagnosticCategory::Parser, message)
-                    .with_primary_span(span_from_line_column(*line, *column))
-            }
+            } => Diagnostic::error(
+                codes::PAR_UNEXPECTED_TOKEN,
+                DiagnosticCategory::Parser,
+                message,
+            )
+            .with_primary_span(span_from_line_column(*line, *column)),
             PipelineError::TypeError {
                 message,
                 line,
                 column,
-            } => Diagnostic::error(codes::TYP_MISMATCH, DiagnosticCategory::TypeChecker, message)
-                .with_primary_span(span_from_line_column(*line, *column)),
+            } => Diagnostic::error(
+                codes::TYP_MISMATCH,
+                DiagnosticCategory::TypeChecker,
+                message,
+            )
+            .with_primary_span(span_from_line_column(*line, *column)),
             PipelineError::Runtime {
                 message,
                 line,
@@ -190,9 +196,13 @@ mod tests {
 
     #[test]
     fn structured_variant_roundtrips() {
-        let d = Diagnostic::error(codes::TYP_MISMATCH, DiagnosticCategory::TypeChecker, "bad type")
-            .with_primary_span(Span::new(10, 11, 2, 8))
-            .with_help("adjust the annotation");
+        let d = Diagnostic::error(
+            codes::TYP_MISMATCH,
+            DiagnosticCategory::TypeChecker,
+            "bad type",
+        )
+        .with_primary_span(Span::new(10, 11, 2, 8))
+        .with_help("adjust the annotation");
         let err = PipelineError::from_diagnostic(d.clone());
         assert_eq!(err.to_diagnostic(), d);
     }

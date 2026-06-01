@@ -17,7 +17,11 @@ Purpose: track the architecture-first diagnostics refactor so work can be resume
 - [x] Step 4: Switch CLI rendering to structured diagnostics (primary + secondary labels, notes/help, fix-its).
 - [x] Step 5: Switch LSP diagnostic mapping to structured diagnostics.
 - [x] Step 6: Add/adjust regression tests for diagnostics conversion and LSP mapping.
-- [ ] Step 7: Run validation and mark completion.
+- [x] Step 7: Run validation and mark completion.
+
+## Final Status
+
+**DONE**
 
 ## Progress Log
 
@@ -28,3 +32,4 @@ Purpose: track the architecture-first diagnostics refactor so work can be resume
 - ✅ Updated CLI `display_error` to render from `Diagnostic` (codes/categories, labels, notes/help, fix-its).
 - ✅ Updated `oxy-lsp` diagnostic mapping to use structured diagnostics + codes + secondary spans.
 - ✅ Added regression tests for `PipelineError` conversion and apply-mismatch help-note diagnostics.
+- ✅ Validation pass completed: fmt, clippy, and tests for `oxy-core`, `oxy-lsp`, and `oxy-cli`.

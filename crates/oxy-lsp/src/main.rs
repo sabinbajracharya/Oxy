@@ -8,8 +8,8 @@
 mod completions;
 mod server;
 
-use oxy_core::diagnostics::{DiagnosticSeverity as OxyDiagnosticSeverity, LabelKind};
 use oxy_core::ast::Item;
+use oxy_core::diagnostics::{DiagnosticSeverity as OxyDiagnosticSeverity, LabelKind};
 use oxy_core::errors::PipelineError;
 use tower_lsp::lsp_types::*;
 

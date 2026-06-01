@@ -64,7 +64,11 @@ fn test_extern_flag_resolves_module() {
     std::fs::create_dir_all(&extern_dir).ok();
     let extern_file = extern_dir.join("greet.ox");
     let mut f = std::fs::File::create(&extern_file).unwrap();
-    writeln!(f, "pub fn hello() {{ println!(\"hello from extern\"); }}").unwrap();
+    writeln!(
+        f,
+        "pub fn hello() {{ io::println(\"hello from extern\"); }}"
+    )
+    .unwrap();
 
     // Main file in a different directory — `mod greet;` would normally fail,
     // but the --extern flag must inject it.
