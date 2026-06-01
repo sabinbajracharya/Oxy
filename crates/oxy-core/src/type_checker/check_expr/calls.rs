@@ -633,6 +633,27 @@ impl TypeChecker {
             });
         }
 
+        // The closure parameter must accept the receiver type, since
+        // `apply`/`try_apply` invoke the closure with the receiver as argument.
+        if !params[0].accepts(obj_ty) {
+            let param_span = match closure_expr {
+                Expr::Closure { params, .. } => params
+                    .first()
+                    .map(|p| p.span)
+                    .unwrap_or_else(|| closure_expr.span()),
+                _ => closure_expr.span(),
+            };
+            return Err(PipelineError::TypeError {
+                message: format!(
+                    "mismatched types. `{method}` closure expects parameter `{}`, but receiver is `{}`",
+                    params[0].display_name(),
+                    obj_ty.display_name()
+                ),
+                line: param_span.line,
+                column: param_span.column,
+            });
+        }
+
         if method == symbols::generic_m::APPLY {
             if *ret != TypeInfo::Unit {
                 let diag = crate::diagnostics::Diagnostic::error(

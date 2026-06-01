@@ -283,6 +283,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_apply_rejects_wrong_closure_param_type() {
+        let source = r#"
+            struct A { p: Int }
+            impl A { fn new() -> A { A { p: 0 } } }
+            fn main() {
+                val _ = A::new().apply(|it: Int| {});
+            }
+            "#;
+        let program = crate::parser::parse(source).expect("source should parse");
+        let err = crate::type_checker::TypeChecker::new()
+            .check_program(&program)
+            .expect_err("expected type mismatch");
+        let message = err.to_string();
+        assert!(
+            message.contains("closure expects parameter `Int`"),
+            "expected closure parameter mismatch error, got: {message}"
+        );
+    }
+
     // --- Phase 3.2: single-line function syntax `fn name(params) -> T = expr` ---
 
     #[test]

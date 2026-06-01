@@ -127,3 +127,18 @@ fn test_apply_rejects_explicit_return_err() {
         return Err(AuthError::Denied);
     };
 }
+
+#[compile_error]
+fn test_apply_rejects_wrong_closure_param_type() {
+    val _api = ApiService::new().apply(|it: Int| {
+        val _ = it + 1;
+    });
+}
+
+#[compile_error]
+fn test_try_apply_rejects_wrong_closure_param_type() {
+    val _api = ApiService::new().try_apply(|it: Int| {
+        val _ = it + 1;
+        Ok(())
+    });
+}

@@ -850,8 +850,21 @@ fn dispatch_apply_method(
 
     match closure_result {
         Value::EnumVariant {
-            enum_name, variant, ..
-        } if enum_name == "Result" && variant == "Ok" => Ok(Value::ok(updated)),
+            enum_name,
+            variant,
+            data,
+        } if enum_name == "Result" && variant == "Ok" => {
+            let ok_payload = data.first().cloned().unwrap_or(Value::Unit);
+            let unit_like = matches!(&ok_payload, Value::Unit)
+                || matches!(&ok_payload, Value::Tuple(items) if items.is_empty());
+            if !unit_like {
+                return Err(format!(
+                    "`{method_name}` closure must return Result<(), E>, got Result<{}, _>",
+                    ok_payload.type_name()
+                ));
+            }
+            Ok(Value::ok(updated))
+        }
         Value::EnumVariant {
             enum_name,
             variant,
