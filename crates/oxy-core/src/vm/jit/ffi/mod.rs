@@ -109,6 +109,18 @@ use std::rc::Rc;
 /// follows execution into closures and spawned tasks.
 type OutputPtr = *const std::rc::Rc<std::cell::RefCell<Vec<String>>>;
 
+fn cloned_output_capture(
+    output: OutputPtr,
+) -> Option<std::rc::Rc<std::cell::RefCell<Vec<String>>>> {
+    if output.is_null() {
+        None
+    } else {
+        // Safety: non-null pointers come from `JitVm` / `Interpreter` and stay
+        // valid for the duration of a call; clone the Rc to own this reference.
+        Some(unsafe { (&*output).clone() })
+    }
+}
+
 // ── Stack helpers (used by JIT and FFI internally) ──────────────────
 
 pub(crate) unsafe fn push(ctx: &mut JitContext, val: Value) {
@@ -1128,7 +1140,9 @@ extern "C" fn oxy_path_call_builtin(
 
     // Try exact-path items first
     if let Some(handler) = registry::lookup_item(&seg_refs) {
-        match handler(&args) {
+        let result =
+            registry::with_output_capture(cloned_output_capture(ctx.output), || handler(&args));
+        match result {
             Ok(val) => unsafe {
                 push(ctx, val);
             },
@@ -1227,7 +1241,9 @@ fn call_stdlib_jit(
         line: 0,
         column: 0,
     };
-    module_call(func, args, &span, &mut cb).map_err(|e| e.to_string())
+    crate::stdlib::registry::with_output_capture(cloned_output_capture(output), || {
+        module_call(func, args, &span, &mut cb).map_err(|e| e.to_string())
+    })
 }
 
 // ── Display trait ─────────────────────────────────────────────────────

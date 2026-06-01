@@ -28,6 +28,46 @@ use crate::errors::PipelineError;
 use crate::lexer::Span;
 use crate::types::Value;
 
+thread_local! {
+    static CURRENT_OUTPUT: RefCell<Option<Rc<RefCell<Vec<String>>>>> = const { RefCell::new(None) };
+}
+
+/// Run `f` with a temporary output sink used by stdlib path handlers such as
+/// `io::print*`. When `output` is `None`, handlers write to host stdout.
+pub(crate) fn with_output_capture<T>(
+    output: Option<Rc<RefCell<Vec<String>>>>,
+    f: impl FnOnce() -> T,
+) -> T {
+    CURRENT_OUTPUT.with(|slot| {
+        let previous = slot.replace(output);
+        let result = f();
+        slot.replace(previous);
+        result
+    })
+}
+
+fn emit_output_text(text: &str) {
+    CURRENT_OUTPUT.with(|slot| {
+        let output = slot.borrow().clone();
+        if let Some(output) = output {
+            output.borrow_mut().push(text.to_string());
+        } else {
+            print!("{text}");
+        }
+    });
+}
+
+fn emit_output_line(line: &str) {
+    CURRENT_OUTPUT.with(|slot| {
+        let output = slot.borrow().clone();
+        if let Some(output) = output {
+            output.borrow_mut().push(format!("{line}\n"));
+        } else {
+            println!("{line}");
+        }
+    });
+}
+
 /// Callback used by stdlib modules to invoke a user-supplied closure (for
 /// route handlers, async continuations, etc.). Module implementations that
 /// don't need to call back into user code can ignore this parameter.
@@ -434,10 +474,10 @@ fn panic_handler(args: &[Value]) -> Result<Value, String> {
 
 fn io_println_handler(args: &[Value]) -> Result<Value, String> {
     if args.is_empty() {
-        println!();
+        emit_output_line("");
     } else {
         let template = args[0].to_string();
-        println!("{}", crate::types::format_template(&template, &args[1..]));
+        emit_output_line(&crate::types::format_template(&template, &args[1..]));
     }
     Ok(Value::Unit)
 }
@@ -445,19 +485,18 @@ fn io_println_handler(args: &[Value]) -> Result<Value, String> {
 fn io_print_handler(args: &[Value]) -> Result<Value, String> {
     if !args.is_empty() {
         let template = args[0].to_string();
-        print!("{}", crate::types::format_template(&template, &args[1..]));
+        emit_output_text(&crate::types::format_template(&template, &args[1..]));
     }
     Ok(Value::Unit)
 }
 
 fn io_dbg_handler(args: &[Value]) -> Result<Value, String> {
-    for (i, val) in args.iter().enumerate() {
-        if i > 0 {
-            print!(" ");
-        }
-        print!("{:?}", val);
-    }
-    println!();
+    let line = args
+        .iter()
+        .map(|v| format!("{v:?}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    emit_output_line(&line);
     Ok(Value::Unit)
 }
 

@@ -88,6 +88,24 @@ mod tests {
         assert_eq!(output, vec!["10\n", "20\n"]);
     }
 
+    #[test]
+    fn test_compiled_io_println_captured() {
+        let source = r#"
+        fn main() {
+            io::println("fib({}) = {}", 8, 21);
+            io::print("done");
+        }
+        "#;
+        let result = run_compiled_capturing(source);
+        assert!(
+            result.is_ok(),
+            "io::println capture failed: {:?}",
+            result.err()
+        );
+        let (_, output) = result.unwrap();
+        assert_eq!(output, vec!["fib(8) = 21\n", "done"]);
+    }
+
     // --- ForDestructure tests ---
 
     #[test]

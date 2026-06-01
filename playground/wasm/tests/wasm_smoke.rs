@@ -34,6 +34,12 @@ fn wasm_println_arithmetic() {
     check("fn main() { println(\"{}\", 1 + 2 * 3); }", "7\n");
 }
 
+// io::println path dispatch should use the same captured output sink as println.
+#[wasm_bindgen_test]
+fn wasm_io_println_captures_output() {
+    check("fn main() { io::println(\"{}\", 42); }", "42\n");
+}
+
 // oxy_load_local / oxy_store_local / oxy_make_cell (usize slot indices).
 #[wasm_bindgen_test]
 fn wasm_locals_and_while() {
