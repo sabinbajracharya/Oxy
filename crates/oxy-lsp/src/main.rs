@@ -8,6 +8,7 @@
 mod completions;
 mod server;
 
+use oxy_core::diagnostics::{DiagnosticSeverity as OxyDiagnosticSeverity, LabelKind};
 use oxy_core::ast::Item;
 use oxy_core::errors::PipelineError;
 use tower_lsp::lsp_types::*;
@@ -17,35 +18,64 @@ pub(crate) fn is_ident_char(b: u8) -> bool {
 }
 
 pub(crate) fn error_to_diagnostic(e: &PipelineError) -> Diagnostic {
-    let (message, line, column) = match e {
-        PipelineError::Lexer {
-            message,
-            line,
-            column,
-        } => (message.clone(), *line, *column),
-        PipelineError::Parser {
-            message,
-            line,
-            column,
-        } => (message.clone(), *line, *column),
-        PipelineError::Runtime {
-            message,
-            line,
-            column,
-        } => (message.clone(), *line, *column),
-        _ => (e.to_string(), 1, 1),
-    };
+    let d = e.to_diagnostic();
+    let primary = d.primary_label();
 
     // Oxy spans are 1-indexed; LSP is 0-indexed.
-    let line0 = if line > 0 { line - 1 } else { 0 } as u32;
-    let col0 = if column > 0 { column - 1 } else { 0 } as u32;
-    let pos = Position::new(line0, col0);
+    let (start, end) = if let Some(label) = primary {
+        let line0 = label.span.line.saturating_sub(1) as u32;
+        let col0 = label.span.column.saturating_sub(1) as u32;
+        let width = (label.span.end.saturating_sub(label.span.start)).max(1) as u32;
+        (
+            Position::new(line0, col0),
+            Position::new(line0, col0.saturating_add(width)),
+        )
+    } else {
+        let (line, column) = d.line_column().unwrap_or((1, 1));
+        let line0 = line.saturating_sub(1) as u32;
+        let col0 = column.saturating_sub(1) as u32;
+        let pos = Position::new(line0, col0);
+        (pos, pos)
+    };
+
+    let related_information: Vec<DiagnosticRelatedInformation> = d
+        .labels
+        .iter()
+        .filter(|l| l.kind == LabelKind::Secondary)
+        .map(|label| {
+            let line0 = label.span.line.saturating_sub(1) as u32;
+            let col0 = label.span.column.saturating_sub(1) as u32;
+            let width = (label.span.end.saturating_sub(label.span.start)).max(1) as u32;
+            let start = Position::new(line0, col0);
+            let end = Position::new(line0, col0.saturating_add(width));
+            DiagnosticRelatedInformation {
+                location: Location {
+                    uri: Url::parse("file://unknown").expect("valid synthetic URI"),
+                    range: Range::new(start, end),
+                },
+                message: label
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| "related location".to_string()),
+            }
+        })
+        .collect();
 
     Diagnostic {
-        range: Range::new(pos, pos),
-        severity: Some(DiagnosticSeverity::ERROR),
+        range: Range::new(start, end),
+        severity: Some(match d.severity {
+            OxyDiagnosticSeverity::Error => tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
+            OxyDiagnosticSeverity::Warning => tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
+            OxyDiagnosticSeverity::Note => tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION,
+        }),
+        code: Some(NumberOrString::String(d.code.to_string())),
         source: Some("oxy".to_string()),
-        message,
+        message: d.message,
+        related_information: if related_information.is_empty() {
+            None
+        } else {
+            Some(related_information)
+        },
         ..Default::default()
     }
 }
@@ -133,7 +163,16 @@ mod tests {
         let diag = error_to_diagnostic(&err);
         assert_eq!(diag.range.start.line, 2); // 0-indexed
         assert_eq!(diag.range.start.character, 4);
-        assert_eq!(diag.severity, Some(DiagnosticSeverity::ERROR));
+        assert_eq!(
+            diag.severity,
+            Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
+        );
+        assert_eq!(
+            diag.code,
+            Some(NumberOrString::String(
+                oxy_core::diagnostics::codes::PAR_UNEXPECTED_TOKEN.to_string()
+            ))
+        );
         assert_eq!(diag.message, "unexpected token");
     }
 
