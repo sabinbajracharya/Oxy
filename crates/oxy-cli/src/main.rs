@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::process;
 
 use colored::Colorize;
+use oxy_core::diagnostics::{Diagnostic, DiagnosticCategory, LabelKind, NoteKind};
 use oxy_core::errors::PipelineError;
+use oxy_core::lexer::Span;
 use oxy_core::vm::CallFrame;
 
 fn main() {
@@ -505,92 +507,126 @@ fn print_help() {
 /// Display a rich error with colored output, source context, and optional stack trace.
 fn display_error(err: &PipelineError, source: &str, call_stack: &[CallFrame]) {
     let is_tty = atty_stderr();
+    let diagnostic = err.to_diagnostic();
+    print_error_header(&diagnostic, is_tty);
 
-    match err {
-        PipelineError::Runtime {
-            message,
-            line,
-            column,
-        } => {
-            print_error_header("runtime error", message, *line, *column, is_tty);
-            if *line > 0 {
-                print_source_context(source, *line, *column, is_tty);
-            }
-            // Print "did you mean?" as a separate help line if embedded in message
-            if message.contains("did you mean") {
-                // Already in the message, extract and format as help
-            }
-            // Print stack trace
-            if !call_stack.is_empty() {
-                eprintln!();
+    let mut rendered_any_label = false;
+    if let Some(primary) = diagnostic.primary_label() {
+        if primary.span.line > 0 {
+            print_source_context(source, primary.span, primary.message.as_deref(), is_tty);
+            rendered_any_label = true;
+        }
+    }
+
+    for label in diagnostic
+        .labels
+        .iter()
+        .filter(|l| l.kind == LabelKind::Secondary)
+    {
+        if label.span.line > 0 {
+            print_source_context(source, label.span, label.message.as_deref(), is_tty);
+            rendered_any_label = true;
+        }
+    }
+
+    if !rendered_any_label {
+        if let Some((line, column)) = diagnostic.line_column() {
+            print_source_context(source, Span::new(0, 1, line, column), None, is_tty);
+        }
+    }
+
+    for note in &diagnostic.notes {
+        match note.kind {
+            NoteKind::Note => {
                 if is_tty {
-                    eprint!("{}", "stack trace".blue().bold());
-                    eprintln!("{}", " (most recent call last):".blue());
+                    eprintln!("{} {}", "note:".blue().bold(), note.message);
                 } else {
-                    eprintln!("stack trace (most recent call last):");
+                    eprintln!("note: {}", note.message);
                 }
-                for frame in call_stack.iter().rev() {
-                    if is_tty {
-                        eprintln!(
-                            "  {} `{}` {} {}:{}",
-                            "in".dimmed(),
-                            frame.name.yellow(),
-                            "at".dimmed(),
-                            frame.line,
-                            frame.column,
-                        );
-                    } else {
-                        eprintln!("{frame}");
-                    }
+            }
+            NoteKind::Help => {
+                if is_tty {
+                    eprintln!("{} {}", "help:".cyan().bold(), note.message);
+                } else {
+                    eprintln!("help: {}", note.message);
                 }
             }
         }
-        PipelineError::Parser {
-            message,
-            line,
-            column,
-        } => {
-            print_error_header("parse error", message, *line, *column, is_tty);
-            if *line > 0 {
-                print_source_context(source, *line, *column, is_tty);
-            }
+    }
+
+    for fix in &diagnostic.fix_its {
+        if is_tty {
+            eprintln!("{} {}", "help:".cyan().bold(), fix.message);
+        } else {
+            eprintln!("help: {}", fix.message);
         }
-        PipelineError::Lexer {
-            message,
-            line,
-            column,
-        } => {
-            print_error_header("lex error", message, *line, *column, is_tty);
-            if *line > 0 {
-                print_source_context(source, *line, *column, is_tty);
-            }
-        }
-        _ => {
+        for edit in &fix.edits {
             if is_tty {
-                eprintln!("{} {err}", "error:".red().bold());
+                eprintln!(
+                    "  {} line {}:{} {} `{}`",
+                    "replace".dimmed(),
+                    edit.span.line,
+                    edit.span.column,
+                    "with".dimmed(),
+                    edit.replacement,
+                );
             } else {
-                eprintln!("error: {err}");
+                eprintln!(
+                    "  replace line {}:{} with `{}`",
+                    edit.span.line, edit.span.column, edit.replacement
+                );
+            }
+        }
+    }
+
+    if diagnostic.category == DiagnosticCategory::Runtime && !call_stack.is_empty() {
+        eprintln!();
+        if is_tty {
+            eprint!("{}", "stack trace".blue().bold());
+            eprintln!("{}", " (most recent call last):".blue());
+        } else {
+            eprintln!("stack trace (most recent call last):");
+        }
+        for frame in call_stack.iter().rev() {
+            if is_tty {
+                eprintln!(
+                    "  {} `{}` {} {}:{}",
+                    "in".dimmed(),
+                    frame.name.yellow(),
+                    "at".dimmed(),
+                    frame.line,
+                    frame.column,
+                );
+            } else {
+                eprintln!("{frame}");
             }
         }
     }
 }
 
-/// Print the error header line: `error[kind]: message`
-fn print_error_header(kind: &str, message: &str, line: usize, column: usize, is_tty: bool) {
+/// Print the error header line: `error[CODE/category]: message`.
+fn print_error_header(diagnostic: &Diagnostic, is_tty: bool) {
+    let category = diagnostic_category_name(diagnostic.category);
     if is_tty {
         eprintln!(
             "{}{}{}{} {}",
             "error".red().bold(),
             "[".dimmed(),
-            kind.red(),
+            format!("{}/{}", diagnostic.code, category).red(),
             "]".dimmed(),
-            message.bold(),
+            diagnostic.message.bold(),
         );
     } else {
-        eprintln!("error[{kind}]: {message}");
+        eprintln!(
+            "error[{}/{}]: {}",
+            diagnostic.code, category, diagnostic.message
+        );
     }
 
-    if line > 0 {
+    if let Some((line, column)) = diagnostic.line_column() {
+        if line == 0 {
+            return;
+        }
         if is_tty {
             eprintln!(" {} line {}:{}", "-->".blue().bold(), line, column,);
         } else {
@@ -600,7 +636,12 @@ fn print_error_header(kind: &str, message: &str, line: usize, column: usize, is_
 }
 
 /// Print source context: the error line ± 1, with line numbers and an underline.
-fn print_source_context(source: &str, line: usize, column: usize, is_tty: bool) {
+fn print_source_context(source: &str, span: Span, label_message: Option<&str>, is_tty: bool) {
+    let line = span.line;
+    let column = span.column;
+    if line == 0 {
+        return;
+    }
     let lines: Vec<&str> = source.lines().collect();
     let gutter_width = format!("{}", (line + 1).min(lines.len())).len();
 
@@ -646,16 +687,20 @@ fn print_source_context(source: &str, line: usize, column: usize, is_tty: bool) 
         // Underline / caret
         if column > 0 {
             let padding = " ".repeat(column - 1);
+            let underline_width = (span.end.saturating_sub(span.start)).max(1);
+            let underline = "^".repeat(underline_width);
+            let label = label_message.unwrap_or("here");
             if is_tty {
                 eprintln!(
-                    "{:>gutter_width$} {} {}{}",
+                    "{:>gutter_width$} {} {}{} {}",
                     "",
                     "|".blue().bold(),
                     padding,
-                    "^-- here".cyan().bold(),
+                    underline.cyan().bold(),
+                    label.cyan().bold(),
                 );
             } else {
-                eprintln!("{:>gutter_width$} | {padding}^-- here", "");
+                eprintln!("{:>gutter_width$} | {padding}{underline} {label}", "");
             }
         }
     }
@@ -682,4 +727,14 @@ fn print_source_context(source: &str, line: usize, column: usize, is_tty: bool) 
 fn atty_stderr() -> bool {
     use std::io::IsTerminal;
     io::stderr().is_terminal()
+}
+
+fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
+    match category {
+        DiagnosticCategory::Lexer => "lexer",
+        DiagnosticCategory::Parser => "parser",
+        DiagnosticCategory::TypeChecker => "type",
+        DiagnosticCategory::Runtime => "runtime",
+        DiagnosticCategory::Other => "other",
+    }
 }
