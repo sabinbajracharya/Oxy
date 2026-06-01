@@ -44,20 +44,9 @@ impl Parser {
     // === Expression parsing (Pratt / precedence climbing) ===
 
     pub(super) fn parse_expr(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
-        let mut left = self.parse_prefix()?;
+        let left = self.parse_expr_inner(min_prec)?;
 
-        while !self.is_at_end() {
-            let prec = Precedence::of_binary(self.peek_kind());
-            if prec <= min_prec {
-                break;
-            }
-
-            left = self.parse_infix(left, prec)?;
-        }
-
-        // Cascade operator `~>` — postfix chain of method calls and field
-        // assignments. All operations apply to the same receiver, flattened
-        // into a single Block to avoid double-evaluation.
+        // Cascade operator `~>` — postfix chain outside the precedence system.
         if !self.is_at_end() && self.check(&TokenKind::TildeArrow) {
             return self.parse_cascade_chain(left);
         }
@@ -65,14 +54,13 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse an expression without cascade — used for the right-hand side
-    /// of `~>` to prevent `a ~> (b ~> c)` right-associative nesting.
-    fn parse_expr_no_cascade(&mut self) -> Result<Expr, PipelineError> {
+    /// Core expression parser (prefix + infix loop), without cascade.
+    fn parse_expr_inner(&mut self, min_prec: Precedence) -> Result<Expr, PipelineError> {
         let mut left = self.parse_prefix()?;
 
         loop {
             let prec = Precedence::of_binary(self.peek_kind());
-            if prec <= Precedence::None {
+            if prec <= min_prec {
                 break;
             }
             left = self.parse_infix(left, prec)?;
@@ -1075,7 +1063,7 @@ impl Parser {
 
         while self.check(&TokenKind::TildeArrow) {
             self.advance();
-            let right = self.parse_expr_no_cascade()?;
+            let right = self.parse_expr_inner(Precedence::None)?;
             let stmt = Self::cascade_stmt(&receiver, right)?;
             stmts.push(stmt);
         }
