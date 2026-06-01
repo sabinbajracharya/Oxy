@@ -143,12 +143,12 @@ mod expressions {
 
     #[test]
     fn const_int() {
-        assert_ir_snapshot("expressions/const_Int", "let x = 42;");
+        assert_ir_snapshot("expressions/const_int", "let x = 42;");
     }
 
     #[test]
     fn const_float() {
-        assert_ir_snapshot("expressions/const_Float", "let x = 3.14;");
+        assert_ir_snapshot("expressions/const_float", "let x = 3.14;");
     }
 
     #[test]
@@ -223,7 +223,7 @@ mod expressions {
 
     #[test]
     fn const_negative_int() {
-        assert_ir_snapshot("expressions/const_negative_Int", "let x = -100;");
+        assert_ir_snapshot("expressions/const_negative_int", "let x = -100;");
     }
 
     #[test]
@@ -246,7 +246,7 @@ mod expressions {
 
     #[test]
     fn arithmetic_float() {
-        assert_ir_snapshot("expressions/arithmetic_Float", "let x = 1.5 + 2.5;");
+        assert_ir_snapshot("expressions/arithmetic_float", "let x = 1.5 + 2.5;");
     }
 
     #[test]
