@@ -153,14 +153,20 @@ impl Parser {
                         // `foo::<T>(args)` — call with turbofish
                         if self.check(&TokenKind::LParen) {
                             self.advance();
-                            let args = self.parse_arg_list()?;
+                            let mut args = self.parse_arg_list()?;
                             let end_span = self.current_span();
                             self.expect(TokenKind::RParen)?;
+                            let mut full_end_span = end_span;
+                            if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
+                                let closure = self.parse_trailing_closure_arg()?;
+                                full_end_span = closure.span();
+                                args.push(closure);
+                            }
                             return Ok(Expr::Call {
                                 callee: Box::new(Expr::Ident(name.clone(), span)),
                                 turbofish,
                                 args,
-                                span: self.merge_spans(span, end_span),
+                                span: self.merge_spans(span, full_end_span),
                             });
                         }
                         // `Foo::<T> { field: val }` — struct init with turbofish
@@ -184,14 +190,20 @@ impl Parser {
                     // Check if followed by `(` → PathCall
                     if self.check(&TokenKind::LParen) {
                         self.advance();
-                        let args = self.parse_arg_list()?;
+                        let mut args = self.parse_arg_list()?;
                         let end_span = self.current_span();
                         self.expect(TokenKind::RParen)?;
+                        let mut full_end_span = end_span;
+                        if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
+                            let closure = self.parse_trailing_closure_arg()?;
+                            full_end_span = closure.span();
+                            args.push(closure);
+                        }
                         return Ok(Expr::PathCall {
                             path: segments,
                             turbofish,
                             args,
-                            span: self.merge_spans(span, end_span),
+                            span: self.merge_spans(span, full_end_span),
                         });
                     }
 
@@ -547,14 +559,20 @@ impl Parser {
         // Function call: `expr(...)`
         if op_kind == TokenKind::LParen {
             self.advance();
-            let args = self.parse_arg_list()?;
+            let mut args = self.parse_arg_list()?;
             let end_span = self.current_span();
             self.expect(TokenKind::RParen)?;
+            let mut full_end_span = end_span;
+            if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
+                let closure = self.parse_trailing_closure_arg()?;
+                full_end_span = closure.span();
+                args.push(closure);
+            }
             return Ok(Expr::Call {
                 callee: Box::new(left),
                 turbofish: None,
                 args,
-                span: self.merge_spans(op_span, end_span),
+                span: self.merge_spans(op_span, full_end_span),
             });
         }
 
@@ -619,7 +637,7 @@ impl Parser {
                 let end_span = self.current_span();
                 self.expect(TokenKind::RParen)?;
                 let mut full_end_span = end_span;
-                if Self::is_trailing_closure_method(&name) && self.check(&TokenKind::LBrace) {
+                if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
                     let closure = self.parse_trailing_closure_arg()?;
                     full_end_span = closure.span();
                     args.push(closure);
@@ -634,8 +652,8 @@ impl Parser {
             }
 
             // Trailing-closure method call without parentheses:
-            // `receiver.apply { ... }`, `receiver.try_apply { ... }`.
-            if Self::is_trailing_closure_method(&name) && self.check(&TokenKind::LBrace) {
+            // `receiver.map { ... }`, `receiver.apply { ... }`, etc.
+            if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
                 let closure = self.parse_trailing_closure_arg()?;
                 let end_span = closure.span();
                 return Ok(Expr::MethodCall {
@@ -691,7 +709,7 @@ impl Parser {
             return self.parse_if_let_expr(start_span);
         }
 
-        let condition = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
+        let condition = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
         let then_block = self.parse_block()?;
 
         let else_block = if self.match_token(&TokenKind::Else) {
@@ -730,10 +748,10 @@ impl Parser {
         let pattern = self.parse_pattern()?;
         self.expect(TokenKind::Eq)?;
         // Stop at `&&` so it can separate scrutinee from optional guard condition.
-        let expr = self.with_no_struct_literal(|p| p.parse_expr(Precedence::And))?;
+        let expr = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::And))?;
         // Optional `&& guard_condition` — the bound pattern variables are in scope.
         let guard = if self.match_token(&TokenKind::AmpAmp) {
-            Some(Box::new(self.with_no_struct_literal(|p| {
+            Some(Box::new(self.with_header_expr_disambiguation(|p| {
                 p.parse_expr(Precedence::None)
             })?))
         } else {
@@ -857,7 +875,7 @@ impl Parser {
         let start_span = self.current_span();
         self.expect(TokenKind::Match)?;
 
-        let expr = self.parse_expr(Precedence::None)?;
+        let expr = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
         self.expect(TokenKind::LBrace)?;
 
         let mut arms = Vec::new();
@@ -1031,14 +1049,20 @@ impl Parser {
 
         if self.check(&TokenKind::LParen) {
             self.advance();
-            let args = self.parse_arg_list()?;
+            let mut args = self.parse_arg_list()?;
             let end_span = self.current_span();
             self.expect(TokenKind::RParen)?;
+            let mut full_end_span = end_span;
+            if !self.ctx.no_trailing_closure && self.check(&TokenKind::LBrace) {
+                let closure = self.parse_trailing_closure_arg()?;
+                full_end_span = closure.span();
+                args.push(closure);
+            }
             return Ok(Expr::PathCall {
                 path: segments,
                 turbofish: None,
                 args,
-                span: self.merge_spans(span, end_span),
+                span: self.merge_spans(span, full_end_span),
             });
         }
         Ok(Expr::Ident(keyword.to_string(), span))
@@ -1082,9 +1106,5 @@ impl Parser {
             span,
             is_async: false,
         })
-    }
-
-    fn is_trailing_closure_method(name: &str) -> bool {
-        matches!(name, "apply" | "try_apply")
     }
 }

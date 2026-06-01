@@ -246,6 +246,19 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
     }
 
+    #[test]
+    fn test_trailing_closure_implicit_it_for_unary_method() {
+        let result = run_compiled(
+            r#"
+            fn main() {
+                val v = [1, 2, 3];
+                val _ = v.map { it + 1 };
+            }
+            "#,
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+    }
+
     // --- Phase 3.2: single-line function syntax `fn name(params) -> T = expr` ---
 
     #[test]

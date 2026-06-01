@@ -440,9 +440,18 @@ impl TypeChecker {
                     return Ok(ret_ty.clone());
                 }
             } else {
+                let expected_args = self.builtin_method_expected_args(&obj_ty, method, args);
                 let arg_types: Vec<TypeInfo> = args
                     .iter()
-                    .map(|a| self.infer_expr(a))
+                    .enumerate()
+                    .map(|(idx, a)| {
+                        let expected = expected_args.as_ref().and_then(|types| types.get(idx));
+                        if let Some(expected) = expected {
+                            self.infer_expr_expected(a, Some(expected))
+                        } else {
+                            self.infer_expr(a)
+                        }
+                    })
                     .collect::<Result<_, _>>()?;
                 // Validate the method against the builtin method tables.
                 // Skip when the receiver type is Unknown (we have no
@@ -589,14 +598,6 @@ impl TypeChecker {
             });
         }
 
-        if method == symbols::generic_m::APPLY && Self::apply_closure_contains_try(closure_expr) {
-            return Err(PipelineError::TypeError {
-                message: "mismatched types. Expected closure to return `()`, found `Result<_, _>`. Consider using `try_apply` instead.".to_string(),
-                line: closure_expr.span().line,
-                column: closure_expr.span().column,
-            });
-        }
-
         let expected_closure_ty = if method == symbols::generic_m::APPLY {
             TypeInfo::Function {
                 params: vec![obj_ty.clone()],
@@ -671,145 +672,62 @@ impl TypeChecker {
         Ok(TypeInfo::Result(Box::new(obj_ty.clone()), err_ty.clone()))
     }
 
-    fn apply_closure_contains_try(expr: &Expr) -> bool {
-        match expr {
-            Expr::Try { .. } => true,
-            Expr::UnaryOp { expr, .. }
-            | Expr::Grouped(expr, ..)
-            | Expr::Await { expr, .. }
-            | Expr::As { expr, .. } => Self::apply_closure_contains_try(expr),
-            Expr::BinaryOp { left, right, .. } => {
-                Self::apply_closure_contains_try(left) || Self::apply_closure_contains_try(right)
-            }
-            Expr::Call { callee, args, .. } => {
-                Self::apply_closure_contains_try(callee)
-                    || args.iter().any(Self::apply_closure_contains_try)
-            }
-            Expr::MethodCall { object, args, .. } => {
-                Self::apply_closure_contains_try(object)
-                    || args.iter().any(Self::apply_closure_contains_try)
-            }
-            Expr::PathCall { args, .. } | Expr::Tuple { elements: args, .. } => {
-                args.iter().any(Self::apply_closure_contains_try)
-            }
-            Expr::Array { elements, .. } => elements.iter().any(Self::apply_closure_contains_try),
-            Expr::Repeat { value, count, .. } => {
-                Self::apply_closure_contains_try(value) || Self::apply_closure_contains_try(count)
-            }
-            Expr::Index { object, index, .. } => {
-                Self::apply_closure_contains_try(object) || Self::apply_closure_contains_try(index)
-            }
-            Expr::Assign { target, value, .. } | Expr::CompoundAssign { target, value, .. } => {
-                Self::apply_closure_contains_try(target) || Self::apply_closure_contains_try(value)
-            }
-            Expr::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                Self::apply_closure_contains_try(condition)
-                    || then_block
-                        .stmts
-                        .iter()
-                        .any(Self::apply_closure_stmt_contains_try)
-                    || else_block
-                        .as_deref()
-                        .is_some_and(Self::apply_closure_contains_try)
-            }
-            Expr::IfLet {
-                expr,
-                guard,
-                then_block,
-                else_block,
-                ..
-            } => {
-                Self::apply_closure_contains_try(expr)
-                    || guard
-                        .as_deref()
-                        .is_some_and(Self::apply_closure_contains_try)
-                    || then_block
-                        .stmts
-                        .iter()
-                        .any(Self::apply_closure_stmt_contains_try)
-                    || else_block
-                        .as_deref()
-                        .is_some_and(Self::apply_closure_contains_try)
-            }
-            Expr::Match { expr, arms, .. } => {
-                Self::apply_closure_contains_try(expr)
-                    || arms.iter().any(|a| {
-                        a.guard
-                            .as_deref()
-                            .is_some_and(Self::apply_closure_contains_try)
-                            || Self::apply_closure_contains_try(&a.body)
-                    })
-            }
-            Expr::StructInit { fields, base, .. } => {
-                fields
-                    .iter()
-                    .any(|(_, e)| Self::apply_closure_contains_try(e))
-                    || base
-                        .as_deref()
-                        .is_some_and(Self::apply_closure_contains_try)
-            }
-            Expr::Block(block) | Expr::AsyncBlock { body: block, .. } => block
-                .stmts
-                .iter()
-                .any(Self::apply_closure_stmt_contains_try),
-            Expr::Closure { body, .. } => Self::apply_closure_contains_try(body),
-            Expr::Range { start, end, .. } => {
-                start
-                    .as_deref()
-                    .is_some_and(Self::apply_closure_contains_try)
-                    || end.as_deref().is_some_and(Self::apply_closure_contains_try)
-            }
-            Expr::FString { parts, .. } => parts
-                .iter()
-                .any(|p| matches!(p, FStringPart::Expr(e) if Self::apply_closure_contains_try(e))),
-            Expr::Return { value, .. } => value
-                .as_deref()
-                .is_some_and(Self::apply_closure_contains_try),
-            Expr::IntLiteral(..)
-            | Expr::FloatLiteral(..)
-            | Expr::BoolLiteral(..)
-            | Expr::StringLiteral(..)
-            | Expr::CharLiteral(..)
-            | Expr::Ident(..)
-            | Expr::FieldAccess { .. }
-            | Expr::Path { .. }
-            | Expr::SelfRef(..) => false,
+    fn builtin_method_expected_args(
+        &self,
+        obj_ty: &TypeInfo,
+        method: &str,
+        args: &[Expr],
+    ) -> Option<Vec<TypeInfo>> {
+        if args.is_empty() {
+            return None;
         }
+        let expected_closure = self.unary_closure_expected_for_method(obj_ty, method)?;
+        let mut expected = vec![TypeInfo::Unknown; args.len()];
+        expected[0] = expected_closure;
+        Some(expected)
     }
 
-    fn apply_closure_stmt_contains_try(stmt: &Stmt) -> bool {
-        match stmt {
-            Stmt::Expr { expr, .. } => Self::apply_closure_contains_try(expr),
-            Stmt::Let { value, .. } => value.as_ref().is_some_and(Self::apply_closure_contains_try),
-            Stmt::LetPattern { value, .. } => Self::apply_closure_contains_try(value),
-            Stmt::Return { value, .. } => {
-                value.as_ref().is_some_and(Self::apply_closure_contains_try)
+    fn unary_closure_expected_for_method(
+        &self,
+        obj_ty: &TypeInfo,
+        method: &str,
+    ) -> Option<TypeInfo> {
+        let unary = |param: TypeInfo, ret: TypeInfo| TypeInfo::Function {
+            params: vec![param],
+            ret: Box::new(ret),
+        };
+
+        match obj_ty {
+            TypeInfo::Vec(elem) | TypeInfo::Array(elem, _) => {
+                let elem_ty = (**elem).clone();
+                match method {
+                    "map" => Some(unary(elem_ty, TypeInfo::Unknown)),
+                    "filter" | "find" | "position" | "all" | "any" => {
+                        Some(unary(elem_ty, TypeInfo::Bool))
+                    }
+                    "for_each" => Some(unary(elem_ty, TypeInfo::Unit)),
+                    _ => None,
+                }
             }
-            Stmt::While {
-                condition, body, ..
-            } => {
-                Self::apply_closure_contains_try(condition)
-                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
+            TypeInfo::Option(inner) => {
+                let inner_ty = (**inner).clone();
+                match method {
+                    "map" => Some(unary(inner_ty, TypeInfo::Unknown)),
+                    "and_then" => Some(unary(
+                        inner_ty,
+                        TypeInfo::Option(Box::new(TypeInfo::Unknown)),
+                    )),
+                    _ => None,
+                }
             }
-            Stmt::WhileLet { expr, body, .. } => {
-                Self::apply_closure_contains_try(expr)
-                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
-            }
-            Stmt::For { iterable, body, .. } => {
-                Self::apply_closure_contains_try(iterable)
-                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
-            }
-            Stmt::ForDestructure { iterable, body, .. } => {
-                Self::apply_closure_contains_try(iterable)
-                    || body.stmts.iter().any(Self::apply_closure_stmt_contains_try)
-            }
-            Stmt::Loop { body, .. } => body.stmts.iter().any(Self::apply_closure_stmt_contains_try),
-            Stmt::Item(_) | Stmt::Use(_) | Stmt::Break { .. } | Stmt::Continue { .. } => false,
+            TypeInfo::Result(ok_ty, err_ty) => match method {
+                "map" | "and_then" => Some(unary((**ok_ty).clone(), TypeInfo::Unknown)),
+                "map_err" | "or_else" | "unwrap_or_else" => {
+                    Some(unary((**err_ty).clone(), TypeInfo::Unknown))
+                }
+                _ => None,
+            },
+            _ => None,
         }
     }
 }

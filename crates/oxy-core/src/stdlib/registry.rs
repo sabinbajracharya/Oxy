@@ -452,7 +452,9 @@ fn io_print_handler(args: &[Value]) -> Result<Value, String> {
 
 fn io_dbg_handler(args: &[Value]) -> Result<Value, String> {
     for (i, val) in args.iter().enumerate() {
-        if i > 0 { print!(" "); }
+        if i > 0 {
+            print!(" ");
+        }
         print!("{:?}", val);
     }
     println!();
@@ -464,5 +466,8 @@ fn string_format_handler(args: &[Value]) -> Result<Value, String> {
         return Ok(Value::String(String::new()));
     }
     let template = args[0].to_string();
-    Ok(Value::String(crate::types::format_template(&template, &args[1..])))
+    Ok(Value::String(crate::types::format_template(
+        &template,
+        &args[1..],
+    )))
 }

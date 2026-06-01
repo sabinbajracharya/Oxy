@@ -1001,11 +1001,7 @@ mod tests {
     fn test_arrows() {
         assert_eq!(
             kinds("-> =>"),
-            vec![
-                TokenKind::Arrow,
-                TokenKind::FatArrow,
-                TokenKind::Eof,
-            ]
+            vec![TokenKind::Arrow, TokenKind::FatArrow, TokenKind::Eof,]
         );
     }
 

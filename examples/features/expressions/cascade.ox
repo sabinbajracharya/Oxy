@@ -39,6 +39,14 @@ fn test_apply_trailing_closure_with_parens() {
 }
 
 #[test]
+fn test_map_trailing_closure_implicit_it() {
+    val xs = [1, 2, 3];
+    val ys = xs.map { it + 1 };
+    assert_eq(ys.len(), 3);
+    assert_eq(ys[0], 2);
+}
+
+#[test]
 fn test_try_apply_returns_result() {
     val api_result = ApiService::new().try_apply {
         it.port = 90;
@@ -56,6 +64,21 @@ fn test_try_apply_error_stays_local() {
     val api_result = ApiService::new().try_apply {
         it.port = 91;
         it.auth_fail()?;
+        Ok(())
+    };
+
+    match api_result {
+        Ok(_) => assert(false),
+        Err(_) => assert(true),
+    }
+}
+
+#[test]
+fn test_try_apply_allows_explicit_return_err() {
+    val api_result = ApiService::new().try_apply {
+        if true {
+            return Err(AuthError::Denied);
+        }
         Ok(())
     };
 
@@ -95,5 +118,12 @@ fn test_apply_rejects_result_return() {
     val _api = ApiService::new().apply {
         it.port = 80;
         Err(AuthError::Denied)
+    };
+}
+
+#[compile_error]
+fn test_apply_rejects_explicit_return_err() {
+    val _api = ApiService::new().apply {
+        return Err(AuthError::Denied);
     };
 }

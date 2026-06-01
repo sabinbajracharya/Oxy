@@ -33,6 +33,10 @@ struct ParseContext {
     /// doesn't mistake `MAX { ... }` for a struct init. Matches Rust's
     /// "no-struct-literal" disambiguation.
     no_struct_literal: bool,
+    /// When true, expression parsing will not consume a following `{ ... }`
+    /// as a trailing closure argument. Used in header contexts (`if`/`while`/
+    /// `for`/`match`) where the next block belongs to the control-flow syntax.
+    no_trailing_closure: bool,
 }
 
 /// Parser for the Oxy language.
@@ -121,6 +125,28 @@ impl Parser {
         let result = f(self);
         self.ctx.no_struct_literal = saved;
         result
+    }
+
+    /// Parse with trailing-closure capture disabled, restoring the previous
+    /// mode afterwards.
+    fn with_no_trailing_closure<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = self.ctx.no_trailing_closure;
+        self.ctx.no_trailing_closure = true;
+        let result = f(self);
+        self.ctx.no_trailing_closure = saved;
+        result
+    }
+
+    /// Header-expression mode for control-flow forms whose next `{ ... }`
+    /// belongs to syntax, not a trailing closure argument.
+    fn with_header_expr_disambiguation<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        self.with_no_struct_literal(|p| p.with_no_trailing_closure(f))
     }
 
     /// Parse the tokens into a [`Program`].

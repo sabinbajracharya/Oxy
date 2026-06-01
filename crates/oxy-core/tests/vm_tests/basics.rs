@@ -129,8 +129,7 @@ fn test_block_value() {
 
 #[test]
 fn test_compound_assignment() {
-    let output =
-        run_and_capture(r#"fn main() { var x = 10; x += 5; x -= 3; println("{}", x); }"#);
+    let output = run_and_capture(r#"fn main() { var x = 10; x += 5; x -= 3; println("{}", x); }"#);
     assert_eq!(output, vec!["12\n"]);
 }
 

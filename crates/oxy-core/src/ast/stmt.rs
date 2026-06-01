@@ -268,10 +268,7 @@ impl Stmt {
                 value,
                 ..
             } => {
-                out.push_str(&format!(
-                    "{pad}{} ",
-                    if *mutable { "var" } else { "val" }
-                ));
+                out.push_str(&format!("{pad}{} ", if *mutable { "var" } else { "val" }));
                 pattern.pretty_print(out);
                 out.push_str(" = ");
                 value.pretty_print(out, 0);

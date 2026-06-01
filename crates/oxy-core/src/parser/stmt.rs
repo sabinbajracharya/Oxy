@@ -204,7 +204,7 @@ impl Parser {
             };
             let pattern = self.parse_pattern()?;
             self.expect(TokenKind::Eq)?;
-            let expr = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
+            let expr = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::WhileLet {
@@ -217,7 +217,7 @@ impl Parser {
             });
         }
 
-        let condition = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
+        let condition = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
         let body = self.parse_block()?;
         let end_span = body.span;
 
@@ -267,7 +267,8 @@ impl Parser {
             }
             self.expect(TokenKind::RParen)?;
             self.expect(TokenKind::In)?;
-            let iterable = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
+            let iterable =
+                self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
             let body = self.parse_block()?;
             let end_span = body.span;
             return Ok(Stmt::ForDestructure {
@@ -282,7 +283,7 @@ impl Parser {
         let name = self.expect_ident()?;
         self.expect(TokenKind::In)?;
 
-        let iterable = self.with_no_struct_literal(|p| p.parse_expr(Precedence::None))?;
+        let iterable = self.with_header_expr_disambiguation(|p| p.parse_expr(Precedence::None))?;
         let body = self.parse_block()?;
         let end_span = body.span;
 

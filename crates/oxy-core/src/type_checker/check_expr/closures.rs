@@ -79,6 +79,9 @@ impl TypeChecker {
         self.env = closure_env;
         let saved_fn_return =
             std::mem::replace(&mut self.current_fn_return, expected_body_ret.clone());
+        if let Expr::Block(block) = body {
+            self.check_block(block, &expected_body_ret)?;
+        }
         let inferred_ret = self.infer_expr_expected(body, Some(&expected_body_ret));
         self.current_fn_return = saved_fn_return;
         self.env = saved_env;

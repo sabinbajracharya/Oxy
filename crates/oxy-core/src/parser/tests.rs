@@ -1188,6 +1188,49 @@ fn test_apply_trailing_closure_with_empty_parens() {
     ));
 }
 
+#[test]
+fn test_map_trailing_closure_without_parens() {
+    let program = parse(r#"fn main() { val y = xs.map { it + 1 }; }"#).unwrap();
+    let Item::Function(f) = &program.items[0] else {
+        panic!("expected function");
+    };
+    let Stmt::Let {
+        value: Some(expr), ..
+    } = &f.body.stmts[0]
+    else {
+        panic!("expected let");
+    };
+    let Expr::MethodCall { method, args, .. } = expr else {
+        panic!("expected method call");
+    };
+    assert_eq!(method, "map");
+    assert_eq!(args.len(), 1);
+    assert!(matches!(
+        &args[0],
+        Expr::Closure { params, .. } if params.len() == 1 && params[0].name == "it"
+    ));
+}
+
+#[test]
+fn test_while_condition_block_is_not_trailing_closure() {
+    let program = parse(
+        r#"
+fn main() {
+    var i = 0;
+    val xs = [1, 2, 3];
+    while i < xs.len() {
+        i = i + 1;
+    }
+}
+"#,
+    )
+    .unwrap();
+    let Item::Function(f) = &program.items[0] else {
+        panic!("expected function");
+    };
+    assert!(matches!(f.body.stmts[2], Stmt::While { .. }));
+}
+
 // === Phase 11: Modules & Use Statements ===
 
 #[test]
