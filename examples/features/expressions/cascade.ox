@@ -37,7 +37,7 @@ fn test_cascade_single_field() {
     assert_eq(p.y, 20);
 }
 
-// --- Builder pattern (single assignment per cascade) ---
+// --- Field assignment (one per cascade statement) ---
 
 struct Button {
     text: String,
